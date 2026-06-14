@@ -8,10 +8,10 @@
   ],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",
-    "test:unit": "bun run --filter '@verity/core' test && bun run --filter '@verity/web' test:unit",
-    "test:e2e": "bun run --filter '@verity/web' test:e2e",
-    "dev": "bun run --filter '@verity/web' dev",
-    "build": "bun run --filter '@verity/core' build && bun run --filter '@verity/web' build",
+    "test:unit": "bun run --filter '@beamhop/core' test && bun run --filter '@beamhop/web' test:unit",
+    "test:e2e": "bun run --filter '@beamhop/web' test:e2e",
+    "dev": "bun run --filter '@beamhop/web' dev",
+    "build": "bun run --filter '@beamhop/core' build && bun run --filter '@beamhop/web' build",
     "changeset": "changeset",
     "version": "changeset version"
   },

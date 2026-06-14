@@ -1,8 +1,8 @@
-# @verity/web
+# @beamhop/web
 
 The Verity web client — a modern, enterprise-flavored Nostr app built with React
 + Vite + TypeScript, implementing the `Verity.dc.html` design. All Nostr logic
-lives in [`@verity/core`](../../packages/core); this package is the UI and the
+lives in [`@beamhop/core`](../../packages/core); this package is the UI and the
 real-time state engine that binds it.
 
 ## Features

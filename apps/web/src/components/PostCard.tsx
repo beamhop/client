@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import type { NostrEvent } from '@verity/core';
+import type { NostrEvent } from '@beamhop/core';
 import { useApp } from '../store/AppContext.js';
 import { routeToHash } from '../lib/router.js';
 import { Avatar, Btn, ProfileLink, personView } from './common.js';

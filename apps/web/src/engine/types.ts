@@ -1,4 +1,4 @@
-import type { NostrEvent, Profile, EngagementCounts, DirectMessage } from '@verity/core';
+import type { NostrEvent, Profile, EngagementCounts, DirectMessage } from '@beamhop/core';
 import type { AuditEntry } from '../lib/audit.js';
 import type { SignerKind } from '../lib/session.js';
 

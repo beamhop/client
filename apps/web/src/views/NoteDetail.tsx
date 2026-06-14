@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { NostrEvent } from '@verity/core';
+import type { NostrEvent } from '@beamhop/core';
 import { useApp } from '../store/AppContext.js';
 import { Btn } from '../components/common.js';
 import { Icon } from '../components/Icon.js';

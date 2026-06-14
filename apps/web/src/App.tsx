@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { DEFAULT_RELAYS, encodeNsec } from '@verity/core';
+import { DEFAULT_RELAYS, encodeNsec } from '@beamhop/core';
 import { VerityEngine } from './engine/VerityEngine.js';
 import { AppProvider } from './store/AppContext.js';
 import { Shell } from './Shell.js';

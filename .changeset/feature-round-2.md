@@ -1,5 +1,5 @@
 ---
-"@verity/core": minor
+"@beamhop/core": minor
 ---
 
 Add NIP-50 full-text search (`searchNotes`, `searchProfiles`), a time-windowed

@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode, type MouseEvent } from 'react';
-import { encodeNpub, displayName, type Profile } from '@verity/core';
+import { encodeNpub, displayName, type Profile } from '@beamhop/core';
 import { avatarStyle, initials as toInitials, truncateMiddle } from '../lib/ui.js';
 
 /** A button that applies hover/active style overrides (replaces prototype style-hover). */

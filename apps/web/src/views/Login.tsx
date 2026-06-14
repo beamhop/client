@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { detectNip07 } from '@verity/core';
+import { detectNip07 } from '@beamhop/core';
 import { Logo, Icon } from '../components/Icon.js';
 import { Btn } from '../components/common.js';
 import { createNewIdentity, importNsec, connectNip07, type Session } from '../lib/session.js';

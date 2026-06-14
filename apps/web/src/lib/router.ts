@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { encodeNpub, encodeNevent, pubkeyFromBech32, eventIdFromBech32 } from '@verity/core';
+import { encodeNpub, encodeNevent, pubkeyFromBech32, eventIdFromBech32 } from '@beamhop/core';
 
 /**
  * The single source of truth for "where am I". Identifiers are kept as hex

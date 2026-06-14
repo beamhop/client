@@ -9,8 +9,8 @@ This is a Bun monorepo:
 
 | Package | Description |
 | --- | --- |
-| [`@verity/core`](packages/core) | Framework-agnostic Nostr domain logic (keys, relays, events, profiles, contacts, posts, reactions, reposts, bookmarks, NIP-17 DMs). |
-| [`@verity/web`](apps/web) | React + Vite web client implementing the Verity design. |
+| [`@beamhop/core`](packages/core) | Framework-agnostic Nostr domain logic (keys, relays, events, profiles, contacts, posts, reactions, reposts, bookmarks, NIP-17 DMs). |
+| [`@beamhop/web`](apps/web) | React + Vite web client implementing the Verity design. |
 
 ## Getting started
 
@@ -27,14 +27,14 @@ connect a NIP-07 browser extension.
 ```sh
 bun run typecheck    # strict typecheck of every package
 bun run build        # build core + web
-bun run test:unit    # @verity/core unit tests (fast, offline)
+bun run test:unit    # @beamhop/core unit tests (fast, offline)
 bun run test:e2e     # Playwright E2E against real relays (posting, DMs, profile…)
 ```
 
 Integration tests that hit real relays from the core package:
 
 ```sh
-bun run --filter '@verity/core' test:integration
+bun run --filter '@beamhop/core' test:integration
 ```
 
 ## What's implemented

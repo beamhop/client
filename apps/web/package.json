@@ -1,5 +1,5 @@
 {
-  "name": "@verity/web",
+  "name": "@beamhop/web",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -13,7 +13,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@verity/core": "workspace:*",
+    "@beamhop/core": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

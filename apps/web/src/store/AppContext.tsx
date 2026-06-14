@@ -9,7 +9,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
-import type { NostrEvent } from '@verity/core';
+import type { NostrEvent } from '@beamhop/core';
 import type { VerityEngine } from '../engine/VerityEngine.js';
 import type { EngineState } from '../engine/types.js';
 import { useHash, parseHash, navigateTo, type SearchType } from '../lib/router.js';

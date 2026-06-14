@@ -8,7 +8,7 @@ import {
   encodeNpub,
   type Signer,
   type KeyPair,
-} from '@verity/core';
+} from '@beamhop/core';
 
 const NSEC_KEY = 'verity:nsec';
 const RELAYS_KEY = 'verity:relays';

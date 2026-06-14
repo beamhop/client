@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import type { Profile } from '@verity/core';
-import { displayName, pubkeyFromBech32 } from '@verity/core';
+import type { Profile } from '@beamhop/core';
+import { displayName, pubkeyFromBech32 } from '@beamhop/core';
 import type { ContentToken } from './media.js';
 
 export type ProfileLookup = (pubkey: string) => Profile | undefined;

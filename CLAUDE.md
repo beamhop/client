@@ -1,7 +1,7 @@
 # Verity — project notes for coding agents
 
-Enterprise Nostr client. Bun monorepo: `@verity/core` (framework-agnostic Nostr
-logic) + `@verity/web` (React/Vite UI). See `README.md` for the full overview.
+Enterprise Nostr client. Bun monorepo: `@beamhop/core` (framework-agnostic Nostr
+logic) + `@beamhop/web` (React/Vite UI). See `README.md` for the full overview.
 
 ## Architecture constraint: client-side only (hard rule)
 
@@ -25,7 +25,7 @@ static host (GitHub Pages, etc.).
 bun run typecheck      # strict typecheck, both packages
 bun run test:unit      # core + web unit tests (offline, fast)
 bun run test:e2e       # Playwright E2E against REAL relays (from apps/web)
-bun run --filter '@verity/core' test:integration   # core real-relay tests
+bun run --filter '@beamhop/core' test:integration   # core real-relay tests
 bun run build          # build core + web
 bun run dev            # web dev server on :5173
 ```

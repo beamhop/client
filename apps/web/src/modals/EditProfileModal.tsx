@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import type { ProfileMetadata } from '@verity/core';
+import type { ProfileMetadata } from '@beamhop/core';
 import { useApp } from '../store/AppContext.js';
 import { Modal } from '../components/Modal.js';
 import { Btn } from '../components/common.js';

@@ -1,5 +1,5 @@
 ---
-"@verity/core": minor
+"@beamhop/core": minor
 ---
 
 Initial release: keys & signers (local + NIP-07), relay pool, event building,

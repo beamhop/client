@@ -16,7 +16,7 @@ import {
   type EngagementCounts,
   type DirectMessage,
   type Pubkey,
-} from '@verity/core';
+} from '@beamhop/core';
 import type { Session } from '../lib/session.js';
 import { loadReadState, saveReadState, saveRelays } from '../lib/session.js';
 import { loadAudit, appendAudit, type AuditEntry, type AuditType } from '../lib/audit.js';

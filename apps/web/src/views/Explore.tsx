@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { normalizePubkey, type NostrEvent } from '@verity/core';
+import { normalizePubkey, type NostrEvent } from '@beamhop/core';
 import { useApp } from '../store/AppContext.js';
 import type { SearchType } from '../lib/router.js';
 import { Avatar, Btn, ProfileLink, personView, type PersonView } from '../components/common.js';

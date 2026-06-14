@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { DEFAULT_RELAYS } from '@verity/core';
+import { DEFAULT_RELAYS } from '@beamhop/core';
 import { useApp } from '../store/AppContext.js';
 import { Modal } from '../components/Modal.js';
 import { Btn } from '../components/common.js';

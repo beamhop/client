@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@verity/core': fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url)),
+      '@beamhop/core': fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url)),
     },
   },
   server: { port: 5173 },
