@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useApp, type View } from '../store/AppContext.js';
-import { Icon, Logo } from './Icon.js';
+import { Icon } from './Icon.js';
+import { BeamhopLogoAnimated } from './BeamhopLogoAnimated.js';
 import { Btn } from './common.js';
 
 const TITLES: Record<View, [string, string]> = {
@@ -30,7 +31,11 @@ export function Header(): ReactNode {
         zIndex: 5,
       }}
     >
-      {isMobile ? <Logo size={26} /> : null}
+      {isMobile ? (
+        <span style={{ display: 'inline-flex', width: 120, flexShrink: 0 }}>
+          <BeamhopLogoAnimated />
+        </span>
+      ) : null}
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1
           data-testid="view-title"

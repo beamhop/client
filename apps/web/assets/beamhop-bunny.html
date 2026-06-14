@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Beamhop — Bunny Logo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E1A; --beam:#5EEAD4; --hop:#8B7BFF; --core:#FDFBFF;
+    --ink:#EAF0FF; --muted:#6E7896;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:radial-gradient(1100px 600px at 50% -5%, #161d33 0%, var(--bg) 60%);
+    color:var(--ink); font-family:"Space Grotesk",system-ui,sans-serif;
+    min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:28px;
+  }
+  .stage{
+    width:min(420px,90vw); aspect-ratio:1/1; border-radius:24px;
+    background:radial-gradient(120% 120% at 50% 115%, #11162a 0%, #0a0d18 72%);
+    box-shadow:0 30px 80px -30px #000, inset 0 0 0 1px #ffffff10; overflow:hidden;
+    display:grid; place-items:center;
+  }
+  svg{ width:84%; height:84%; display:block; }
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  button{
+    font:600 13px "Space Grotesk",sans-serif; letter-spacing:.03em; color:var(--muted);
+    background:#ffffff0a; border:1px solid #ffffff1a; padding:10px 18px; border-radius:999px;
+    cursor:pointer; transition:all .16s ease;
+  }
+  button:hover{ color:var(--ink); border-color:#ffffff33; }
+  button.active{ color:var(--bg); background:var(--beam); border-color:var(--beam); box-shadow:0 6px 20px -8px var(--beam); }
+  button:focus-visible{ outline:2px solid var(--hop); outline-offset:2px; }
+  .label{ color:var(--muted); font-size:12px; letter-spacing:.12em; text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <svg id="scene" viewBox="0 0 300 320" role="img" aria-label="Beamhop bunny logo">
+      <defs>
+        <radialGradient id="gBody" cx="50%" cy="34%" r="72%">
+          <stop offset="0%"  stop-color="#9DF8EA"/>
+          <stop offset="52%" stop-color="#5EEAD4"/>
+          <stop offset="100%" stop-color="#39BCAD"/>
+        </radialGradient>
+        <radialGradient id="gEar" cx="50%" cy="20%" r="90%">
+          <stop offset="0%"  stop-color="#8FF6E6"/>
+          <stop offset="100%" stop-color="#48CDBC"/>
+        </radialGradient>
+        <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="6"/>
+        </filter>
+        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- ground shadow (stays on the floor; does not hop) -->
+      <ellipse id="shadow" cx="150" cy="256" rx="50" ry="11" fill="#000" opacity="0.36" filter="url(#soft)"/>
+
+      <!-- the bunny: #bunny translates for the hop -->
+      <g id="bunny">
+        <!-- #body squashes/stretches/skews, pivoting at the feet -->
+        <g id="body">
+          <!-- #head turns for "looking" -->
+          <g id="head">
+            <!-- ears (behind the body blob) -->
+            <g id="earL"><ellipse cx="136" cy="142" rx="12" ry="41" fill="url(#gEar)"/>
+              <ellipse cx="136" cy="140" rx="5.4" ry="29" fill="#8B7BFF" opacity="0.7"/></g>
+            <g id="earR"><ellipse cx="164" cy="142" rx="12" ry="41" fill="url(#gEar)"/>
+              <ellipse cx="164" cy="140" rx="5.4" ry="29" fill="#8B7BFF" opacity="0.7"/></g>
+
+            <!-- body / head blob -->
+            <circle id="blob" cx="150" cy="204" r="46" fill="url(#gBody)" filter="url(#glow)"/>
+
+            <!-- face: can shift sideways for "looking" -->
+            <g id="face">
+              <ellipse cx="128" cy="210" rx="9" ry="6" fill="#8B7BFF" opacity="0.22"/>
+              <ellipse cx="172" cy="210" rx="9" ry="6" fill="#8B7BFF" opacity="0.22"/>
+
+              <!-- angry eyebrows: tangent to the eyes, inner ends low (hidden by default) -->
+              <g id="brows" opacity="0">
+                <path d="M125 189 L145 196" stroke="#0A0E1A" stroke-width="3.6" stroke-linecap="round"/>
+                <path d="M175 189 L155 196" stroke="#0A0E1A" stroke-width="3.6" stroke-linecap="round"/>
+              </g>
+
+              <g id="eyeL"><circle cx="135" cy="197" r="6" fill="#0A0E1A"/>
+                <circle cx="133" cy="194.5" r="1.8" fill="#EAF0FF"/></g>
+              <g id="eyeR"><circle cx="165" cy="197" r="6" fill="#0A0E1A"/>
+                <circle cx="163" cy="194.5" r="1.8" fill="#EAF0FF"/></g>
+
+              <!-- nose -->
+              <path d="M150 215 l-4.5 -5 h9 z" fill="#8B7BFF"/>
+
+              <!-- mouth: neutral (corners down) crossfades with smile (corners up) -->
+              <path id="mouth" d="M150 215 q0 6 -6 8 M150 215 q0 6 6 8" stroke="#2C8E83" stroke-width="1.6"
+                    fill="none" stroke-linecap="round" opacity="0.7"/>
+              <path id="mouthSmile" d="M150 217 q-7 4 -13 -3 M150 217 q7 4 13 -3" stroke="#2C8E83"
+                    stroke-width="1.9" fill="none" stroke-linecap="round" opacity="0"/>
+
+              <!-- Secret Mode: arms reach up from the body and paws cover the eyes -->
+              <g id="hands" opacity="0">
+                <g id="handL">
+                  <path d="M120 232 Q124 209 135 201" stroke="#2C8E83" stroke-width="17" fill="none" stroke-linecap="round"/>
+                  <path d="M120 232 Q124 209 135 201" stroke="#54D9C9" stroke-width="13" fill="none" stroke-linecap="round"/>
+                  <ellipse cx="135" cy="198" rx="13" ry="15" fill="url(#gBody)" stroke="#2C8E83" stroke-width="1.6"/>
+                  <circle cx="129" cy="187" r="3.4" fill="url(#gBody)"/>
+                  <circle cx="135" cy="185" r="3.6" fill="url(#gBody)"/>
+                  <circle cx="141" cy="187" r="3.4" fill="url(#gBody)"/>
+                  <ellipse cx="135" cy="201" rx="6" ry="7.5" fill="#8B7BFF" opacity="0.4"/>
+                </g>
+                <g id="handR">
+                  <path d="M180 232 Q176 209 165 201" stroke="#2C8E83" stroke-width="17" fill="none" stroke-linecap="round"/>
+                  <path d="M180 232 Q176 209 165 201" stroke="#54D9C9" stroke-width="13" fill="none" stroke-linecap="round"/>
+                  <ellipse cx="165" cy="198" rx="13" ry="15" fill="url(#gBody)" stroke="#2C8E83" stroke-width="1.6"/>
+                  <circle cx="159" cy="187" r="3.4" fill="url(#gBody)"/>
+                  <circle cx="165" cy="185" r="3.6" fill="url(#gBody)"/>
+                  <circle cx="171" cy="187" r="3.4" fill="url(#gBody)"/>
+                  <ellipse cx="165" cy="201" rx="6" ry="7.5" fill="#8B7BFF" opacity="0.4"/>
+                </g>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button id="btnIdle" class="active">Idle</button>
+    <button id="btnSpin">Spinner</button>
+  </div>
+  <div class="controls">
+    <button id="btnSmile">Smile</button>
+    <button id="btnAngry">Angry</button>
+    <button id="btnSecret">Secret</button>
+  </div>
+  <div class="label" id="state">idle — blinks, ear flicks, looks around</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+  (function(){
+    const $=(s)=>document.querySelector(s);
+    // ears are positioned at the top of the blob; rotation pivots at their base
+    // Fixed (SVG-space) pivots. Percentage origins recompute from a bounding box
+    // that changes as the ears swing, which made the body lurch sideways each hop.
+    // A constant svgOrigin point keeps the bunny planted.
+    gsap.set('#earL',{rotation:-11,svgOrigin:'136 183'});
+    gsap.set('#earR',{rotation:11, svgOrigin:'164 183'});
+    gsap.set('#body',{svgOrigin:'150 250'});   // feet
+    gsap.set('#head',{svgOrigin:'150 226'});   // neck
+    gsap.set('#eyeL',{svgOrigin:'135 197'});
+    gsap.set('#eyeR',{svgOrigin:'165 197'});
+    gsap.set('#shadow',{svgOrigin:'150 256'});
+    gsap.set('#handL',{svgOrigin:'120 232'});   // grow from the shoulder
+    gsap.set('#handR',{svgOrigin:'180 232'});
+    gsap.set('#mouthSmile',{svgOrigin:'150 218'});
+
+    const EAR_L=-11, EAR_R=11;   // rest angles
+    function restPose(){
+      gsap.set('#bunny',{y:0});
+      gsap.set('#body',{scaleX:1,scaleY:1,skewX:0});
+      gsap.set('#head',{rotation:0});
+      gsap.set('#face',{x:0});
+      gsap.set('#earL',{rotation:EAR_L}); gsap.set('#earR',{rotation:EAR_R});
+      gsap.set(['#eyeL','#eyeR'],{scaleY:1});
+      gsap.set('#shadow',{scaleX:1,scaleY:1,opacity:0.36});
+    }
+
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ---------------- SPINNER: a physical hop, looped ---------------- */
+    function buildHop(){
+      const up=-70, tl=gsap.timeline({repeat:-1});
+      // anticipation (load the legs)
+      tl.to('#body',{scaleY:0.82,scaleX:1.16,duration:0.10,ease:'power2.out'},0);
+      tl.addLabel('launch',0.10);
+      // launch: rise (decelerate) + stretch tall + thin; ears swing back/out
+      tl.to('#bunny',{y:up,duration:0.26,ease:'power2.out'},'launch');
+      tl.to('#body',{scaleY:1.2,scaleX:0.88,duration:0.14,ease:'power2.out'},'launch');
+      tl.to('#body',{scaleY:1,scaleX:1,duration:0.12,ease:'sine.in'},'launch+=0.14');
+      tl.to('#earL',{rotation:-30,duration:0.22,ease:'power2.out'},'launch');
+      tl.to('#earR',{rotation:30, duration:0.22,ease:'power2.out'},'launch');
+      tl.to('#shadow',{scaleX:0.6,scaleY:0.7,opacity:0.16,duration:0.26,ease:'power2.out'},'launch');
+      tl.addLabel('fall','launch+=0.26');  // apex
+      // fall (accelerate); ears swing forward, overshooting through vertical
+      tl.to('#bunny',{y:0,duration:0.24,ease:'power2.in'},'fall');
+      tl.to('#earL',{rotation:2, duration:0.24,ease:'power1.in'},'fall');
+      tl.to('#earR',{rotation:-2,duration:0.24,ease:'power1.in'},'fall');
+      tl.to('#shadow',{scaleX:1.08,scaleY:1.05,opacity:0.42,duration:0.24,ease:'power2.in'},'fall');
+      tl.addLabel('land','fall+=0.24');
+      // impact: squash + skew + a quick squint; ears flop forward
+      tl.to('#body',{scaleY:0.74,scaleX:1.24,skewX:8,duration:0.07,ease:'power3.in'},'land');
+      tl.to(['#eyeL','#eyeR'],{scaleY:0.35,duration:0.07,yoyo:true,repeat:1,ease:'power2.inOut'},'land');
+      tl.to('#earL',{rotation:12, duration:0.09,ease:'power2.in'},'land');
+      tl.to('#earR',{rotation:-12,duration:0.09,ease:'power2.in'},'land');
+      // settle: body springs back, ears damp-oscillate to rest, shadow recovers
+      tl.to('#body',{scaleY:1,scaleX:1,skewX:0,duration:0.5,ease:'elastic.out(1,0.4)'},'land+=0.07');
+      tl.to('#earL',{rotation:EAR_L,duration:0.62,ease:'elastic.out(1,0.34)'},'land+=0.09');
+      tl.to('#earR',{rotation:EAR_R,duration:0.62,ease:'elastic.out(1,0.34)'},'land+=0.09');
+      tl.to('#shadow',{scaleX:1,scaleY:1,opacity:0.36,duration:0.4,ease:'elastic.out(1,0.5)'},'land+=0.07');
+      tl.to({},{duration:0.16});  // a beat before the next hop
+      return tl;
+    }
+    function buildHopReduced(){
+      const tl=gsap.timeline({repeat:-1,yoyo:true});
+      tl.to('#bunny',{y:-14,duration:0.7,ease:'sine.inOut'})
+        .to('#body',{scaleY:0.96,scaleX:1.03,duration:0.7,ease:'sine.inOut'},0);
+      return tl;
+    }
+
+    /* ---------------- IDLE: stand + random micro-life ---------------- */
+    let breathTL=null, idleTimer=null;
+    function blink(){ gsap.to(['#eyeL','#eyeR'],{scaleY:0.1,duration:0.06,yoyo:true,repeat:1,ease:'power2.inOut',overwrite:'auto'}); }
+    function foldEar(){
+      const left=Math.random()<0.5, id=left?'#earL':'#earR';
+      const rest=left?EAR_L:EAR_R, fold=left?40:-40;
+      gsap.to(id,{rotation:fold,duration:0.16,ease:'power2.out',overwrite:'auto',
+        onComplete:()=>gsap.to(id,{rotation:rest,duration:0.7,ease:'elastic.out(1,0.4)'})});
+    }
+    function lookAround(){
+      const dir=Math.random()<0.5?-1:1;
+      gsap.to('#head',{rotation:7*dir,duration:0.45,ease:'power2.out',overwrite:'auto'});
+      gsap.to('#face',{x:6*dir,duration:0.45,ease:'power2.out',overwrite:'auto',
+        onComplete:()=>{ gsap.to('#head',{rotation:0,duration:0.7,ease:'power2.inOut',delay:0.55});
+                         gsap.to('#face',{x:0,duration:0.7,ease:'power2.inOut',delay:0.55}); }});
+      if(Math.random()<0.5) gsap.delayedCall(0.2, blink);
+    }
+    function twitch(){
+      gsap.to('#earL',{rotation:EAR_L-3.5,duration:0.09,yoyo:true,repeat:3,ease:'sine.inOut',overwrite:'auto'});
+      gsap.to('#earR',{rotation:EAR_R+3.5,duration:0.09,yoyo:true,repeat:3,ease:'sine.inOut',overwrite:'auto'});
+    }
+    function scheduleIdle(){
+      const acts=[blink,blink,foldEar,lookAround,twitch,blink];
+      acts[Math.floor(Math.random()*acts.length)]();
+      idleTimer=setTimeout(scheduleIdle, 1100+Math.random()*2700);
+    }
+
+    /* ---------------- state machine ---------------- */
+    let hopTL=null;
+    function stopAll(){
+      if(idleTimer){ clearTimeout(idleTimer); idleTimer=null; }
+      if(breathTL){ breathTL.kill(); breathTL=null; }
+      if(hopTL){ hopTL.kill(); hopTL=null; }
+      gsap.killTweensOf(['#bunny','#body','#head','#face','#earL','#earR','#eyeL','#eyeR','#shadow']);
+      restPose();
+    }
+    function setIdle(){
+      stopAll();
+      if(!reduced){
+        breathTL=gsap.to('#body',{scaleY:1.03,scaleX:0.99,duration:1.7,ease:'sine.inOut',yoyo:true,repeat:-1});
+        scheduleIdle();
+      }
+      $('#state').textContent='idle — blinks, ear flicks, looks around';
+      $('#btnIdle').classList.add('active'); $('#btnSpin').classList.remove('active');
+    }
+    function setSpinner(){
+      stopAll();
+      hopTL = reduced ? buildHopReduced() : buildHop();
+      $('#state').textContent='spinner — hop loop for loading screens';
+      $('#btnSpin').classList.add('active'); $('#btnIdle').classList.remove('active');
+    }
+
+    $('#btnIdle').addEventListener('click',setIdle);
+    $('#btnSpin').addEventListener('click',setSpinner);
+
+    /* ---------------- expressions (overlay on any base state) ---------------- */
+    let smiling=false, angry=false, covered=false;
+
+    function setSmile(on){
+      smiling=on;
+      gsap.to('#mouth',{opacity:on?0:0.7,duration:0.22,ease:'power2.out',overwrite:'auto'});
+      if(on) gsap.fromTo('#mouthSmile',{opacity:0,scale:0.7},{opacity:0.9,scale:1,duration:0.32,ease:'back.out(2.4)',overwrite:'auto'});
+      else   gsap.to('#mouthSmile',{opacity:0,duration:0.2,overwrite:'auto'});
+      $('#btnSmile').classList.toggle('active',on);
+    }
+    function setAngry(on){
+      angry=on;
+      if(on) gsap.fromTo('#brows',{opacity:0,y:-4},{opacity:1,y:0,duration:0.30,ease:'back.out(2)',overwrite:'auto'});
+      else   gsap.to('#brows',{opacity:0,y:-3,duration:0.20,ease:'power2.in',overwrite:'auto'});
+      $('#btnAngry').classList.toggle('active',on);
+    }
+    // Secret Mode — two methods: cover and uncover (reverse)
+    function coverEyes(){
+      covered=true;
+      gsap.set('#hands',{opacity:1});
+      gsap.fromTo('#handL',{scale:0,rotation:-10},{scale:1,rotation:0,duration:0.42,ease:'back.out(2)',overwrite:'auto'});
+      gsap.fromTo('#handR',{scale:0,rotation:10}, {scale:1,rotation:0,duration:0.42,ease:'back.out(2)',delay:0.06,overwrite:'auto'});
+      $('#btnSecret').classList.add('active');
+    }
+    function uncoverEyes(){
+      covered=false;
+      gsap.to('#handL',{scale:0,rotation:-10,duration:0.32,ease:'back.in(1.7)',overwrite:'auto'});
+      gsap.to('#handR',{scale:0,rotation:10, duration:0.32,ease:'back.in(1.7)',overwrite:'auto',
+        onComplete:()=>gsap.set('#hands',{opacity:0})});
+      $('#btnSecret').classList.remove('active');
+    }
+
+    $('#btnSmile').addEventListener('click',()=>setSmile(!smiling));
+    $('#btnAngry').addEventListener('click',()=>setAngry(!angry));
+    $('#btnSecret').addEventListener('click',()=>covered?uncoverEyes():coverEyes());
+
+    restPose();
+    setIdle();
+  })();
+  </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { detectNip07 } from '@beamhop/core';
-import { Logo, Icon } from '../components/Icon.js';
+import { Icon } from '../components/Icon.js';
+import { BeamhopLogo } from '../components/BeamhopLogo.js';
 import { Btn } from '../components/common.js';
 import { createNewIdentity, importNsec, connectNip07, type Session } from '../lib/session.js';
 
@@ -54,8 +55,7 @@ export function Login({ onSession }: LoginProps): ReactNode {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-          <Logo size={40} />
-          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: '-.02em' }}>Verity</span>
+          <BeamhopLogo size={28} />
         </div>
         <p style={{ margin: '0 0 24px', color: 'var(--text-2)', fontSize: 14.5, lineHeight: 1.5 }}>
           Verifiable identity for teams, built on Nostr. Your keys, your messages, end-to-end encrypted.

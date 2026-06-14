@@ -68,7 +68,7 @@ export function RelaysModal(): ReactNode {
     >
       <div style={{ padding: 20 }}>
         <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--text-2)', lineHeight: 1.5 }}>
-          Verity reads from and publishes to these relays. Add the relays your team uses, or remove ones you don't trust.
+          beamhop reads from and publishes to these relays. Add the relays your team uses, or remove ones you don't trust.
         </p>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>

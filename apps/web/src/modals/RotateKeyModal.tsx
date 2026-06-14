@@ -31,7 +31,7 @@ export function RotateKeyModal(): ReactNode {
         <div style={{ display: 'flex', gap: 12, padding: 14, borderRadius: 12, background: 'var(--accent-soft)' }}>
           <Icon name="rotate" size={20} stroke="var(--accent)" />
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--text-2)' }}>
-            On Nostr your public key is your identity. Rotating generates a brand-new keypair and switches Verity to
+            On Nostr your public key is your identity. Rotating generates a brand-new keypair and switches beamhop to
             it — your previous identity will no longer sign from this device.
           </p>
         </div>

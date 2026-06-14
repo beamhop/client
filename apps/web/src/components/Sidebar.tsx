@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useApp, type View } from '../store/AppContext.js';
-import { Icon, Verified, Logo, type IconName } from './Icon.js';
+import { Icon, Verified, type IconName } from './Icon.js';
+import { BeamhopLogoAnimated } from './BeamhopLogoAnimated.js';
 import { Avatar, Btn, personView } from './common.js';
 
 function navStyle(active: boolean): CSSProperties {
@@ -51,11 +52,8 @@ export function Sidebar(): ReactNode {
         top: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 8px 14px' }}>
-        <Logo size={32} />
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: '-.02em' }}>
-          Verity
-        </span>
+      <div style={{ padding: '6px 6px 16px' }}>
+        <BeamhopLogoAnimated />
       </div>
 
       <Btn

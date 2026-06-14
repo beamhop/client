@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Beamhop — Brand Motion Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0B0E1A; --beam:#5EEAD4; --hop:#8B7BFF; --core:#FDFBFF; --ink:#EAF0FF; --muted:#6E7896; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:radial-gradient(1300px 700px at 50% -8%, #161d33 0%, var(--bg) 58%);
+    color:var(--ink); font-family:"Space Grotesk",system-ui,sans-serif;
+    min-height:100dvh; padding:40px 24px 56px;
+  }
+  .wrap{ max-width:1120px; margin:0 auto; }
+  header.top{ margin:6px 4px 30px; }
+  .mark{ font-size:clamp(28px,5vw,44px); font-weight:700; letter-spacing:-1.5px; }
+  .mark b{ color:var(--beam); font-weight:700; }
+  .tag{ margin:8px 0 0; color:var(--muted); font-size:13px; letter-spacing:.22em; text-transform:uppercase; }
+  .lbl{ color:var(--muted); font-size:12px; letter-spacing:.16em; text-transform:uppercase; margin:0 4px 12px; }
+  .frame{ border-radius:18px; overflow:hidden; box-shadow:0 30px 80px -34px #000, inset 0 0 0 1px #ffffff10; background:#0a0d18; }
+  .frame iframe{ width:100%; border:0; display:block; background:#0a0d18; }
+  .hero iframe{ height:clamp(300px,44vw,520px); }
+  .row{ display:grid; grid-template-columns:1fr; gap:34px; margin-top:40px; }
+  @media(min-width:860px){ .row{ grid-template-columns:1.05fr .95fr; align-items:start; } }
+  .square iframe{ height:clamp(360px,42vw,460px); }
+  .card .panelbox{ border-radius:18px; padding:26px; background:radial-gradient(120% 120% at 50% 0%, #141a2e 0%, #0c1020 80%); box-shadow:inset 0 0 0 1px #ffffff10; }
+  .sysword{ font-size:40px; font-weight:700; letter-spacing:-1px; }
+  .sysword .a{ color:var(--beam);} .sysword .b{ color:var(--ink);}
+  .desc{ color:#aeb6cf; font-size:14px; line-height:1.6; margin:14px 0 22px; }
+  .swatches{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .sw{ display:flex; align-items:center; gap:10px; font-size:12px; color:var(--muted); }
+  .chip{ width:30px; height:30px; border-radius:9px; box-shadow:inset 0 0 0 1px #ffffff1a; }
+  .states{ list-style:none; padding:0; margin:20px 0 0; display:grid; gap:10px; }
+  .states li{ font-size:13px; color:#aeb6cf; padding-left:16px; position:relative; }
+  .states li::before{ content:""; position:absolute; left:0; top:7px; width:7px; height:7px; border-radius:50%; background:var(--beam); }
+  .states li b{ color:var(--ink); font-weight:600; }
+  footer{ margin:42px 4px 0; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="mark"><b>beam</b>hop</div>
+      <p class="tag">Brand motion system · opening sequence &amp; mascot</p>
+    </header>
+
+    <section class="hero">
+      <div class="lbl">Opening animation</div>
+      <div class="frame hero"><iframe title="Beamhop opening animation" loading="lazy" srcdoc="<!doctype html>
+<html lang=&quot;en&quot;>
+<head>
+<meta charset=&quot;utf-8&quot; />
+<meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot; />
+<title>Beamhop — Opening Animation</title>
+<link rel=&quot;preconnect&quot; href=&quot;https://fonts.googleapis.com&quot;>
+<link rel=&quot;preconnect&quot; href=&quot;https://fonts.gstatic.com&quot; crossorigin>
+<link href=&quot;https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;>
+<style>
+  :root{
+    --bg:#0B0E1A;
+    --beam:#5EEAD4;   /* aqua — the &quot;beam&quot; */
+    --hop:#8B7BFF;    /* violet — the &quot;hop&quot; */
+    --core:#FDFBFF;   /* hot white core */
+    --ink:#EAF0FF; --muted:#6E7896;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:radial-gradient(1200px 600px at 50% -10%, #161d33 0%, var(--bg) 60%);
+    color:var(--ink); font-family:&quot;Space Grotesk&quot;, system-ui, sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:100dvh; gap:18px; padding:24px;
+  }
+  .stage{
+    width:min(880px,100%); aspect-ratio:16/9; border-radius:18px;
+    background:radial-gradient(120% 120% at 50% 120%, #11162a 0%, #0a0d18 70%);
+    box-shadow:0 30px 80px -30px #000, inset 0 0 0 1px #ffffff10;
+    overflow:hidden; position:relative;
+  }
+  svg{ width:100%; height:100%; display:block; }
+
+  /* NOTE: transform origins are owned by GSAP (transformOrigin in JS).
+     Do NOT set transform-box/transform-origin here — the browser would
+     apply the origin a second time on top of GSAP's baked matrix and the
+     element would jump across the canvas. */
+
+  .controls{ display:flex; gap:10px; align-items:center; }
+  button{
+    font:500 13px &quot;Space Grotesk&quot;,sans-serif; letter-spacing:.02em; color:var(--ink);
+    background:#ffffff0d; border:1px solid #ffffff1f; padding:9px 16px; border-radius:999px;
+    cursor:pointer; transition:background .15s, border-color .15s, transform .1s;
+  }
+  button:hover{ background:#ffffff16; border-color:#ffffff33; }
+  button:active{ transform:translateY(1px); }
+  button:focus-visible{ outline:2px solid var(--beam); outline-offset:2px; }
+  .hint{ color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+  <div class=&quot;stage&quot;>
+    <svg id=&quot;scene&quot; viewBox=&quot;0 0 800 450&quot; role=&quot;img&quot;
+         aria-label=&quot;Beamhop logo: the letter o hops along B, e, a, m, h squishing each, then lands in place to spell Beamhop.&quot;>
+      <defs>
+        <radialGradient id=&quot;gBeam&quot; cx=&quot;50%&quot; cy=&quot;50%&quot; r=&quot;50%&quot;>
+          <stop offset=&quot;0%&quot; stop-color=&quot;var(--core)&quot;/>
+          <stop offset=&quot;35%&quot; stop-color=&quot;var(--beam)&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;var(--hop)&quot;/>
+        </radialGradient>
+        <linearGradient id=&quot;gWire&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;0&quot;>
+          <stop offset=&quot;0%&quot; stop-color=&quot;var(--beam)&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;var(--hop)&quot;/>
+        </linearGradient>
+        <linearGradient id=&quot;gScan&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;0&quot;>
+          <stop offset=&quot;0%&quot;  stop-color=&quot;#38E1FF&quot; stop-opacity=&quot;0&quot;/>
+          <stop offset=&quot;50%&quot; stop-color=&quot;#38E1FF&quot; stop-opacity=&quot;0.30&quot;/>
+          <stop offset=&quot;84%&quot; stop-color=&quot;#7DF9FF&quot; stop-opacity=&quot;0.82&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;#EAFEFF&quot; stop-opacity=&quot;1&quot;/>
+        </linearGradient>
+        <linearGradient id=&quot;gScanCore&quot; x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;1&quot; y2=&quot;0&quot;>
+          <stop offset=&quot;0%&quot;  stop-color=&quot;#EAFEFF&quot; stop-opacity=&quot;0&quot;/>
+          <stop offset=&quot;72%&quot; stop-color=&quot;#CFF7FF&quot; stop-opacity=&quot;0.55&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;#FFFFFF&quot; stop-opacity=&quot;1&quot;/>
+        </linearGradient>
+        <filter id=&quot;glow&quot; x=&quot;-80%&quot; y=&quot;-80%&quot; width=&quot;260%&quot; height=&quot;260%&quot;>
+          <feGaussianBlur stdDeviation=&quot;4&quot; result=&quot;b&quot;/>
+          <feMerge><feMergeNode in=&quot;b&quot;/><feMergeNode in=&quot;SourceGraphic&quot;/></feMerge>
+        </filter>
+        <filter id=&quot;softglow&quot; x=&quot;-120%&quot; y=&quot;-120%&quot; width=&quot;340%&quot; height=&quot;340%&quot;>
+          <feGaussianBlur stdDeviation=&quot;9&quot;/>
+        </filter>
+      </defs>
+
+      <!-- scan beam that &quot;writes&quot; the letters of Beam, then dissipates at h -->
+      <g id=&quot;scanbeam&quot; opacity=&quot;0&quot;>
+        <rect   id=&quot;beamGlow&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;0&quot; height=&quot;18&quot; rx=&quot;9&quot; fill=&quot;url(#gScan)&quot; filter=&quot;url(#softglow)&quot; opacity=&quot;0.6&quot;/>
+        <rect   id=&quot;beamBar&quot;  x=&quot;0&quot; y=&quot;0&quot; width=&quot;0&quot; height=&quot;5&quot;  rx=&quot;2.5&quot; fill=&quot;url(#gScan)&quot; opacity=&quot;0.95&quot;/>
+        <rect   id=&quot;beamCore&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;0&quot; height=&quot;2&quot;  rx=&quot;1&quot; fill=&quot;url(#gScanCore)&quot;/>
+        <ellipse id=&quot;beamHead&quot; cx=&quot;0&quot; cy=&quot;0&quot; rx=&quot;9&quot; ry=&quot;6&quot; fill=&quot;#F2FFFF&quot; filter=&quot;url(#glow)&quot;/>
+      </g>
+
+      <!-- wordmark: individual letters placed by JS; the &quot;o&quot; is filled by the packet -->
+      <g id=&quot;wordmark&quot;></g>
+      <text id=&quot;oGlyph&quot; font-size=&quot;56&quot; font-weight=&quot;700&quot; fill=&quot;var(--beam)&quot;
+            filter=&quot;url(#glow)&quot; opacity=&quot;0&quot;>o</text>
+
+      <!-- rabbit head the &quot;o&quot; morphs into on hover (coords relative to the o centre) -->
+      <g id=&quot;rabbit&quot; opacity=&quot;0&quot;>
+        <g id=&quot;rEarL&quot;><ellipse cx=&quot;-6&quot; cy=&quot;-23&quot; rx=&quot;4.6&quot; ry=&quot;13&quot; fill=&quot;url(#gBeam)&quot;/>
+          <ellipse cx=&quot;-6&quot; cy=&quot;-23&quot; rx=&quot;2&quot; ry=&quot;8.5&quot; fill=&quot;var(--hop)&quot; opacity=&quot;0.65&quot;/></g>
+        <g id=&quot;rEarR&quot;><ellipse cx=&quot;6&quot; cy=&quot;-23&quot; rx=&quot;4.6&quot; ry=&quot;13&quot; fill=&quot;url(#gBeam)&quot;/>
+          <ellipse cx=&quot;6&quot; cy=&quot;-23&quot; rx=&quot;2&quot; ry=&quot;8.5&quot; fill=&quot;var(--hop)&quot; opacity=&quot;0.65&quot;/></g>
+        <circle id=&quot;rFace&quot; cx=&quot;0&quot; cy=&quot;0&quot; r=&quot;14&quot; fill=&quot;url(#gBeam)&quot; filter=&quot;url(#glow)&quot;/>
+        <g id=&quot;rFeatures&quot;>
+          <circle cx=&quot;-5&quot; cy=&quot;-2&quot; r=&quot;2.1&quot; fill=&quot;var(--bg)&quot;/>
+          <circle cx=&quot;5&quot; cy=&quot;-2&quot; r=&quot;2.1&quot; fill=&quot;var(--bg)&quot;/>
+          <path d=&quot;M0 3 l-2.6 -2.8 h5.2 z&quot; fill=&quot;var(--hop)&quot;/>
+        </g>
+      </g>
+      <rect id=&quot;sweep&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;0&quot; height=&quot;2.5&quot; rx=&quot;1.5&quot; fill=&quot;url(#gWire)&quot; opacity=&quot;0&quot;/>
+      <text id=&quot;tag&quot; font-size=&quot;13.5&quot; font-weight=&quot;400&quot; letter-spacing=&quot;3.5&quot;
+            fill=&quot;var(--muted)&quot; text-anchor=&quot;middle&quot; opacity=&quot;0&quot;>PEER · TO · PEER NETWORK</text>
+
+      <rect id=&quot;flash&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;800&quot; height=&quot;450&quot; fill=&quot;var(--core)&quot; opacity=&quot;0&quot;/>
+
+      <!-- invisible region that triggers the o -> rabbit morph on hover -->
+      <rect id=&quot;hoverbox&quot; fill=&quot;transparent&quot; style=&quot;pointer-events:all; cursor:pointer&quot;/>
+
+      <!-- the hopping packet (becomes the o) -->
+      <g id=&quot;packet&quot; opacity=&quot;0&quot;>
+        <circle id=&quot;halo&quot; r=&quot;22&quot; fill=&quot;var(--beam)&quot; opacity=&quot;0.18&quot; filter=&quot;url(#softglow)&quot;/>
+        <g id=&quot;ears&quot;>
+          <path d=&quot;M-7 -12 C -10 -28, -2 -30, -2 -14 Z&quot; fill=&quot;url(#gBeam)&quot;/>
+          <path d=&quot;M 7 -12 C 10 -28, 2 -30, 2 -14 Z&quot;   fill=&quot;url(#gBeam)&quot;/>
+        </g>
+        <ellipse id=&quot;packetBody&quot; rx=&quot;13&quot; ry=&quot;15&quot; fill=&quot;url(#gBeam)&quot; filter=&quot;url(#glow)&quot;/>
+      </g>
+    </svg>
+  </div>
+
+  <div class=&quot;controls&quot;>
+    <button id=&quot;replay&quot; aria-label=&quot;Replay animation&quot;>↻ Replay</button>
+    <span class=&quot;hint&quot;>opening sequence</span>
+  </div>
+
+  <script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js&quot;></script>
+  <script>
+  (function(){
+    const SVGNS='http://www.w3.org/2000/svg';
+    const $=(s)=>document.querySelector(s), $$=(s)=>Array.from(document.querySelectorAll(s));
+    const scene=$('#scene');
+
+    const WORD='Beamhop', FS=56, BASE=250, CENTER=400;   // word centered in the frame
+    // &quot;Beam&quot; + the o in teal; h &amp; p in ink
+    const FILL={0:'var(--beam)',1:'var(--beam)',2:'var(--beam)',3:'var(--beam)',
+                4:'var(--ink)',5:'var(--beam)',6:'var(--ink)'};
+
+    const packet=$('#packet'), body=$('#packetBody'), ears=$('#ears');
+    gsap.set(packet,{transformOrigin:'50% 50%'});
+    gsap.set(body,{transformOrigin:'50% 100%'});
+    gsap.set(ears,{transformOrigin:'50% 100%'});
+
+    // lay out the word with real glyph metrics; LET[i] = {el, cx, cy, topY} (el null for o)
+    function layoutWord(){
+      const wm=$('#wordmark'); wm.innerHTML='';
+      const ref=document.createElementNS(SVGNS,'text');
+      ref.setAttribute('x',CENTER); ref.setAttribute('y',BASE); ref.setAttribute('text-anchor','middle');
+      ref.setAttribute('font-size',FS); ref.setAttribute('font-weight','700');
+      ref.setAttribute('letter-spacing','-1'); ref.setAttribute('opacity','0'); ref.textContent=WORD;
+      wm.appendChild(ref);
+
+      const LET=[];
+      for(let i=0;i<WORD.length;i++){
+        const start=ref.getStartPositionOfChar(i), ext=ref.getExtentOfChar(i);
+        const cx=ext.x+ext.width/2, cy=ext.y+ext.height/2, topY=ext.y;
+        if(i===5){ // o slot
+          const o=$('#oGlyph');
+          o.setAttribute('x',start.x); o.setAttribute('y',BASE); o.setAttribute('letter-spacing','-1');
+          gsap.set(o,{transformOrigin:'50% 50%'});
+          LET.push({el:null,cx,cy,topY}); continue;
+        }
+        const t=document.createElementNS(SVGNS,'text');
+        t.setAttribute('class','letter'); t.setAttribute('x',start.x); t.setAttribute('y',BASE);
+        t.setAttribute('font-size',FS); t.setAttribute('font-weight','700');
+        t.setAttribute('letter-spacing','-1'); t.setAttribute('fill',FILL[i]);
+        t.textContent=WORD[i]; wm.appendChild(t);
+        gsap.set(t,{transformOrigin:'50% 100%'});   // pivot at the glyph's baseline
+        LET.push({el:t,cx,cy,topY});
+      }
+      ref.remove();
+      $('#tag').setAttribute('x',CENTER); $('#tag').setAttribute('y',BASE+30);
+      const first=LET[0], last=LET[WORD.length-1];
+      $('#sweep').setAttribute('x',first.cx-22); $('#sweep').setAttribute('y',BASE+10);
+      $('#sweep').dataset.w=(last.cx+22)-(first.cx-22);
+
+      // place the rabbit head at the o's centre; size the hover region over the word
+      const o=LET[5];
+      $('#rabbit').setAttribute('transform',`translate(${o.cx},${o.cy})`);
+      const wb=$('#wordmark').getBBox();
+      $('#hoverbox').setAttribute('x',wb.x-14);
+      $('#hoverbox').setAttribute('y',wb.y-48);          // room for the ears
+      $('#hoverbox').setAttribute('width',wb.width+28);
+      $('#hoverbox').setAttribute('height',wb.height+62);
+      return LET;
+    }
+
+    function ping(tl,t,x,y,col){
+      const r=document.createElementNS(SVGNS,'circle');
+      r.setAttribute('class','pingRing'); r.setAttribute('cx',x); r.setAttribute('cy',y); r.setAttribute('r','6');
+      r.setAttribute('fill','none'); r.setAttribute('stroke',col||'var(--beam)'); r.setAttribute('stroke-width','2.5');
+      r.setAttribute('opacity','0'); scene.insertBefore(r,$('#packet'));
+      gsap.set(r,{transformOrigin:'50% 50%'});
+      tl.fromTo(r,{scale:0.4,opacity:0.8},{scale:3,opacity:0,duration:.5,ease:'power2.out',immediateRender:false,
+        onComplete:()=>r.remove()},t);
+    }
+    // squeeze + skew on impact, anchored at the baseline so the glyph stays put
+    function squish(tl,t,el){
+      tl.to(el,{scaleY:0.7,scaleX:1.04,skewX:-8,duration:0.09,ease:'power3.in'},t);
+      tl.to(el,{scaleY:1,scaleX:1,skewX:0,duration:0.55,ease:'elastic.out(1,0.4)'},t+0.09);
+    }
+    // physics hop: constant horizontal velocity + parabolic vertical, with squash/stretch
+    function hop(tl,t,from,to,height,dur){
+      tl.to(body,{scaleX:1.28,scaleY:0.74,duration:0.10,ease:'power2.out'},t);
+      const L=t+0.10, peakY=Math.min(from.y,to.y)-height;
+      tl.fromTo(packet,{x:from.x},{x:to.x,duration:dur,ease:'none',immediateRender:false},L);
+      tl.fromTo(packet,{y:from.y},{y:peakY,duration:dur*0.5,ease:'power2.out',immediateRender:false},L);
+      tl.to(packet,{y:to.y,duration:dur*0.5,ease:'power2.in'},L+dur*0.5);
+      tl.to(body,{scaleX:0.82,scaleY:1.28,duration:0.14,ease:'power2.out'},L);
+      tl.to(body,{scaleX:1,scaleY:1,duration:dur*0.5,ease:'sine.in'},L+dur*0.5);
+      tl.to(ears,{rotation:-18,duration:0.16,ease:'power2.out'},L);
+      tl.to(ears,{rotation:10,duration:0.18,ease:'power1.inOut'},L+dur*0.55);
+      const land=L+dur;
+      tl.to(body,{scaleX:1.36,scaleY:0.62,duration:0.07,ease:'power3.in'},land-0.02);
+      tl.to(body,{scaleX:1,scaleY:1,duration:0.42,ease:'elastic.out(1,0.45)'},land+0.05);
+      tl.to(ears,{rotation:0,duration:0.5,ease:'elastic.out(1,0.4)'},land+0.05);
+      return land;
+    }
+
+    let LET=null, settled=false, isRabbit=false;
+    function buildTimeline(){
+      settled=false; isRabbit=false;
+      gsap.set('#rabbit',{opacity:0});
+      gsap.set(['#rEarL','#rEarR'],{scaleY:0});
+      LET.forEach(g=>{ if(g.el) gsap.set(g.el,{opacity:0,y:14,scaleX:1,scaleY:1,skewX:0}); });
+      gsap.set('#oGlyph',{opacity:0,scale:0});
+      gsap.set('#tag',{opacity:0}); gsap.set('#sweep',{opacity:0,attr:{width:0}});
+      gsap.set('#flash',{opacity:0});
+      gsap.set(body,{scaleX:1,scaleY:1,opacity:1}); gsap.set(ears,{rotation:0,scale:1,opacity:1});
+      gsap.set('#halo',{opacity:0.18});
+
+      gsap.set('#scanbeam',{opacity:0});
+
+      const START={x:LET[0].cx-115, y:LET[0].topY-15};  // enters from the left
+      gsap.set(packet,{opacity:0,scale:0,x:START.x,y:START.y});
+
+      const tl=gsap.timeline({onComplete:()=>{settled=true;}}); let t=0;
+
+      // ---- a beam writes the letters of &quot;Beam&quot;, vertically centered on the word ----
+      const beamY=(LET[0].topY+BASE)/2;          // cap-height centre
+      const x0=LET[0].cx-42, xEnd=LET[3].cx+24;  // start left of B, end just past m
+      const SWEEP=0.9, TRAIL=160, leftBound=x0-34;
+      const layers=['#beamGlow','#beamBar','#beamCore'];
+      gsap.set('#beamGlow',{attr:{y:beamY-9}});
+      gsap.set('#beamBar', {attr:{y:beamY-2.5}});
+      gsap.set('#beamCore',{attr:{y:beamY-1}});
+      gsap.set('#beamHead',{attr:{cx:x0,cy:beamY}});
+      gsap.set(['#beamGlow','#beamBar','#beamCore'],{attr:{width:0}});
+      gsap.set('#scanbeam',{opacity:0});
+
+      const bs={head:x0};
+      // render a comet: a fixed-length tail that follows the head and fades out behind it
+      function renderBeam(len){
+        const head=bs.head;
+        const useLen=(len==null)?Math.min(TRAIL, head-leftBound):len;
+        const left=head-useLen, w=Math.max(0,useLen);
+        layers.forEach(s=>{ const e=$(s); e.setAttribute('x',left); e.setAttribute('width',w); });
+        $('#beamHead').setAttribute('cx',head);
+      }
+
+      const reveal=(g,at)=>tl.to(g.el,{opacity:1,y:0,duration:0.32,ease:'power2.out'},at);
+
+      // beam appears, then the head sweeps left->right (linear: time maps to x)
+      tl.to('#scanbeam',{opacity:1,duration:0.12},0);
+      tl.to(bs,{head:xEnd,duration:SWEEP,ease:'none',onUpdate:()=>renderBeam(null)},0);
+      // B, e, a, m fade in as the head passes each
+      [0,1,2,3].forEach(i=>{
+        const at=(LET[i].cx-x0)/(xEnd-x0)*SWEEP;
+        reveal(LET[i], Math.max(0, at-0.04));
+      });
+      // when &quot;h&quot; appears, the trail collapses into the head and fades away
+      reveal(LET[4], SWEEP);                                  // h
+      const ls={len:TRAIL};
+      tl.to(ls,{len:0,duration:0.36,ease:'power2.in',onUpdate:()=>renderBeam(ls.len)},SWEEP);
+      tl.to('#scanbeam',{opacity:0,duration:0.36,ease:'power2.in'},SWEEP+0.04);
+      reveal(LET[6], SWEEP+0.12);                             // p
+
+      // the o-packet arrives from the left (after the beam has gone)
+      tl.fromTo(packet,{opacity:0,scale:0},{opacity:1,scale:1,duration:0.34,ease:'back.out(2.2)',immediateRender:false},SWEEP+0.25);
+      tl.to(packet,{y:START.y-10,duration:0.22,yoyo:true,repeat:1,ease:'sine.inOut'},SWEEP+0.4);
+      t=SWEEP+0.75;
+
+      // hop ALONG the letters, squishing each
+      let pos=START;
+      function letterHop(g,height,dur,gap,squishIt,asO){
+        const target=asO?{x:g.cx,y:g.cy}:{x:g.cx,y:g.topY-15};
+        const land=hop(tl,t,pos,target,height,dur);
+        if(squishIt) squish(tl,land,g.el);
+        if(!asO) ping(tl,land,g.cx,g.topY);
+        pos=target; t=land+gap; return land;
+      }
+      letterHop(LET[0],70,0.5,0.07,true,false);          // onto B
+      [1,2,3,4].forEach(i=>letterHop(LET[i],56,0.34,0.06,true,false)); // e a m h
+
+      // drop into the o slot and BECOME the o
+      const oLand=letterHop(LET[5],50,0.36,0,false,true);
+      tl.to('#ears',{scale:0,opacity:0,duration:0.18,ease:'power2.in'},oLand);
+      tl.to('#halo',{opacity:0,duration:0.3},oLand);
+      tl.to('#flash',{opacity:0.5,duration:0.06},oLand+0.02).to('#flash',{opacity:0,duration:0.45},oLand+0.08);
+      tl.to(body,{opacity:0,duration:0.22,ease:'power2.in'},oLand+0.06);
+      tl.fromTo('#oGlyph',{scale:0,opacity:0},{scale:1,opacity:1,duration:0.5,ease:'elastic.out(1,0.5)',immediateRender:false},oLand+0.04);
+      ping(tl,oLand+0.05,LET[5].cx,LET[5].cy,'var(--hop)');
+
+      // underline sweep + tagline
+      const w=oLand+0.5;
+      tl.to('#sweep',{opacity:1,attr:{width:+$('#sweep').dataset.w},duration:0.5,ease:'power3.out'},w);
+      tl.to('#sweep',{opacity:0.5,duration:0.4},w+0.5);
+      tl.to('#tag',{opacity:1,duration:0.5,ease:'power1.out'},w+0.2);
+      return tl;
+    }
+
+    function showStatic(){
+      gsap.set('#scanbeam',{opacity:0});
+      LET.forEach(g=>{ if(g.el) gsap.set(g.el,{opacity:1,y:0}); });
+      gsap.set('#oGlyph',{opacity:1,scale:1}); gsap.set('#tag',{opacity:1});
+      gsap.set('#sweep',{opacity:0.5,attr:{width:+$('#sweep').dataset.w}}); gsap.set('#packet',{opacity:0});
+      settled=true;
+    }
+
+    // o <-> rabbit-head morph on hover
+    function setRabbit(on){
+      if(on===isRabbit) return; isRabbit=on;
+      if(on){
+        gsap.to('#oGlyph',{opacity:0,scale:0.55,duration:0.16,ease:'power2.in'});
+        gsap.to('#rabbit',{opacity:1,duration:0.12});
+        gsap.fromTo('#rFace',{scale:0.6},{scale:1,duration:0.34,ease:'back.out(2.4)'});
+        gsap.fromTo('#rFeatures',{opacity:0},{opacity:1,duration:0.2,delay:0.08});
+        gsap.to(['#rEarL','#rEarR'],{scaleY:1,duration:0.55,ease:'elastic.out(1,0.45)'});
+      } else {
+        gsap.to(['#rEarL','#rEarR'],{scaleY:0,duration:0.20,ease:'power2.in'});
+        gsap.to('#rabbit',{opacity:0,duration:0.22,ease:'power2.in'});
+        gsap.to('#oGlyph',{opacity:1,scale:1,duration:0.28,ease:'back.out(1.8)',delay:0.04});
+      }
+    }
+
+    let current;
+    function play(){ if(current) current.kill(); current=buildTimeline(); }
+    function init(){
+      LET=layoutWord();
+      // rabbit rest state: ears furled, pivoting at their base, face centred
+      gsap.set('#rFace',{transformOrigin:'50% 50%'});
+      gsap.set('#rEarL',{rotation:-16,scaleY:0,transformOrigin:'50% 100%'});
+      gsap.set('#rEarR',{rotation:16, scaleY:0,transformOrigin:'50% 100%'});
+      const box=$('#hoverbox');
+      box.addEventListener('pointerenter',()=>{ if(settled) setRabbit(true); });
+      box.addEventListener('pointerleave',()=>{ if(settled) setRabbit(false); });
+
+      if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ showStatic(); }
+      else { play(); $('#replay').addEventListener('click',play); }
+    }
+    if(document.fonts &amp;&amp; document.fonts.ready){ document.fonts.ready.then(()=>requestAnimationFrame(init)); }
+    else { window.addEventListener('load',init); }
+  })();
+  </script>
+</body>
+</html>
+"></iframe></div>
+    </section>
+
+    <div class="row">
+      <section class="card">
+        <div class="lbl">Mascot · idle / spinner</div>
+        <div class="frame square"><iframe title="Beamhop bunny mascot" loading="lazy" srcdoc="<!doctype html>
+<html lang=&quot;en&quot;>
+<head>
+<meta charset=&quot;utf-8&quot;/>
+<meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;/>
+<title>Beamhop — Bunny Logo</title>
+<link rel=&quot;preconnect&quot; href=&quot;https://fonts.googleapis.com&quot;>
+<link rel=&quot;preconnect&quot; href=&quot;https://fonts.gstatic.com&quot; crossorigin>
+<link href=&quot;https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap&quot; rel=&quot;stylesheet&quot;>
+<style>
+  :root{
+    --bg:#0B0E1A; --beam:#5EEAD4; --hop:#8B7BFF; --core:#FDFBFF;
+    --ink:#EAF0FF; --muted:#6E7896;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    background:radial-gradient(1100px 600px at 50% -5%, #161d33 0%, var(--bg) 60%);
+    color:var(--ink); font-family:&quot;Space Grotesk&quot;,system-ui,sans-serif;
+    min-height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:28px;
+  }
+  .stage{
+    width:min(420px,90vw); aspect-ratio:1/1; border-radius:24px;
+    background:radial-gradient(120% 120% at 50% 115%, #11162a 0%, #0a0d18 72%);
+    box-shadow:0 30px 80px -30px #000, inset 0 0 0 1px #ffffff10; overflow:hidden;
+    display:grid; place-items:center;
+  }
+  svg{ width:84%; height:84%; display:block; }
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  button{
+    font:600 13px &quot;Space Grotesk&quot;,sans-serif; letter-spacing:.03em; color:var(--muted);
+    background:#ffffff0a; border:1px solid #ffffff1a; padding:10px 18px; border-radius:999px;
+    cursor:pointer; transition:all .16s ease;
+  }
+  button:hover{ color:var(--ink); border-color:#ffffff33; }
+  button.active{ color:var(--bg); background:var(--beam); border-color:var(--beam); box-shadow:0 6px 20px -8px var(--beam); }
+  button:focus-visible{ outline:2px solid var(--hop); outline-offset:2px; }
+  .label{ color:var(--muted); font-size:12px; letter-spacing:.12em; text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <div class=&quot;stage&quot;>
+    <svg id=&quot;scene&quot; viewBox=&quot;0 0 300 320&quot; role=&quot;img&quot; aria-label=&quot;Beamhop bunny logo&quot;>
+      <defs>
+        <radialGradient id=&quot;gBody&quot; cx=&quot;50%&quot; cy=&quot;34%&quot; r=&quot;72%&quot;>
+          <stop offset=&quot;0%&quot;  stop-color=&quot;#9DF8EA&quot;/>
+          <stop offset=&quot;52%&quot; stop-color=&quot;#5EEAD4&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;#39BCAD&quot;/>
+        </radialGradient>
+        <radialGradient id=&quot;gEar&quot; cx=&quot;50%&quot; cy=&quot;20%&quot; r=&quot;90%&quot;>
+          <stop offset=&quot;0%&quot;  stop-color=&quot;#8FF6E6&quot;/>
+          <stop offset=&quot;100%&quot; stop-color=&quot;#48CDBC&quot;/>
+        </radialGradient>
+        <filter id=&quot;soft&quot; x=&quot;-60%&quot; y=&quot;-60%&quot; width=&quot;220%&quot; height=&quot;220%&quot;>
+          <feGaussianBlur stdDeviation=&quot;6&quot;/>
+        </filter>
+        <filter id=&quot;glow&quot; x=&quot;-50%&quot; y=&quot;-50%&quot; width=&quot;200%&quot; height=&quot;200%&quot;>
+          <feGaussianBlur stdDeviation=&quot;3.5&quot; result=&quot;b&quot;/>
+          <feMerge><feMergeNode in=&quot;b&quot;/><feMergeNode in=&quot;SourceGraphic&quot;/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- ground shadow (stays on the floor; does not hop) -->
+      <ellipse id=&quot;shadow&quot; cx=&quot;150&quot; cy=&quot;256&quot; rx=&quot;50&quot; ry=&quot;11&quot; fill=&quot;#000&quot; opacity=&quot;0.36&quot; filter=&quot;url(#soft)&quot;/>
+
+      <!-- the bunny: #bunny translates for the hop -->
+      <g id=&quot;bunny&quot;>
+        <!-- #body squashes/stretches/skews, pivoting at the feet -->
+        <g id=&quot;body&quot;>
+          <!-- #head turns for &quot;looking&quot; -->
+          <g id=&quot;head&quot;>
+            <!-- ears (behind the body blob) -->
+            <g id=&quot;earL&quot;><ellipse cx=&quot;136&quot; cy=&quot;142&quot; rx=&quot;12&quot; ry=&quot;41&quot; fill=&quot;url(#gEar)&quot;/>
+              <ellipse cx=&quot;136&quot; cy=&quot;140&quot; rx=&quot;5.4&quot; ry=&quot;29&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.7&quot;/></g>
+            <g id=&quot;earR&quot;><ellipse cx=&quot;164&quot; cy=&quot;142&quot; rx=&quot;12&quot; ry=&quot;41&quot; fill=&quot;url(#gEar)&quot;/>
+              <ellipse cx=&quot;164&quot; cy=&quot;140&quot; rx=&quot;5.4&quot; ry=&quot;29&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.7&quot;/></g>
+
+            <!-- body / head blob -->
+            <circle id=&quot;blob&quot; cx=&quot;150&quot; cy=&quot;204&quot; r=&quot;46&quot; fill=&quot;url(#gBody)&quot; filter=&quot;url(#glow)&quot;/>
+
+            <!-- face: can shift sideways for &quot;looking&quot; -->
+            <g id=&quot;face&quot;>
+              <ellipse cx=&quot;128&quot; cy=&quot;210&quot; rx=&quot;9&quot; ry=&quot;6&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.22&quot;/>
+              <ellipse cx=&quot;172&quot; cy=&quot;210&quot; rx=&quot;9&quot; ry=&quot;6&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.22&quot;/>
+
+              <!-- angry eyebrows: tangent to the eyes, inner ends low (hidden by default) -->
+              <g id=&quot;brows&quot; opacity=&quot;0&quot;>
+                <path d=&quot;M125 189 L145 196&quot; stroke=&quot;#0A0E1A&quot; stroke-width=&quot;3.6&quot; stroke-linecap=&quot;round&quot;/>
+                <path d=&quot;M175 189 L155 196&quot; stroke=&quot;#0A0E1A&quot; stroke-width=&quot;3.6&quot; stroke-linecap=&quot;round&quot;/>
+              </g>
+
+              <g id=&quot;eyeL&quot;><circle cx=&quot;135&quot; cy=&quot;197&quot; r=&quot;6&quot; fill=&quot;#0A0E1A&quot;/>
+                <circle cx=&quot;133&quot; cy=&quot;194.5&quot; r=&quot;1.8&quot; fill=&quot;#EAF0FF&quot;/></g>
+              <g id=&quot;eyeR&quot;><circle cx=&quot;165&quot; cy=&quot;197&quot; r=&quot;6&quot; fill=&quot;#0A0E1A&quot;/>
+                <circle cx=&quot;163&quot; cy=&quot;194.5&quot; r=&quot;1.8&quot; fill=&quot;#EAF0FF&quot;/></g>
+
+              <!-- nose -->
+              <path d=&quot;M150 215 l-4.5 -5 h9 z&quot; fill=&quot;#8B7BFF&quot;/>
+
+              <!-- mouth: neutral (corners down) crossfades with smile (corners up) -->
+              <path id=&quot;mouth&quot; d=&quot;M150 215 q0 6 -6 8 M150 215 q0 6 6 8&quot; stroke=&quot;#2C8E83&quot; stroke-width=&quot;1.6&quot;
+                    fill=&quot;none&quot; stroke-linecap=&quot;round&quot; opacity=&quot;0.7&quot;/>
+              <path id=&quot;mouthSmile&quot; d=&quot;M150 217 q-7 4 -13 -3 M150 217 q7 4 13 -3&quot; stroke=&quot;#2C8E83&quot;
+                    stroke-width=&quot;1.9&quot; fill=&quot;none&quot; stroke-linecap=&quot;round&quot; opacity=&quot;0&quot;/>
+
+              <!-- Secret Mode: arms reach up from the body and paws cover the eyes -->
+              <g id=&quot;hands&quot; opacity=&quot;0&quot;>
+                <g id=&quot;handL&quot;>
+                  <path d=&quot;M120 232 Q124 209 135 201&quot; stroke=&quot;#2C8E83&quot; stroke-width=&quot;17&quot; fill=&quot;none&quot; stroke-linecap=&quot;round&quot;/>
+                  <path d=&quot;M120 232 Q124 209 135 201&quot; stroke=&quot;#54D9C9&quot; stroke-width=&quot;13&quot; fill=&quot;none&quot; stroke-linecap=&quot;round&quot;/>
+                  <ellipse cx=&quot;135&quot; cy=&quot;198&quot; rx=&quot;13&quot; ry=&quot;15&quot; fill=&quot;url(#gBody)&quot; stroke=&quot;#2C8E83&quot; stroke-width=&quot;1.6&quot;/>
+                  <circle cx=&quot;129&quot; cy=&quot;187&quot; r=&quot;3.4&quot; fill=&quot;url(#gBody)&quot;/>
+                  <circle cx=&quot;135&quot; cy=&quot;185&quot; r=&quot;3.6&quot; fill=&quot;url(#gBody)&quot;/>
+                  <circle cx=&quot;141&quot; cy=&quot;187&quot; r=&quot;3.4&quot; fill=&quot;url(#gBody)&quot;/>
+                  <ellipse cx=&quot;135&quot; cy=&quot;201&quot; rx=&quot;6&quot; ry=&quot;7.5&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.4&quot;/>
+                </g>
+                <g id=&quot;handR&quot;>
+                  <path d=&quot;M180 232 Q176 209 165 201&quot; stroke=&quot;#2C8E83&quot; stroke-width=&quot;17&quot; fill=&quot;none&quot; stroke-linecap=&quot;round&quot;/>
+                  <path d=&quot;M180 232 Q176 209 165 201&quot; stroke=&quot;#54D9C9&quot; stroke-width=&quot;13&quot; fill=&quot;none&quot; stroke-linecap=&quot;round&quot;/>
+                  <ellipse cx=&quot;165&quot; cy=&quot;198&quot; rx=&quot;13&quot; ry=&quot;15&quot; fill=&quot;url(#gBody)&quot; stroke=&quot;#2C8E83&quot; stroke-width=&quot;1.6&quot;/>
+                  <circle cx=&quot;159&quot; cy=&quot;187&quot; r=&quot;3.4&quot; fill=&quot;url(#gBody)&quot;/>
+                  <circle cx=&quot;165&quot; cy=&quot;185&quot; r=&quot;3.6&quot; fill=&quot;url(#gBody)&quot;/>
+                  <circle cx=&quot;171&quot; cy=&quot;187&quot; r=&quot;3.4&quot; fill=&quot;url(#gBody)&quot;/>
+                  <ellipse cx=&quot;165&quot; cy=&quot;201&quot; rx=&quot;6&quot; ry=&quot;7.5&quot; fill=&quot;#8B7BFF&quot; opacity=&quot;0.4&quot;/>
+                </g>
+              </g>
+            </g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <div class=&quot;controls&quot;>
+    <button id=&quot;btnIdle&quot; class=&quot;active&quot;>Idle</button>
+    <button id=&quot;btnSpin&quot;>Spinner</button>
+  </div>
+  <div class=&quot;controls&quot;>
+    <button id=&quot;btnSmile&quot;>Smile</button>
+    <button id=&quot;btnAngry&quot;>Angry</button>
+    <button id=&quot;btnSecret&quot;>Secret</button>
+  </div>
+  <div class=&quot;label&quot; id=&quot;state&quot;>idle — blinks, ear flicks, looks around</div>
+
+  <script src=&quot;https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js&quot;></script>
+  <script>
+  (function(){
+    const $=(s)=>document.querySelector(s);
+    // ears are positioned at the top of the blob; rotation pivots at their base
+    // Fixed (SVG-space) pivots. Percentage origins recompute from a bounding box
+    // that changes as the ears swing, which made the body lurch sideways each hop.
+    // A constant svgOrigin point keeps the bunny planted.
+    gsap.set('#earL',{rotation:-11,svgOrigin:'136 183'});
+    gsap.set('#earR',{rotation:11, svgOrigin:'164 183'});
+    gsap.set('#body',{svgOrigin:'150 250'});   // feet
+    gsap.set('#head',{svgOrigin:'150 226'});   // neck
+    gsap.set('#eyeL',{svgOrigin:'135 197'});
+    gsap.set('#eyeR',{svgOrigin:'165 197'});
+    gsap.set('#shadow',{svgOrigin:'150 256'});
+    gsap.set('#handL',{svgOrigin:'120 232'});   // grow from the shoulder
+    gsap.set('#handR',{svgOrigin:'180 232'});
+    gsap.set('#mouthSmile',{svgOrigin:'150 218'});
+
+    const EAR_L=-11, EAR_R=11;   // rest angles
+    function restPose(){
+      gsap.set('#bunny',{y:0});
+      gsap.set('#body',{scaleX:1,scaleY:1,skewX:0});
+      gsap.set('#head',{rotation:0});
+      gsap.set('#face',{x:0});
+      gsap.set('#earL',{rotation:EAR_L}); gsap.set('#earR',{rotation:EAR_R});
+      gsap.set(['#eyeL','#eyeR'],{scaleY:1});
+      gsap.set('#shadow',{scaleX:1,scaleY:1,opacity:0.36});
+    }
+
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* ---------------- SPINNER: a physical hop, looped ---------------- */
+    function buildHop(){
+      const up=-70, tl=gsap.timeline({repeat:-1});
+      // anticipation (load the legs)
+      tl.to('#body',{scaleY:0.82,scaleX:1.16,duration:0.10,ease:'power2.out'},0);
+      tl.addLabel('launch',0.10);
+      // launch: rise (decelerate) + stretch tall + thin; ears swing back/out
+      tl.to('#bunny',{y:up,duration:0.26,ease:'power2.out'},'launch');
+      tl.to('#body',{scaleY:1.2,scaleX:0.88,duration:0.14,ease:'power2.out'},'launch');
+      tl.to('#body',{scaleY:1,scaleX:1,duration:0.12,ease:'sine.in'},'launch+=0.14');
+      tl.to('#earL',{rotation:-30,duration:0.22,ease:'power2.out'},'launch');
+      tl.to('#earR',{rotation:30, duration:0.22,ease:'power2.out'},'launch');
+      tl.to('#shadow',{scaleX:0.6,scaleY:0.7,opacity:0.16,duration:0.26,ease:'power2.out'},'launch');
+      tl.addLabel('fall','launch+=0.26');  // apex
+      // fall (accelerate); ears swing forward, overshooting through vertical
+      tl.to('#bunny',{y:0,duration:0.24,ease:'power2.in'},'fall');
+      tl.to('#earL',{rotation:2, duration:0.24,ease:'power1.in'},'fall');
+      tl.to('#earR',{rotation:-2,duration:0.24,ease:'power1.in'},'fall');
+      tl.to('#shadow',{scaleX:1.08,scaleY:1.05,opacity:0.42,duration:0.24,ease:'power2.in'},'fall');
+      tl.addLabel('land','fall+=0.24');
+      // impact: squash + skew + a quick squint; ears flop forward
+      tl.to('#body',{scaleY:0.74,scaleX:1.24,skewX:8,duration:0.07,ease:'power3.in'},'land');
+      tl.to(['#eyeL','#eyeR'],{scaleY:0.35,duration:0.07,yoyo:true,repeat:1,ease:'power2.inOut'},'land');
+      tl.to('#earL',{rotation:12, duration:0.09,ease:'power2.in'},'land');
+      tl.to('#earR',{rotation:-12,duration:0.09,ease:'power2.in'},'land');
+      // settle: body springs back, ears damp-oscillate to rest, shadow recovers
+      tl.to('#body',{scaleY:1,scaleX:1,skewX:0,duration:0.5,ease:'elastic.out(1,0.4)'},'land+=0.07');
+      tl.to('#earL',{rotation:EAR_L,duration:0.62,ease:'elastic.out(1,0.34)'},'land+=0.09');
+      tl.to('#earR',{rotation:EAR_R,duration:0.62,ease:'elastic.out(1,0.34)'},'land+=0.09');
+      tl.to('#shadow',{scaleX:1,scaleY:1,opacity:0.36,duration:0.4,ease:'elastic.out(1,0.5)'},'land+=0.07');
+      tl.to({},{duration:0.16});  // a beat before the next hop
+      return tl;
+    }
+    function buildHopReduced(){
+      const tl=gsap.timeline({repeat:-1,yoyo:true});
+      tl.to('#bunny',{y:-14,duration:0.7,ease:'sine.inOut'})
+        .to('#body',{scaleY:0.96,scaleX:1.03,duration:0.7,ease:'sine.inOut'},0);
+      return tl;
+    }
+
+    /* ---------------- IDLE: stand + random micro-life ---------------- */
+    let breathTL=null, idleTimer=null;
+    function blink(){ gsap.to(['#eyeL','#eyeR'],{scaleY:0.1,duration:0.06,yoyo:true,repeat:1,ease:'power2.inOut',overwrite:'auto'}); }
+    function foldEar(){
+      const left=Math.random()<0.5, id=left?'#earL':'#earR';
+      const rest=left?EAR_L:EAR_R, fold=left?40:-40;
+      gsap.to(id,{rotation:fold,duration:0.16,ease:'power2.out',overwrite:'auto',
+        onComplete:()=>gsap.to(id,{rotation:rest,duration:0.7,ease:'elastic.out(1,0.4)'})});
+    }
+    function lookAround(){
+      const dir=Math.random()<0.5?-1:1;
+      gsap.to('#head',{rotation:7*dir,duration:0.45,ease:'power2.out',overwrite:'auto'});
+      gsap.to('#face',{x:6*dir,duration:0.45,ease:'power2.out',overwrite:'auto',
+        onComplete:()=>{ gsap.to('#head',{rotation:0,duration:0.7,ease:'power2.inOut',delay:0.55});
+                         gsap.to('#face',{x:0,duration:0.7,ease:'power2.inOut',delay:0.55}); }});
+      if(Math.random()<0.5) gsap.delayedCall(0.2, blink);
+    }
+    function twitch(){
+      gsap.to('#earL',{rotation:EAR_L-3.5,duration:0.09,yoyo:true,repeat:3,ease:'sine.inOut',overwrite:'auto'});
+      gsap.to('#earR',{rotation:EAR_R+3.5,duration:0.09,yoyo:true,repeat:3,ease:'sine.inOut',overwrite:'auto'});
+    }
+    function scheduleIdle(){
+      const acts=[blink,blink,foldEar,lookAround,twitch,blink];
+      acts[Math.floor(Math.random()*acts.length)]();
+      idleTimer=setTimeout(scheduleIdle, 1100+Math.random()*2700);
+    }
+
+    /* ---------------- state machine ---------------- */
+    let hopTL=null;
+    function stopAll(){
+      if(idleTimer){ clearTimeout(idleTimer); idleTimer=null; }
+      if(breathTL){ breathTL.kill(); breathTL=null; }
+      if(hopTL){ hopTL.kill(); hopTL=null; }
+      gsap.killTweensOf(['#bunny','#body','#head','#face','#earL','#earR','#eyeL','#eyeR','#shadow']);
+      restPose();
+    }
+    function setIdle(){
+      stopAll();
+      if(!reduced){
+        breathTL=gsap.to('#body',{scaleY:1.03,scaleX:0.99,duration:1.7,ease:'sine.inOut',yoyo:true,repeat:-1});
+        scheduleIdle();
+      }
+      $('#state').textContent='idle — blinks, ear flicks, looks around';
+      $('#btnIdle').classList.add('active'); $('#btnSpin').classList.remove('active');
+    }
+    function setSpinner(){
+      stopAll();
+      hopTL = reduced ? buildHopReduced() : buildHop();
+      $('#state').textContent='spinner — hop loop for loading screens';
+      $('#btnSpin').classList.add('active'); $('#btnIdle').classList.remove('active');
+    }
+
+    $('#btnIdle').addEventListener('click',setIdle);
+    $('#btnSpin').addEventListener('click',setSpinner);
+
+    /* ---------------- expressions (overlay on any base state) ---------------- */
+    let smiling=false, angry=false, covered=false;
+
+    function setSmile(on){
+      smiling=on;
+      gsap.to('#mouth',{opacity:on?0:0.7,duration:0.22,ease:'power2.out',overwrite:'auto'});
+      if(on) gsap.fromTo('#mouthSmile',{opacity:0,scale:0.7},{opacity:0.9,scale:1,duration:0.32,ease:'back.out(2.4)',overwrite:'auto'});
+      else   gsap.to('#mouthSmile',{opacity:0,duration:0.2,overwrite:'auto'});
+      $('#btnSmile').classList.toggle('active',on);
+    }
+    function setAngry(on){
+      angry=on;
+      if(on) gsap.fromTo('#brows',{opacity:0,y:-4},{opacity:1,y:0,duration:0.30,ease:'back.out(2)',overwrite:'auto'});
+      else   gsap.to('#brows',{opacity:0,y:-3,duration:0.20,ease:'power2.in',overwrite:'auto'});
+      $('#btnAngry').classList.toggle('active',on);
+    }
+    // Secret Mode — two methods: cover and uncover (reverse)
+    function coverEyes(){
+      covered=true;
+      gsap.set('#hands',{opacity:1});
+      gsap.fromTo('#handL',{scale:0,rotation:-10},{scale:1,rotation:0,duration:0.42,ease:'back.out(2)',overwrite:'auto'});
+      gsap.fromTo('#handR',{scale:0,rotation:10}, {scale:1,rotation:0,duration:0.42,ease:'back.out(2)',delay:0.06,overwrite:'auto'});
+      $('#btnSecret').classList.add('active');
+    }
+    function uncoverEyes(){
+      covered=false;
+      gsap.to('#handL',{scale:0,rotation:-10,duration:0.32,ease:'back.in(1.7)',overwrite:'auto'});
+      gsap.to('#handR',{scale:0,rotation:10, duration:0.32,ease:'back.in(1.7)',overwrite:'auto',
+        onComplete:()=>gsap.set('#hands',{opacity:0})});
+      $('#btnSecret').classList.remove('active');
+    }
+
+    $('#btnSmile').addEventListener('click',()=>setSmile(!smiling));
+    $('#btnAngry').addEventListener('click',()=>setAngry(!angry));
+    $('#btnSecret').addEventListener('click',()=>covered?uncoverEyes():coverEyes());
+
+    restPose();
+    setIdle();
+  })();
+  </script>
+</body>
+</html>
+"></iframe></div>
+      </section>
+
+      <aside class="card">
+        <div class="lbl">System</div>
+        <div class="panelbox">
+          <div class="sysword"><span class="a">Beam</span><span class="b">hop</span></div>
+          <p class="desc">A peer-to-peer network. The identity fuses <b style="color:var(--beam)">beaming</b> — light, transmission — with <b style="color:var(--hop)">hopping</b>: a packet that travels like a rabbit. The "o" is the packet at rest; hover the wordmark to see it reveal itself.</p>
+          <div class="swatches">
+            <div class="sw"><span class="chip" style="background:#5EEAD4"></span>beam · #5EEAD4</div>
+            <div class="sw"><span class="chip" style="background:#8B7BFF"></span>hop · #8B7BFF</div>
+            <div class="sw"><span class="chip" style="background:#0B0E1A"></span>midnight · #0B0E1A</div>
+            <div class="sw"><span class="chip" style="background:#EAF0FF"></span>ink · #EAF0FF</div>
+          </div>
+          <ul class="states">
+            <li><b>Idle</b> — stands, blinks, flicks an ear, glances around</li>
+            <li><b>Spinner</b> — physics hop loop for loading screens</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+
+    <footer>Single-page demo · each piece runs isolated in its own frame · GSAP-driven SVG</footer>
+  </div>
+</body>
+</html>

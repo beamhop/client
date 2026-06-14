@@ -3,6 +3,7 @@ import { useApp } from '../store/AppContext.js';
 import { Avatar, Btn, personView } from '../components/common.js';
 import { Icon } from '../components/Icon.js';
 import { PostCard } from '../components/PostCard.js';
+import { BunnyLoader } from '../components/BunnyLoader.js';
 import { useComposer } from '../hooks/useComposer.js';
 
 function postBtnStyle(enabled: boolean): CSSProperties {
@@ -184,20 +185,7 @@ function EmptyOrLoading({ loading }: { loading: boolean }): ReactNode {
       }}
     >
       {loading ? (
-        <>
-          <div
-            style={{
-              width: 26,
-              height: 26,
-              margin: '0 auto 14px',
-              border: '3px solid var(--border-2)',
-              borderTopColor: 'var(--accent)',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-            }}
-          />
-          Loading your feed…
-        </>
+        <BunnyLoader label="Loading your feed…" />
       ) : (
         'No posts yet. Follow people in Explore, or write the first note.'
       )}

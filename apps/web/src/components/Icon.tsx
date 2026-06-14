@@ -230,21 +230,3 @@ export function Icon({ name, size = 20, fill = 'none', stroke = 'currentColor', 
 export function Verified({ size = 15 }: { size?: number }): ReactNode {
   return <VerifiedBadge size={size} />;
 }
-
-/** The Verity wordmark logo glyph. */
-export function Logo({ size = 32 }: { size?: number }): ReactNode {
-  const gid = `lg-${size}`;
-  return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden>
-      <rect width="32" height="32" rx="9" fill={`url(#${gid})`} />
-      <path d="M16 7.5l6.4 8.5-6.4 8.5L9.6 16 16 7.5z" fill="#fff" fillOpacity=".96" />
-      <circle cx="16" cy="16" r="2.5" fill={`url(#${gid})`} />
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="32" y2="32">
-          <stop stopColor="#6366f1" />
-          <stop offset="1" stopColor="#a855f7" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}

@@ -191,7 +191,7 @@ export function Security(): ReactNode {
           </Btn>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
-          <div style={{ flex: 1, fontSize: 13, color: 'var(--text-3)' }}>Sign out of Verity on this device. Your key stays valid — back it up first.</div>
+          <div style={{ flex: 1, fontSize: 13, color: 'var(--text-3)' }}>Sign out of beamhop on this device. Your key stays valid — back it up first.</div>
           <Btn
             onClick={onLogout}
             data-testid="logout"
@@ -257,7 +257,7 @@ export function Security(): ReactNode {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {state.audit.length === 0 ? (
-            <p style={{ color: 'var(--text-3)', fontSize: 13.5, margin: 0 }}>Activity you take in Verity will be logged here.</p>
+            <p style={{ color: 'var(--text-3)', fontSize: 13.5, margin: 0 }}>Activity you take in beamhop will be logged here.</p>
           ) : (
             state.audit.slice(0, 20).map((a: AuditEntry) => (
               <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="audit-entry">

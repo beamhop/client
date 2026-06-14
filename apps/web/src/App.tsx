@@ -11,13 +11,14 @@ import {
   loadRelays,
   type Session,
 } from './lib/session.js';
-import { Logo } from './components/Icon.js';
+import { BeamhopLogo } from './components/BeamhopLogo.js';
+import { BunnyLoader } from './components/BunnyLoader.js';
 
 function Splash(): ReactNode {
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--bg)' }}>
-      <Logo size={48} />
-      <div style={{ width: 24, height: 24, border: '3px solid var(--border-2)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'var(--bg)' }}>
+      <BeamhopLogo size={30} />
+      <BunnyLoader />
     </div>
   );
 }

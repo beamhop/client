@@ -4,6 +4,7 @@ import { useApp } from '../store/AppContext.js';
 import { Btn } from '../components/common.js';
 import { Icon } from '../components/Icon.js';
 import { PostCard } from '../components/PostCard.js';
+import { BunnyLoader } from '../components/BunnyLoader.js';
 
 export function NoteDetail(): ReactNode {
   const { engine, noteTarget, setView } = useApp();
@@ -60,19 +61,8 @@ export function NoteDetail(): ReactNode {
       </Btn>
 
       {loading ? (
-        <div data-testid="note-loading" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-3)' }}>
-          <div
-            style={{
-              width: 26,
-              height: 26,
-              margin: '0 auto 14px',
-              border: '3px solid var(--border-2)',
-              borderTopColor: 'var(--accent)',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite',
-            }}
-          />
-          Loading thread…
+        <div style={{ padding: '60px 20px' }}>
+          <BunnyLoader label="Loading thread…" testId="note-loading" />
         </div>
       ) : root ? (
         <>

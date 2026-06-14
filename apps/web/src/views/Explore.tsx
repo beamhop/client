@@ -5,6 +5,7 @@ import type { SearchType } from '../lib/router.js';
 import { Avatar, Btn, ProfileLink, personView, type PersonView } from '../components/common.js';
 import { Icon, Verified, type IconName } from '../components/Icon.js';
 import { PostCard } from '../components/PostCard.js';
+import { BunnyLoader } from '../components/BunnyLoader.js';
 
 const TOPICS = ['nostr', 'bitcoin', 'security', 'design', 'engineering'];
 
@@ -335,9 +336,8 @@ function SearchResults({ results, searching, type }: { results: Results | null; 
 
   if (searching && items.length === 0) {
     return (
-      <div data-testid="search-loading" style={{ textAlign: 'center', padding: '50px 0', color: 'var(--text-3)' }}>
-        <div style={{ width: 24, height: 24, margin: '0 auto 12px', border: '3px solid var(--border-2)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
-        Searching relays…
+      <div style={{ padding: '50px 0' }}>
+        <BunnyLoader label="Searching relays…" testId="search-loading" />
       </div>
     );
   }
