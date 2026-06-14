@@ -73,6 +73,7 @@ export class VerityEngine {
 
   #feedSub: { close(): void } | undefined;
   #dmSub: { close(): void } | undefined;
+  #legacyDmSub: { close(): void } | undefined;
   #engagementSub: { close(): void } | undefined;
   #engagementTimer: ReturnType<typeof setTimeout> | undefined;
   #profileTimer: ReturnType<typeof setTimeout> | undefined;
@@ -207,7 +208,8 @@ export class VerityEngine {
       this.#emit();
     });
 
-    // Direct messages: history + live.
+    // Direct messages: history + live. Includes legacy (less-secure) DMs for
+    // interop with older clients; those arrive flagged so the UI can mark them.
     void this.#loadDirectMessages();
     this.#startDmSub();
 
@@ -217,6 +219,8 @@ export class VerityEngine {
   #startDmSub(): void {
     this.#dmSub?.close();
     this.#dmSub = this.#client.subscribeDirectMessages((m) => this.#onDirectMessage(m, true));
+    this.#legacyDmSub?.close();
+    this.#legacyDmSub = this.#client.subscribeLegacyDirectMessages((m) => this.#onDirectMessage(m, true));
   }
 
   #startFeed(): void {
@@ -362,8 +366,11 @@ export class VerityEngine {
 
   // ---------- direct messages ----------
   async #loadDirectMessages(): Promise<void> {
-    const messages = await this.#client.fetchDirectMessages();
-    for (const m of messages) this.#onDirectMessage(m, false);
+    const [secure, legacy] = await Promise.all([
+      this.#client.fetchDirectMessages(),
+      this.#client.fetchLegacyDirectMessages(),
+    ]);
+    for (const m of [...secure, ...legacy]) this.#onDirectMessage(m, false);
     this.#emit();
   }
 
@@ -490,6 +497,7 @@ export class VerityEngine {
       content,
       createdAt: Math.floor(Date.now() / 1000),
       wrapId: selfWrap?.id ?? '',
+      legacy: false,
     };
     this.#messages.set(mirror.id, mirror);
     this.#emit();
@@ -660,6 +668,7 @@ export class VerityEngine {
     this.#destroyed = true;
     this.#feedSub?.close();
     this.#dmSub?.close();
+    this.#legacyDmSub?.close();
     this.#engagementSub?.close();
     for (const s of this.#subs) s.close();
     if (this.#engagementTimer) clearTimeout(this.#engagementTimer);

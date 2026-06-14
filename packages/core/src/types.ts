@@ -30,15 +30,17 @@ export interface Profile {
   readonly createdAt: number;
 }
 
-/** A decrypted direct message (NIP-17 rumor). */
+/** A decrypted direct message. */
 export interface DirectMessage {
   readonly id: string;
   readonly from: Pubkey;
   readonly to: readonly Pubkey[];
   readonly content: string;
   readonly createdAt: number;
-  /** id of the gift wrap that delivered this message. */
+  /** id of the gift wrap (or source event) that delivered this message. */
   readonly wrapId: string;
+  /** True when delivered over the legacy, less-secure encryption scheme. */
+  readonly legacy: boolean;
 }
 
 /** Well-known Nostr event kinds used by Verity. */
@@ -49,6 +51,7 @@ export const Kind = {
   Reaction: 7,
   Deletion: 5,
   Contacts: 3,
+  LegacyDirectMessage: 4,
   Seal: 13,
   DirectMessage: 14,
   GiftWrap: 1059,

@@ -132,11 +132,12 @@ function Thread({ conv }: { conv: Conversation }): ReactNode {
           const fromMe = m.from === state.pubkey;
           return (
             <div key={m.id} style={{ display: 'flex', justifyContent: fromMe ? 'flex-end' : 'flex-start' }} data-testid="dm-message">
-              <div>
+              {/* Cap width on the wrapper (a flex item of the full-width row) so the
+                  74% resolves against the thread, not the bubble's own shrink width. */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: fromMe ? 'flex-end' : 'flex-start', maxWidth: '74%', minWidth: 40 }}>
                 <div
                   style={{
-                    maxWidth: '74%',
-                    minWidth: 40,
+                    maxWidth: '100%',
                     padding: '10px 14px',
                     borderRadius: fromMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
                     background: fromMe ? 'var(--accent)' : 'var(--surface-2)',
@@ -144,13 +145,32 @@ function Thread({ conv }: { conv: Conversation }): ReactNode {
                     fontSize: 14.5,
                     lineHeight: 1.45,
                     overflowWrap: 'anywhere',
-                    marginLeft: fromMe ? 'auto' : 0,
                   }}
                 >
                   {m.content}
                 </div>
-                <div style={{ fontSize: 10.5, marginTop: 4, color: 'var(--text-3)', textAlign: fromMe ? 'right' : 'left' }}>
-                  {clockTime(m.createdAt)}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginTop: 4,
+                    fontSize: 10.5,
+                    color: 'var(--text-3)',
+                    justifyContent: fromMe ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  {m.legacy ? (
+                    <span
+                      data-testid="dm-insecure"
+                      title="Encrypted with an older, less secure method"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--warn)', fontWeight: 600 }}
+                    >
+                      <Icon name="alert" size={11} stroke="currentColor" />
+                      Less secure
+                    </span>
+                  ) : null}
+                  <span>{clockTime(m.createdAt)}</span>
                 </div>
               </div>
             </div>

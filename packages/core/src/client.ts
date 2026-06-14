@@ -11,7 +11,7 @@ import { buildProfileContent, parseProfile } from './profile.js';
 import { parseContacts, addFollow, removeFollow, buildContactTags } from './contacts.js';
 import { parseBookmarks, addBookmark, removeBookmark, buildBookmarkTags } from './bookmarks.js';
 import { buildReactionTags, buildRepostTags, buildDeletionTags } from './interactions.js';
-import { sealDirectMessage, openGiftWrap } from './dms.js';
+import { sealDirectMessage, openGiftWrap, openLegacyDm } from './dms.js';
 import type { Signer } from './signer.js';
 import type { Subscription } from './relays.js';
 import type {
@@ -317,6 +317,69 @@ export class NostrClient {
     if (since !== undefined) filter.since = since;
     const wraps = await this.#pool.list([filter]);
     const decrypted = await Promise.all(wraps.map((wrap) => openGiftWrap(this.#signer, wrap)));
+    return decrypted
+      .filter((m): m is DirectMessage => m !== null)
+      .sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /**
+   * Subscribe to legacy (kind 4) encrypted DMs — both received (`#p` = us) and
+   * sent (authored by us) — decrypting each into a DirectMessage flagged
+   * `legacy: true`. Supported for interop with older clients; the scheme is less
+   * secure than gift-wrapped messages.
+   */
+  subscribeLegacyDirectMessages(onMessage: (message: DirectMessage) => void, since?: number): Subscription {
+    const seen = new Set<string>();
+    let subs: Subscription[] = [];
+    let closed = false;
+
+    void this.pubkey().then((self) => {
+      if (closed) return;
+      const base = since !== undefined ? { since } : {};
+      const handle = (event: NostrEvent): void => {
+        void this.#handleLegacyDm(event, self, seen, onMessage);
+      };
+      // Two separate subscriptions: received (#p) OR sent (authors). They must
+      // stay separate — the pool merges multiple filters into a single AND.
+      subs = [
+        this.#pool.subscribe([{ kinds: [Kind.LegacyDirectMessage], '#p': [self], ...base }], { onEvent: handle }),
+        this.#pool.subscribe([{ kinds: [Kind.LegacyDirectMessage], authors: [self], ...base }], { onEvent: handle }),
+      ];
+    });
+
+    return {
+      close: () => {
+        closed = true;
+        for (const s of subs) s.close();
+      },
+    };
+  }
+
+  async #handleLegacyDm(
+    event: NostrEvent,
+    self: Pubkey,
+    seen: Set<string>,
+    onMessage: (message: DirectMessage) => void,
+  ): Promise<void> {
+    if (seen.has(event.id)) return;
+    seen.add(event.id);
+    const message = await openLegacyDm(this.#signer, event, self);
+    if (message) onMessage(message);
+  }
+
+  /** One-shot fetch + decrypt of legacy (kind 4) DMs to/from the signer. */
+  async fetchLegacyDirectMessages(since?: number): Promise<DirectMessage[]> {
+    const self = await this.pubkey();
+    const base = since !== undefined ? { since } : {};
+    // Separate queries for received vs sent — merging them would AND the
+    // `#p`/`authors` constraints and drop messages from other people.
+    const [received, sent] = await Promise.all([
+      this.#pool.list([{ kinds: [Kind.LegacyDirectMessage], '#p': [self], ...base }]),
+      this.#pool.list([{ kinds: [Kind.LegacyDirectMessage], authors: [self], ...base }]),
+    ]);
+    const byId = new Map<string, NostrEvent>();
+    for (const event of [...received, ...sent]) byId.set(event.id, event);
+    const decrypted = await Promise.all([...byId.values()].map((event) => openLegacyDm(this.#signer, event, self)));
     return decrypted
       .filter((m): m is DirectMessage => m !== null)
       .sort((a, b) => a.createdAt - b.createdAt);

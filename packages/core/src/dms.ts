@@ -120,6 +120,35 @@ export async function openGiftWrap(signer: Signer, giftWrap: NostrEvent): Promis
       content: rumor.content,
       createdAt: rumor.created_at,
       wrapId: giftWrap.id,
+      legacy: false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decrypt a legacy (kind 4) encrypted direct message into a DirectMessage.
+ * These use an older, less-secure scheme; we read them for interop but flag
+ * them via `legacy: true`. `self` is the viewer, used to pick the counterparty.
+ * Returns null if the event isn't a legacy DM or can't be decrypted.
+ */
+export async function openLegacyDm(signer: Signer, event: NostrEvent, self: Pubkey): Promise<DirectMessage | null> {
+  if (event.kind !== Kind.LegacyDirectMessage) return null;
+  try {
+    const recipient = event.tags.find((t) => t[0] === 'p' && typeof t[1] === 'string')?.[1];
+    // The counterparty is the author when we received it, else the p-tag target.
+    const peer = event.pubkey === self ? recipient : event.pubkey;
+    if (!peer) return null;
+    const content = await signer.legacyDecrypt(peer, event.content);
+    return {
+      id: event.id,
+      from: event.pubkey,
+      to: recipient ? [recipient] : [],
+      content,
+      createdAt: event.created_at,
+      wrapId: event.id,
+      legacy: true,
     };
   } catch {
     return null;

@@ -1,8 +1,18 @@
 import { describe, test, expect } from 'bun:test';
+import { finalizeEvent } from 'nostr-tools/pure';
+import * as nip04 from 'nostr-tools/nip04';
 import { generateKeyPair } from '../src/keys.js';
 import { LocalSigner } from '../src/signer.js';
-import { sealDirectMessage, openGiftWrap, conversationPeer } from '../src/dms.js';
+import { now } from '../src/events.js';
+import { sealDirectMessage, openGiftWrap, openLegacyDm, conversationPeer } from '../src/dms.js';
 import { Kind } from '../src/types.js';
+
+function legacyEvent(senderSk: Uint8Array, recipientPk: string, ciphertext: string) {
+  return finalizeEvent(
+    { kind: Kind.LegacyDirectMessage, created_at: now(), tags: [['p', recipientPk]], content: ciphertext },
+    senderSk,
+  );
+}
 
 describe('NIP-17 direct messages', () => {
   test('round-trips an encrypted message to the recipient', async () => {
@@ -71,5 +81,54 @@ describe('NIP-17 direct messages', () => {
     const bobWrap = wraps.find((w) => w.tags.some((t) => t[0] === 'p' && t[1] === bobPk))!;
     const message = await openGiftWrap(bob, bobWrap);
     expect(message!.content).toBe('body');
+  });
+
+  test('gift-wrapped messages are not flagged legacy', async () => {
+    const alice = new LocalSigner(generateKeyPair());
+    const bob = new LocalSigner(generateKeyPair());
+    const bobPk = await bob.getPublicKey();
+    const { wraps } = await sealDirectMessage(alice, [bobPk], 'hi');
+    const bobWrap = wraps.find((w) => w.tags.some((t) => t[0] === 'p' && t[1] === bobPk))!;
+    const message = await openGiftWrap(bob, bobWrap);
+    expect(message!.legacy).toBe(false);
+  });
+});
+
+describe('legacy (less-secure) direct messages', () => {
+  test('decrypts a received legacy DM and flags it as legacy', async () => {
+    const alice = new LocalSigner(generateKeyPair());
+    const bob = new LocalSigner(generateKeyPair());
+    const alicePk = await alice.getPublicKey();
+    const bobPk = await bob.getPublicKey();
+
+    const ciphertext = await nip04.encrypt(alice.secretKey, bobPk, 'legacy hello');
+    expect(ciphertext).not.toContain('legacy hello'); // ciphertext doesn't leak
+    const event = legacyEvent(alice.secretKey, bobPk, ciphertext);
+
+    const msg = await openLegacyDm(bob, event, bobPk);
+    expect(msg).not.toBeNull();
+    expect(msg!.content).toBe('legacy hello');
+    expect(msg!.from).toBe(alicePk);
+    expect(msg!.to).toContain(bobPk);
+    expect(msg!.legacy).toBe(true);
+  });
+
+  test('a third party cannot decrypt a legacy DM', async () => {
+    const alice = new LocalSigner(generateKeyPair());
+    const bob = new LocalSigner(generateKeyPair());
+    const eve = new LocalSigner(generateKeyPair());
+    const bobPk = await bob.getPublicKey();
+    const evePk = await eve.getPublicKey();
+
+    const ciphertext = await nip04.encrypt(alice.secretKey, bobPk, 'not for eve');
+    const event = legacyEvent(alice.secretKey, bobPk, ciphertext);
+    expect(await openLegacyDm(eve, event, evePk)).toBeNull();
+  });
+
+  test('ignores non-kind-4 events', async () => {
+    const bob = new LocalSigner(generateKeyPair());
+    const bobPk = await bob.getPublicKey();
+    const note = finalizeEvent({ kind: Kind.Text, created_at: now(), tags: [], content: 'hi' }, generateKeyPair().secretKey);
+    expect(await openLegacyDm(bob, note, bobPk)).toBeNull();
   });
 });

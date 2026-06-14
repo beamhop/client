@@ -1,5 +1,6 @@
 import { finalizeEvent } from 'nostr-tools/pure';
 import * as nip44 from 'nostr-tools/nip44';
+import * as nip04 from 'nostr-tools/nip04';
 import type { KeyPair } from './keys.js';
 import type { NostrEvent, NostrEventTemplate, Pubkey } from './types.js';
 
@@ -17,6 +18,8 @@ export interface Signer {
   nip44Encrypt(peerPubkey: Pubkey, plaintext: string): Promise<string>;
   /** Decrypt a NIP-44 payload received from `peerPubkey`. */
   nip44Decrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string>;
+  /** Decrypt a legacy (less-secure) payload received from `peerPubkey`. */
+  legacyDecrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string>;
 }
 
 /** A Signer backed by an in-memory secret key. */
@@ -51,6 +54,10 @@ export class LocalSigner implements Signer {
     const conversationKey = nip44.getConversationKey(this.#secretKey, peerPubkey);
     return Promise.resolve(nip44.decrypt(ciphertext, conversationKey));
   }
+
+  legacyDecrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string> {
+    return Promise.resolve(nip04.decrypt(this.#secretKey, peerPubkey, ciphertext));
+  }
 }
 
 /** The subset of the NIP-07 `window.nostr` API that Verity relies on. */
@@ -58,6 +65,10 @@ export interface Nip07Provider {
   getPublicKey(): Promise<Pubkey>;
   signEvent(template: NostrEventTemplate): Promise<NostrEvent>;
   nip44?: {
+    encrypt(peerPubkey: Pubkey, plaintext: string): Promise<string>;
+    decrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string>;
+  };
+  nip04?: {
     encrypt(peerPubkey: Pubkey, plaintext: string): Promise<string>;
     decrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string>;
   };
@@ -91,6 +102,13 @@ export class Nip07Signer implements Signer {
       throw new Error('The connected signer does not support NIP-44 decryption');
     }
     return this.#provider.nip44.decrypt(peerPubkey, ciphertext);
+  }
+
+  legacyDecrypt(peerPubkey: Pubkey, ciphertext: string): Promise<string> {
+    if (!this.#provider.nip04) {
+      throw new Error('The connected signer does not support legacy decryption');
+    }
+    return this.#provider.nip04.decrypt(peerPubkey, ciphertext);
   }
 }
 
