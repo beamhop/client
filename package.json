@@ -1,0 +1,22 @@
+{
+  "name": "verity-nostr",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "bun run --filter '*' typecheck",
+    "test:unit": "bun run --filter '@verity/core' test && bun run --filter '@verity/web' test:unit",
+    "test:e2e": "bun run --filter '@verity/web' test:e2e",
+    "dev": "bun run --filter '@verity/web' dev",
+    "build": "bun run --filter '@verity/core' build && bun run --filter '@verity/web' build",
+    "changeset": "changeset",
+    "version": "changeset version"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.11",
+    "typescript": "^5.7.3"
+  }
+}
