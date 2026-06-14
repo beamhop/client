@@ -99,6 +99,21 @@ test.describe('command palette & keyboard', () => {
 });
 
 test.describe('search', () => {
+  test('searching an npub surfaces that user under People results', async ({ page }) => {
+    await createIdentity(page);
+    await page.getByTestId('nav-explore').click();
+    await page.getByTestId('explore-search').fill(TARGET_NPUB);
+    await page.getByTestId('explore-search').press('Enter');
+
+    // The key is resolved into a People result (not a futile post search).
+    const results = page.getByTestId('search-results');
+    await expect(results).toBeVisible({ timeout: 20_000 });
+    await expect(results.getByTestId('explore-person').first()).toBeVisible();
+    // Opening it lands on that user's profile.
+    await results.getByTestId('explore-person').first().locator('[role="link"]').first().click();
+    await expect(page.getByTestId('view-title')).toHaveText('Profile');
+  });
+
   test('full-text search returns posts from relays', async ({ page }) => {
     await createIdentity(page);
     await page.getByTestId('nav-explore').click();

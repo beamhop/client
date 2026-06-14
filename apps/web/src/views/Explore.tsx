@@ -8,6 +8,15 @@ import { PostCard } from '../components/PostCard.js';
 
 const TOPICS = ['nostr', 'bitcoin', 'security', 'design', 'engineering'];
 
+/** Decode a bare npub/nprofile/hex into a hex pubkey, or null if it isn't one. */
+function asPubkey(value: string): string | null {
+  try {
+    return normalizePubkey(value);
+  } catch {
+    return null;
+  }
+}
+
 function followStyle(following: boolean): CSSProperties {
   const base: CSSProperties = {
     padding: '8px 18px',
@@ -114,19 +123,32 @@ export function Explore(): ReactNode {
       return;
     }
 
-    // npub / hex → add the exact identity to the network list (scope-independent).
-    try {
-      const pubkey = normalizePubkey(value);
+    let cancelled = false;
+
+    // A bare npub / nprofile / hex pubkey resolves to one exact person. Surface
+    // them as a People result (and remember them in the network list for later).
+    // The submit handler forces the People scope so this always shows.
+    const pubkey = asPubkey(value);
+    if (pubkey) {
       engine.ensureProfiles([pubkey]);
       setExtra((prev) => (prev.includes(pubkey) ? prev : [pubkey, ...prev]));
-      setResults(null);
-      toast('Found identity — add them to your feed', 'check');
-      return;
-    } catch {
-      // not a key — fall through to full-text search
+      setSearching(true);
+      setResults({ people: [personView(pubkey, state.profiles[pubkey])], posts: [] });
+      void engine.client
+        .fetchProfile(pubkey)
+        .then((profile) => {
+          if (cancelled || token !== searchSeq.current) return;
+          setResults({ people: [personView(pubkey, profile ?? undefined)], posts: [] });
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (!cancelled && token === searchSeq.current) setSearching(false);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
     setSearching(true);
     setResults({ people: [], posts: [] });
     void (async () => {
@@ -152,6 +174,10 @@ export function Explore(): ReactNode {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exploreQuery, exploreType, engine]);
 
+  // Commit a search. A pubkey query is forced into the People scope so the
+  // resolved person is shown under People rather than as a (futile) post search.
+  const submitSearch = (q: string): void => setExploreSearch(q, asPubkey(q.trim()) ? 'people' : exploreType);
+
   const searchActive = results !== null || searching;
 
   return (
@@ -175,7 +201,7 @@ export function Explore(): ReactNode {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') setExploreSearch(query, exploreType);
+            if (e.key === 'Enter') submitSearch(query);
           }}
           placeholder="Search posts & people, or paste an npub…"
           style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none', fontSize: 15, color: 'var(--text)' }}
