@@ -30,7 +30,7 @@ describe("mobileNavSlots", () => {
 describe("MobileNav", () => {
   test("keeps the compose button as the exact middle with symmetric sides", async () => {
     setWidth(430); // → 3 tabs per side
-    renderWithStore(<MobileNav onCompose={() => undefined} />, { identity });
+    renderWithStore(<MobileNav onCompose={() => undefined} onOpenPalette={() => undefined} />, { identity });
     const nav = await waitFor(() => screen.getByTestId("bottom-nav"));
 
     const left = screen.getByTestId("bottom-nav-left");
@@ -47,14 +47,14 @@ describe("MobileNav", () => {
 
   test("adapts the visible tab count to width without overflowing", async () => {
     setWidth(340); // → 2 per side (narrowest)
-    const narrow = renderWithStore(<MobileNav onCompose={() => undefined} />, { identity });
+    const narrow = renderWithStore(<MobileNav onCompose={() => undefined} onOpenPalette={() => undefined} />, { identity });
     await waitFor(() => screen.getByTestId("bottom-nav"));
     expect(screen.getByTestId("bottom-nav-left").children.length).toBe(2);
     expect(screen.getByTestId("bottom-nav-right").children.length).toBe(2); // 1 tab + More
     narrow.unmount();
 
     setWidth(580); // → 4 per side (tablet width)
-    renderWithStore(<MobileNav onCompose={() => undefined} />, { identity });
+    renderWithStore(<MobileNav onCompose={() => undefined} onOpenPalette={() => undefined} />, { identity });
     await waitFor(() => screen.getByTestId("bottom-nav"));
     expect(screen.getByTestId("bottom-nav-left").children.length).toBe(4);
     expect(screen.getByTestId("bottom-nav-right").children.length).toBe(4);
@@ -62,7 +62,7 @@ describe("MobileNav", () => {
 
   test("the More sheet holds the overflow destinations and navigates", async () => {
     setWidth(430); // slots=3 → agents/docs/security overflow into More
-    renderWithStore(<MobileNav onCompose={() => undefined} />, { identity });
+    renderWithStore(<MobileNav onCompose={() => undefined} onOpenPalette={() => undefined} />, { identity });
     await waitFor(() => screen.getByTestId("bottom-nav"));
 
     expect(screen.queryByTestId("tab-docs")).toBeNull(); // not a visible tab at this width

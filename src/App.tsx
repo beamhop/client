@@ -178,7 +178,7 @@ export const App = (): ReactNode => {
         {showRightRail && <RightRail onOpenPalette={() => setPaletteOpen(true)} />}
       </div>
 
-      {isMobile && <MobileNav onCompose={() => setCompose(true)} />}
+      {isMobile && <MobileNav onCompose={() => setCompose(true)} onOpenPalette={() => setPaletteOpen(true)} />}
       {compose && <Compose onClose={() => setCompose(false)} />}
       {palette && <CommandPalette onClose={() => setPaletteOpen(false)} onCompose={() => setCompose(true)} />}
       <Toasts />

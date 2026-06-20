@@ -20,6 +20,7 @@ import {
   MoonIcon,
   ChevronDownIcon,
   VerifiedSeal,
+  CommandIcon,
 } from "./icons.tsx";
 
 type NavItem = { id: ViewId; testid: string; label: string; icon: ReactNode; active: (v: ViewId) => boolean };
@@ -269,7 +270,7 @@ const MoreSheet = ({
   );
 };
 
-export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode => {
+export const MobileNav = ({ onCompose, onOpenPalette }: { onCompose: () => void; onOpenPalette: () => void }): ReactNode => {
   const { state, navigate } = useStore();
   const view = state.nav.view;
   const unreadNotifications = state.notifications.filter((n) => !n.read).length;
@@ -283,7 +284,8 @@ export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode =
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const visibleCount = 2 * slots - 1; // last right slot is reserved for "More"
+  // Reserve one right slot for the command palette button in addition to "More"
+  const visibleCount = 2 * slots - 2;
   const leftTabs = MOBILE_DESTS.slice(0, slots);
   const rightTabs = MOBILE_DESTS.slice(slots, visibleCount);
   const hidden = MOBILE_DESTS.slice(visibleCount);
@@ -314,6 +316,14 @@ export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode =
         </button>
         <div data-testid="bottom-nav-right" style={sideGroupStyle}>
           {rightTabs.map(tab)}
+          <button
+            data-testid="tab-palette"
+            aria-label="Command palette"
+            onClick={onOpenPalette}
+            style={tabStyle(false)}
+          >
+            <CommandIcon size={24} />
+          </button>
           <button
             data-testid="tab-more"
             aria-label="More"

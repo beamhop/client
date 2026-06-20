@@ -430,6 +430,12 @@ const FeedTabs = ({
       alignItems: "stretch",
       margin: "0 0 16px",
       borderBottom: "1px solid var(--hairline)",
+      position: "sticky",
+      top: 0,
+      zIndex: 9,
+      background: "color-mix(in srgb, var(--bg-base) 88%, transparent)",
+      backdropFilter: "blur(8px)",
+      WebkitBackdropFilter: "blur(8px)",
     }}
   >
     {FEED_TABS.map((tab) => {

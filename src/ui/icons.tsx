@@ -168,6 +168,11 @@ export const EyeOffIcon = (p: IconProps): ReactNode => (
     <path d="M9.9 4.2A10 10 0 0 1 12 4c6.5 0 10 7 10 7a17 17 0 0 1-3 3.8M6.1 6.1A17 17 0 0 0 2 11s3.5 7 10 7a10 10 0 0 0 4-.8M1 1l22 22" />
   </Svg>
 );
+export const CommandIcon = (p: IconProps): ReactNode => (
+  <Svg {...p}>
+    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" />
+  </Svg>
+);
 
 /** The verified seal used throughout the design. */
 export const VerifiedSeal = ({ size = 14 }: { size?: number }): ReactNode => (
