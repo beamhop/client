@@ -17,6 +17,7 @@ import { Spinner } from "../ui/primitives.tsx";
 import { avatarStyle, initials, displayName, timeAgo } from "../lib/format.ts";
 import { VerifiedSeal } from "../ui/icons.tsx";
 import { EventJsonButton } from "../ui/EventJsonModal.tsx";
+import { segStyle } from "../ui/styles.ts";
 
 /**
  * Module-level cache of resolved docs keyed by `pubkey:identifier`. The reader
@@ -740,21 +741,6 @@ const DocReader = (): ReactNode => {
 // EDITOR screen
 // ---------------------------------------------------------------------------
 
-const segStyle = (active: boolean): CSSProperties => ({
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "6px 12px",
-  border: "none",
-  borderRadius: 8,
-  background: active ? "var(--glass)" : "transparent",
-  color: active ? "var(--text)" : "var(--text-3)",
-  fontWeight: 700,
-  fontSize: 13,
-  fontFamily: "inherit",
-  cursor: "pointer",
-  boxShadow: active ? "var(--glass-shadow)" : "none",
-});
 
 const DocEditor = (): ReactNode => {
   const { state, navigate, publish, toast } = useStore();

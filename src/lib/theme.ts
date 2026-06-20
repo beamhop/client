@@ -40,7 +40,7 @@ export const paletteBanner = (id: PaletteId): string => PALETTES[id].banner;
 export const applyPalette = (el: HTMLElement, id: PaletteId, mode: ThemeMode): void => {
   const tones = mode === "dark" ? PALETTES[id].dark : PALETTES[id].light;
   el.style.setProperty("--accent", tones.a);
-  el.style.setProperty("--accent-2", tones.a);
+  el.style.setProperty("--accent-2", tones.a2);
   el.style.setProperty("--accent-soft", tones.soft);
   el.style.setProperty("--accent-ink", tones.ink);
   el.style.setProperty("--on-accent", tones.onAccent ?? "#ffffff");

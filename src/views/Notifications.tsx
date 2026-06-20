@@ -1,7 +1,8 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useProfile, useStore, type NotificationItem, type NotificationType } from "../state/store.tsx";
 import { avatarStyle, displayName, initials, timeAgo } from "../lib/format.ts";
-import { compileMutes, evaluateNotification } from "../lib/mute.ts";
+import { evaluateNotification } from "../lib/mute.ts";
+import { useCompiledMutes } from "../state/hooks.ts";
 import { BellIcon, HeartIcon, MessagesIcon, ReplyIcon } from "../ui/icons.tsx";
 import { EmptyState } from "../ui/primitives.tsx";
 import { EventJsonButton } from "../ui/EventJsonModal.tsx";
@@ -160,7 +161,7 @@ export const NotificationsView = (): ReactNode => {
 
   // Filter muted sources at render so rules added mid-session hide existing
   // notifications and the unread count below reflects only visible items.
-  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const muted = useCompiledMutes();
   const visible = useMemo(
     () => state.notifications.filter((n) => !evaluateNotification(muted, { pubkey: n.pubkey, content: n.content })),
     [state.notifications, muted],

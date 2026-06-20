@@ -358,8 +358,6 @@ const ConversationRow = ({
   const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey: conv.peer });
   const last = conv.messages[conv.messages.length - 1];
   const preview = last ? `${last.fromMe ? "You: " : ""}${last.content}` : "No messages yet";
-  // Best-effort unread: received messages (no read-state tracking yet) — show none here.
-  const unread = 0;
   const [hover, setHover] = useState(false);
 
   return (
@@ -415,25 +413,7 @@ const ConversationRow = ({
           {preview}
         </span>
       </div>
-      {unread > 0 && (
-        <span
-          style={{
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            fontSize: 11,
-            fontWeight: 700,
-            minWidth: 18,
-            height: 18,
-            padding: "0 5px",
-            borderRadius: 9,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {unread}
-        </span>
-      )}
+
     </button>
   );
 };
@@ -693,7 +673,6 @@ const Bubble = ({ message, mine }: { message: DirectMessage; mine: boolean }): R
         padding: "11px 15px",
         fontSize: 14.5,
         lineHeight: 1.45,
-        maxWidth: "72%",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       }
@@ -707,7 +686,6 @@ const Bubble = ({ message, mine }: { message: DirectMessage; mine: boolean }): R
         padding: "11px 15px",
         fontSize: 14.5,
         lineHeight: 1.45,
-        maxWidth: "72%",
         whiteSpace: "pre-wrap",
         wordBreak: "break-word",
       };

@@ -24,7 +24,9 @@ export const withOriginalEvent = <T extends object>(value: T, event: NostrEvent)
 export const decodeProfile = (event: NostrEvent): Profile => {
   let meta: Record<string, unknown> = {};
   try {
-    meta = JSON.parse(event.content) as Record<string, unknown>;
+    const raw: unknown = (() => { try { return JSON.parse(event.content) } catch { return {} } })()
+    const parsed: Record<string, unknown> = typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? raw as Record<string, unknown> : {}
+    meta = parsed;
   } catch {
     meta = {};
   }
@@ -86,18 +88,20 @@ export const decodeRepostPointer = (event: NostrEvent): RepostPointer | null => 
 export const decodeEmbeddedRepostNote = (event: NostrEvent): Note | null => {
   if (event.kind !== Kind.Repost || event.content.trim() === "") return null;
   try {
-    const embedded = JSON.parse(event.content) as Partial<NostrEvent>;
+    const raw: unknown = (() => { try { return JSON.parse(event.content) } catch { return null } })()
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+    const parsed = raw as Partial<NostrEvent>
     if (
-      embedded.kind !== Kind.Note ||
-      typeof embedded.id !== "string" ||
-      typeof embedded.pubkey !== "string" ||
-      typeof embedded.content !== "string" ||
-      typeof embedded.created_at !== "number" ||
-      !Array.isArray(embedded.tags)
+      parsed.kind !== Kind.Note ||
+      typeof parsed.id !== "string" ||
+      typeof parsed.pubkey !== "string" ||
+      typeof parsed.content !== "string" ||
+      typeof parsed.created_at !== "number" ||
+      !Array.isArray(parsed.tags)
     ) {
       return null;
     }
-    return decodeNote(embedded as NostrEvent);
+    return decodeNote(parsed as NostrEvent);
   } catch {
     return null;
   }
@@ -118,7 +122,7 @@ export const deletedEventIdsByAuthor = (
   return deleted;
 };
 
-const tagValue = (event: NostrEvent, key: string): string | undefined =>
+export const tagValue = (event: NostrEvent, key: string): string | undefined =>
   event.tags.find((t) => t[0] === key)?.[1];
 
 export const decodeLongForm = (event: NostrEvent): LongForm => {
@@ -139,6 +143,20 @@ export const decodeLongForm = (event: NostrEvent): LongForm => {
     kind,
   }, event);
 };
+
+export function dedupeArticles(events: NostrEvent[]): NostrEvent[] {
+  const seen = new Map<string, NostrEvent>()
+  for (const ev of events) {
+    const key = `${ev.pubkey}:${tagValue(ev, 'd') ?? ''}`
+    const cur = seen.get(key)
+    if (!cur || ev.created_at > cur.created_at) seen.set(key, ev)
+  }
+  return [...seen.values()].sort((a, b) => b.created_at - a.created_at)
+}
+
+export function extractPTags(event: NostrEvent): string[] {
+  return event.tags.flatMap(t => t[0] === 'p' && t[1] ? [t[1]] : [])
+}
 
 // ---------- builders: domain -> EventTemplate ----------
 

@@ -17,6 +17,7 @@ import { VerifiedSeal } from "../ui/icons.tsx";
 import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { timeAgo, fmtCount, displayName } from "../lib/format.ts";
 import { PALETTES } from "../lib/theme.ts";
+import { segStyle } from "../ui/styles.ts";
 
 // ---------------------------------------------------------------------------
 // Module cache: resolved articles keyed by `pubkey:identifier`. The reader and
@@ -536,22 +537,6 @@ const COVER_OPTIONS: readonly string[] = [
   "linear-gradient(120deg,#8b5cf6,#ec4899)",
 ];
 
-const segStyle = (active: boolean): CSSProperties => ({
-  display: "flex",
-  alignItems: "center",
-  gap: 7,
-  padding: "7px 14px",
-  borderRadius: 8,
-  border: "none",
-  cursor: "pointer",
-  fontFamily: "inherit",
-  fontSize: 13,
-  fontWeight: 700,
-  background: active ? "var(--glass)" : "transparent",
-  color: active ? "var(--text)" : "var(--text-3)",
-  boxShadow: active ? "0 1px 2px rgba(0,0,0,.07)" : "none",
-  transition: "all .15s",
-});
 
 const swatchStyle = (grad: string, sel: boolean): CSSProperties => ({
   width: 32,

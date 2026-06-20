@@ -174,6 +174,18 @@ export const CommandIcon = (p: IconProps): ReactNode => (
   </Svg>
 );
 
+export const ShareIcon = (p: IconProps): ReactNode => (
+  <Svg {...p}>
+    <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+    <path d="M16 6l-4-4-4 4M12 2v13" />
+  </Svg>
+);
+export const TrashIcon = (p: IconProps): ReactNode => (
+  <Svg {...p}>
+    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+  </Svg>
+);
+
 /** The verified seal used throughout the design. */
 export const VerifiedSeal = ({ size = 14 }: { size?: number }): ReactNode => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="var(--accent)" aria-label="Verified">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-export type BubblePopTone = "accent" | "success" | "info" | "warn" | "danger";
+type BubblePopTone = "accent" | "success" | "info" | "warn" | "danger";
 
 type BubblePopProps = {
   children: ReactNode;

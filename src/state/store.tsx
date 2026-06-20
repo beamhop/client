@@ -12,7 +12,7 @@ import {
 import type { Event as NostrEvent, EventTemplate, Filter } from "nostr-tools";
 import { NostrClient } from "../nostr/client.ts";
 import { Kind, type Profile, type RelayInfo } from "../nostr/types.ts";
-import { decodeProfile, buildContacts } from "../nostr/events.ts";
+import { decodeProfile, buildContacts, tagValue } from "../nostr/events.ts";
 import {
   type Identity,
   loadPersisted,
@@ -270,9 +270,6 @@ const cloneNotificationWithRead = (item: NotificationItem, read: boolean): Notif
   const clone = { ...item, read };
   return item.event ? withNotificationEvent(clone, item.event) : clone;
 };
-
-const tagValue = (event: NostrEvent, key: string): string | undefined =>
-  event.tags.find((tag) => tag[0] === key)?.[1];
 
 const hasTagValue = (event: NostrEvent, key: string, value: string): boolean =>
   event.tags.some((tag) => tag[0] === key && tag[1] === value);
@@ -636,7 +633,8 @@ export const StoreProvider = ({
     const identity = loadPersisted();
     let bookmarks: string[] = [];
     try {
-      bookmarks = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? "[]") as string[];
+      const rawBookmarks: unknown = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) ?? '[]')
+      bookmarks = Array.isArray(rawBookmarks) ? rawBookmarks.filter((x): x is string => typeof x === 'string') : []
     } catch {
       bookmarks = [];
     }
@@ -669,6 +667,7 @@ export const StoreProvider = ({
 
   const readRelayUrls = useMemo(() => readRelays(state.relays), [state.relays]);
   const writeRelayUrls = useMemo(() => writeRelays(state.relays), [state.relays]);
+  useEffect(() => { profileCache.current.clear() }, [readRelayUrls])
 
   // ---- load own profile + contacts when identity changes ----
   useEffect(() => {
@@ -926,6 +925,10 @@ export const StoreProvider = ({
     dispatch({ type: "setIdentity", identity: null });
     dispatch({ type: "setMe", me: null });
     dispatch({ type: "setContacts", contacts: [] });
+    dispatch({ type: "setNotifications", notifications: [] });
+    dispatch({ type: "setNotificationReadIds", ids: [] });
+    dispatch({ type: "setBookmarks", bookmarks: [] });
+    dispatch({ type: "setMuteSettings", muteSettings: EMPTY_MUTE_SETTINGS });
     toast("Signed out", "info");
   }, [toast]);
 

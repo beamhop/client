@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useIsMobile } from "./lib/hooks";
 import { useStore, type ViewId } from "./state/store.tsx";
 import { Onboarding } from "./ui/Onboarding.tsx";
 import { Sidebar, MobileNav } from "./ui/Sidebar.tsx";
@@ -77,14 +78,7 @@ export const App = (): ReactNode => {
   const { state, rootRef, toggleTheme, setPalette } = useStore();
   const [compose, setCompose] = useState(false);
   const [palette, setPaletteOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 900);
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+  const isMobile = useIsMobile();
 
   // Global ⌘K / Ctrl+K toggles the command palette.
   useEffect(() => {

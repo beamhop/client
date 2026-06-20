@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Event as NostrEvent, Filter } from "nostr-tools";
 import { useStore } from "./store.tsx";
 import { Kind, type Note } from "../nostr/types.ts";
+import { compileMutes } from "../lib/mute.ts";
 import {
   decodeEmbeddedRepostNote,
   decodeNote,
@@ -449,3 +450,19 @@ export const useEngagement = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, key, JSON.stringify(optimistic)]);
 };
+
+/** Returns compiled mute rules, memoized on the rules array identity. */
+export function useCompiledMutes(): ReturnType<typeof compileMutes> {
+  const { state } = useStore();
+  return useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+}
+
+/** Returns the count of unread, non-muted notifications. */
+export function useUnreadNotificationCount(): number {
+  const { state } = useStore();
+  const mutes = useCompiledMutes();
+  return useMemo(() => {
+    const readSet = new Set(state.notificationReadIds);
+    return state.notifications.filter((n) => !readSet.has(n.id) && !mutes.matchAccount(n.pubkey) && !mutes.matchText(n.content)).length;
+  }, [state.notifications, state.notificationReadIds, mutes]);
+}

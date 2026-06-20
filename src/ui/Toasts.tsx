@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { useStore, type ToastAction } from "../state/store.tsx";
+import { useStore, type Toast, type ToastAction } from "../state/store.tsx";
 import { CheckIcon, CopyIcon, RepostIcon } from "./icons.tsx";
 import { ProfileToastChip } from "./ProfileToastChip.tsx";
 
-const toneIcon = (tone: string): ReactNode => {
+const toneIcon = (tone: Toast["tone"]): ReactNode => {
   switch (tone) {
     case "check":
       return <CheckIcon size={16} />;
@@ -16,7 +16,7 @@ const toneIcon = (tone: string): ReactNode => {
   }
 };
 
-const toneColor = (tone: string): string => {
+const toneColor = (tone: Toast["tone"]): string => {
   if (tone === "warn") return "var(--warn)";
   if (tone === "check") return "var(--success)";
   return "var(--accent)";

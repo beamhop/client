@@ -66,11 +66,19 @@ export class NostrClient {
       throw new Error("No relay accepted the event");
     });
     this.localEvents.set(event.id, event);
+    if (this.localEvents.size > 500) {
+      const oldest = this.localEvents.keys().next().value
+      if (oldest !== undefined) this.localEvents.delete(oldest)
+    }
     return event;
   }
 
   close(relays: string[]): void {
     this.pool.close(relays);
+  }
+
+  destroy(): void {
+    this.pool.destroy()
   }
 
   private localMatching(filter: Filter): NostrEvent[] {

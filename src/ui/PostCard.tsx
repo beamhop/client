@@ -5,7 +5,7 @@ import { useProfile, useStore } from "../state/store.tsx";
 import { displayName, initials, avatarStyle, timeAgo, fmtCount } from "../lib/format.ts";
 import { parseMedia, type Embed } from "../lib/media.ts";
 import { actionStyle, avatarWrap, statusDot, postCardStyle, navStyle } from "./styles.ts";
-import { CloseIcon, ImageIcon, MoreIcon, VerifiedSeal } from "./icons.tsx";
+import { CloseIcon, HeartIcon, ImageIcon, MoreIcon, RepostIcon, ShareIcon, TrashIcon, VerifiedSeal } from "./icons.tsx";
 import type { Engagement } from "../state/hooks.ts";
 import { BubblePop } from "./BubblePop.tsx";
 import { EventJsonButton } from "./EventJsonModal.tsx";
@@ -35,29 +35,9 @@ const ReplyGlyph = (): ReactNode => (
     <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 );
-const RepostGlyph = (): ReactNode => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m17 2 4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
-  </svg>
-);
-const HeartGlyph = ({ fill }: { fill: string }): ReactNode => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.8 5.6a5.3 5.3 0 0 0-7.5 0L12 6.9l-1.3-1.3a5.3 5.3 0 1 0-7.5 7.5L12 22l8.8-8.9a5.3 5.3 0 0 0 0-7.5z" />
-  </svg>
-);
 const BookmarkGlyph = ({ fill }: { fill: string }): ReactNode => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-  </svg>
-);
-const ShareGlyph = (): ReactNode => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" /><path d="M16 6l-4-4-4 4M12 2v13" />
-  </svg>
-);
-const TrashGlyph = (): ReactNode => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
   </svg>
 );
 const PinGlyph = (): ReactNode => (
@@ -669,7 +649,7 @@ export const PostCard = ({
     >
       {repostLabel && (
         <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text-3)", marginBottom: 10, paddingLeft: 54 }}>
-          <RepostGlyph />
+          <RepostIcon size={16} />
           <span>{repostLabel}</span>
           {repostedAt !== undefined && <span style={{ fontWeight: 600 }}>· {timeAgo(repostedAt)}</span>}
           <EventJsonButton
@@ -718,12 +698,12 @@ export const PostCard = ({
             </button>
             <button onClick={(event) => runAction(event, handleRepost)} style={actionStyle(Boolean(e?.reposted), "var(--success)")}>
               <BubblePop activeKey={unrepostBubbleKey} message="Unreposted" tone="success">
-                <span style={{ display: "flex" }} className={repostPop ? "verity-pop" : undefined}><RepostGlyph /></span>
+                <span style={{ display: "flex" }} className={repostPop ? "verity-pop" : undefined}><RepostIcon size={16} /></span>
               </BubblePop>
               <span>{e && e.reposts > 0 ? fmtCount(e.reposts) : ""}</span>
             </button>
             <button onClick={(event) => runAction(event, handleLike)} style={actionStyle(Boolean(e?.liked), "var(--danger)")}>
-              <span style={{ display: "flex" }} className={likePop ? "verity-pop" : undefined}><HeartGlyph fill={e?.liked ? "var(--danger)" : "none"} /></span>
+              <span style={{ display: "flex" }} className={likePop ? "verity-pop" : undefined}><HeartIcon size={16} filled={Boolean(e?.liked)} /></span>
               <span>{e && e.likes > 0 ? fmtCount(e.likes) : ""}</span>
             </button>
             <div style={{ flex: 1 }} />
@@ -731,7 +711,7 @@ export const PostCard = ({
               <BookmarkGlyph fill={bookmarked ? "var(--accent)" : "none"} />
             </button>
             <button onClick={(event) => runAction(event, onShare)} style={actionStyle(false, "var(--accent)")} title="Share">
-              <ShareGlyph />
+              <ShareIcon size={16} />
             </button>
             <EventJsonButton event={note.event} label="Original post event" style={actionStyle(false, "var(--accent)")} />
             {isMine && onDelete && (
@@ -745,7 +725,7 @@ export const PostCard = ({
                   title="Delete post"
                   data-testid="post-delete"
                 >
-                  <TrashGlyph />
+                  <TrashIcon size={16} />
                 </button>
                 {confirmDelete && (
                   <span

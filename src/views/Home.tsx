@@ -771,7 +771,7 @@ export const HomeView = (): ReactNode => {
   const share = useCallback(
     (note: Note): void => {
       const link = `${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id: note.id } })}`;
-      void navigator.clipboard.writeText(link).then(() => toast("Link copied to clipboard", "copy"));
+      void navigator.clipboard?.writeText(link).then(() => toast("Link copied to clipboard", "copy"));
     },
     [toast],
   );

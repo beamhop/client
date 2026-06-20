@@ -14,4 +14,4 @@ const server = serve({
   },
 });
 
-console.log(`Verity client running at ${server.url}`);
+console.log(`Beamhop client running at ${server.url}`);

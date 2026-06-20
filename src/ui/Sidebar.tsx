@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useStore, type ViewId } from "../state/store.tsx";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
-import { compileMutes, evaluateNotification } from "../lib/mute.ts";
+import { evaluateNotification } from "../lib/mute.ts";
+import { useEscapeKey, useBodyScrollLock } from "../lib/hooks.ts";
+import { useCompiledMutes } from "../state/hooks.ts";
 import { shortNpub } from "../nostr/keys.ts";
 import { PALETTE_ORDER, paletteBanner, type PaletteId } from "../lib/theme.ts";
 import { navStyle, tabStyle } from "./styles.ts";
@@ -19,7 +21,6 @@ import {
   MoreIcon,
   SunIcon,
   MoonIcon,
-  ChevronDownIcon,
   VerifiedSeal,
   CommandIcon,
 } from "./icons.tsx";
@@ -38,12 +39,11 @@ const NAV: NavItem[] = [
 ];
 
 export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => {
-  const { state, navigate, toggleTheme, setPalette, toast } = useStore();
+  const { state, navigate, toggleTheme, setPalette } = useStore();
   const view = state.nav.view;
   const pubkey = state.identity?.pubkey ?? "";
   const name = state.me ? displayName({ name: state.me.name, displayName: state.me.displayName, pubkey }) : "You";
-  const relayCount = state.relays.filter((r) => r.enabled && (r.read || r.write)).length;
-  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const muted = useCompiledMutes();
   const unreadNotifications = useMemo(
     () =>
       state.notifications.filter(
@@ -61,19 +61,6 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
         <Logo size={32} />
         <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>Verity</span>
       </div>
-
-      <button
-        data-testid="workspace-switcher"
-        onClick={() => toast("Workspace switching is a demo stub", "info")}
-        style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", margin: "0 2px 8px", border: "1px solid var(--glass-border)", borderRadius: 10, background: "var(--glass)", boxShadow: "var(--glass-shadow)", cursor: "pointer", transition: "transform .18s", width: "calc(100% - 4px)" }}
-      >
-        <span style={{ width: 27, height: 27, borderRadius: 8, background: "var(--grad)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-accent)", fontWeight: 700, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>A</span>
-        <span style={{ textAlign: "left", flex: 1, minWidth: 0 }}>
-          <span style={{ display: "block", fontWeight: 700, fontSize: 13.5, color: "var(--text)" }}>Aperture</span>
-          <span style={{ display: "block", fontSize: 11, color: "var(--text-3)" }}>Workspace · {relayCount} relays</span>
-        </span>
-        <ChevronDownIcon size={15} />
-      </button>
 
       <nav data-testid="sidebar-nav" style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 2px" }}>
         {NAV.map((item) => {
@@ -237,18 +224,8 @@ const MoreSheet = ({
   onNavigate: (id: ViewId) => void;
   onClose: () => void;
 }): ReactNode => {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") onClose();
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
+  useEscapeKey(onClose, true);
+  useBodyScrollLock(true);
 
   return (
     <div
@@ -281,7 +258,7 @@ const MoreSheet = ({
 export const MobileNav = ({ onCompose, onOpenPalette }: { onCompose: () => void; onOpenPalette: () => void }): ReactNode => {
   const { state, navigate } = useStore();
   const view = state.nav.view;
-  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const muted = useCompiledMutes();
   const unreadNotifications = useMemo(
     () =>
       state.notifications.filter(
