@@ -805,6 +805,7 @@ export const StoreProvider = ({
           // next publish sends the full current state.
           const merged = mergeSettings(localMuteSettings, remoteSettings);
           saveMuteRelayAt(id.pubkey, muteListEvent.created_at);
+          saveMuteSettings(id.pubkey, merged);
           dispatch({ type: "setMuteSettings", muteSettings: merged });
         } catch {
           // Decryption failure (key rotation, etc.) — keep local settings
