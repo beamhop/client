@@ -29,7 +29,7 @@ const dmEvent = async (from: Peer, to: Peer, body: string) => {
 
 /** Persist per-identity mute settings under the key the store boots from. */
 const seedMutes = (pubkey: string, settings: MuteSettings): void => {
-  localStorage.setItem(`verity.mutes.v1:${pubkey}`, serializeMuteSettings(settings));
+  localStorage.setItem(`beamhop.mutes.v1:${pubkey}`, serializeMuteSettings(settings));
 };
 
 describe("MessagesView client-only soft mute", () => {

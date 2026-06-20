@@ -19,7 +19,7 @@ const identity: Identity = { kind: "local", secretKey: sk, pubkey: getPublicKey(
 
 /** Seed identity-scoped soft-mute settings the store reads on boot. */
 const seedMutes = (display: MuteDisplay, rules: MuteRule[]): void => {
-  localStorage.setItem(`verity.mutes.v1:${identity.pubkey}`, serializeMuteSettings({ display, rules }));
+  localStorage.setItem(`beamhop.mutes.v1:${identity.pubkey}`, serializeMuteSettings({ display, rules }));
 };
 
 /** A signed kind-1 note. A fresh secret key per call gives each note its own author. */
@@ -30,7 +30,7 @@ const mkNote = (
   tags: string[][] = [],
 ): NostrEvent => finalizeEvent({ kind: Kind.Note, created_at: createdAt, tags, content }, authorSk);
 
-/** A signed NIP-23 article event (kind 30023) carrying the verity-article marker. */
+/** A signed NIP-23 article event (kind 30023) carrying the beamhop-article marker. */
 const mkArticle = (
   fields: { title: string; summary?: string; body?: string },
   createdAt: number,

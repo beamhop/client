@@ -140,7 +140,7 @@ export const Spinner = ({ size = 22 }: { size?: number }): ReactNode => (
       border: "2.5px solid var(--glass-border)",
       borderTopColor: "var(--accent)",
       borderRadius: "50%",
-      animation: "verity-spin .7s linear infinite",
+      animation: "beamhop-spin .7s linear infinite",
     }}
   />
 );
@@ -270,7 +270,7 @@ export const Modal = ({
       background: "rgba(10,11,20,.5)",
       backdropFilter: "blur(3px)",
       WebkitBackdropFilter: "blur(3px)",
-      animation: "verity-fade .18s ease",
+      animation: "beamhop-fade .18s ease",
       overflowY: "auto",
       overscrollBehavior: "contain",
     }}
@@ -282,7 +282,7 @@ export const Modal = ({
         width: "100%",
         maxWidth: width,
         boxShadow: "var(--glass-shadow-lg)",
-        animation: "verity-scale .2s ease",
+        animation: "beamhop-scale .2s ease",
       }}
     >
       {children}

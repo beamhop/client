@@ -6,7 +6,7 @@
  */
 import { spawn } from "bun";
 
-const IDENTITY = await Bun.file("/tmp/verity-shot/identity.json").text();
+const IDENTITY = await Bun.file("/tmp/beamhop-shot/identity.json").text();
 const PORT = 9242;
 const BASE = "http://localhost:3000";
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -18,7 +18,7 @@ const chrome = spawn([
   "--no-sandbox",
   "--hide-scrollbars",
   `--remote-debugging-port=${PORT}`,
-  "--user-data-dir=/tmp/verity-shot/profile",
+  "--user-data-dir=/tmp/beamhop-shot/profile",
   "--window-size=1340,940",
   "about:blank",
 ]);
@@ -95,7 +95,7 @@ await send("Network.enable");
 await send("Page.navigate", { url: BASE });
 await sleep(1500);
 await send("Runtime.evaluate", {
-  expression: `localStorage.setItem('verity.identity.v1', ${JSON.stringify(IDENTITY)}); localStorage.setItem('verity.theme.v1','light');`,
+  expression: `localStorage.setItem('beamhop.identity.v1', ${JSON.stringify(IDENTITY)}); localStorage.setItem('beamhop.theme.v1','light');`,
 });
 await send("Page.reload", {});
 await sleep(2500);
@@ -135,7 +135,7 @@ for (const v of views) {
     await sleep(900);
   }
   const shot = (await send("Page.captureScreenshot", { format: "png" })) as { data: string };
-  await Bun.write(`/tmp/verity-shot/app-${v.name}.png`, Buffer.from(shot.data, "base64"));
+  await Bun.write(`/tmp/beamhop-shot/app-${v.name}.png`, Buffer.from(shot.data, "base64"));
   console.log(`captured ${v.name}`);
 }
 

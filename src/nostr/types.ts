@@ -2,7 +2,7 @@ import type { Event as NostrEvent } from "nostr-tools";
 
 export type { NostrEvent };
 
-/** Nostr event kinds used by Verity. */
+/** Nostr event kinds used by Beamhop. */
 export const Kind = {
   Metadata: 0,
   Note: 1,
@@ -23,8 +23,8 @@ export const Kind = {
 } as const;
 
 /** Marker tag value distinguishing Documentation articles from blog Articles, both kind 30023. */
-export const DOC_MARKER = "verity-doc";
-export const ARTICLE_MARKER = "verity-article";
+export const DOC_MARKER = "beamhop-doc";
+export const ARTICLE_MARKER = "beamhop-article";
 
 /** Decoded profile (kind 0 content). */
 export type Profile = {

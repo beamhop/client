@@ -60,7 +60,7 @@ export const Toasts = (): ReactNode => {
             fontSize: 13.5,
             fontWeight: 600,
             color: "var(--text)",
-            animation: "verity-toast .25s ease",
+            animation: "beamhop-toast .25s ease",
             pointerEvents: "auto",
           }}
         >

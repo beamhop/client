@@ -43,7 +43,7 @@ const webDriver: HapticDriver = {
   },
 };
 
-const STORAGE_KEY = "verity.haptics.v1";
+const STORAGE_KEY = "beamhop.haptics.v1";
 
 // Module-level mutable state. `driver` defaults to the web driver and can be
 // swapped at boot. `enabled` is lazily hydrated from localStorage on first read
@@ -72,7 +72,7 @@ export const setHapticDriver = (next: HapticDriver | null): void => {
   driver = next ?? webDriver;
 };
 
-/** Persisted on/off (localStorage "verity.haptics.v1", default ON). */
+/** Persisted on/off (localStorage "beamhop.haptics.v1", default ON). */
 export const setHapticsEnabled = (next: boolean): void => {
   enabled = next;
   try {

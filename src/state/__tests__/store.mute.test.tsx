@@ -16,7 +16,7 @@ const sk = generateSecretKey();
 const me = getPublicKey(sk);
 const myIdentity: Identity = { kind: "local", secretKey: sk, pubkey: me };
 
-const mutesKey = (pubkey: string): string => `verity.mutes.v1:${pubkey}`;
+const mutesKey = (pubkey: string): string => `beamhop.mutes.v1:${pubkey}`;
 
 // Read a persisted mute blob straight back out of localStorage and parse it.
 const persistedMutes = (pubkey: string): MuteSettings =>
@@ -276,7 +276,7 @@ describe("NIP-51 relay sync — union merge on login", () => {
 
   test("skips relay event when its created_at is not newer than the last merged timestamp", async () => {
     // Seed the relay-at marker so it looks like we've already merged this event.
-    localStorage.setItem(`verity.mutes.relayAt.v1:${me}`, "999");
+    localStorage.setItem(`beamhop.mutes.relayAt.v1:${me}`, "999");
 
     seedMutes(me, {
       display: "hidden",

@@ -26,7 +26,7 @@ const note: Note = {
 
 // Read the per-identity mute settings the store persists to localStorage.
 const storedSettings = (pubkey: string): MuteSettings =>
-  parseMuteSettings(JSON.parse(localStorage.getItem(`verity.mutes.v1:${pubkey}`) ?? "null"));
+  parseMuteSettings(JSON.parse(localStorage.getItem(`beamhop.mutes.v1:${pubkey}`) ?? "null"));
 const storedRules = (pubkey: string): readonly MuteRule[] => storedSettings(pubkey).rules;
 
 describe("PostCard soft-mute affordances", () => {

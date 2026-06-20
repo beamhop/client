@@ -59,7 +59,7 @@ type Agent = {
   createdAt: number;
 };
 
-const STORAGE_KEY = "verity.agents.v1";
+const STORAGE_KEY = "beamhop.agents.v1";
 
 const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -1848,7 +1848,7 @@ const AgentWizard = ({
         alignItems: "center",
         justifyContent: "center",
         padding: "24px 16px",
-        animation: "verity-fade .15s",
+        animation: "beamhop-fade .15s",
       }}
     >
       <div
@@ -1864,7 +1864,7 @@ const AgentWizard = ({
           borderRadius: 16,
           boxShadow: "var(--glass-shadow-lg)",
           overflow: "hidden",
-          animation: "verity-scale .18s cubic-bezier(.2,.9,.3,1)",
+          animation: "beamhop-scale .18s cubic-bezier(.2,.9,.3,1)",
         }}
       >
         {/* header */}

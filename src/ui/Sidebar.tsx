@@ -61,7 +61,7 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
     >
       <div data-testid="sidebar-logo" style={{ display: "flex", alignItems: "center", gap: 11, padding: "8px 10px 16px" }}>
         <Logo size={32} />
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>Verity</span>
+        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>Beamhop</span>
       </div>
 
       <nav data-testid="sidebar-nav" style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 2px" }}>
@@ -236,11 +236,11 @@ const MoreSheet = ({
       aria-modal="true"
       aria-label="More destinations"
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 40, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "rgba(6,7,13,.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "verity-fade .16s ease" }}
+      style={{ position: "fixed", inset: 0, zIndex: 40, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "rgba(6,7,13,.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "beamhop-fade .16s ease" }}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ margin: "0 calc(10px + var(--sar)) calc(10px + var(--sab)) calc(10px + var(--sal))", padding: "8px 8px 12px", borderRadius: 18, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)", animation: "verity-slideup .22s ease" }}
+        style={{ margin: "0 calc(10px + var(--sar)) calc(10px + var(--sab)) calc(10px + var(--sal))", padding: "8px 8px 12px", borderRadius: 18, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)", animation: "beamhop-slideup .22s ease" }}
       >
         <span aria-hidden style={{ display: "block", width: 38, height: 4, borderRadius: 999, background: "var(--glass-border)", margin: "4px auto 10px" }} />
         {items.map((d) => (

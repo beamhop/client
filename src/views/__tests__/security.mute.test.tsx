@@ -8,7 +8,7 @@ import { SecurityView } from "../Security.tsx";
 const sk = generateSecretKey();
 const identity: Identity = { kind: "local", secretKey: sk, pubkey: getPublicKey(sk) };
 
-const MUTES_KEY = `verity.mutes.v1:${identity.pubkey}`;
+const MUTES_KEY = `beamhop.mutes.v1:${identity.pubkey}`;
 
 /** Read what the store persisted for this identity, typed (no `any`). */
 type PersistedMutes = { version: number; display: MuteDisplay; rules: MuteRule[] };

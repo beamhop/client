@@ -23,7 +23,7 @@ describe("theme persistence", () => {
   });
 
   test("an unrecognized stored theme falls back to light", () => {
-    localStorage.setItem("verity.theme.v1", "neon");
+    localStorage.setItem("beamhop.theme.v1", "neon");
     expect(loadTheme()).toBe("light");
   });
 });
@@ -39,7 +39,7 @@ describe("palette persistence", () => {
   });
 
   test("an unknown stored palette falls back to Ember", () => {
-    localStorage.setItem("verity.palette.v1", "Chartreuse");
+    localStorage.setItem("beamhop.palette.v1", "Chartreuse");
     expect(loadPalette()).toBe("Ember");
   });
 

@@ -1,9 +1,9 @@
 {
-  "name": "@verity/client",
+  "name": "@beamhop/client",
   "version": "0.1.0",
   "type": "module",
   "private": true,
-  "description": "Verity — a glass-morphic Nostr client with first-class Documentations (NIP-23 long-form)",
+  "description": "Beamhop — a glass-morphic Nostr client with first-class Documentations (NIP-23 long-form)",
   "scripts": {
     "dev": "bun --hot run src/server.ts",
     "build": "bun run scripts/build.ts",

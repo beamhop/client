@@ -257,7 +257,7 @@ const PhotoGallery = ({
             background: "rgba(6,7,13,.78)",
             backdropFilter: "blur(18px)",
             WebkitBackdropFilter: "blur(18px)",
-            animation: "verity-fade .16s ease",
+            animation: "beamhop-fade .16s ease",
           }}
         >
           <div
@@ -332,7 +332,7 @@ const PhotoGallery = ({
                 objectFit: "contain",
                 borderRadius: 18,
                 boxShadow: "0 28px 90px rgba(0,0,0,.42)",
-                animation: "verity-scale .18s ease",
+                animation: "beamhop-scale .18s ease",
               }}
             />
             {imageCount > 1 && (
@@ -404,7 +404,7 @@ const PhotoGallery = ({
   );
 };
 
-/** Duration of the shrink-and-dissolve exit; kept in sync with the `verity-dissolve` keyframe. */
+/** Duration of the shrink-and-dissolve exit; kept in sync with the `beamhop-dissolve` keyframe. */
 const EXIT_MS = 420;
 
 const confirmPopoverStyle: CSSProperties = {
@@ -422,7 +422,7 @@ const confirmPopoverStyle: CSSProperties = {
   boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
-  animation: "verity-scale .14s ease",
+  animation: "beamhop-scale .14s ease",
 };
 
 const confirmButtonBase: CSSProperties = {
@@ -435,7 +435,7 @@ const confirmButtonBase: CSSProperties = {
   border: "1px solid var(--glass-border)",
 };
 
-/** The canonical feed post, faithful to the design (verity-glass.html ~271-323). */
+/** The canonical feed post, faithful to the design (beamhop-glass.html ~271-323). */
 export const PostCard = ({
   note,
   engagement,
@@ -643,7 +643,7 @@ export const PostCard = ({
         borderColor: hover ? "var(--text-3)" : "var(--glass-border)",
         cursor: "pointer",
         ...(exiting
-          ? { animation: `verity-dissolve ${EXIT_MS}ms ease forwards`, overflow: "hidden", pointerEvents: "none" }
+          ? { animation: `beamhop-dissolve ${EXIT_MS}ms ease forwards`, overflow: "hidden", pointerEvents: "none" }
           : null),
       }}
     >
@@ -698,12 +698,12 @@ export const PostCard = ({
             </button>
             <button onClick={(event) => runAction(event, handleRepost)} style={actionStyle(Boolean(e?.reposted), "var(--success)")}>
               <BubblePop activeKey={unrepostBubbleKey} message="Unreposted" tone="success">
-                <span style={{ display: "flex" }} className={repostPop ? "verity-pop" : undefined}><RepostIcon size={16} /></span>
+                <span style={{ display: "flex" }} className={repostPop ? "beamhop-pop" : undefined}><RepostIcon size={16} /></span>
               </BubblePop>
               <span>{e && e.reposts > 0 ? fmtCount(e.reposts) : ""}</span>
             </button>
             <button onClick={(event) => runAction(event, handleLike)} style={actionStyle(Boolean(e?.liked), "var(--danger)")}>
-              <span style={{ display: "flex" }} className={likePop ? "verity-pop" : undefined}><HeartIcon size={16} filled={Boolean(e?.liked)} /></span>
+              <span style={{ display: "flex" }} className={likePop ? "beamhop-pop" : undefined}><HeartIcon size={16} filled={Boolean(e?.liked)} /></span>
               <span>{e && e.likes > 0 ? fmtCount(e.likes) : ""}</span>
             </button>
             <div style={{ flex: 1 }} />
@@ -886,7 +886,7 @@ export const PostCard = ({
             boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
-            animation: "verity-scale .14s ease",
+            animation: "beamhop-scale .14s ease",
           }}
         >
           Mute this phrase

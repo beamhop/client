@@ -93,7 +93,7 @@ export const BubblePop = ({
             pointerEvents: "none",
             transform: "translate(-50%, 6px) scale(.78)",
             transformOrigin: "50% 100%",
-            animation: `verity-bubble-pop ${durationMs}ms cubic-bezier(.18,.82,.22,1) forwards`,
+            animation: `beamhop-bubble-pop ${durationMs}ms cubic-bezier(.18,.82,.22,1) forwards`,
             ...bubbleStyle,
           }}
         >
@@ -110,7 +110,7 @@ export const BubblePop = ({
               border: `1.5px solid ${color}`,
               opacity: 0,
               transform: "translate(-50%, -50%) scale(.7)",
-              animation: `verity-bubble-burst ${Math.round(durationMs * 0.42)}ms ease-out forwards`,
+              animation: `beamhop-bubble-burst ${Math.round(durationMs * 0.42)}ms ease-out forwards`,
               animationDelay: `${Math.round(durationMs * 0.55)}ms`,
             }}
           />

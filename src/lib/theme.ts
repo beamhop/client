@@ -47,8 +47,8 @@ export const applyPalette = (el: HTMLElement, id: PaletteId, mode: ThemeMode): v
   el.style.setProperty("--grad", tones.a);
 };
 
-const THEME_KEY = "verity.theme.v1";
-const PALETTE_KEY = "verity.palette.v1";
+const THEME_KEY = "beamhop.theme.v1";
+const PALETTE_KEY = "beamhop.palette.v1";
 
 export const loadTheme = (): ThemeMode => (localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light");
 export const saveTheme = (mode: ThemeMode): void => localStorage.setItem(THEME_KEY, mode);

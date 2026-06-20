@@ -229,7 +229,7 @@ export const App = (): ReactNode => {
                 </div>
               </header>
             )}
-            <div className={SUPPORTS_VIEW_TRANSITION ? undefined : "verity-fadein"} key={view}>
+            <div className={SUPPORTS_VIEW_TRANSITION ? undefined : "beamhop-fadein"} key={view}>
               {renderView(view)}
             </div>
           </div>

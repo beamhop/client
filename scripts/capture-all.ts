@@ -1,12 +1,12 @@
 /// <reference lib="dom" />
 /**
- * Capture every Verity surface (views + modals + wizard) headlessly via CDP for
- * design-fidelity review. Writes PNGs to /tmp/verity-shot/v2-*.png and prints any
+ * Capture every Beamhop surface (views + modals + wizard) headlessly via CDP for
+ * design-fidelity review. Writes PNGs to /tmp/beamhop-shot/v2-*.png and prints any
  * console errors. Usage: bun scripts/capture-all.ts [theme]
  */
 import { spawn } from "bun";
 
-const IDENTITY = await Bun.file("/tmp/verity-shot/identity.json").text();
+const IDENTITY = await Bun.file("/tmp/beamhop-shot/identity.json").text();
 const THEME = process.argv[2] === "dark" ? "dark" : "light";
 const PORT = 9251;
 const BASE = "http://localhost:3000";
@@ -14,7 +14,7 @@ const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 const chrome = spawn([
   CHROME, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
-  `--remote-debugging-port=${PORT}`, "--user-data-dir=/tmp/verity-shot/profile-v2",
+  `--remote-debugging-port=${PORT}`, "--user-data-dir=/tmp/beamhop-shot/profile-v2",
   "--window-size=1340,940", "about:blank",
 ]);
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -67,7 +67,7 @@ await send("Runtime.enable");
 
 await send("Page.navigate", { url: BASE });
 await sleep(1200);
-await send("Runtime.evaluate", { expression: `localStorage.setItem('verity.identity.v1', ${JSON.stringify(IDENTITY)}); localStorage.setItem('verity.theme.v1','${THEME}');` });
+await send("Runtime.evaluate", { expression: `localStorage.setItem('beamhop.identity.v1', ${JSON.stringify(IDENTITY)}); localStorage.setItem('beamhop.theme.v1','${THEME}');` });
 await send("Page.reload", {});
 await sleep(2600);
 
@@ -77,7 +77,7 @@ const clickText = (re: string) => evalJs(`(()=>{const b=[...document.querySelect
 const shot = async (name: string, wait = 900): Promise<void> => {
   await sleep(wait);
   const s = (await send("Page.captureScreenshot", { format: "png" })) as { data: string };
-  await Bun.write(`/tmp/verity-shot/v2-${name}.png`, Buffer.from(s.data, "base64"));
+  await Bun.write(`/tmp/beamhop-shot/v2-${name}.png`, Buffer.from(s.data, "base64"));
   console.log(`captured ${name}`);
 };
 

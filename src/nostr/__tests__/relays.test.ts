@@ -9,7 +9,7 @@ import {
 } from "../relays.ts";
 import type { RelayInfo } from "../types.ts";
 
-const STORAGE_KEY = "verity.relays.v1";
+const STORAGE_KEY = "beamhop.relays.v1";
 
 const relay = (over: Partial<RelayInfo>): RelayInfo => ({
   url: "wss://example",

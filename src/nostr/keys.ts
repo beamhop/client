@@ -1,7 +1,7 @@
 import { generateSecretKey, getPublicKey, nip19, finalizeEvent } from "nostr-tools";
 import type { EventTemplate, Event as NostrEvent } from "nostr-tools";
 
-const STORAGE_KEY = "verity.identity.v1";
+const STORAGE_KEY = "beamhop.identity.v1";
 
 /**
  * An identity is either a locally-held secret key, or a delegated NIP-07 signer

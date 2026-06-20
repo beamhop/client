@@ -10,7 +10,7 @@ type Command = {
   run: () => void;
 };
 
-/** ⌘K command palette, faithful to the design (verity-glass.html 1635-1664). */
+/** ⌘K command palette, faithful to the design (beamhop-glass.html 1635-1664). */
 export const CommandPalette = ({ onClose, onCompose }: { onClose: () => void; onCompose: () => void }): ReactNode => {
   const { navigate, toggleTheme, state } = useStore();
   const [query, setQuery] = useState("");
@@ -71,9 +71,9 @@ export const CommandPalette = ({ onClose, onCompose }: { onClose: () => void; on
     <div
       data-testid="command-palette"
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(10,10,25,.42)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 70, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "92px 18px", animation: "verity-fade .14s" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,10,25,.42)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 70, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "92px 18px", animation: "beamhop-fade .14s" }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 580, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 14, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "verity-scale .18s cubic-bezier(.2,.9,.3,1)" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 580, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 14, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "beamhop-scale .18s cubic-bezier(.2,.9,.3,1)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 16px", borderBottom: "1px solid var(--hairline)" }}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
           <input ref={inputRef} data-testid="palette-input" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onKey} enterKeyHint="search" placeholder="Type a command or search…" style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 16, color: "var(--text)", fontFamily: "inherit" }} />

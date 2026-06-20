@@ -13,7 +13,7 @@ import { ProfileView } from "../Profile.tsx";
  * only to the non-me branch, so a user's own profile must never expose it.
  */
 
-const MUTES_KEY = "verity.mutes.v1";
+const MUTES_KEY = "beamhop.mutes.v1";
 const mutesKey = (pubkey: string): string => `${MUTES_KEY}:${pubkey}`;
 
 const newIdentity = (): Identity => {

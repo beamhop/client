@@ -109,7 +109,7 @@ describe("identity persistence", () => {
   });
 
   test("loadPersisted returns null for corrupt storage", () => {
-    localStorage.setItem("verity.identity.v1", "{not json");
+    localStorage.setItem("beamhop.identity.v1", "{not json");
     expect(loadPersisted()).toBeNull();
   });
 

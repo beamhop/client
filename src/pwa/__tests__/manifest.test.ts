@@ -15,8 +15,8 @@ describe("web app manifest", () => {
   });
 
   it("carries identity + color fields matching the light theme default", () => {
-    expect(manifest.name).toBe("Verity");
-    expect(manifest.short_name).toBe("Verity");
+    expect(manifest.name).toBe("Beamhop");
+    expect(manifest.short_name).toBe("Beamhop");
     expect(manifest.id).toBe("/");
     expect(manifest.orientation).toBe("portrait");
     expect(manifest.background_color).toBe("#f4f5f7");

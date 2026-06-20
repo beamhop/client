@@ -11,10 +11,10 @@ describe("Onboarding", () => {
 
     // The created step shows the npub and a confirmation button.
     expect(await screen.findByText(/Public key/i)).toBeDefined();
-    const enter = screen.getByRole("button", { name: /enter verity/i });
+    const enter = screen.getByRole("button", { name: /enter beamhop/i });
     fireEvent.click(enter);
 
-    await waitFor(() => expect(localStorage.getItem("verity.identity.v1")).not.toBeNull());
+    await waitFor(() => expect(localStorage.getItem("beamhop.identity.v1")).not.toBeNull());
   });
 
   test("importing a valid nsec signs in", async () => {
@@ -25,7 +25,7 @@ describe("Onboarding", () => {
     fireEvent.change(screen.getByPlaceholderText(/nsec1/i), { target: { value: nsec } });
     fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
 
-    await waitFor(() => expect(localStorage.getItem("verity.identity.v1")).not.toBeNull());
+    await waitFor(() => expect(localStorage.getItem("beamhop.identity.v1")).not.toBeNull());
   });
 
   test("importing garbage surfaces an inline error and does not sign in", async () => {
@@ -35,7 +35,7 @@ describe("Onboarding", () => {
     fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
 
     expect(await screen.findByText(/Expected an nsec/i)).toBeDefined();
-    expect(localStorage.getItem("verity.identity.v1")).toBeNull();
+    expect(localStorage.getItem("beamhop.identity.v1")).toBeNull();
   });
 
   test("the NIP-07 option is hidden when no signer is present", () => {

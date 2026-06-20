@@ -203,11 +203,11 @@ export const VerifiedSeal = ({ size = 14 }: { size?: number }): ReactNode => (
 
 export const Logo = ({ size = 32 }: { size?: number }): ReactNode => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-    <rect width="32" height="32" rx="9" fill="url(#verity-lg)" />
+    <rect width="32" height="32" rx="9" fill="url(#beamhop-lg)" />
     <path d="M16 7.5l6.4 8.5-6.4 8.5L9.6 16 16 7.5z" fill="#fff" fillOpacity=".96" />
-    <circle cx="16" cy="16" r="2.5" fill="url(#verity-lg)" />
+    <circle cx="16" cy="16" r="2.5" fill="url(#beamhop-lg)" />
     <defs>
-      <linearGradient id="verity-lg" x1="0" y1="0" x2="32" y2="32">
+      <linearGradient id="beamhop-lg" x1="0" y1="0" x2="32" y2="32">
         <stop stopColor="var(--accent)" />
         <stop offset="1" stopColor="var(--accent-2)" />
       </linearGradient>

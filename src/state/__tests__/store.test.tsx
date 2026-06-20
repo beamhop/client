@@ -47,7 +47,7 @@ describe("theme + palette", () => {
 
     act(() => result.current.toggleTheme());
     expect(result.current.state.theme).not.toBe(before);
-    expect(localStorage.getItem("verity.theme.v1")).toBe(result.current.state.theme);
+    expect(localStorage.getItem("beamhop.theme.v1")).toBe(result.current.state.theme);
   });
 
   test("setPalette updates state, persists, and toasts", async () => {
@@ -56,7 +56,7 @@ describe("theme + palette", () => {
 
     act(() => result.current.setPalette("Pine"));
     expect(result.current.state.palette).toBe("Pine");
-    expect(localStorage.getItem("verity.palette.v1")).toBe("Pine");
+    expect(localStorage.getItem("beamhop.palette.v1")).toBe("Pine");
     expect(result.current.state.toasts.some((t) => t.text.includes("Pine"))).toBe(true);
   });
 });
@@ -68,7 +68,7 @@ describe("bookmarks", () => {
 
     act(() => result.current.toggleBookmark("note1"));
     expect(result.current.state.bookmarks).toContain("note1");
-    expect(JSON.parse(localStorage.getItem("verity.bookmarks.v1") ?? "[]")).toContain("note1");
+    expect(JSON.parse(localStorage.getItem("beamhop.bookmarks.v1") ?? "[]")).toContain("note1");
 
     act(() => result.current.toggleBookmark("note1"));
     expect(result.current.state.bookmarks).not.toContain("note1");
@@ -140,7 +140,7 @@ describe("relays + me", () => {
     );
     expect(result.current.readRelayUrls).toEqual(["wss://only-read"]);
     expect(result.current.writeRelayUrls).toEqual(["wss://only-write"]);
-    expect(JSON.parse(localStorage.getItem("verity.relays.v1") ?? "[]")).toHaveLength(2);
+    expect(JSON.parse(localStorage.getItem("beamhop.relays.v1") ?? "[]")).toHaveLength(2);
   });
 
   test("setMe updates the profile in state", async () => {
@@ -235,7 +235,7 @@ describe("publish + signOut", () => {
     act(() => result.current.signOut());
     expect(result.current.state.identity).toBeNull();
     expect(result.current.state.contacts).toEqual([]);
-    expect(localStorage.getItem("verity.identity.v1")).toBeNull();
+    expect(localStorage.getItem("beamhop.identity.v1")).toBeNull();
   });
 });
 

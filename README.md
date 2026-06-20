@@ -1,7 +1,7 @@
-# Verity — a Nostr client with first-class Documentations
+# Beamhop — a Nostr client with first-class Documentations
 
-Verity is a fully client-side [Nostr](https://github.com/nostr-protocol/nostr) client
-built from the **Verity Glass** design. Beyond the usual social surface (feed, profiles,
+Beamhop is a fully client-side [Nostr](https://github.com/nostr-protocol/nostr) client
+built from the **Beamhop Glass** design. Beyond the usual social surface (feed, profiles,
 follows, reactions, reposts, encrypted DMs) it adds a headline feature: **Documentations** —
 long-form, versioned, signed knowledge built on [NIP-23](https://github.com/nostr-protocol/nips/blob/master/23.md).
 
@@ -65,7 +65,7 @@ src/
 
 Everything maps to standard Nostr: profiles = kind 0, feed = kind 1, follows = kind 3,
 DMs = kind 4, reposts = kind 6, reactions = kind 7, long-form = kind 30023. Documentation
-vs. blog articles (both kind 30023) are split by a `t` marker tag (`verity-doc` / `verity-article`).
+vs. blog articles (both kind 30023) are split by a `t` marker tag (`beamhop-doc` / `beamhop-article`).
 
 ## Documentations, end to end
 

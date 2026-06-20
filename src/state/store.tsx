@@ -224,11 +224,11 @@ const reducer = (state: State, action: Action): State => {
   }
 };
 
-const BOOKMARKS_KEY = "verity.bookmarks.v1";
-const NOTIFICATION_READ_KEY = "verity.notifications.read.v1";
-const MUTES_KEY = "verity.mutes.v1";
-const MUTES_RELAY_AT_KEY = "verity.mutes.relayAt.v1";
-const DEVELOPER_MODE_KEY = "verity.developerMode.v1";
+const BOOKMARKS_KEY = "beamhop.bookmarks.v1";
+const NOTIFICATION_READ_KEY = "beamhop.notifications.read.v1";
+const MUTES_KEY = "beamhop.mutes.v1";
+const MUTES_RELAY_AT_KEY = "beamhop.mutes.relayAt.v1";
+const DEVELOPER_MODE_KEY = "beamhop.developerMode.v1";
 
 // Browser/status-bar tint per theme; kept in sync with --bg-base in tokens.css.
 const BG_BY_MODE: Record<ThemeMode, string> = { light: "#f4f5f7", dark: "#0c0d11" };

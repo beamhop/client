@@ -1,6 +1,6 @@
 import type { RelayInfo } from "./types.ts";
 
-const STORAGE_KEY = "verity.relays.v1";
+const STORAGE_KEY = "beamhop.relays.v1";
 
 /** Beamhop relay first; community relays included but disabled by default. */
 export const DEFAULT_RELAYS: readonly RelayInfo[] = [

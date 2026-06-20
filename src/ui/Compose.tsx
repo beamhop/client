@@ -5,7 +5,7 @@ import { buildNote } from "../nostr/events.ts";
 import type { Note } from "../nostr/types.ts";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
 
-/** Compose modal — faithful to the design (verity-glass.html 1536-1561). */
+/** Compose modal — faithful to the design (beamhop-glass.html 1536-1561). */
 export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void; replyTo?: Note; onPublished?: (note: Note) => void }): ReactNode => {
   const { state, publish, toast, writeRelayUrls, navigate } = useStore();
   const isMobile = useIsMobile();
@@ -55,11 +55,11 @@ export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void
     <div
       data-testid="modal-compose"
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, background: "rgba(10,10,25,.4)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 50, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "max(16px, 5vh) 18px", overflowY: "auto", overscrollBehavior: "contain", animation: "verity-fade .2s" }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,10,25,.4)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", zIndex: 50, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "max(16px, 5vh) 18px", overflowY: "auto", overscrollBehavior: "contain", animation: "beamhop-fade .2s" }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: "100%", maxWidth: 560, maxHeight: cardMaxHeight, display: "flex", flexDirection: "column", background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 16, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "verity-scale .24s cubic-bezier(.2,.9,.3,1)" }}
+        style={{ width: "100%", maxWidth: 560, maxHeight: cardMaxHeight, display: "flex", flexDirection: "column", background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 16, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "beamhop-scale .24s cubic-bezier(.2,.9,.3,1)" }}
       >
         <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--hairline)" }}>
           <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 17 }}>{replyTo ? "Reply" : "New post"}</span>

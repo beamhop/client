@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 /**
- * Exact port of the Verity design's style-helper functions (verity-glass.html
+ * Exact port of the Beamhop design's style-helper functions (beamhop-glass.html
  * ~lines 1997-2207). Views use these so feed/profile/agent surfaces are
  * pixel-identical to the design. Keep values verbatim.
  */

@@ -14,7 +14,7 @@ import { compileMutes, arrangeFeed, evaluateNote, evaluateRepost, evaluateArticl
 import { Compose } from "../ui/Compose.tsx";
 import { haptic } from "../lib/haptics.ts";
 
-const AGENTS_KEY = "verity.agents.v1";
+const AGENTS_KEY = "beamhop.agents.v1";
 
 /** Pubkeys of locally-defined AI agents, used to flag agent-authored posts. */
 const loadAgentPubkeys = (): Set<string> => {
@@ -209,7 +209,7 @@ const Composer = ({
   );
 };
 
-/** Lightweight article strip — NIP-23 kind 30023 (verity-article). */
+/** Lightweight article strip — NIP-23 kind 30023 (beamhop-article). */
 const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
   const { client, readRelayUrls, navigate, state } = useStore();
   const [articles, setArticles] = useState<LongForm[]>([]);

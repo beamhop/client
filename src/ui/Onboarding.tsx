@@ -29,7 +29,7 @@ export const Onboarding = (): ReactNode => {
   const finishCreated = (): void => {
     if (created) {
       setIdentity(created);
-      toast("Welcome to Verity", "check");
+      toast("Welcome to Beamhop", "check");
     }
   };
 
@@ -66,11 +66,11 @@ export const Onboarding = (): ReactNode => {
         fontFamily: "'Hanken Grotesk',sans-serif",
       }}
     >
-      <div style={{ ...glass, width: "100%", maxWidth: 460, padding: 32 }} className="verity-slideup">
+      <div style={{ ...glass, width: "100%", maxWidth: 460, padding: 32 }} className="beamhop-slideup">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <Logo size={40} />
           <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "-.02em" }}>
-            Verity
+            Beamhop
           </span>
         </div>
         <p style={{ color: "var(--text-2)", fontSize: 15, lineHeight: 1.6, margin: "0 0 24px" }}>
@@ -142,7 +142,7 @@ export const Onboarding = (): ReactNode => {
               to recover this identity.
             </p>
             <PrimaryButton onClick={finishCreated} style={{ padding: "13px" }}>
-              I've saved it — enter Verity
+              I've saved it — enter Beamhop
             </PrimaryButton>
           </div>
         )}

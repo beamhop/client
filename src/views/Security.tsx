@@ -225,7 +225,7 @@ type AuditRow = { type: AuditType; event: string; detail: string; time: string }
 
 /* ── local UI preferences (hardware / delegation toggles) ───────────────── */
 
-const PREFS_KEY = "verity.security.prefs.v1";
+const PREFS_KEY = "beamhop.security.prefs.v1";
 
 type Prefs = { hardware: boolean; delegation: boolean };
 
@@ -466,7 +466,7 @@ export const SecurityView = (): ReactNode => {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "verity-mutes.json";
+    anchor.download = "beamhop-mutes.json";
     anchor.click();
     URL.revokeObjectURL(url);
     toast("Mute rules exported", "check");
@@ -547,7 +547,7 @@ export const SecurityView = (): ReactNode => {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "verity-audit-log.csv";
+    anchor.download = "beamhop-audit-log.csv";
     anchor.click();
     URL.revokeObjectURL(url);
     toast("Audit log exported", "check");
@@ -1650,7 +1650,7 @@ export const SecurityView = (): ReactNode => {
             <p style={{ margin: "0 0 18px", fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.55 }}>
               {isLocal
                 ? "This removes your private key from this browser. If you haven't backed up your nsec, you will lose access to this identity permanently."
-                : "This disconnects your NIP-07 signer from Verity on this device."}
+                : "This disconnects your NIP-07 signer from Beamhop on this device."}
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <GhostButton onClick={() => setConfirmSignOut(false)}>Cancel</GhostButton>

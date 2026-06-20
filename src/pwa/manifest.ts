@@ -31,8 +31,8 @@ interface WebAppManifest {
 }
 
 export const manifest: WebAppManifest = {
-  name: "Verity",
-  short_name: "Verity",
+  name: "Beamhop",
+  short_name: "Beamhop",
   description: "Nostr, signed and clear",
   id: "/",
   start_url: ".",

@@ -8,7 +8,7 @@ import {
   setHapticsEnabled,
 } from "../haptics.ts";
 
-const STORAGE_KEY = "verity.haptics.v1";
+const STORAGE_KEY = "beamhop.haptics.v1";
 const THROTTLE_MS = 120;
 
 // Swap navigator.vibrate with a recording stub and hand back a restore fn. We
