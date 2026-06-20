@@ -26,6 +26,7 @@ export const CommandPalette = ({ onClose, onCompose }: { onClose: () => void; on
     () => [
       { id: "home", label: "Go to Home", group: "Navigate", iconPath: "M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z", run: go("home") },
       { id: "explore", label: "Go to Explore", group: "Navigate", iconPath: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm10 2-4.3-4.3", run: go("explore") },
+      { id: "notifications", label: "Go to Notifications", group: "Navigate", iconPath: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21a2 2 0 0 0 4 0", run: go("notifications") },
       { id: "docs", label: "Go to Documentations", group: "Navigate", iconPath: "M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", run: go("docs") },
       { id: "messages", label: "Go to Messages", group: "Navigate", iconPath: "M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", run: go("messages") },
       { id: "agents", label: "Go to Agents", group: "Navigate", iconPath: "M4 7h16v12H4zM12 7V4", run: go("agents") },

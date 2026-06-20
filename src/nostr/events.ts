@@ -92,6 +92,15 @@ export const buildProfile = (profile: Omit<Profile, "pubkey">): EventTemplate =>
   content: JSON.stringify(stripUndefined(profile)),
 });
 
+const extractHashtags = (content: string): string[] => {
+  const tags = new Set<string>();
+  for (const match of content.matchAll(/(^|[^A-Za-z0-9_])#([A-Za-z0-9_][A-Za-z0-9_-]{0,63})/g)) {
+    const tag = match[2]?.toLowerCase();
+    if (tag) tags.add(tag);
+  }
+  return [...tags];
+};
+
 export const buildNote = (content: string, replyTo?: Note): EventTemplate => {
   const tags: string[][] = [];
   if (replyTo) {
@@ -100,6 +109,7 @@ export const buildNote = (content: string, replyTo?: Note): EventTemplate => {
     if (replyTo.rootId) tags.push(["e", replyTo.id, "", "reply"]);
     tags.push(["p", replyTo.pubkey]);
   }
+  for (const tag of extractHashtags(content)) tags.push(["t", tag]);
   return { kind: Kind.Note, created_at: nowSeconds(), tags, content };
 };
 

@@ -11,16 +11,19 @@ import { Logo, SunIcon, MoonIcon } from "./ui/icons.tsx";
 import { PALETTE_ORDER, paletteBanner, type PaletteId } from "./lib/theme.ts";
 import { HomeView } from "./views/Home.tsx";
 import { ExploreView } from "./views/Explore.tsx";
+import { NotificationsView } from "./views/Notifications.tsx";
 import { DocsView } from "./views/Docs.tsx";
 import { MessagesView } from "./views/Messages.tsx";
 import { AgentsView } from "./views/Agents.tsx";
 import { ProfileView } from "./views/Profile.tsx";
 import { SecurityView } from "./views/Security.tsx";
 import { ArticleView } from "./views/Article.tsx";
+import { PostDetailView } from "./views/PostDetail.tsx";
 
 const HEADERS: Partial<Record<ViewId, { title: string; subtitle: string }>> = {
   home: { title: "Home", subtitle: "Your network, freshest first" },
   explore: { title: "Explore", subtitle: "Find people, posts, and topics" },
+  notifications: { title: "Notifications", subtitle: "Replies, mentions, reactions, zaps, and messages" },
   docs: { title: "Documentations", subtitle: "Long-form knowledge, signed and versioned" },
   messages: { title: "Messages", subtitle: "End-to-end encrypted · NIP-04" },
   agents: { title: "Agents", subtitle: "Autonomous identities you own" },
@@ -31,13 +34,14 @@ const HEADERS: Partial<Record<ViewId, { title: string; subtitle: string }>> = {
 const HEADER_WIDTH: Partial<Record<ViewId, number | null>> = {
   home: 640,
   explore: 680,
+  notifications: 720,
   docs: 760,
   messages: null,
   agents: 820,
   security: 760,
 };
 
-const NO_HEADER: ViewId[] = ["docReader", "docEditor", "agentDetail", "profile", "articleReader", "articleEditor"];
+const NO_HEADER: ViewId[] = ["docReader", "docEditor", "agentDetail", "profile", "postDetail", "articleReader", "articleEditor"];
 const RIGHT_RAIL_VIEWS: ViewId[] = ["home", "explore"];
 
 const renderView = (view: ViewId): ReactNode => {
@@ -46,6 +50,8 @@ const renderView = (view: ViewId): ReactNode => {
       return <HomeView />;
     case "explore":
       return <ExploreView />;
+    case "notifications":
+      return <NotificationsView />;
     case "docs":
     case "docReader":
     case "docEditor":
@@ -59,6 +65,8 @@ const renderView = (view: ViewId): ReactNode => {
       return <ProfileView />;
     case "security":
       return <SecurityView />;
+    case "postDetail":
+      return <PostDetailView />;
     case "articleReader":
     case "articleEditor":
       return <ArticleView />;

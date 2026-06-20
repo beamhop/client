@@ -10,7 +10,10 @@ export const Kind = {
   EncryptedDM: 4,
   Repost: 6,
   Reaction: 7,
+  PrivateDirectMessage: 17,
+  Mention: 24,
   Report: 1984,
+  ZapReceipt: 9735,
   LongForm: 30023,
   LongFormDraft: 30024,
 } as const;
@@ -80,6 +83,7 @@ export type RelayStatus = "connecting" | "connected" | "error" | "disconnected";
 
 export type RelayInfo = {
   url: string;
+  enabled: boolean;
   read: boolean;
   write: boolean;
   status: RelayStatus;

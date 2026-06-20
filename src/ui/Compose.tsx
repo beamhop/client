@@ -15,7 +15,7 @@ export const Compose = ({ onClose, replyTo }: { onClose: () => void; replyTo?: N
 
   const post = async (): Promise<void> => {
     const content = text.trim();
-    if (!content) return;
+    if (!content || busy) return;
     setBusy(true);
     try {
       await publish(buildNote(content, replyTo));
@@ -54,6 +54,12 @@ export const Compose = ({ onClose, replyTo }: { onClose: () => void; replyTo?: N
               autoFocus
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  void post();
+                }
+              }}
               placeholder={replyTo ? "Write your reply…" : "Share something with your workspace…"}
               style={{ flex: 1, border: "none", background: "transparent", resize: "none", outline: "none", fontSize: 19, lineHeight: 1.5, color: "var(--text)", minHeight: 130, fontFamily: "inherit" }}
             />

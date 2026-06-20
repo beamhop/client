@@ -8,6 +8,7 @@ import {
   Logo,
   HomeIcon,
   SearchIcon,
+  BellIcon,
   DocsIcon,
   MessagesIcon,
   AgentsIcon,
@@ -23,8 +24,9 @@ import {
 type NavItem = { id: ViewId; testid: string; label: string; icon: ReactNode; active: (v: ViewId) => boolean };
 
 const NAV: NavItem[] = [
-  { id: "home", testid: "nav-home", label: "Home", icon: <HomeIcon />, active: (v) => v === "home" },
+  { id: "home", testid: "nav-home", label: "Home", icon: <HomeIcon />, active: (v) => v === "home" || v === "postDetail" },
   { id: "explore", testid: "nav-explore", label: "Explore", icon: <SearchIcon />, active: (v) => v === "explore" },
+  { id: "notifications", testid: "nav-notifications", label: "Notifications", icon: <BellIcon />, active: (v) => v === "notifications" },
   { id: "docs", testid: "nav-docs", label: "Docs", icon: <DocsIcon />, active: (v) => v.startsWith("doc") },
   { id: "messages", testid: "nav-messages", label: "Messages", icon: <MessagesIcon />, active: (v) => v === "messages" },
   { id: "agents", testid: "nav-agents", label: "Agents", icon: <AgentsIcon />, active: (v) => v === "agents" || v === "agentDetail" },
@@ -37,7 +39,8 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
   const view = state.nav.view;
   const pubkey = state.identity?.pubkey ?? "";
   const name = state.me ? displayName({ name: state.me.name, displayName: state.me.displayName, pubkey }) : "You";
-  const relayCount = state.relays.filter((r) => r.read || r.write).length;
+  const relayCount = state.relays.filter((r) => r.enabled && (r.read || r.write)).length;
+  const unreadNotifications = state.notifications.filter((n) => !n.read).length;
 
   return (
     <aside
@@ -67,8 +70,44 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
           const active = item.active(view);
           return (
             <button key={item.id} data-testid={item.testid} onClick={() => navigate(item.id)} style={navStyle(active)}>
-              {item.icon}
-              <span style={item.id === "messages" ? { flex: 1, textAlign: "left" } : undefined}>{item.label}</span>
+              <span style={{ display: "flex", position: "relative" }}>
+                {item.icon}
+                {item.id === "notifications" && unreadNotifications > 0 && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      right: -4,
+                      top: -4,
+                      width: 9,
+                      height: 9,
+                      borderRadius: "50%",
+                      background: "var(--danger)",
+                      border: "2px solid var(--bg-base)",
+                    }}
+                  />
+                )}
+              </span>
+              <span style={{ flex: 1, textAlign: "left" }}>{item.label}</span>
+              {item.id === "notifications" && unreadNotifications > 0 && (
+                <span
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 6px",
+                    borderRadius: 999,
+                    background: "var(--danger)",
+                    color: "#fff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </span>
+              )}
             </button>
           );
         })}
@@ -130,8 +169,9 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
 };
 
 const MOBILE_TABS: { id: ViewId; testid: string; icon: ReactNode; active: (v: ViewId) => boolean }[] = [
-  { id: "home", testid: "tab-home", icon: <HomeIcon size={24} />, active: (v) => v === "home" },
+  { id: "home", testid: "tab-home", icon: <HomeIcon size={24} />, active: (v) => v === "home" || v === "postDetail" },
   { id: "explore", testid: "tab-explore", icon: <SearchIcon size={24} />, active: (v) => v === "explore" },
+  { id: "notifications", testid: "tab-notifications", icon: <BellIcon size={24} />, active: (v) => v === "notifications" },
   { id: "docs", testid: "tab-docs", icon: <DocsIcon size={24} />, active: (v) => v.startsWith("doc") },
 ];
 const MOBILE_TABS_RIGHT: { id: ViewId; testid: string; icon: ReactNode; active: (v: ViewId) => boolean }[] = [
@@ -143,6 +183,35 @@ const MOBILE_TABS_RIGHT: { id: ViewId; testid: string; icon: ReactNode; active: 
 export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode => {
   const { state, navigate } = useStore();
   const view = state.nav.view;
+  const unreadNotifications = state.notifications.filter((n) => !n.read).length;
+  const tabIcon = (tabId: ViewId, icon: ReactNode): ReactNode => (
+    <span style={{ display: "flex", position: "relative" }}>
+      {icon}
+      {tabId === "notifications" && unreadNotifications > 0 && (
+        <span
+          style={{
+            position: "absolute",
+            right: -5,
+            top: -5,
+            minWidth: 15,
+            height: 15,
+            padding: "0 3px",
+            borderRadius: 999,
+            background: "var(--danger)",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 800,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            lineHeight: 1,
+          }}
+        >
+          {unreadNotifications > 9 ? "9+" : unreadNotifications}
+        </span>
+      )}
+    </span>
+  );
   return (
     <nav
       data-testid="bottom-nav"
@@ -150,7 +219,7 @@ export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode =
     >
       {MOBILE_TABS.map((t) => (
         <button key={t.id} data-testid={t.testid} onClick={() => navigate(t.id)} style={tabStyle(t.active(view))}>
-          {t.icon}
+          {tabIcon(t.id, t.icon)}
         </button>
       ))}
       <button

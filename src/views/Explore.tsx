@@ -5,13 +5,13 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import type { Filter } from "nostr-tools";
+import type { Event as NostrEvent, Filter } from "nostr-tools";
 import { nip19 } from "nostr-tools";
-import { useStore, useProfile } from "../state/store.tsx";
+import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { useFeed, useEngagement } from "../state/hooks.ts";
 import type { Engagement } from "../state/hooks.ts";
 import { Kind, ARTICLE_MARKER, type LongForm, type Note } from "../nostr/types.ts";
-import { decodeLongForm, buildReaction, buildRepost } from "../nostr/events.ts";
+import { decodeLongForm, decodeNote, buildReaction, buildRepost } from "../nostr/events.ts";
 import { EmptyState, Spinner } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
 import { SearchIcon, VerifiedSeal } from "../ui/icons.tsx";
@@ -27,6 +27,9 @@ import { countWords, readingMinutes } from "../lib/markdown.ts";
 
 /** The five glass topic pills, verbatim from the design. */
 const TOPICS = ["engineering", "security", "design", "product", "announcements"] as const;
+const SEARCH_LIMIT = 50;
+const RECENT_SEARCH_LIMIT = 200;
+const PROFILE_SEARCH_LIMIT = 20;
 
 // ---------------------------------------------------------------------------
 // data hooks
@@ -50,6 +53,7 @@ const useArticles = (topic: string | null): { articles: LongForm[]; loading: boo
       const decoded = events
         .map(decodeLongForm)
         .filter((a) => a.kind === "article")
+        .filter((a) => !topic || a.hashtags.includes(topic))
         .sort((a, b) => b.publishedAt - a.publishedAt)
         .slice(0, 3);
       setArticles(decoded);
@@ -85,6 +89,99 @@ const usePeopleToFollow = (notes: Note[]): string[] => {
     }
     return out;
   }, [notes, me, state.contacts]);
+};
+
+type RelaySearchResults = {
+  notes: Note[];
+  people: string[];
+  loading: boolean;
+};
+
+const normalizeSearchInput = (value: string): string =>
+  value.trim().replace(/^#/, "").trim();
+
+const tagCandidate = (value: string): string | null => {
+  const tag = normalizeSearchInput(value).toLowerCase();
+  return /^[a-z0-9_][a-z0-9_-]{0,63}$/.test(tag) ? tag : null;
+};
+
+const dedupeEvents = (events: NostrEvent[]): NostrEvent[] => {
+  const byId = new Map<string, NostrEvent>();
+  for (const event of events) if (!byId.has(event.id)) byId.set(event.id, event);
+  return [...byId.values()];
+};
+
+const noteMatchesSearch = (event: NostrEvent, lowerQuery: string, tag: string | null): boolean => {
+  if (event.kind !== Kind.Note) return false;
+  if (event.content.toLowerCase().includes(lowerQuery)) return true;
+  return Boolean(tag && event.tags.some((t) => t[0] === "t" && t[1]?.toLowerCase() === tag));
+};
+
+const profileMatchesSearch = (event: NostrEvent, lowerQuery: string): boolean =>
+  event.kind === Kind.Metadata && event.content.toLowerCase().includes(lowerQuery);
+
+const useRelaySearch = (query: string): RelaySearchResults => {
+  const { client, readRelayUrls } = useStore();
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [people, setPeople] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const term = normalizeSearchInput(query);
+    if (!term || readRelayUrls.length === 0) {
+      setNotes([]);
+      setPeople([]);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const lowerTerm = term.toLowerCase();
+    const tag = tagCandidate(term);
+    const list = async (filter: Filter): Promise<NostrEvent[]> => {
+      try {
+        return await client.list(readRelayUrls, filter);
+      } catch {
+        return [];
+      }
+    };
+
+    setLoading(true);
+    void (async () => {
+      const [searchEvents, recentEvents, tagEvents, profileEvents] = await Promise.all([
+        list({ kinds: [Kind.Note], search: term, limit: SEARCH_LIMIT }),
+        list({ kinds: [Kind.Note], limit: RECENT_SEARCH_LIMIT }),
+        tag ? list({ kinds: [Kind.Note], "#t": [tag], limit: SEARCH_LIMIT }) : Promise.resolve([]),
+        list({ kinds: [Kind.Metadata], search: term, limit: PROFILE_SEARCH_LIMIT }),
+      ]);
+      if (cancelled) return;
+
+      const nextNotes = dedupeEvents([...searchEvents, ...tagEvents, ...recentEvents])
+        .filter((event) => noteMatchesSearch(event, lowerTerm, tag))
+        .map(decodeNote)
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, SEARCH_LIMIT);
+
+      const seenPeople = new Set<string>();
+      const nextPeople: string[] = [];
+      for (const event of dedupeEvents(profileEvents).filter((candidate) => profileMatchesSearch(candidate, lowerTerm))) {
+        if (seenPeople.has(event.pubkey)) continue;
+        seenPeople.add(event.pubkey);
+        nextPeople.push(event.pubkey);
+        if (nextPeople.length >= 6) break;
+      }
+
+      setNotes(nextNotes);
+      setPeople(nextPeople);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, query, readRelayUrls]);
+
+  return { notes, people, loading };
 };
 
 // ---------------------------------------------------------------------------
@@ -214,7 +311,7 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
   const hasCover = Boolean(article.image);
   const isMine = article.pubkey === state.identity?.pubkey;
 
-  const onOpen = (): void => navigate("articleReader", { id: article.id });
+  const onOpen = (): void => navigate("articleReader", { id: article.identifier, pubkey: article.pubkey });
 
   // The article event is a kind-30023 addressable note; reactions tag it by `e`.
   const onLike = (e: React.MouseEvent): void => {
@@ -478,9 +575,10 @@ const resolveNip05 = async (input: string): Promise<string | null> => {
 // ---------------------------------------------------------------------------
 
 export const ExploreView = (): ReactNode => {
-  const { state, navigate, toast, publish } = useStore();
+  const { state, navigate, toast, publish, toggleBookmark } = useStore();
   const [topic, setTopic] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
 
   const filter = useMemo<Filter>(
@@ -491,10 +589,13 @@ export const ExploreView = (): ReactNode => {
     [topic],
   );
   const { notes, loading } = useFeed(filter, [topic]);
+  const search = useRelaySearch(searchTerm);
+  const searchActive = searchTerm.length > 0;
+  const visibleNotes = searchActive ? search.notes : notes;
   const { articles } = useArticles(topic);
   const people = usePeopleToFollow(notes);
 
-  const noteIds = useMemo(() => notes.map((n) => n.id), [notes]);
+  const noteIds = useMemo(() => visibleNotes.map((n) => n.id), [visibleNotes]);
   const engagement = useEngagement(noteIds, optimistic);
 
   const like = (note: Note): void => {
@@ -509,6 +610,11 @@ export const ExploreView = (): ReactNode => {
     if (cur?.reposted) return;
     setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 } }));
     void publish(buildRepost(note)).then(() => toast("Reposted to your followers", "repost"));
+  };
+
+  const share = (note: Note): void => {
+    const link = `${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id: note.id } })}`;
+    void navigator.clipboard?.writeText(link).then(() => toast("Post link copied", "copy"));
   };
 
   const submit = async (): Promise<void> => {
@@ -537,7 +643,8 @@ export const ExploreView = (): ReactNode => {
       return;
     }
 
-    setTopic(value.replace(/^#/, "").toLowerCase());
+    setSearchTerm(normalizeSearchInput(value));
+    setTopic(null);
   };
 
   const openPalette = (): void => toast("Command palette coming soon", "info");
@@ -570,7 +677,10 @@ export const ExploreView = (): ReactNode => {
         <input
           data-testid="search-input"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            if (!e.target.value.trim()) setSearchTerm("");
+          }}
           placeholder="Search people, handles, or NIP-05 domains…"
           style={{
             flex: 1,
@@ -603,7 +713,15 @@ export const ExploreView = (): ReactNode => {
         <h3 style={h3Style}>Curate by topic</h3>
         <div data-testid="topic-list" style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
           {TOPICS.map((t) => (
-            <TopicPill key={t} topic={t} onClick={() => setTopic(t)} />
+            <TopicPill
+              key={t}
+              topic={t}
+              onClick={() => {
+                setTopic(t);
+                setSearchTerm("");
+                setQuery(`#${t}`);
+              }}
+            />
           ))}
         </div>
       </div>
@@ -620,8 +738,53 @@ export const ExploreView = (): ReactNode => {
         </div>
       )}
 
+      {searchActive && (
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={h3Style}>Search results for "{searchTerm}"</h3>
+          {search.loading ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
+              <Spinner />
+            </div>
+          ) : search.people.length === 0 && search.notes.length === 0 ? (
+            <EmptyState
+              icon={<SearchIcon size={28} />}
+              title="No results"
+              hint="Try a different word, phrase, hashtag, npub, or NIP-05 address."
+            />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {search.people.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                  {search.people.map((pk) => (
+                    <PersonRow key={pk} pubkey={pk} />
+                  ))}
+                </div>
+              )}
+
+              {search.notes.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {search.notes.map((note) => (
+                    <PostCard
+                      key={note.id}
+                      note={note}
+                      engagement={engagement.get(note.id)}
+                      bookmarked={state.bookmarks.includes(note.id)}
+                      onLike={() => like(note)}
+                      onRepost={() => repost(note)}
+                      onReply={() => navigate("postDetail", { id: note.id })}
+                      onBookmark={() => toggleBookmark(note.id)}
+                      onShare={() => share(note)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* topic-filtered note feed (real Nostr content for the active topic) */}
-      {topic && (
+      {!searchActive && topic && (
         <div style={{ marginBottom: 24 }}>
           <h3 style={h3Style}>#{topic}</h3>
           {loading && notes.length === 0 ? (
@@ -644,7 +807,9 @@ export const ExploreView = (): ReactNode => {
                   bookmarked={state.bookmarks.includes(note.id)}
                   onLike={() => like(note)}
                   onRepost={() => repost(note)}
-                  onReply={() => navigate("profile", { pubkey: note.pubkey })}
+                  onReply={() => navigate("postDetail", { id: note.id })}
+                  onBookmark={() => toggleBookmark(note.id)}
+                  onShare={() => share(note)}
                 />
               ))}
             </div>

@@ -99,7 +99,10 @@ export const MessagesView = (): ReactNode => {
   // Honor a pubkey arriving via navigation after mount.
   useEffect(() => {
     const target = state.nav.params.pubkey;
-    if (!target) return;
+    if (!target) {
+      setActive(null);
+      return;
+    }
     setActive(target);
     setPending((prev) => (prev.includes(target) ? prev : [...prev, target]));
   }, [state.nav.params.pubkey]);
@@ -159,7 +162,10 @@ export const MessagesView = (): ReactNode => {
     return <EmptyState icon={<MessagesIcon size={34} />} title="Sign in to view messages" />;
   }
 
-  const openThread = (peer: string): void => setActive(peer);
+  const openThread = (peer: string): void => {
+    setActive(peer);
+    navigate("messages", { pubkey: peer });
+  };
 
   const startConversation = (raw: string): void => {
     const peer = resolvePeer(raw);
@@ -222,7 +228,10 @@ export const MessagesView = (): ReactNode => {
           text={text}
           onText={setText}
           onSend={send}
-          onBack={() => setActive(null)}
+          onBack={() => {
+            setActive(null);
+            navigate("messages");
+          }}
           onOpenProfile={(peer) => navigate("profile", { pubkey: peer })}
         />
       )}
@@ -610,7 +619,7 @@ const ThreadBody = ({
           onFocus={() => setInputFocus(true)}
           onBlur={() => setInputFocus(false)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && ((e.metaKey || e.ctrlKey) || !e.shiftKey)) {
               e.preventDefault();
               handleSend();
             }

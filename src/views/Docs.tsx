@@ -8,8 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Filter } from "nostr-tools";
-import { nip19 } from "nostr-tools";
-import { useStore, useProfile } from "../state/store.tsx";
+import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { Kind, DOC_MARKER, type LongForm } from "../nostr/types.ts";
 import { decodeLongForm, buildLongForm } from "../nostr/events.ts";
 import { nowSeconds } from "../nostr/client.ts";
@@ -541,9 +540,12 @@ const DocReader = (): ReactNode => {
   const verified = Boolean(profile?.nip05);
 
   const onShare = async (): Promise<void> => {
-    const naddr = nip19.naddrEncode({ identifier: doc.identifier, pubkey: doc.pubkey, kind: Kind.LongForm });
+    const link = `${location.origin}${location.pathname}${location.search}${routeToHash({
+      view: "docReader",
+      params: { id: doc.identifier, pubkey: doc.pubkey },
+    })}`;
     try {
-      await navigator.clipboard.writeText(`${location.origin}/${naddr}`);
+      await navigator.clipboard.writeText(link);
     } catch {
       // Clipboard may be unavailable; the toast still confirms intent.
     }

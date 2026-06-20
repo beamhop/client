@@ -1,41 +1,126 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { Filter } from "nostr-tools";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Event as NostrEvent, Filter } from "nostr-tools";
 import { useStore } from "./store.tsx";
 import { Kind, type Note } from "../nostr/types.ts";
 import { decodeNote } from "../nostr/events.ts";
 
+const sortNotes = (notes: Iterable<Note>): Note[] =>
+  [...notes].sort((a, b) => b.createdAt - a.createdAt);
+
+const feedLimit = (filter: Filter): number =>
+  typeof filter.limit === "number" && filter.limit > 0 ? filter.limit : 80;
+
+const oldestCreatedAt = (notes: Iterable<Note>): number | undefined => {
+  let oldest: number | undefined;
+  for (const note of notes) {
+    if (oldest === undefined || note.createdAt < oldest) oldest = note.createdAt;
+  }
+  return oldest;
+};
+
 /** Live-subscribe to a feed of notes (kind 1) matching the given filter. */
-export const useFeed = (filter: Filter, deps: unknown[]): { notes: Note[]; loading: boolean } => {
+export const useFeed = (
+  filter: Filter,
+  deps: unknown[],
+  enabled = true,
+): {
+  notes: Note[];
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
+} => {
   const { client, readRelayUrls } = useStore();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const byIdRef = useRef<Map<string, Note>>(new Map());
+  const pagingRef = useRef(false);
+  const feedVersionRef = useRef(0);
 
   // Stable filter identity across renders.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const stableFilter = useMemo(() => filter, deps);
 
+  const flush = useCallback(() => {
+    setNotes(sortNotes(byIdRef.current.values()));
+  }, []);
+
+  const addEvent = useCallback((event: NostrEvent): boolean => {
+    if (event.kind !== Kind.Note) return false;
+    if (byIdRef.current.has(event.id)) return false;
+    byIdRef.current.set(event.id, decodeNote(event));
+    return true;
+  }, []);
+
   useEffect(() => {
-    if (readRelayUrls.length === 0) return;
+    if (!enabled || readRelayUrls.length === 0) {
+      feedVersionRef.current++;
+      byIdRef.current = new Map();
+      setNotes([]);
+      setLoading(false);
+      setLoadingMore(false);
+      setHasMore(false);
+      return;
+    }
     setLoading(true);
+    setLoadingMore(false);
+    setHasMore(true);
     setNotes([]);
-    const byId = new Map<string, Note>();
-    const flush = () => setNotes([...byId.values()].sort((a, b) => b.createdAt - a.createdAt));
+    feedVersionRef.current++;
+    byIdRef.current = new Map();
+    pagingRef.current = false;
     const unsub = client.subscribe(
       readRelayUrls,
       stableFilter,
       (event) => {
-        if (event.kind !== Kind.Note) return;
-        if (byId.has(event.id)) return;
-        byId.set(event.id, decodeNote(event));
-        flush();
+        if (addEvent(event)) flush();
       },
-      () => setLoading(false),
+      () => {
+        setLoading(false);
+        if (byIdRef.current.size === 0) setHasMore(false);
+      },
     );
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, readRelayUrls, stableFilter]);
+  }, [addEvent, client, flush, readRelayUrls, stableFilter, enabled]);
 
-  return { notes, loading };
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (!enabled || readRelayUrls.length === 0 || loading || !hasMore || pagingRef.current) return;
+    const oldest = oldestCreatedAt(byIdRef.current.values());
+    if (oldest === undefined) {
+      setHasMore(false);
+      return;
+    }
+
+    pagingRef.current = true;
+    const feedVersion = feedVersionRef.current;
+    setLoadingMore(true);
+    try {
+      const events = await client.list(readRelayUrls, {
+        ...stableFilter,
+        until: oldest,
+        limit: feedLimit(stableFilter),
+      });
+      if (feedVersion !== feedVersionRef.current) return;
+      let added = 0;
+      for (const event of events) {
+        if (addEvent(event)) added++;
+      }
+      if (added > 0) flush();
+      else setHasMore(false);
+    } catch {
+      if (feedVersion === feedVersionRef.current) setHasMore(false);
+    } finally {
+      if (feedVersion === feedVersionRef.current) {
+        pagingRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [addEvent, client, enabled, flush, hasMore, loading, readRelayUrls, stableFilter]);
+
+  return { notes, loading, loadingMore, hasMore, loadMore };
 };
 
 export type Engagement = {
@@ -44,6 +129,7 @@ export type Engagement = {
   replies: number;
   liked: boolean;
   reposted: boolean;
+  likedEventId?: string;
 };
 
 const empty: Engagement = { likes: 0, reposts: 0, replies: 0, liked: false, reposted: false };
@@ -78,7 +164,10 @@ export const useEngagement = (
         if (!cur) continue;
         if (ev.kind === Kind.Reaction && ev.content !== "-") {
           cur.likes++;
-          if (ev.pubkey === me) cur.liked = true;
+          if (ev.pubkey === me) {
+            cur.liked = true;
+            cur.likedEventId = ev.id;
+          }
         } else if (ev.kind === Kind.Repost) {
           cur.reposts++;
           if (ev.pubkey === me) cur.reposted = true;

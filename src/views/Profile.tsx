@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { useStore, useProfile } from "../state/store.tsx";
+import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { useEngagement, type Engagement } from "../state/hooks.ts";
 import { Kind, type LongForm, type Note, type Profile } from "../nostr/types.ts";
 import {
@@ -25,10 +25,36 @@ import { timeAgo, displayName, avatarStyle, initials, fmtCount } from "../lib/fo
 import { Modal, Spinner, EmptyState } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
 import { followStyle, profileTabStyle, statusDot } from "../ui/styles.ts";
-import { VerifiedSeal } from "../ui/icons.tsx";
+import { MessagesIcon, VerifiedSeal } from "../ui/icons.tsx";
 import { Compose } from "../ui/Compose.tsx";
 
-type TabId = "posts" | "articles" | "replies" | "media";
+type TabId = "posts" | "articles" | "replies" | "media" | "following" | "followers";
+type PeopleTabId = Extract<TabId, "following" | "followers">;
+
+const uniquePubkeys = (pubkeys: Iterable<string>): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const pubkey of pubkeys) {
+    if (!pubkey || seen.has(pubkey)) continue;
+    seen.add(pubkey);
+    out.push(pubkey);
+  }
+  return out;
+};
+
+const isPeopleTab = (tab: TabId): tab is PeopleTabId => tab === "following" || tab === "followers";
+
+const statButtonStyle = (active: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "baseline",
+  gap: 4,
+  padding: 0,
+  border: "none",
+  background: "transparent",
+  color: active ? "var(--accent)" : "var(--text-2)",
+  cursor: "pointer",
+  font: "inherit",
+});
 
 // ---------------------------------------------------------------------------
 // small inline SVGs from the design (kept local — not part of the shared set)
@@ -580,30 +606,215 @@ const ArticleCard = ({
   );
 };
 
+const PersonRow = ({
+  pubkey,
+  myPubkey,
+  followed,
+  onOpen,
+  onToggleFollow,
+}: {
+  pubkey: string;
+  myPubkey: string | undefined;
+  followed: boolean;
+  onOpen: (pubkey: string) => void;
+  onToggleFollow: (pubkey: string) => void;
+}): ReactNode => {
+  const profile = useProfile(pubkey);
+  const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey });
+  const isSelf = pubkey === myPubkey;
+
+  return (
+    <div
+      data-testid="profile-person-row"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: 13,
+        border: "1px solid var(--glass-border)",
+        borderRadius: 12,
+        background: "var(--glass)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onOpen(pubkey)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 11,
+          padding: 0,
+          border: "none",
+          background: "transparent",
+          color: "inherit",
+          textAlign: "left",
+          fontFamily: "inherit",
+          cursor: "pointer",
+        }}
+      >
+        <span style={avatarStyle(pubkey, 44, profile?.picture)}>
+          {!profile?.picture && initials(name)}
+        </span>
+        <span style={{ minWidth: 0, display: "block" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "var(--text)",
+                fontWeight: 700,
+                fontSize: 14.5,
+              }}
+            >
+              {name}
+            </span>
+            {profile?.nip05 && <VerifiedSeal size={14} />}
+          </span>
+          <span
+            style={{
+              display: "block",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              color: "var(--text-3)",
+              fontFamily: "'JetBrains Mono',monospace",
+              fontSize: 12.5,
+              marginTop: 2,
+            }}
+          >
+            {profile?.nip05 ?? shortNpub(pubkey)}
+          </span>
+        </span>
+      </button>
+
+      {!isSelf && (
+        <button
+          type="button"
+          data-testid="profile-person-follow"
+          onClick={() => onToggleFollow(pubkey)}
+          style={followStyle(followed)}
+        >
+          {followed ? "Following" : "Follow"}
+        </button>
+      )}
+    </div>
+  );
+};
+
+const PeoplePanel = ({
+  tab,
+  pubkeys,
+  myPubkey,
+  contacts,
+  onOpenProfile,
+  onToggleFollow,
+}: {
+  tab: PeopleTabId;
+  pubkeys: string[] | null;
+  myPubkey: string | undefined;
+  contacts: string[];
+  onOpenProfile: (pubkey: string) => void;
+  onToggleFollow: (pubkey: string) => void;
+}): ReactNode => {
+  const isFollowing = tab === "following";
+  const title = isFollowing ? "Following" : "Followers";
+  const emptyTitle = isFollowing ? "Not following anyone yet" : "No followers yet";
+  const emptyHint = isFollowing
+    ? "People you follow will show up here."
+    : "People following this profile will show up here.";
+
+  return (
+    <div
+      data-testid={`profile-panel-${tab}`}
+      style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, animation: "fadeIn .2s ease" }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          paddingBottom: 2,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: "'Space Grotesk',sans-serif",
+            fontSize: 17,
+            lineHeight: 1.2,
+            fontWeight: 700,
+          }}
+        >
+          {title}
+        </h3>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-3)" }}>
+          {pubkeys === null ? "—" : fmtCount(pubkeys.length)}
+        </span>
+      </div>
+
+      {pubkeys === null ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "42px 0" }}>
+          <Spinner size={24} />
+        </div>
+      ) : pubkeys.length === 0 ? (
+        <EmptyState title={emptyTitle} hint={emptyHint} />
+      ) : (
+        pubkeys.map((personPubkey) => (
+          <PersonRow
+            key={personPubkey}
+            pubkey={personPubkey}
+            myPubkey={myPubkey}
+            followed={contacts.includes(personPubkey)}
+            onOpen={onOpenProfile}
+            onToggleFollow={onToggleFollow}
+          />
+        ))
+      )}
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Profile view
 // ---------------------------------------------------------------------------
 
 export const ProfileView = (): ReactNode => {
-  const { state, client, readRelayUrls, publish, toggleFollow, toast, navigate } = useStore();
+  const { state, client, readRelayUrls, publish, toggleFollow, toggleBookmark, toast, navigate } = useStore();
   const myPubkey = state.identity?.pubkey;
   const paramPubkey = state.nav.params.pubkey;
   const pubkey = paramPubkey ?? myPubkey;
   const isMe = pubkey !== undefined && pubkey === myPubkey;
+  const routeTab: TabId =
+    state.nav.params.tab === "articles" ||
+    state.nav.params.tab === "replies" ||
+    state.nav.params.tab === "media" ||
+    state.nav.params.tab === "following" ||
+    state.nav.params.tab === "followers"
+      ? state.nav.params.tab
+      : "posts";
 
   const otherProfile = useProfile(isMe ? undefined : pubkey);
   const profile: Profile | null = isMe ? state.me : otherProfile;
 
-  const [tab, setTab] = useState<TabId>("posts");
+  const [tab, setTab] = useState<TabId>(routeTab);
   const [notes, setNotes] = useState<Note[]>([]);
   const [articles, setArticles] = useState<LongForm[]>([]);
-  const [followers, setFollowers] = useState<number | null>(null);
-  const [theirFollowing, setTheirFollowing] = useState<number | null>(null);
+  const [repostedNotes, setRepostedNotes] = useState<Array<{ repostAt: number; note: Note }>>([]);
+  const [followerPubkeys, setFollowerPubkeys] = useState<string[] | null>(null);
+  const [theirFollowingPubkeys, setTheirFollowingPubkeys] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setTab(routeTab);
+  }, [routeTab]);
 
   // ---- notes (kind 1) ----
   useEffect(() => {
@@ -644,11 +855,45 @@ export const ProfileView = (): ReactNode => {
     };
   }, [pubkey, readRelayUrls, client]);
 
-  // ---- followers (distinct authors of kind-3 lists referencing this user) ----
+  // ---- reposts (kind 6 by this user → resolve original notes) ----
   useEffect(() => {
     if (!pubkey || readRelayUrls.length === 0) return;
     let cancelled = false;
-    setFollowers(null);
+    setRepostedNotes([]);
+    void (async () => {
+      const repostEvents = await client.list(readRelayUrls, {
+        kinds: [Kind.Repost],
+        authors: [pubkey],
+        limit: 60,
+      });
+      if (cancelled || repostEvents.length === 0) return;
+      const noteIds = repostEvents
+        .flatMap((e) => e.tags.filter((t) => t[0] === "e" && t[1]).map((t) => t[1]))
+        .filter((id): id is string => Boolean(id));
+      if (noteIds.length === 0) return;
+      const noteEvents = await client.list(readRelayUrls, { kinds: [Kind.Note], ids: noteIds });
+      if (cancelled) return;
+      const byId = new Map(noteEvents.map((e) => [e.id, decodeNote(e)]));
+      const resolved = repostEvents.flatMap((re) => {
+        const noteId = re.tags.find((t) => t[0] === "e" && t[1])?.[1];
+        const note = noteId ? byId.get(noteId) : undefined;
+        return note ? [{ repostAt: re.created_at, note }] : [];
+      });
+      setRepostedNotes(resolved);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pubkey, readRelayUrls, client]);
+
+  // ---- followers (distinct authors of kind-3 lists referencing this user) ----
+  useEffect(() => {
+    if (!pubkey || readRelayUrls.length === 0) {
+      setFollowerPubkeys(null);
+      return;
+    }
+    let cancelled = false;
+    setFollowerPubkeys(null);
     void (async () => {
       const events = await client.list(readRelayUrls, {
         kinds: [Kind.Contacts],
@@ -656,7 +901,8 @@ export const ProfileView = (): ReactNode => {
         limit: 500,
       });
       if (cancelled) return;
-      setFollowers(new Set(events.map((e) => e.pubkey)).size);
+      const authors = [...events].sort((a, b) => b.created_at - a.created_at).map((e) => e.pubkey);
+      setFollowerPubkeys(uniquePubkeys(authors));
     })();
     return () => {
       cancelled = true;
@@ -666,24 +912,26 @@ export const ProfileView = (): ReactNode => {
   // ---- another user's following count (their own kind-3 p-tags) ----
   useEffect(() => {
     if (!pubkey || isMe || readRelayUrls.length === 0) {
-      setTheirFollowing(null);
+      setTheirFollowingPubkeys(null);
       return;
     }
     let cancelled = false;
+    setTheirFollowingPubkeys(null);
     void (async () => {
       const event = await client.get(readRelayUrls, {
         kinds: [Kind.Contacts],
         authors: [pubkey],
       });
       if (cancelled) return;
-      const count = event ? event.tags.filter((t) => t[0] === "p" && t[1]).length : 0;
-      setTheirFollowing(count);
+      const follows = event ? event.tags.flatMap((t) => (t[0] === "p" && t[1] ? [t[1]] : [])) : [];
+      setTheirFollowingPubkeys(uniquePubkeys(follows));
     })();
     return () => {
       cancelled = true;
     };
   }, [pubkey, isMe, readRelayUrls, client]);
 
+  const myFollowingPubkeys = useMemo(() => uniquePubkeys(state.contacts), [state.contacts]);
   const live = useMemo(() => notes.filter((n) => !deleted.has(n.id)), [notes, deleted]);
   const posts = useMemo(() => live.filter((n) => n.replyTo === undefined), [live]);
   const replies = useMemo(() => live.filter((n) => n.replyTo !== undefined), [live]);
@@ -695,23 +943,47 @@ export const ProfileView = (): ReactNode => {
     [live],
   );
 
+  // merged posts + reposts sorted by timestamp (for the Posts tab)
+  const postFeed = useMemo(() => {
+    type FeedItem = { at: number; type: "own"; note: Note } | { at: number; type: "repost"; note: Note };
+    const own: FeedItem[] = posts.map((n) => ({ at: n.createdAt, type: "own", note: n }));
+    const reposts: FeedItem[] = repostedNotes.map((r) => ({ at: r.repostAt, type: "repost", note: r.note }));
+    return [...own, ...reposts].sort((a, b) => b.at - a.at);
+  }, [posts, repostedNotes]);
+
   // engagement for whichever notes can be on screen
   const visibleIds = useMemo(() => {
-    const base = isMe ? (tab === "replies" ? replies : posts) : posts;
-    return base.map((n) => n.id);
-  }, [isMe, tab, posts, replies]);
+    if (isPeopleTab(tab)) return [];
+    if (!isMe) return posts.map((n) => n.id);
+    if (tab === "replies") return replies.map((n) => n.id);
+    return postFeed.map((item) => item.note.id);
+  }, [isMe, tab, posts, replies, postFeed]);
   const engagement = useEngagement(visibleIds, optimistic);
 
   // ---- per-note actions ----
   const like = useCallback(
     (note: Note): void => {
       const cur = engagement.get(note.id);
-      if (cur?.liked) return;
+      if (cur?.liked) {
+        const eventId = cur.likedEventId;
+        if (!eventId) return;
+        setOptimistic((o) => ({
+          ...o,
+          [note.id]: { ...o[note.id], liked: false, likes: Math.max(0, (cur.likes ?? 1) - 1), likedEventId: undefined },
+        }));
+        void publish({ kind: 5, created_at: nowSeconds(), tags: [["e", eventId]], content: "" }).then(
+          () => toast("Unliked", "info"),
+        );
+        return;
+      }
       setOptimistic((o) => ({
         ...o,
         [note.id]: { ...o[note.id], liked: true, likes: (cur?.likes ?? 0) + 1 },
       }));
-      void publish(buildReaction(note, "+")).then(() => toast("Liked", "check"));
+      void publish(buildReaction(note, "+")).then((eventId) => {
+        toast("Liked", "check");
+        setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], likedEventId: eventId } }));
+      });
     },
     [engagement, publish, toast],
   );
@@ -749,7 +1021,7 @@ export const ProfileView = (): ReactNode => {
   const share = useCallback(
     (note: Note): void => {
       void navigator.clipboard
-        .writeText(npubOf(note.pubkey))
+        .writeText(`${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id: note.id } })}`)
         .then(() => toast("Link copied to clipboard", "copy"));
     },
     [toast],
@@ -761,6 +1033,11 @@ export const ProfileView = (): ReactNode => {
       .writeText(npubOf(pubkey))
       .then(() => toast("npub copied to clipboard", "copy"));
   }, [pubkey, toast]);
+
+  const openTab = (next: TabId): void => {
+    setTab(next);
+    navigate("profile", { pubkey: paramPubkey, tab: next === "posts" ? undefined : next });
+  };
 
   if (!pubkey) {
     return (
@@ -774,7 +1051,10 @@ export const ProfileView = (): ReactNode => {
   const banner = profile?.banner;
   const handle = profile?.nip05?.replace(/^_@/, "");
   const following = state.contacts.includes(pubkey);
-  const followingCount = isMe ? state.contacts.length : theirFollowing;
+  const followingPubkeys = isMe ? myFollowingPubkeys : theirFollowingPubkeys;
+  const followingCount = followingPubkeys === null ? null : followingPubkeys.length;
+  const followerCount = followerPubkeys === null ? null : followerPubkeys.length;
+  const activePeoplePubkeys = tab === "following" ? followingPubkeys : followerPubkeys;
 
   const renderNoteCard = (note: Note): ReactNode => {
     const e = engagement.get(note.id);
@@ -787,7 +1067,7 @@ export const ProfileView = (): ReactNode => {
         onReply={() => setReplyTarget(note)}
         onRepost={() => repost(note)}
         onLike={() => like(note)}
-        onBookmark={() => {}}
+        onBookmark={() => toggleBookmark(note.id)}
         onShare={() => share(note)}
         onDelete={() => remove(note)}
       />
@@ -858,7 +1138,23 @@ export const ProfileView = (): ReactNode => {
               Edit profile
             </button>
           ) : (
-            <div style={{ alignSelf: "flex-start", marginTop: 60 }}>
+            <div style={{ alignSelf: "flex-start", marginTop: 60, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                data-testid="profile-message"
+                onClick={() => navigate("messages", { pubkey })}
+                style={{
+                  ...followStyle(true),
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  background: "var(--glass)",
+                  color: "var(--text)",
+                }}
+              >
+                <MessagesIcon size={14} />
+                Message
+              </button>
               <button
                 type="button"
                 data-testid="profile-follow"
@@ -942,18 +1238,28 @@ export const ProfileView = (): ReactNode => {
 
           {/* stats — Following · Followers · Posts */}
           <div style={{ display: "flex", gap: 22, marginTop: 16, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 14, color: "var(--text-2)" }}>
+            <button
+              type="button"
+              data-testid="profile-stat-following"
+              onClick={() => openTab("following")}
+              style={statButtonStyle(tab === "following")}
+            >
               <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
                 {followingCount === null ? "—" : fmtCount(followingCount)}
               </strong>{" "}
               Following
-            </span>
-            <span style={{ fontSize: 14, color: "var(--text-2)" }}>
+            </button>
+            <button
+              type="button"
+              data-testid="profile-stat-followers"
+              onClick={() => openTab("followers")}
+              style={statButtonStyle(tab === "followers")}
+            >
               <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
-                {followers === null ? "—" : fmtCount(followers)}
+                {followerCount === null ? "—" : fmtCount(followerCount)}
               </strong>{" "}
               Followers
-            </span>
+            </button>
             <span style={{ fontSize: 14, color: "var(--text-2)" }}>
               <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
                 {fmtCount(posts.length)}
@@ -1010,28 +1316,44 @@ export const ProfileView = (): ReactNode => {
             role="tablist"
             style={{
               display: "flex",
-              gap: 24,
+              gap: 20,
+              flexWrap: "wrap",
               marginTop: 22,
               borderBottom: "1px solid var(--hairline)",
             }}
           >
-            <button type="button" data-testid="profile-tab-posts" onClick={() => setTab("posts")} style={profileTabStyle(tab === "posts")}>
+            <button type="button" data-testid="profile-tab-posts" onClick={() => openTab("posts")} style={profileTabStyle(tab === "posts")}>
               Posts
             </button>
-            <button type="button" data-testid="profile-tab-articles" onClick={() => setTab("articles")} style={profileTabStyle(tab === "articles")}>
+            <button type="button" data-testid="profile-tab-articles" onClick={() => openTab("articles")} style={profileTabStyle(tab === "articles")}>
               Articles
             </button>
-            <button type="button" data-testid="profile-tab-replies" onClick={() => setTab("replies")} style={profileTabStyle(tab === "replies")}>
+            <button type="button" data-testid="profile-tab-replies" onClick={() => openTab("replies")} style={profileTabStyle(tab === "replies")}>
               Replies
             </button>
-            <button type="button" data-testid="profile-tab-media" onClick={() => setTab("media")} style={profileTabStyle(tab === "media")}>
+            <button type="button" data-testid="profile-tab-media" onClick={() => openTab("media")} style={profileTabStyle(tab === "media")}>
               Media
+            </button>
+            <button type="button" data-testid="profile-tab-following" onClick={() => openTab("following")} style={profileTabStyle(tab === "following")}>
+              Following
+            </button>
+            <button type="button" data-testid="profile-tab-followers" onClick={() => openTab("followers")} style={profileTabStyle(tab === "followers")}>
+              Followers
             </button>
           </div>
         )}
 
         {/* panels */}
-        {loading && notes.length === 0 ? (
+        {isPeopleTab(tab) ? (
+          <PeoplePanel
+            tab={tab}
+            pubkeys={activePeoplePubkeys}
+            myPubkey={myPubkey}
+            contacts={state.contacts}
+            onOpenProfile={(personPubkey) => navigate("profile", { pubkey: personPubkey })}
+            onToggleFollow={(personPubkey) => void toggleFollow(personPubkey)}
+          />
+        ) : loading && notes.length === 0 ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
             <Spinner size={24} />
           </div>
@@ -1063,10 +1385,36 @@ export const ProfileView = (): ReactNode => {
             data-testid="profile-panel-posts"
             style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 14, animation: "fadeIn .2s ease" }}
           >
-            {posts.length === 0 ? (
+            {postFeed.length === 0 ? (
               <EmptyState title="No posts yet" hint="Share something — it'll show up here." />
             ) : (
-              posts.map(renderNoteCard)
+              postFeed.map((item) =>
+                item.type === "repost" ? (
+                  <div key={`repost-${item.note.id}`}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        color: "var(--text-3)",
+                        marginBottom: 6,
+                        paddingLeft: 2,
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" />
+                        <path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                      </svg>
+                      You reposted
+                    </div>
+                    {renderNoteCard(item.note)}
+                  </div>
+                ) : (
+                  renderNoteCard(item.note)
+                ),
+              )
             )}
           </div>
         ) : tab === "articles" ? (
@@ -1106,7 +1454,7 @@ export const ProfileView = (): ReactNode => {
                   authorPubkey={pubkey}
                   authorPicture={profile?.picture}
                   isMine={isMe}
-                  onOpen={() => navigate("articleReader", { pubkey, identifier: a.identifier })}
+                  onOpen={() => navigate("articleReader", { pubkey, id: a.identifier })}
                   onDelete={() =>
                     void publish({
                       kind: 5,
@@ -1195,7 +1543,7 @@ export const ProfileView = (): ReactNode => {
                     key={`${note.id}:${url}`}
                     type="button"
                     data-testid="profile-media-tile"
-                    onClick={() => navigate("profile", { pubkey })}
+                    onClick={() => navigate("postDetail", { id: note.id })}
                     style={{
                       aspectRatio: "1 / 1",
                       border: "none",

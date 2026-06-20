@@ -289,7 +289,7 @@ export const SecurityView = (): ReactNode => {
       toast("Relay already added", "warn");
       return;
     }
-    setRelays([...relays, { url, read: true, write: true, status: "disconnected" }]);
+    setRelays([...relays, { url, enabled: true, read: true, write: true, status: "disconnected" }]);
     setDraftRelay("");
     toast("Relay added", "check");
   };
@@ -741,7 +741,8 @@ export const SecurityView = (): ReactNode => {
           }}
         >
           <span style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-            {relays.length} relay{relays.length === 1 ? "" : "s"} configured
+            {relays.filter((relay) => relay.enabled).length} of {relays.length} relay
+            {relays.length === 1 ? "" : "s"} enabled
           </span>
           <GhostButton onClick={resetRelays} style={{ padding: "7px 12px", fontSize: 12.5 }}>
             Reset to defaults
@@ -749,64 +750,75 @@ export const SecurityView = (): ReactNode => {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-          {relays.map((relay) => (
-            <div
-              key={relay.url}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                padding: "10px 12px",
-                borderRadius: 9,
-                background: "var(--glass-2)",
-                border: "1px solid var(--hairline)",
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontFamily: mono,
-                  fontSize: 12.5,
-                  color: "var(--text-2)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {relay.url}
-              </span>
-              <RelayToggle
-                label="Read"
-                active={relay.read}
-                onClick={() => updateRelay(relay.url, { read: !relay.read })}
-              />
-              <RelayToggle
-                label="Write"
-                active={relay.write}
-                onClick={() => updateRelay(relay.url, { write: !relay.write })}
-              />
-              <button
-                type="button"
-                onClick={() => removeRelay(relay.url)}
+          {relays.map((relay) => {
+            const enabled = relay.enabled;
+            return (
+              <div
+                key={relay.url}
                 style={{
                   display: "flex",
-                  padding: 8,
-                  border: "none",
+                  alignItems: "center",
+                  gap: 9,
+                  padding: "10px 12px",
                   borderRadius: 9,
-                  background: "transparent",
-                  color: "var(--danger)",
-                  cursor: "pointer",
-                  flexShrink: 0,
+                  background: enabled ? "var(--glass-2)" : "var(--glass)",
+                  border: "1px solid var(--hairline)",
+                  opacity: enabled ? 1 : 0.68,
                 }}
-                aria-label={`Remove ${relay.url}`}
               >
-                <svg width={16} height={16} {...svgBase} strokeWidth={2.2} stroke="currentColor">
-                  <path d="M6 6l12 12M18 6 6 18" />
-                </svg>
-              </button>
-            </div>
-          ))}
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontFamily: mono,
+                    fontSize: 12.5,
+                    color: enabled ? "var(--text-2)" : "var(--text-3)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {relay.url}
+                </span>
+                <RelayToggle
+                  label={enabled ? "Enabled" : "Disabled"}
+                  active={enabled}
+                  onClick={() => updateRelay(relay.url, { enabled: !enabled })}
+                />
+                <RelayToggle
+                  label="Read"
+                  active={relay.read}
+                  muted={!enabled}
+                  onClick={() => updateRelay(relay.url, { read: !relay.read })}
+                />
+                <RelayToggle
+                  label="Write"
+                  active={relay.write}
+                  muted={!enabled}
+                  onClick={() => updateRelay(relay.url, { write: !relay.write })}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeRelay(relay.url)}
+                  style={{
+                    display: "flex",
+                    padding: 8,
+                    border: "none",
+                    borderRadius: 9,
+                    background: "transparent",
+                    color: "var(--danger)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                  aria-label={`Remove ${relay.url}`}
+                >
+                  <svg width={16} height={16} {...svgBase} strokeWidth={2.2} stroke="currentColor">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         <form
@@ -1022,24 +1034,27 @@ const GovRow = ({
 const RelayToggle = ({
   label,
   active,
+  muted = false,
   onClick,
 }: {
   label: string;
   active: boolean;
+  muted?: boolean;
   onClick: () => void;
 }): ReactNode => (
   <button
     type="button"
     onClick={onClick}
+    aria-pressed={active}
     style={{
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       padding: "6px 11px",
-      border: active ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+      border: active && !muted ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
       borderRadius: 8,
-      background: active ? "var(--accent-soft)" : "var(--glass)",
-      color: active ? "var(--accent)" : "var(--text-3)",
+      background: active && !muted ? "var(--accent-soft)" : "var(--glass)",
+      color: active && !muted ? "var(--accent)" : "var(--text-3)",
       fontWeight: 700,
       fontSize: 12,
       fontFamily: "inherit",

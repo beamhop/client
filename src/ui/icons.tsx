@@ -33,6 +33,12 @@ export const SearchIcon = (p: IconProps): ReactNode => (
     <path d="m21 21-4.3-4.3" />
   </Svg>
 );
+export const BellIcon = (p: IconProps): ReactNode => (
+  <Svg {...p}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+    <path d="M10 21a2 2 0 0 0 4 0" />
+  </Svg>
+);
 export const DocsIcon = (p: IconProps): ReactNode => (
   <Svg {...p}>
     <path d="M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />

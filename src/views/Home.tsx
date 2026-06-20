@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { Filter } from "nostr-tools";
-import { nip19 } from "nostr-tools";
-import { useStore } from "../state/store.tsx";
+import { useStore, routeToHash } from "../state/store.tsx";
 import { useFeed, useEngagement, type Engagement } from "../state/hooks.ts";
 import { Kind, ARTICLE_MARKER, type Note, type LongForm } from "../nostr/types.ts";
 import { buildNote, buildReaction, buildRepost, decodeLongForm } from "../nostr/events.ts";
@@ -71,7 +70,7 @@ const Composer = ({
 
   const post = async (): Promise<void> => {
     const content = text.trim();
-    if (!content) return;
+    if (!content || busy) return;
     setBusy(true);
     try {
       await publish(buildNote(content));
@@ -115,6 +114,12 @@ const Composer = ({
           data-testid="composer-input"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              void post();
+            }
+          }}
           placeholder="Share something with your workspace…"
           style={{
             flex: 1,
@@ -200,21 +205,26 @@ const Composer = ({
   );
 };
 
-/** Lightweight "Articles in your network" strip — NIP-23 kind 30023 (verity-article). */
-const ArticlesStrip = (): ReactNode => {
+/** Lightweight article strip — NIP-23 kind 30023 (verity-article). */
+const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
   const { client, readRelayUrls, navigate, state } = useStore();
   const [articles, setArticles] = useState<LongForm[]>([]);
   const [seeAllHover, setSeeAllHover] = useState(false);
 
   useEffect(() => {
-    if (readRelayUrls.length === 0) return;
+    if (readRelayUrls.length === 0 || authors?.length === 0) {
+      setArticles([]);
+      return;
+    }
     let cancelled = false;
     void (async () => {
-      const events = await client.list(readRelayUrls, {
+      const filter: Filter = {
         kinds: [Kind.LongForm],
         "#t": [ARTICLE_MARKER],
         limit: 12,
-      });
+      };
+      if (authors) filter.authors = authors;
+      const events = await client.list(readRelayUrls, filter);
       if (cancelled) return;
       const byKey = new Map<string, LongForm>();
       for (const ev of events) {
@@ -228,7 +238,7 @@ const ArticlesStrip = (): ReactNode => {
     return () => {
       cancelled = true;
     };
-  }, [client, readRelayUrls]);
+  }, [authors, client, readRelayUrls]);
 
   if (articles.length === 0) return null;
 
@@ -382,40 +392,171 @@ const ArticleCard = ({ article, mine }: { article: LongForm; mine: boolean }): R
   );
 };
 
+type FeedTab = "forYou" | "following";
+
+const FEED_TABS: { id: FeedTab; label: string }[] = [
+  { id: "forYou", label: "For you" },
+  { id: "following", label: "Following" },
+];
+
+const feedTabStyle = (active: boolean): CSSProperties => ({
+  flex: 1,
+  minHeight: 42,
+  padding: "0 14px",
+  border: "none",
+  borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+  background: "transparent",
+  color: active ? "var(--text)" : "var(--text-3)",
+  fontWeight: active ? 800 : 700,
+  fontSize: 14,
+  fontFamily: "inherit",
+  cursor: "pointer",
+  transition: "color .15s, border-color .15s, background .15s",
+});
+
+const FeedTabs = ({
+  active,
+  onChange,
+}: {
+  active: FeedTab;
+  onChange: (tab: FeedTab) => void;
+}): ReactNode => (
+  <div
+    role="tablist"
+    aria-label="Home feed"
+    data-testid="home-feed-tabs"
+    style={{
+      display: "flex",
+      alignItems: "stretch",
+      margin: "0 0 16px",
+      borderBottom: "1px solid var(--hairline)",
+    }}
+  >
+    {FEED_TABS.map((tab) => {
+      const selected = tab.id === active;
+      return (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={selected}
+          data-testid={`home-tab-${tab.id === "forYou" ? "for-you" : "following"}`}
+          onClick={() => onChange(tab.id)}
+          style={feedTabStyle(selected)}
+        >
+          {tab.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
 export const HomeView = (): ReactNode => {
-  const { state, publish, toast, toggleBookmark } = useStore();
+  const { state, publish, toast, toggleBookmark, readRelayUrls } = useStore();
   const pubkey = state.identity?.pubkey ?? "";
+  const [feedTab, setFeedTab] = useState<FeedTab>("forYou");
 
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const agentPubkeys = useMemo(() => loadAgentPubkeys(), []);
 
-  const filter = useMemo<Filter>(() => {
-    const authors = [...new Set([...state.contacts, pubkey].filter(Boolean))];
-    if (authors.length <= 1) return { kinds: [Kind.Note], limit: 60 };
-    return { kinds: [Kind.Note], authors, limit: 80 };
-  }, [state.contacts, pubkey]);
+  const followedAuthors = useMemo(
+    () => [...new Set(state.contacts.filter(Boolean))],
+    [state.contacts],
+  );
+  const isFollowingFeed = feedTab === "following";
+  const followedAuthorSet = useMemo(() => new Set(followedAuthors), [followedAuthors]);
 
-  const { notes, loading } = useFeed(filter, [filter]);
+  const filter = useMemo<Filter>(() => {
+    if (isFollowingFeed) return { kinds: [Kind.Note], authors: followedAuthors, limit: 80 };
+    return { kinds: [Kind.Note], limit: 80 };
+  }, [followedAuthors, isFollowingFeed]);
+
+  const feedEnabled = !isFollowingFeed || followedAuthors.length > 0;
+  const { notes, loading, loadingMore, hasMore, loadMore } = useFeed(filter, [filter], feedEnabled);
 
   // Home feed = top-level notes only (no replies), minus optimistically-deleted ones.
   const topLevel = useMemo(
-    () => notes.filter((n) => n.replyTo === undefined && !deleted.has(n.id)),
-    [notes, deleted],
+    () =>
+      notes.filter((n) => {
+        if (isFollowingFeed && !followedAuthorSet.has(n.pubkey)) return false;
+        return n.replyTo === undefined && !deleted.has(n.id);
+      }),
+    [notes, isFollowingFeed, followedAuthorSet, deleted],
   );
   const visibleNoteIds = useMemo(() => topLevel.map((n) => n.id), [topLevel]);
   const engagement = useEngagement(visibleNoteIds, optimistic);
+  const emptyFeed = useMemo(() => {
+    if (feedTab === "following") {
+      return state.contacts.length === 0
+        ? {
+            title: "Follow people to build this feed",
+            hint: "Find people on Explore, then their posts will show up here.",
+          }
+        : {
+            title: "No posts from people you follow yet",
+            hint: "New posts from your follows will show up here.",
+          };
+    }
+    return readRelayUrls.length === 0
+      ? {
+          title: "No read relays connected",
+          hint: "Enable a read relay in Keys & Security to load the For you feed.",
+        }
+      : {
+          title: "Your For you feed is quiet",
+          hint: "New public posts from your connected relays will show up here.",
+        };
+  }, [feedTab, readRelayUrls.length, state.contacts.length]);
+
+  useEffect(() => {
+    if (!feedEnabled || typeof document === "undefined") return;
+    const scrollRoot = document.querySelector<HTMLElement>('[data-testid="main-scroll"]');
+    if (!scrollRoot) return;
+
+    let frame = 0;
+    const checkForMore = (): void => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (loading || loadingMore || !hasMore) return;
+        const distanceFromBottom = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
+        if (distanceFromBottom < 640) void loadMore();
+      });
+    };
+
+    scrollRoot.addEventListener("scroll", checkForMore, { passive: true });
+    checkForMore();
+    return () => {
+      scrollRoot.removeEventListener("scroll", checkForMore);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [feedEnabled, hasMore, loadMore, loading, loadingMore, notes.length, topLevel.length]);
 
   const like = useCallback(
     (note: Note): void => {
       const cur = engagement.get(note.id);
-      if (cur?.liked) return;
+      if (cur?.liked) {
+        const eventId = cur.likedEventId;
+        if (!eventId) return;
+        setOptimistic((o) => ({
+          ...o,
+          [note.id]: { ...o[note.id], liked: false, likes: Math.max(0, (cur.likes ?? 1) - 1), likedEventId: undefined },
+        }));
+        void publish({ kind: 5, created_at: nowSeconds(), tags: [["e", eventId]], content: "" }).then(
+          () => toast("Unliked", "info"),
+        );
+        return;
+      }
       setOptimistic((o) => ({
         ...o,
         [note.id]: { ...o[note.id], liked: true, likes: (cur?.likes ?? 0) + 1 },
       }));
-      void publish(buildReaction(note, "+")).then(() => toast("Liked", "check"));
+      void publish(buildReaction(note, "+")).then((eventId) => {
+        toast("Liked", "check");
+        setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], likedEventId: eventId } }));
+      });
     },
     [engagement, publish, toast],
   );
@@ -435,7 +576,7 @@ export const HomeView = (): ReactNode => {
 
   const share = useCallback(
     (note: Note): void => {
-      const link = `https://njump.me/${nip19.noteEncode(note.id)}`;
+      const link = `${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id: note.id } })}`;
       void navigator.clipboard.writeText(link).then(() => toast("Link copied to clipboard", "copy"));
     },
     [toast],
@@ -462,36 +603,52 @@ export const HomeView = (): ReactNode => {
 
   return (
     <div data-testid="view-home" style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px 120px" }}>
+      <FeedTabs active={feedTab} onChange={setFeedTab} />
+
       <Composer pubkey={pubkey} meName={meName} picture={state.me?.picture} />
 
-      <ArticlesStrip />
+      <ArticlesStrip authors={isFollowingFeed ? followedAuthors : undefined} />
 
       {loading && topLevel.length === 0 ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "56px 0" }}>
           <Spinner size={26} />
         </div>
       ) : topLevel.length === 0 ? (
-        <EmptyState
-          icon={<HomeIcon size={32} />}
-          title="Your feed is quiet"
-          hint="Follow a few people on Explore, or share the first post — it'll show up right here."
-        />
-      ) : (
-        topLevel.map((note) => (
-          <PostCard
-            key={note.id}
-            note={note}
-            engagement={engagement.get(note.id)}
-            bookmarked={state.bookmarks.includes(note.id)}
-            isAgent={agentPubkeys.has(note.pubkey)}
-            onReply={() => setReplyTarget(note)}
-            onRepost={() => repost(note)}
-            onLike={() => like(note)}
-            onBookmark={() => toggleBookmark(note.id)}
-            onShare={() => share(note)}
-            onDelete={() => remove(note)}
+        <>
+          <EmptyState
+            icon={<HomeIcon size={32} />}
+            title={emptyFeed.title}
+            hint={emptyFeed.hint}
           />
-        ))
+          {loadingMore && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
+              <Spinner size={20} />
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {topLevel.map((note) => (
+            <PostCard
+              key={note.id}
+              note={note}
+              engagement={engagement.get(note.id)}
+              bookmarked={state.bookmarks.includes(note.id)}
+              isAgent={agentPubkeys.has(note.pubkey)}
+              onReply={() => setReplyTarget(note)}
+              onRepost={() => repost(note)}
+              onLike={() => like(note)}
+              onBookmark={() => toggleBookmark(note.id)}
+              onShare={() => share(note)}
+              onDelete={() => remove(note)}
+            />
+          ))}
+          {loadingMore && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
+              <Spinner size={20} />
+            </div>
+          )}
+        </>
       )}
 
       {replyTarget && <Compose replyTo={replyTarget} onClose={() => setReplyTarget(null)} />}

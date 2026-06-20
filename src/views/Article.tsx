@@ -8,8 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Filter } from "nostr-tools";
-import { nip19 } from "nostr-tools";
-import { useStore, useProfile } from "../state/store.tsx";
+import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { Kind, type LongForm } from "../nostr/types.ts";
 import { decodeLongForm, buildLongForm } from "../nostr/events.ts";
 import { renderMarkdown, countWords, readingMinutes } from "../lib/markdown.ts";
@@ -91,7 +90,7 @@ const useResolveArticle = (
 // from the note-flavored useEngagement which keys on `#e`.
 // ---------------------------------------------------------------------------
 
-type ArticleStats = { likes: number; liked: boolean; comments: number };
+type ArticleStats = { likes: number; liked: boolean; comments: number; likedEventId?: string };
 
 const useArticleStats = (
   pubkey: string | undefined,
@@ -114,16 +113,20 @@ const useArticleStats = (
       if (cancelled) return;
       let likes = 0;
       let liked = false;
+      let likedEventId: string | undefined;
       let comments = 0;
       for (const ev of events) {
         if (ev.kind === Kind.Reaction && ev.content !== "-") {
           likes++;
-          if (ev.pubkey === me) liked = true;
+          if (ev.pubkey === me) {
+            liked = true;
+            likedEventId = ev.id;
+          }
         } else if (ev.kind === Kind.Note) {
           comments++;
         }
       }
-      setStats({ likes, liked, comments });
+      setStats({ likes, liked, comments, likedEventId });
     })();
     return () => {
       cancelled = true;
@@ -134,6 +137,7 @@ const useArticleStats = (
     likes: optimistic.likes ?? stats.likes,
     liked: optimistic.liked ?? stats.liked,
     comments: optimistic.comments ?? stats.comments,
+    likedEventId: optimistic.likedEventId ?? stats.likedEventId,
   };
 };
 
@@ -200,7 +204,8 @@ const readerTagStyle: CSSProperties = {
 
 const ArticleReader = (): ReactNode => {
   const { state, navigate, publish, toast } = useStore();
-  const { id, pubkey } = state.nav.params;
+  const { pubkey } = state.nav.params;
+  const id = state.nav.params.id ?? state.nav.params.identifier;
   const article = useResolveArticle(pubkey, id);
   const profile = useProfile(pubkey);
   const [optimistic, setOptimistic] = useState<Partial<ArticleStats>>({});
@@ -210,16 +215,10 @@ const ArticleReader = (): ReactNode => {
 
   const copyShareLink = useCallback(() => {
     if (!article) return;
-    let link: string;
-    try {
-      link = `nostr:${nip19.naddrEncode({
-        identifier: article.identifier,
-        pubkey: article.pubkey,
-        kind: Kind.LongForm,
-      })}`;
-    } catch {
-      link = `${location.origin}/a/${article.identifier}`;
-    }
+    const link = `${location.origin}${location.pathname}${location.search}${routeToHash({
+      view: "articleReader",
+      params: { id: article.identifier, pubkey: article.pubkey },
+    })}`;
     void navigator.clipboard?.writeText(link);
     toast("Article link copied to clipboard", "copy");
   }, [article, toast]);
@@ -244,7 +243,23 @@ const ArticleReader = (): ReactNode => {
   const readLabel = `${readingMinutes(words)} min read`;
 
   const onLike = (): void => {
-    if (stats.liked) return;
+    if (stats.liked) {
+      const eventId = stats.likedEventId;
+      if (!eventId) return;
+      setOptimistic((o) => ({ ...o, liked: false, likes: Math.max(0, stats.likes - 1), likedEventId: undefined }));
+      void publish({
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["e", eventId]],
+        content: "",
+      })
+        .then(() => toast("Unliked", "info"))
+        .catch(() => {
+          setOptimistic((o) => ({ ...o, liked: true, likes: stats.likes, likedEventId: eventId }));
+          toast("Could not unlike article", "warn");
+        });
+      return;
+    }
     setOptimistic((o) => ({ ...o, liked: true, likes: stats.likes + 1 }));
     void publish({
       kind: Kind.Reaction,
@@ -256,7 +271,10 @@ const ArticleReader = (): ReactNode => {
       ],
       content: "+",
     })
-      .then(() => toast("Liked", "check"))
+      .then((eventId) => {
+        toast("Liked", "check");
+        setOptimistic((o) => ({ ...o, likedEventId: eventId }));
+      })
       .catch(() => {
         setOptimistic((o) => ({ ...o, liked: false, likes: stats.likes }));
         toast("Could not like article", "warn");

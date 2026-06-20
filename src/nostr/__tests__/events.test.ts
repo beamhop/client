@@ -25,6 +25,27 @@ describe("note round-trip", () => {
     expect(decoded.replyTo).toBeUndefined();
   });
 
+  test("a built note carries deduped lowercase hashtag t-tags", () => {
+    const tmpl = buildNote("Shipping #BeamHop, testing #search and #beamhop again");
+    expect(tmpl.tags).toContainEqual(["t", "beamhop"]);
+    expect(tmpl.tags).toContainEqual(["t", "search"]);
+    expect(tmpl.tags.filter((t) => t[0] === "t" && t[1] === "beamhop")).toHaveLength(1);
+  });
+
+  test("hashtags are added alongside reply tags", () => {
+    const root: Note = {
+      id: "e".repeat(64),
+      pubkey: "b".repeat(64),
+      content: "root",
+      createdAt: 1,
+      tags: [],
+    };
+    const tmpl = buildNote("replying with #relay2", root);
+    expect(tmpl.tags).toContainEqual(["e", root.id, "", "root"]);
+    expect(tmpl.tags).toContainEqual(["p", root.pubkey]);
+    expect(tmpl.tags).toContainEqual(["t", "relay2"]);
+  });
+
   test("a reply carries root + reply e-tags and a p-tag", () => {
     const root: Note = {
       id: "f".repeat(64),
