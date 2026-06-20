@@ -3,7 +3,6 @@ import { copyFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const OUTDIR = "dist";
-const CUSTOM_DOMAIN = "app.beamhop.com";
 
 await rm(OUTDIR, { recursive: true, force: true });
 
@@ -32,7 +31,6 @@ const indexHtml = join(OUTDIR, "index.html");
 if (bundledHtml !== indexHtml) await rename(bundledHtml, indexHtml);
 
 await copyFile(indexHtml, join(OUTDIR, "404.html"));
-await writeFile(join(OUTDIR, "CNAME"), `${CUSTOM_DOMAIN}\n`);
 await writeFile(join(OUTDIR, ".nojekyll"), "");
 
 const outputs = await readdir(OUTDIR);
