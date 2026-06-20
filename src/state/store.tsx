@@ -46,7 +46,14 @@ export type ViewId =
   | "articleReader"
   | "articleEditor";
 
-export type Toast = { id: number; text: string; tone: "check" | "info" | "warn" | "copy" | "repost" };
+export type ToastAction = { type: "profile"; pubkey: string };
+
+export type Toast = {
+  id: number;
+  text: string;
+  tone: "check" | "info" | "warn" | "copy" | "repost";
+  action?: ToastAction;
+};
 
 export type Nav = { view: ViewId; params: Record<string, string | undefined> };
 
@@ -475,7 +482,7 @@ export type Store = {
   readRelayUrls: string[];
   writeRelayUrls: string[];
   navigate: (view: ViewId, params?: Record<string, string | undefined>) => void;
-  toast: (text: string, tone?: Toast["tone"]) => void;
+  toast: (text: string, tone?: Toast["tone"], action?: ToastAction) => void;
   markNotificationRead: (eventId: string) => void;
   markAllNotificationsRead: () => void;
   setIdentity: (identity: Identity | null) => void;
@@ -591,9 +598,9 @@ export const StoreProvider = ({ children }: { children: ReactNode }): ReactNode 
     };
   }, [state.identity, readRelayUrls]);
 
-  const toast = useCallback((text: string, tone: Toast["tone"] = "info") => {
+  const toast = useCallback((text: string, tone: Toast["tone"] = "info", action?: ToastAction) => {
     const id = toastSeq++;
-    dispatch({ type: "pushToast", toast: { id, text, tone } });
+    dispatch({ type: "pushToast", toast: { id, text, tone, action } });
     setTimeout(() => dispatch({ type: "dropToast", id }), 3200);
   }, []);
 
@@ -709,7 +716,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }): ReactNode 
       dispatch({ type: "setContacts", contacts: next });
       try {
         await publish(buildContacts(next));
-        toast(has ? "Unfollowed" : "Following", has ? "info" : "check");
+        toast(has ? "Unfollowed" : "Followed", has ? "info" : "check", has ? undefined : { type: "profile", pubkey });
       } catch {
         dispatch({ type: "setContacts", contacts: state.contacts });
         toast("Could not update follows", "warn");

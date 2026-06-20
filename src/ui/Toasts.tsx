@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { useStore } from "../state/store.tsx";
+import { useStore, type ToastAction } from "../state/store.tsx";
 import { CheckIcon, CopyIcon, RepostIcon } from "./icons.tsx";
+import { ProfileToastChip } from "./ProfileToastChip.tsx";
 
 const toneIcon = (tone: string): ReactNode => {
   switch (tone) {
@@ -19,6 +20,11 @@ const toneColor = (tone: string): string => {
   if (tone === "warn") return "var(--warn)";
   if (tone === "check") return "var(--success)";
   return "var(--accent)";
+};
+
+const ToastActionView = ({ action }: { action: ToastAction }): ReactNode => {
+  if (action.type === "profile") return <ProfileToastChip pubkey={action.pubkey} />;
+  return null;
 };
 
 export const Toasts = (): ReactNode => {
@@ -45,6 +51,7 @@ export const Toasts = (): ReactNode => {
             display: "flex",
             alignItems: "center",
             gap: 10,
+            maxWidth: "calc(100vw - 32px)",
             padding: "11px 16px",
             borderRadius: 12,
             background: "var(--glass-strong)",
@@ -54,10 +61,12 @@ export const Toasts = (): ReactNode => {
             fontWeight: 600,
             color: "var(--text)",
             animation: "verity-toast .25s ease",
+            pointerEvents: "auto",
           }}
         >
           <span style={{ color: toneColor(t.tone), display: "flex" }}>{toneIcon(t.tone)}</span>
           {t.text}
+          {t.action && <ToastActionView action={t.action} />}
         </div>
       ))}
     </div>
