@@ -217,7 +217,7 @@ export const MessagesView = (): ReactNode => {
   const showThread = !isMobile || active !== null;
 
   return (
-    <div style={{ display: "flex", height: "calc(var(--app-h) - var(--header-h))", minHeight: 0 }}>
+    <div style={{ display: "flex", height: isMobile ? "calc(var(--app-h) - var(--header-h) - var(--mobile-nav-h))" : "calc(var(--app-h) - var(--header-h))", minHeight: 0 }}>
       {showList && (
         <ConversationList
           conversations={conversations}

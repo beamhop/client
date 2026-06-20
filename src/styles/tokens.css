@@ -24,6 +24,8 @@
     --sar: env(safe-area-inset-right);
     /* Sticky header grows under the notch/Dynamic Island via the top inset. */
     --header-h: calc(74px + env(safe-area-inset-top));
+    /* Mobile bottom nav clearance: 52px content + 8px top pad + (8px + sab) bottom pad + 10px margin. */
+    --mobile-nav-h: calc(78px + var(--sab));
     --bg-base:#f4f5f7;
     --text:#16181d; --text-2:#565b66; --text-3:#9196a1;
     --accent:#5b54f0; --accent-2:#5b54f0; --accent-soft:rgba(91,84,240,.10); --accent-ink:#4a43d6; --on-accent:#ffffff;
