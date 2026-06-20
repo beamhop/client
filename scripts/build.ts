@@ -31,6 +31,7 @@ const indexHtml = join(OUTDIR, "index.html");
 if (bundledHtml !== indexHtml) await rename(bundledHtml, indexHtml);
 
 await copyFile(indexHtml, join(OUTDIR, "404.html"));
+await writeFile(join(OUTDIR, "CNAME"), "app.beamhop.com\n");
 await writeFile(join(OUTDIR, ".nojekyll"), "");
 
 const outputs = await readdir(OUTDIR);
