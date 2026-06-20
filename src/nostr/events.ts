@@ -61,6 +61,54 @@ export const decodeReaction = (event: NostrEvent): Reaction | null => {
   return { id: event.id, pubkey: event.pubkey, targetId: target[1], content: event.content };
 };
 
+export type RepostPointer = {
+  noteId: string;
+  pubkey?: string;
+};
+
+export const decodeRepostPointer = (event: NostrEvent): RepostPointer | null => {
+  if (event.kind !== Kind.Repost) return null;
+  const noteId = event.tags.find((t) => t[0] === "e" && t[1])?.[1];
+  if (!noteId) return null;
+  const pubkey = event.tags.find((t) => t[0] === "p" && t[1])?.[1];
+  return { noteId, pubkey };
+};
+
+export const decodeEmbeddedRepostNote = (event: NostrEvent): Note | null => {
+  if (event.kind !== Kind.Repost || event.content.trim() === "") return null;
+  try {
+    const embedded = JSON.parse(event.content) as Partial<NostrEvent>;
+    if (
+      embedded.kind !== Kind.Note ||
+      typeof embedded.id !== "string" ||
+      typeof embedded.pubkey !== "string" ||
+      typeof embedded.content !== "string" ||
+      typeof embedded.created_at !== "number" ||
+      !Array.isArray(embedded.tags)
+    ) {
+      return null;
+    }
+    return decodeNote(embedded as NostrEvent);
+  } catch {
+    return null;
+  }
+};
+
+export const deletedEventIdsByAuthor = (
+  deletions: Iterable<NostrEvent>,
+  eventAuthorById: ReadonlyMap<string, string>,
+): Set<string> => {
+  const deleted = new Set<string>();
+  for (const deletion of deletions) {
+    if (deletion.kind !== Kind.Deletion) continue;
+    for (const tag of deletion.tags) {
+      if (tag[0] !== "e" || !tag[1]) continue;
+      if (eventAuthorById.get(tag[1]) === deletion.pubkey) deleted.add(tag[1]);
+    }
+  }
+  return deleted;
+};
+
 const tagValue = (event: NostrEvent, key: string): string | undefined =>
   event.tags.find((t) => t[0] === key)?.[1];
 

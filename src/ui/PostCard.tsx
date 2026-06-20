@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import type { Note } from "../nostr/types.ts";
 import { useProfile, useStore } from "../state/store.tsx";
 import { displayName, initials, avatarStyle, timeAgo, fmtCount } from "../lib/format.ts";
@@ -13,6 +13,8 @@ type PostCardProps = {
   engagement?: Engagement;
   bookmarked?: boolean;
   pinnedLabel?: string;
+  repostedBy?: string;
+  repostedAt?: number;
   isAgent?: boolean;
   agentOwner?: string;
   online?: boolean;
@@ -419,12 +421,45 @@ const PhotoGallery = ({
   );
 };
 
+/** Duration of the shrink-and-dissolve exit; kept in sync with the `verity-dissolve` keyframe. */
+const EXIT_MS = 420;
+
+const confirmPopoverStyle: CSSProperties = {
+  position: "absolute",
+  bottom: "calc(100% + 8px)",
+  right: 0,
+  zIndex: 12,
+  display: "flex",
+  flexDirection: "column",
+  gap: 9,
+  padding: "11px 12px",
+  borderRadius: 13,
+  border: "1px solid var(--glass-border)",
+  background: "var(--glass-strong)",
+  boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  animation: "verity-scale .14s ease",
+};
+
+const confirmButtonBase: CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 9,
+  fontSize: 12.5,
+  fontWeight: 800,
+  fontFamily: "inherit",
+  cursor: "pointer",
+  border: "1px solid var(--glass-border)",
+};
+
 /** The canonical feed post, faithful to the design (verity-glass.html ~271-323). */
 export const PostCard = ({
   note,
   engagement,
   bookmarked,
   pinnedLabel,
+  repostedBy,
+  repostedAt,
   isAgent,
   agentOwner,
   online,
@@ -438,10 +473,36 @@ export const PostCard = ({
 }: PostCardProps): ReactNode => {
   const { navigate, state } = useStore();
   const profile = useProfile(note.pubkey);
+  const repostProfile = useProfile(repostedBy);
   const [hover, setHover] = useState(false);
   const [likePop, setLikePop] = useState(false);
   const [repostPop, setRepostPop] = useState(false);
   const [unrepostBubbleKey, setUnrepostBubbleKey] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const exitActionRef = useRef<(() => void) | null>(null);
+
+  // Shrink + dissolve the card, then run the destructive action so the row
+  // stays mounted for the duration of the animation before its parent drops it.
+  const beginExit = (action: () => void): void => {
+    exitActionRef.current = action;
+    setExiting(true);
+  };
+
+  useEffect(() => {
+    if (!exiting) return;
+    const timer = window.setTimeout(() => exitActionRef.current?.(), EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [exiting]);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setConfirmDelete(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmDelete]);
 
   const handleLike = (): void => {
     if (!e?.liked) {
@@ -452,6 +513,11 @@ export const PostCard = ({
   };
   const handleRepost = (): void => {
     const wasReposted = Boolean(e?.reposted);
+    // Unreposting a repost row gets the same exit micro-interaction as a delete.
+    if (wasReposted && repostedBy !== undefined) {
+      beginExit(() => onRepost?.());
+      return;
+    }
     const handled = onRepost?.();
     if (handled === false) return;
     if (wasReposted) {
@@ -463,6 +529,12 @@ export const PostCard = ({
   };
   const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey: note.pubkey });
   const handle = profile?.nip05 ?? `${note.pubkey.slice(0, 8)}…${note.pubkey.slice(-4)}`;
+  const repostActorName = repostedBy
+    ? repostedBy === state.identity?.pubkey
+      ? "You"
+      : displayName({ name: repostProfile?.name, displayName: repostProfile?.displayName, pubkey: repostedBy })
+    : undefined;
+  const repostLabel = repostActorName ? `${repostActorName} reposted` : undefined;
   const verified = Boolean(profile?.nip05);
   const isMine = note.pubkey === state.identity?.pubkey;
   const { text, embeds } = parseMedia(note.content);
@@ -470,6 +542,10 @@ export const PostCard = ({
   const videos = embeds.filter((m) => m.type === "video");
   const e = engagement;
   const openPost = (): void => {
+    if (confirmDelete) {
+      setConfirmDelete(false);
+      return;
+    }
     if (onOpen) onOpen();
     else navigate("postDetail", { id: note.id });
   };
@@ -485,6 +561,8 @@ export const PostCard = ({
   return (
     <article
       data-testid="feed-post"
+      data-exiting={exiting || undefined}
+      aria-hidden={exiting || undefined}
       role="button"
       tabIndex={0}
       onClick={openPost}
@@ -502,8 +580,18 @@ export const PostCard = ({
         background: hover ? "var(--glass-2)" : "var(--glass)",
         borderColor: hover ? "var(--text-3)" : "var(--glass-border)",
         cursor: "pointer",
+        ...(exiting
+          ? { animation: `verity-dissolve ${EXIT_MS}ms ease forwards`, overflow: "hidden", pointerEvents: "none" }
+          : null),
       }}
     >
+      {repostLabel && (
+        <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: "var(--text-3)", marginBottom: 10, paddingLeft: 54 }}>
+          <RepostGlyph />
+          <span>{repostLabel}</span>
+          {repostedAt !== undefined && <span style={{ fontWeight: 600 }}>· {timeAgo(repostedAt)}</span>}
+        </div>
+      )}
       {pinnedLabel && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", marginBottom: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>
           <PinGlyph /> {pinnedLabel}
@@ -558,9 +646,53 @@ export const PostCard = ({
               <ShareGlyph />
             </button>
             {isMine && onDelete && (
-              <button onClick={(event) => runAction(event, onDelete)} style={actionStyle(false, "var(--danger)")} title="Delete post" data-testid="post-delete">
-                <TrashGlyph />
-              </button>
+              <span style={{ position: "relative", display: "inline-flex" }}>
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setConfirmDelete((open) => !open);
+                  }}
+                  style={actionStyle(confirmDelete, "var(--danger)")}
+                  title="Delete post"
+                  data-testid="post-delete"
+                >
+                  <TrashGlyph />
+                </button>
+                {confirmDelete && (
+                  <span
+                    role="dialog"
+                    aria-label="Delete this post?"
+                    onClick={(event) => event.stopPropagation()}
+                    style={confirmPopoverStyle}
+                  >
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap" }}>Delete this post?</span>
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirmDelete(false);
+                        }}
+                        style={{ ...confirmButtonBase, background: "transparent", color: "var(--text-2)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="post-delete-confirm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConfirmDelete(false);
+                          beginExit(() => onDelete?.());
+                        }}
+                        style={{ ...confirmButtonBase, background: "var(--danger)", color: "#fff", borderColor: "var(--danger)" }}
+                      >
+                        Delete
+                      </button>
+                    </span>
+                  </span>
+                )}
+              </span>
             )}
           </div>
         </div>

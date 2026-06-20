@@ -1,0 +1,5 @@
+[test]
+# Order matters: setup.ts registers the happy-dom globals (window/document/
+# localStorage/...) BEFORE teardown.ts imports testing-library, whose `screen`
+# helper binds to `document` at import time.
+preload = ["./test/setup.ts", "./test/teardown.ts"]

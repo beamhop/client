@@ -6,12 +6,14 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import type { Filter } from "nostr-tools";
 import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { useEngagement, type Engagement } from "../state/hooks.ts";
-import { Kind, type LongForm, type Note, type Profile } from "../nostr/types.ts";
+import { ARTICLE_MARKER, Kind, type LongForm, type Note, type Profile } from "../nostr/types.ts";
 import {
   decodeNote,
   decodeLongForm,
+  deletedEventIdsByAuthor,
   buildProfile,
   buildReaction,
   buildRepost,
@@ -783,7 +785,7 @@ const PeoplePanel = ({
 // ---------------------------------------------------------------------------
 
 export const ProfileView = (): ReactNode => {
-  const { state, client, readRelayUrls, publish, toggleFollow, toggleBookmark, toast, navigate } = useStore();
+  const { state, client, readRelayUrls, writeRelayUrls, publish, toggleFollow, toggleBookmark, toast, navigate } = useStore();
   const myPubkey = state.identity?.pubkey;
   const paramPubkey = state.nav.params.pubkey;
   const pubkey = paramPubkey ?? myPubkey;
@@ -799,6 +801,10 @@ export const ProfileView = (): ReactNode => {
 
   const otherProfile = useProfile(isMe ? undefined : pubkey);
   const profile: Profile | null = isMe ? state.me : otherProfile;
+  const profileArticleRelayUrls = useMemo(
+    () => [...new Set(isMe ? [...readRelayUrls, ...writeRelayUrls] : readRelayUrls)],
+    [isMe, readRelayUrls, writeRelayUrls],
+  );
 
   const [tab, setTab] = useState<TabId>(routeTab);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -818,7 +824,12 @@ export const ProfileView = (): ReactNode => {
 
   // ---- notes (kind 1) ----
   useEffect(() => {
-    if (!pubkey || readRelayUrls.length === 0) return;
+    if (!pubkey) return;
+    if (readRelayUrls.length === 0) {
+      setNotes([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setNotes([]);
@@ -839,25 +850,37 @@ export const ProfileView = (): ReactNode => {
 
   // ---- articles (kind 30023) ----
   useEffect(() => {
-    if (!pubkey || readRelayUrls.length === 0) return;
+    if (!pubkey) return;
     let cancelled = false;
     void (async () => {
-      const events = await client.list(readRelayUrls, {
+      const events = await client.list(profileArticleRelayUrls, {
         kinds: [Kind.LongForm],
         authors: [pubkey],
+        "#t": [ARTICLE_MARKER],
         limit: 30,
-      });
+      } satisfies Filter);
       if (cancelled) return;
-      setArticles(events.map(decodeLongForm).filter((a) => a.kind === "article"));
+      const byKey = new Map<string, LongForm>();
+      for (const event of events) {
+        const article = decodeLongForm(event);
+        if (article.kind !== "article") continue;
+        const key = `${article.pubkey}:${article.identifier}`;
+        const prev = byKey.get(key);
+        if (!prev || article.updatedAt > prev.updatedAt) byKey.set(key, article);
+      }
+      setArticles([...byKey.values()].sort((a, b) => b.updatedAt - a.updatedAt));
     })();
     return () => {
       cancelled = true;
     };
-  }, [pubkey, readRelayUrls, client]);
+  }, [pubkey, profileArticleRelayUrls, client]);
 
   // ---- reposts (kind 6 by this user → resolve original notes) ----
   useEffect(() => {
-    if (!pubkey || readRelayUrls.length === 0) return;
+    if (!pubkey || readRelayUrls.length === 0) {
+      setRepostedNotes([]);
+      return;
+    }
     let cancelled = false;
     setRepostedNotes([]);
     void (async () => {
@@ -867,16 +890,30 @@ export const ProfileView = (): ReactNode => {
         limit: 60,
       });
       if (cancelled || repostEvents.length === 0) return;
-      const noteIds = repostEvents
-        .flatMap((e) => e.tags.filter((t) => t[0] === "e" && t[1]).map((t) => t[1]))
-        .filter((id): id is string => Boolean(id));
+      const repostAuthorById = new Map(repostEvents.map((event) => [event.id, event.pubkey]));
+      const deletionEvents = await client.list(readRelayUrls, {
+        kinds: [Kind.Deletion],
+        authors: [pubkey],
+        "#e": [...repostAuthorById.keys()],
+      });
+      if (cancelled) return;
+      const deletedRepostIds = deletedEventIdsByAuthor(deletionEvents, repostAuthorById);
+      const newestRepostByNoteId = new Map<string, (typeof repostEvents)[number]>();
+      for (const event of repostEvents) {
+        if (deletedRepostIds.has(event.id)) continue;
+        const noteId = event.tags.find((t) => t[0] === "e" && t[1])?.[1];
+        if (!noteId) continue;
+        const prev = newestRepostByNoteId.get(noteId);
+        if (!prev || event.created_at > prev.created_at) newestRepostByNoteId.set(noteId, event);
+      }
+      const liveReposts = [...newestRepostByNoteId.entries()];
+      const noteIds = liveReposts.map(([noteId]) => noteId);
       if (noteIds.length === 0) return;
       const noteEvents = await client.list(readRelayUrls, { kinds: [Kind.Note], ids: noteIds });
       if (cancelled) return;
       const byId = new Map(noteEvents.map((e) => [e.id, decodeNote(e)]));
-      const resolved = repostEvents.flatMap((re) => {
-        const noteId = re.tags.find((t) => t[0] === "e" && t[1])?.[1];
-        const note = noteId ? byId.get(noteId) : undefined;
+      const resolved = liveReposts.flatMap(([noteId, re]) => {
+        const note = byId.get(noteId);
         return note ? [{ repostAt: re.created_at, note }] : [];
       });
       setRepostedNotes(resolved);

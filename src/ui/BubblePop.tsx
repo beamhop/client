@@ -39,15 +39,16 @@ export const BubblePop = ({
 }: BubblePopProps): ReactNode => {
   const [visible, setVisible] = useState(false);
   const [instance, setInstance] = useState(0);
-  const didMount = useRef(false);
+  const previousActiveKey = useRef(activeKey);
   const color = toneColors[tone];
 
   useEffect(() => {
-    if (!didMount.current) {
-      didMount.current = true;
+    if (Object.is(previousActiveKey.current, activeKey)) return;
+    previousActiveKey.current = activeKey;
+    if (activeKey === null || activeKey === undefined || typeof window === "undefined") {
+      setVisible(false);
       return;
     }
-    if (activeKey === null || activeKey === undefined || typeof window === "undefined") return;
 
     setVisible(false);
     const frame = window.requestAnimationFrame(() => {

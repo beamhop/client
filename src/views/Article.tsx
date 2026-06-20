@@ -882,7 +882,7 @@ const ArticleEditor = (): ReactNode => {
     const now = Math.floor(Date.now() / 1000);
     setPublishing(true);
     try {
-      await publish(
+      const eventId = await publish(
         buildLongForm({
           identifier: ident,
           title: cleanTitle,
@@ -891,10 +891,11 @@ const ArticleEditor = (): ReactNode => {
           image: cover || undefined,
           hashtags: tags,
           kind: "article",
+          publishedAt: existing?.publishedAt,
         }),
       );
       cacheArticle({
-        id: ident,
+        id: eventId,
         pubkey: own,
         identifier: ident,
         title: cleanTitle,

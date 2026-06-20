@@ -72,13 +72,16 @@ const useArticles = (topic: string | null): { articles: LongForm[]; loading: boo
 
 /**
  * Derive ~6 "people to follow" from recent feed authors, excluding self and
- * anyone already followed. Real Nostr has no canonical suggestion source, so we
- * surface fresh authors discovered live from the network.
+ * anyone already followed. The list is frozen after the first non-empty
+ * snapshot so it doesn't shift as live notes stream in.
  */
 const usePeopleToFollow = (notes: Note[]): string[] => {
   const { state } = useStore();
   const me = state.identity?.pubkey;
+  const frozenRef = useRef<string[] | null>(null);
   return useMemo(() => {
+    // If we already have a frozen snapshot, return it unchanged.
+    if (frozenRef.current !== null) return frozenRef.current;
     const seen = new Set<string>();
     const out: string[] = [];
     for (const note of notes) {
@@ -90,6 +93,8 @@ const usePeopleToFollow = (notes: Note[]): string[] => {
       out.push(pk);
       if (out.length >= 6) break;
     }
+    // Freeze the first non-empty snapshot.
+    if (out.length > 0) frozenRef.current = out;
     return out;
   }, [notes, me, state.contacts]);
 };

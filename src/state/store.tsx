@@ -502,7 +502,14 @@ const StoreContext = createContext<Store | null>(null);
 
 let toastSeq = 1;
 
-export const StoreProvider = ({ children }: { children: ReactNode }): ReactNode => {
+export const StoreProvider = ({
+  children,
+  client,
+}: {
+  children: ReactNode;
+  /** Inject a pre-built client (e.g. wired to a fake pool in tests). */
+  client?: NostrClient;
+}): ReactNode => {
   const [state, dispatch] = useReducer(reducer, {
     identity: null,
     me: null,
@@ -518,7 +525,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }): ReactNode 
     ready: false,
   });
 
-  const clientRef = useRef(new NostrClient());
+  const clientRef = useRef(client ?? new NostrClient());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const profileCache = useRef(new Map<string, Promise<Profile | null>>());
 

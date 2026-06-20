@@ -8,6 +8,7 @@ export const Kind = {
   Note: 1,
   Contacts: 3,
   EncryptedDM: 4,
+  Deletion: 5,
   Repost: 6,
   Reaction: 7,
   PrivateDirectMessage: 17,

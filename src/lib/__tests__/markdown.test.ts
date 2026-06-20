@@ -41,6 +41,10 @@ describe("renderMarkdown", () => {
     expect(renderMarkdown("> quoted").html).toBe("<blockquote><p>quoted</p></blockquote>");
   });
 
+  test("renders a horizontal rule from a thematic break", () => {
+    expect(renderMarkdown("above\n\n---\n\nbelow").html).toContain("<hr>");
+  });
+
   test("sanitizes dangerous link and image URL schemes", () => {
     const link = renderMarkdown("[x](javascript:alert(1))").html;
     expect(link).toContain('href="#"');

@@ -102,6 +102,11 @@
   35% { opacity: .6; transform: translate(-50%, -50%) scale(1.9); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(3.4); }
 }
+@keyframes verity-dissolve {
+  0% { opacity: 1; transform: scale(1); max-height: 1400px; margin-bottom: 12px; padding-top: 16px; padding-bottom: 16px; }
+  55% { opacity: 0; transform: scale(.84); }
+  100% { opacity: 0; transform: scale(.84); max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+}
 button { font-family: inherit; }
 a { color: inherit; }
 .verity-fadein { animation: verity-fade .25s ease; }

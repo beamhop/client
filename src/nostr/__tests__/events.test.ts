@@ -11,7 +11,10 @@ import {
   decodeNote,
   decodeProfile,
   decodeReaction,
+  decodeRepostPointer,
+  decodeEmbeddedRepostNote,
   decodeLongForm,
+  deletedEventIdsByAuthor,
 } from "../events.ts";
 import { Kind, DOC_MARKER, ARTICLE_MARKER, type Note } from "../types.ts";
 
@@ -83,6 +86,55 @@ describe("reactions and reposts", () => {
     const tmpl = buildRepost(target);
     expect(tmpl.kind).toBe(Kind.Repost);
     expect(tmpl.tags).toContainEqual(["e", target.id]);
+  });
+
+  test("repost pointers resolve the target note id and author", () => {
+    const decoded = decodeRepostPointer(sign(buildRepost(target)));
+    expect(decoded).toEqual({ noteId: target.id, pubkey: target.pubkey });
+  });
+
+  test("embedded repost content can decode the original note", () => {
+    const original = sign(buildNote("embedded repost source"));
+    const repost = sign({
+      kind: Kind.Repost,
+      created_at: original.created_at + 1,
+      tags: [
+        ["e", original.id],
+        ["p", original.pubkey],
+      ],
+      content: JSON.stringify(original),
+    });
+
+    expect(decodeEmbeddedRepostNote(repost)).toEqual(decodeNote(original));
+  });
+
+  test("deletion events only remove events by the same author", () => {
+    const repost = sign(buildRepost(target));
+    const deletion = sign({
+      kind: Kind.Deletion,
+      created_at: repost.created_at + 1,
+      tags: [["e", repost.id]],
+      content: "",
+    });
+    const foreignDeletion = finalizeEvent(
+      {
+        kind: Kind.Deletion,
+        created_at: repost.created_at + 2,
+        tags: [["e", "a".repeat(64)]],
+        content: "",
+      },
+      generateSecretKey(),
+    );
+
+    const deleted = deletedEventIdsByAuthor(
+      [deletion, foreignDeletion],
+      new Map([
+        [repost.id, repost.pubkey],
+        ["a".repeat(64), repost.pubkey],
+      ]),
+    );
+
+    expect(deleted).toEqual(new Set([repost.id]));
   });
 });
 

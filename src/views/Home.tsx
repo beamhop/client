@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { Filter } from "nostr-tools";
 import { useStore, routeToHash } from "../state/store.tsx";
-import { useFeed, useEngagement, type Engagement } from "../state/hooks.ts";
+import { useTimelineFeed, useEngagement, type Engagement, type TimelineItem } from "../state/hooks.ts";
 import { Kind, ARTICLE_MARKER, type Note, type LongForm } from "../nostr/types.ts";
 import { buildNote, buildReaction, buildRepost, decodeLongForm } from "../nostr/events.ts";
 import { nowSeconds } from "../nostr/client.ts";
@@ -451,6 +451,30 @@ const FeedTabs = ({
   </div>
 );
 
+const repostIdentityKey = (pubkey: string, noteId: string): string => `${pubkey}:${noteId}`;
+
+const mergeTimelineItems = (items: TimelineItem[], optimisticReposts: TimelineItem[]): TimelineItem[] => {
+  const byId = new Map<string, TimelineItem>();
+  const repostByActorAndNote = new Map<string, string>();
+
+  for (const item of [...items, ...optimisticReposts]) {
+    if (item.type !== "repost") {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+      continue;
+    }
+
+    const key = repostIdentityKey(item.repostedBy, item.note.id);
+    const prevId = repostByActorAndNote.get(key);
+    const prev = prevId ? byId.get(prevId) : undefined;
+    if (prev && prev.createdAt >= item.createdAt) continue;
+    if (prevId) byId.delete(prevId);
+    byId.set(item.id, item);
+    repostByActorAndNote.set(key, item.id);
+  }
+
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+};
+
 export const HomeView = (): ReactNode => {
   const { state, publish, toast, toggleBookmark, readRelayUrls } = useStore();
   const pubkey = state.identity?.pubkey ?? "";
@@ -458,34 +482,41 @@ export const HomeView = (): ReactNode => {
 
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
+  const [optimisticReposts, setOptimisticReposts] = useState<TimelineItem[]>([]);
+  const [suppressedRepostKeys, setSuppressedRepostKeys] = useState<Set<string>>(new Set());
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
   const agentPubkeys = useMemo(() => loadAgentPubkeys(), []);
 
   const followedAuthors = useMemo(
-    () => [...new Set(state.contacts.filter(Boolean))],
-    [state.contacts],
+    () => [...new Set([...state.contacts, pubkey].filter(Boolean))],
+    [state.contacts, pubkey],
   );
   const isFollowingFeed = feedTab === "following";
   const followedAuthorSet = useMemo(() => new Set(followedAuthors), [followedAuthors]);
 
   const filter = useMemo<Filter>(() => {
-    if (isFollowingFeed) return { kinds: [Kind.Note], authors: followedAuthors, limit: 80 };
-    return { kinds: [Kind.Note], limit: 80 };
+    if (isFollowingFeed) return { kinds: [Kind.Note, Kind.Repost], authors: followedAuthors, limit: 80 };
+    return { kinds: [Kind.Note, Kind.Repost], limit: 80 };
   }, [followedAuthors, isFollowingFeed]);
 
   const feedEnabled = !isFollowingFeed || followedAuthors.length > 0;
-  const { notes, loading, loadingMore, hasMore, loadMore } = useFeed(filter, [filter], feedEnabled);
+  const { items, loading, loadingMore, hasMore, loadMore } = useTimelineFeed(filter, [filter], feedEnabled);
 
-  // Home feed = top-level notes only (no replies), minus optimistically-deleted ones.
-  const topLevel = useMemo(
+  // Home feed = top-level posts plus repost rows, minus optimistically-deleted rows.
+  const timelineItems = useMemo(
     () =>
-      notes.filter((n) => {
-        if (isFollowingFeed && !followedAuthorSet.has(n.pubkey)) return false;
-        return n.replyTo === undefined && !deleted.has(n.id);
+      mergeTimelineItems(items, optimisticReposts).filter((item) => {
+        const actor = item.type === "repost" ? item.repostedBy : item.note.pubkey;
+        if (isFollowingFeed && !followedAuthorSet.has(actor)) return false;
+        if (deleted.has(item.note.id)) return false;
+        if (item.type === "repost" && suppressedRepostKeys.has(repostIdentityKey(item.repostedBy, item.note.id))) {
+          return false;
+        }
+        return item.type === "repost" || item.note.replyTo === undefined;
       }),
-    [notes, isFollowingFeed, followedAuthorSet, deleted],
+    [items, optimisticReposts, isFollowingFeed, followedAuthorSet, deleted, suppressedRepostKeys],
   );
-  const visibleNoteIds = useMemo(() => topLevel.map((n) => n.id), [topLevel]);
+  const visibleNoteIds = useMemo(() => [...new Set(timelineItems.map((item) => item.note.id))], [timelineItems]);
   const engagement = useEngagement(visibleNoteIds, optimistic);
   const emptyFeed = useMemo(() => {
     if (feedTab === "following") {
@@ -532,7 +563,7 @@ export const HomeView = (): ReactNode => {
       scrollRoot.removeEventListener("scroll", checkForMore);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [feedEnabled, hasMore, loadMore, loading, loadingMore, notes.length, topLevel.length]);
+  }, [feedEnabled, hasMore, loadMore, loading, loadingMore, items.length, timelineItems.length]);
 
   const like = useCallback(
     (note: Note): void => {
@@ -564,6 +595,7 @@ export const HomeView = (): ReactNode => {
   const repost = useCallback(
     (note: Note): boolean => {
       const cur = engagement.get(note.id);
+      const ownRepostKey = pubkey ? repostIdentityKey(pubkey, note.id) : undefined;
       if (cur?.reposted) {
         const eventIds = cur.repostedEventIds ?? [];
         if (eventIds.length === 0) return false;
@@ -576,6 +608,12 @@ export const HomeView = (): ReactNode => {
             repostedEventIds: [],
           },
         }));
+        if (ownRepostKey) {
+          setOptimisticReposts((rows) =>
+            rows.filter((row) => row.type !== "repost" || repostIdentityKey(row.repostedBy, row.note.id) !== ownRepostKey),
+          );
+          setSuppressedRepostKeys((keys) => new Set(keys).add(ownRepostKey));
+        }
         void publish({
           kind: 5,
           created_at: nowSeconds(),
@@ -584,17 +622,62 @@ export const HomeView = (): ReactNode => {
         });
         return true;
       }
+      const repostAt = nowSeconds();
+      const optimisticRow: TimelineItem | null = pubkey
+        ? {
+            id: `repost:local:${note.id}:${repostAt}`,
+            type: "repost",
+            createdAt: repostAt,
+            note,
+            repostedBy: pubkey,
+            repostEventId: "",
+          }
+        : null;
+      if (optimisticRow && ownRepostKey) {
+        setSuppressedRepostKeys((keys) => {
+          const next = new Set(keys);
+          next.delete(ownRepostKey);
+          return next;
+        });
+        setOptimisticReposts((rows) => [
+          optimisticRow,
+          ...rows.filter((row) => row.type !== "repost" || repostIdentityKey(row.repostedBy, row.note.id) !== ownRepostKey),
+        ]);
+      }
       setOptimistic((o) => ({
         ...o,
         [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 },
       }));
-      void publish(buildRepost(note)).then((eventId) => {
-        toast("Reposted to your followers", "repost");
-        setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], repostedEventIds: [eventId] } }));
-      });
+      void publish(buildRepost(note)).then(
+        (eventId) => {
+          toast("Reposted to your followers", "repost");
+          setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], repostedEventIds: [eventId] } }));
+          if (ownRepostKey) {
+            setOptimisticReposts((rows) =>
+              rows.map((row) =>
+                row.type === "repost" && repostIdentityKey(row.repostedBy, row.note.id) === ownRepostKey
+                  ? { ...row, id: `repost:${eventId}`, repostEventId: eventId }
+                  : row,
+              ),
+            );
+          }
+        },
+        () => {
+          toast("Could not repost", "warn");
+          setOptimistic((o) => ({
+            ...o,
+            [note.id]: { ...o[note.id], reposted: false, reposts: Math.max(0, (cur?.reposts ?? 1) - 1), repostedEventIds: [] },
+          }));
+          if (ownRepostKey) {
+            setOptimisticReposts((rows) =>
+              rows.filter((row) => row.type !== "repost" || repostIdentityKey(row.repostedBy, row.note.id) !== ownRepostKey),
+            );
+          }
+        },
+      );
       return true;
     },
-    [engagement, publish, toast],
+    [engagement, pubkey, publish, toast],
   );
 
   const share = useCallback(
@@ -632,11 +715,11 @@ export const HomeView = (): ReactNode => {
 
       <ArticlesStrip authors={isFollowingFeed ? followedAuthors : undefined} />
 
-      {loading && topLevel.length === 0 ? (
+      {loading && timelineItems.length === 0 ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "56px 0" }}>
           <Spinner size={26} />
         </div>
-      ) : topLevel.length === 0 ? (
+      ) : timelineItems.length === 0 ? (
         <>
           <EmptyState
             icon={<HomeIcon size={32} />}
@@ -651,21 +734,26 @@ export const HomeView = (): ReactNode => {
         </>
       ) : (
         <>
-          {topLevel.map((note) => (
-            <PostCard
-              key={note.id}
-              note={note}
-              engagement={engagement.get(note.id)}
-              bookmarked={state.bookmarks.includes(note.id)}
-              isAgent={agentPubkeys.has(note.pubkey)}
-              onReply={() => setReplyTarget(note)}
-              onRepost={() => repost(note)}
-              onLike={() => like(note)}
-              onBookmark={() => toggleBookmark(note.id)}
-              onShare={() => share(note)}
-              onDelete={() => remove(note)}
-            />
-          ))}
+          {timelineItems.map((item) => {
+            const note = item.note;
+            return (
+              <PostCard
+                key={item.id}
+                note={note}
+                engagement={engagement.get(note.id)}
+                bookmarked={state.bookmarks.includes(note.id)}
+                repostedBy={item.type === "repost" ? item.repostedBy : undefined}
+                repostedAt={item.type === "repost" ? item.createdAt : undefined}
+                isAgent={agentPubkeys.has(note.pubkey)}
+                onReply={() => setReplyTarget(note)}
+                onRepost={() => repost(note)}
+                onLike={() => like(note)}
+                onBookmark={() => toggleBookmark(note.id)}
+                onShare={() => share(note)}
+                onDelete={() => remove(note)}
+              />
+            );
+          })}
           {loadingMore && (
             <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
               <Spinner size={20} />
