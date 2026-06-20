@@ -2,8 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Verity — Nostr, signed and clear</title>
+    <!-- The manifest + apple-touch-icon links are injected at runtime in main.tsx:
+         Bun's HTML bundler eagerly resolves <link> hrefs and can't resolve these
+         runtime-served, root-absolute asset paths. Installability/A2HS read the live DOM. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Verity" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Static light default; a runtime updater (other agent) swaps this per active theme. -->
+    <meta name="theme-color" content="#f4f5f7" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

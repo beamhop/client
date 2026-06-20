@@ -56,7 +56,7 @@ export const Onboarding = (): ReactNode => {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        minHeight: "var(--app-h)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -105,6 +105,10 @@ export const Onboarding = (): ReactNode => {
               }}
               placeholder="nsec1… or 64-char hex secret"
               rows={3}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               style={{
                 width: "100%",
                 padding: 12,
@@ -113,7 +117,7 @@ export const Onboarding = (): ReactNode => {
                 background: "var(--glass-2)",
                 color: "var(--text)",
                 fontFamily: "'JetBrains Mono',monospace",
-                fontSize: 13,
+                fontSize: 16,
                 resize: "none",
               }}
             />

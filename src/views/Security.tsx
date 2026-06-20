@@ -8,6 +8,7 @@ import type { RelayInfo } from "../nostr/types.ts";
 import { PrimaryButton, GhostButton, Modal } from "../ui/primitives.tsx";
 import { timeAgo } from "../lib/format.ts";
 import type { MuteRule } from "../lib/mute.ts";
+import { isHapticsEnabled, setHapticsEnabled } from "../lib/haptics.ts";
 import type { FollowSet, BookmarkSet } from "../lib/lists.ts";
 import {
   TTL_PRESETS,
@@ -94,7 +95,7 @@ const muteInput: CSSProperties = {
   border: "1px solid var(--glass-border)",
   background: "var(--glass-2)",
   color: "var(--text)",
-  fontSize: 13,
+  fontSize: 16,
   outline: "none",
 };
 
@@ -292,6 +293,7 @@ export const SecurityView = (): ReactNode => {
 
   const [revealed, setRevealed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
+  const [hapticsOn, setHapticsOn] = useState(() => isHapticsEnabled());
   const [draftRelay, setDraftRelay] = useState("");
   const [confirmSignOut, setConfirmSignOut] = useState(false);
 
@@ -780,6 +782,18 @@ export const SecurityView = (): ReactNode => {
           border
         />
         <GovRow
+          title="Haptic feedback"
+          detail="Vibrate on key actions. Works on supported Android devices; iOS web browsers have no vibration."
+          on={hapticsOn}
+          testId="toggle-haptics"
+          onToggle={() => {
+            const next = !hapticsOn;
+            setHapticsOn(next);
+            setHapticsEnabled(next);
+          }}
+          border
+        />
+        <GovRow
           title="Developer mode"
           detail="Show raw Nostr event JSON controls on posts, articles, docs, messages, and notifications."
           on={state.developerMode}
@@ -1022,6 +1036,11 @@ export const SecurityView = (): ReactNode => {
             value={draftRelay}
             onChange={(e) => setDraftRelay(e.target.value)}
             placeholder="wss://relay.example.com"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            inputMode="url"
             style={{
               flex: 1,
               minWidth: 0,
@@ -1031,7 +1050,7 @@ export const SecurityView = (): ReactNode => {
               background: "var(--glass-2)",
               color: "var(--text)",
               fontFamily: mono,
-              fontSize: 12.5,
+              fontSize: 16,
               outline: "none",
             }}
           />
@@ -1135,6 +1154,9 @@ export const SecurityView = (): ReactNode => {
             onChange={(e) => setMuteAccount(e.target.value)}
             placeholder="npub1… or 64-char hex"
             aria-label="Account to mute"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             style={{ ...muteInput, fontFamily: mono }}
           />
           <PrimaryButton type="submit" style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
@@ -1667,13 +1689,14 @@ const CopyButton = ({
       type="button"
       data-testid={testId}
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => {
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => {
         setHover(false);
         setPress(false);
       }}
-      onMouseDown={() => setPress(true)}
-      onMouseUp={() => setPress(false)}
+      onPointerDown={() => setPress(true)}
+      onPointerUp={() => setPress(false)}
+      onPointerCancel={() => setPress(false)}
       aria-label={ariaLabel}
       style={{
         display: "flex",
@@ -1714,13 +1737,14 @@ const PressButton = ({
       data-testid={testId}
       disabled={disabled}
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => {
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => {
         setHover(false);
         setPress(false);
       }}
-      onMouseDown={() => setPress(true)}
-      onMouseUp={() => setPress(false)}
+      onPointerDown={() => setPress(true)}
+      onPointerUp={() => setPress(false)}
+      onPointerCancel={() => setPress(false)}
       style={{
         ...style,
         background: hover && !disabled ? "var(--glass-strong)" : style.background,

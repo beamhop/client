@@ -42,7 +42,7 @@ export const RightRail = ({ onOpenPalette }: { onOpenPalette: () => void }): Rea
   return (
     <aside
       data-testid="right-rail"
-      style={{ width: 300, flexShrink: 0, borderLeft: "1px solid var(--hairline)", height: "100vh", overflowY: "auto", padding: "20px 18px 60px" }}
+      style={{ width: 300, flexShrink: 0, borderLeft: "1px solid var(--hairline)", height: "var(--app-h)", overflowY: "auto", padding: "20px 18px 60px" }}
     >
       <div
         data-testid="right-search"

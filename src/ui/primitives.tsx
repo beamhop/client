@@ -188,6 +188,7 @@ export const PrimaryButton = ({
     type={type}
     onClick={onClick}
     disabled={disabled}
+    className="vy-press"
     style={{
       display: "flex",
       alignItems: "center",
@@ -223,6 +224,7 @@ export const GhostButton = ({
   <button
     type="button"
     onClick={onClick}
+    className="vy-press"
     style={{
       display: "flex",
       alignItems: "center",
@@ -270,6 +272,7 @@ export const Modal = ({
       WebkitBackdropFilter: "blur(3px)",
       animation: "verity-fade .18s ease",
       overflowY: "auto",
+      overscrollBehavior: "contain",
     }}
   >
     <div

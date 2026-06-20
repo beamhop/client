@@ -217,7 +217,7 @@ export const MessagesView = (): ReactNode => {
   const showThread = !isMobile || active !== null;
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 74px)", minHeight: 0 }}>
+    <div style={{ display: "flex", height: "calc(var(--app-h) - var(--header-h))", minHeight: 0 }}>
       {showList && (
         <ConversationList
           conversations={conversations}
@@ -308,6 +308,10 @@ const NewConversation = ({ onStart }: { onStart: (raw: string) => void }): React
             if (e.key === "Enter") onStart(value);
           }}
           placeholder="npub1… or hex"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
           style={{
             flex: 1,
             minWidth: 0,
@@ -316,7 +320,7 @@ const NewConversation = ({ onStart }: { onStart: (raw: string) => void }): React
             background: "var(--glass)",
             padding: "10px 12px",
             outline: "none",
-            fontSize: 13,
+            fontSize: 16,
             color: "var(--text)",
             fontFamily: "'JetBrains Mono',monospace",
           }}
@@ -365,8 +369,8 @@ const ConversationRow = ({
       type="button"
       data-testid="conversation-item"
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -525,8 +529,8 @@ const ThreadBody = ({
         <span
           style={{ ...avatarWrap(40, true), filter: avatarHover ? "brightness(.94)" : undefined }}
           onClick={() => onOpenProfile(conv.peer)}
-          onMouseEnter={() => setAvatarHover(true)}
-          onMouseLeave={() => setAvatarHover(false)}
+          onPointerEnter={() => setAvatarHover(true)}
+          onPointerLeave={() => setAvatarHover(false)}
         >
           <span style={avatarStyle(conv.peer, 40, profile?.picture)}>{!profile?.picture && initials(name)}</span>
           <span style={statusDot(false, false)} />
@@ -535,8 +539,8 @@ const ThreadBody = ({
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span
               onClick={() => onOpenProfile(conv.peer)}
-              onMouseEnter={() => setNameHover(true)}
-              onMouseLeave={() => setNameHover(false)}
+              onPointerEnter={() => setNameHover(true)}
+              onPointerLeave={() => setNameHover(false)}
               style={{
                 fontWeight: 700,
                 fontSize: 15,
@@ -613,6 +617,8 @@ const ThreadBody = ({
             }
           }}
           placeholder="Write an encrypted message…"
+          autoCapitalize="sentences"
+          enterKeyHint="enter"
           style={{
             flex: 1,
             minWidth: 0,
@@ -623,7 +629,7 @@ const ThreadBody = ({
             backdropFilter: "var(--blur)",
             padding: "12px 15px",
             outline: "none",
-            fontSize: 14.5,
+            fontSize: 16,
             color: "var(--text)",
           }}
         />
@@ -631,13 +637,14 @@ const ThreadBody = ({
           type="button"
           data-testid="dm-send"
           onClick={handleSend}
-          onMouseEnter={() => setSendHover(true)}
-          onMouseLeave={() => {
+          onPointerEnter={() => setSendHover(true)}
+          onPointerLeave={() => {
             setSendHover(false);
             setSendActive(false);
           }}
-          onMouseDown={() => setSendActive(true)}
-          onMouseUp={() => setSendActive(false)}
+          onPointerDown={() => setSendActive(true)}
+          onPointerUp={() => setSendActive(false)}
+          onPointerCancel={() => setSendActive(false)}
           title="Send"
           style={{
             display: "flex",

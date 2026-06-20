@@ -1,5 +1,7 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useIsMobile } from "./lib/hooks";
+import { useEdgeSwipeBack, usePullToRefresh, useSwipeTabs, type PointerHandlers } from "./lib/gestures.ts";
+import { haptic } from "./lib/haptics.ts";
 import { useStore, type ViewId } from "./state/store.tsx";
 import { Onboarding } from "./ui/Onboarding.tsx";
 import { Sidebar, MobileNav } from "./ui/Sidebar.tsx";
@@ -45,6 +47,30 @@ const HEADER_WIDTH: Partial<Record<ViewId, number | null>> = {
 const NO_HEADER: ViewId[] = ["docReader", "docEditor", "agentDetail", "profile", "postDetail", "articleReader", "articleEditor"];
 const RIGHT_RAIL_VIEWS: ViewId[] = ["home", "explore"];
 
+// When the browser can drive a directional View Transition (iOS 18.2+, modern
+// Chrome), the store owns the animation; skip the keyed cross-fade to avoid
+// double-animating. Older browsers keep the fade as a graceful fallback.
+const SUPPORTS_VIEW_TRANSITION = typeof document !== "undefined" && "startViewTransition" in document;
+
+// Top-level destinations that horizontal tab-swiping moves between (browser-tab
+// mode only — in standalone the left-edge swipe is reserved for back).
+const SWIPE_TABS: ViewId[] = ["home", "explore", "notifications", "messages", "profile"];
+
+const isStandalone = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const displayMode = window.matchMedia?.("(display-mode: standalone)").matches ?? false;
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return displayMode || iosStandalone;
+};
+
+// Fan one pointer event out to several gesture hooks sharing the scroll element.
+const mergeHandlers = (...sets: PointerHandlers[]): PointerHandlers => ({
+  onPointerDown: (e) => { for (const s of sets) s.onPointerDown?.(e); },
+  onPointerMove: (e) => { for (const s of sets) s.onPointerMove?.(e); },
+  onPointerUp: (e) => { for (const s of sets) s.onPointerUp?.(e); },
+  onPointerCancel: (e) => { for (const s of sets) s.onPointerCancel?.(e); },
+});
+
 const renderView = (view: ViewId): ReactNode => {
   switch (view) {
     case "home":
@@ -75,10 +101,33 @@ const renderView = (view: ViewId): ReactNode => {
 };
 
 export const App = (): ReactNode => {
-  const { state, rootRef, toggleTheme, setPalette } = useStore();
+  const { state, rootRef, toggleTheme, setPalette, goBack, runRefresh, navigate } = useStore();
   const [compose, setCompose] = useState(false);
   const [palette, setPaletteOpen] = useState(false);
   const isMobile = useIsMobile();
+  const view = state.nav.view;
+  const standalone = useMemo(() => isStandalone(), []);
+
+  // ---- touch gestures (hooks must run before the early returns below) ----
+  // Edge-swipe-back: standalone only — in a browser tab iOS owns the edge gesture.
+  const edgeBack = useEdgeSwipeBack(
+    () => { haptic("light"); goBack(); },
+    { enabled: isMobile && standalone },
+  );
+  // Pull-to-refresh on the active feed (online-only refetch via the store seam).
+  const ptr = usePullToRefresh(
+    async () => { haptic("medium"); await runRefresh(); },
+    { enabled: isMobile },
+  );
+  // Swipe between top-level tabs — browser-tab mode only, to avoid colliding with
+  // the standalone left-edge back gesture.
+  const tabIndex = SWIPE_TABS.indexOf(view);
+  const swipeTabs = useSwipeTabs({
+    onPrev: () => { const prev = SWIPE_TABS[tabIndex - 1]; if (prev) { haptic("selection"); navigate(prev); } },
+    onNext: () => { const next = SWIPE_TABS[tabIndex + 1]; if (next) { haptic("selection"); navigate(next); } },
+    enabled: isMobile && !standalone && tabIndex >= 0,
+  });
+  const scrollHandlers = mergeHandlers(ptr.handlers, edgeBack.handlers, swipeTabs.handlers);
 
   // Global ⌘K / Ctrl+K toggles the command palette.
   useEffect(() => {
@@ -94,7 +143,7 @@ export const App = (): ReactNode => {
 
   if (!state.ready) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
+      <div style={{ minHeight: "var(--app-h)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <Spinner size={28} />
       </div>
     );
@@ -109,7 +158,6 @@ export const App = (): ReactNode => {
     );
   }
 
-  const view = state.nav.view;
   const header = HEADERS[view];
   const showHeader = !NO_HEADER.includes(view) && header !== undefined;
   const showRightRail = !isMobile && RIGHT_RAIL_VIEWS.includes(view);
@@ -118,8 +166,8 @@ export const App = (): ReactNode => {
   const shell: CSSProperties = {
     position: "relative",
     color: "var(--text)",
-    minHeight: "100vh",
-    height: "100vh",
+    minHeight: "var(--app-h)",
+    height: "var(--app-h)",
     display: "flex",
     flexDirection: "column",
     fontFamily: "'Hanken Grotesk',sans-serif",
@@ -138,10 +186,28 @@ export const App = (): ReactNode => {
       <div data-testid="app-shell" style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", width: "100%", maxWidth: 1340, margin: "0 auto", minHeight: 0 }}>
         {!isMobile && <Sidebar onCompose={() => setCompose(true)} />}
 
-        <main data-testid="main-column" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-          <div data-testid="main-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0, scrollbarGutter: "stable" }}>
+        <main data-testid="main-column" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "var(--app-h)", overflow: "hidden" }}>
+          <div data-testid="main-scroll" {...scrollHandlers} style={{ flex: 1, overflowY: "auto", minHeight: 0, scrollbarGutter: "stable", overscrollBehaviorY: "contain" }}>
+            {(ptr.pullDistance > 0 || ptr.refreshing) && (
+              <div
+                aria-hidden
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "flex-end",
+                  height: ptr.refreshing ? 44 : ptr.pullDistance,
+                  overflow: "hidden",
+                  color: "var(--text-3)",
+                  transition: ptr.pullDistance === 0 && !ptr.refreshing ? "height .2s ease" : undefined,
+                }}
+              >
+                <div style={{ padding: 8 }}>
+                  <Spinner size={18} />
+                </div>
+              </div>
+            )}
             {showHeader && (
-              <header data-testid="main-header" style={{ display: "flex", padding: "18px 0 0", height: 74, boxSizing: "border-box", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-base)" }}>
+              <header data-testid="main-header" style={{ display: "flex", padding: "calc(18px + var(--sat)) 0 0", minHeight: "var(--header-h)", boxSizing: "border-box", position: "sticky", top: 0, zIndex: 5, background: "var(--bg-base)" }}>
                 <div style={headerInner}>
                   {isMobile && <Logo size={26} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -163,7 +229,7 @@ export const App = (): ReactNode => {
                 </div>
               </header>
             )}
-            <div className="verity-fadein" key={view}>
+            <div className={SUPPORTS_VIEW_TRANSITION ? undefined : "verity-fadein"} key={view}>
               {renderView(view)}
             </div>
           </div>

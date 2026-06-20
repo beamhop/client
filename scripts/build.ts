@@ -1,6 +1,7 @@
 /** Production build: bundle the HTML entry (TS/TSX/CSS) into dist/. */
-import { copyFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, cp, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { MANIFEST_JSON } from "../src/pwa/manifest.ts";
 
 const OUTDIR = "dist";
 
@@ -33,6 +34,18 @@ if (bundledHtml !== indexHtml) await rename(bundledHtml, indexHtml);
 await copyFile(indexHtml, join(OUTDIR, "404.html"));
 await writeFile(join(OUTDIR, "CNAME"), "app.beamhop.com\n");
 await writeFile(join(OUTDIR, ".nojekyll"), "");
+
+// PWA: emit the web app manifest and copy the static public/ tree (icons, …).
+// The manifest <link> + apple-touch-icon are injected at runtime in main.tsx, so
+// the HTML entry stays free of asset hrefs Bun's bundler would fail to resolve.
+await writeFile(join(OUTDIR, "manifest.webmanifest"), MANIFEST_JSON);
+
+const PUBLIC_DIR = "public";
+const hasPublic = await access(PUBLIC_DIR).then(
+  () => true,
+  () => false,
+);
+if (hasPublic) await cp(PUBLIC_DIR, OUTDIR, { recursive: true });
 
 const outputs = await readdir(OUTDIR);
 console.log(`Built ${outputs.length} artifacts into ${OUTDIR}/`);

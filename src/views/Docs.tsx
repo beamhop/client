@@ -523,7 +523,7 @@ const ReaderTagPill = ({ label }: { label: string }): ReactNode => (
 );
 
 const DocReader = (): ReactNode => {
-  const { state, readRelayUrls, writeRelayUrls, navigate, publish, toast } = useStore();
+  const { state, readRelayUrls, writeRelayUrls, navigate, goBack, publish, toast } = useStore();
   const { id, pubkey } = state.nav.params;
   const doc = useResolveDoc(pubkey, id);
   const profile = useProfile(doc?.pubkey);
@@ -577,7 +577,7 @@ const DocReader = (): ReactNode => {
   return (
     <div data-testid="view-doc-reader">
       <div style={toolbarStyle}>
-        <button type="button" data-testid="doc-reader-back" onClick={() => navigate("docs")} style={backButtonStyle}>
+        <button type="button" data-testid="doc-reader-back" onClick={goBack} style={backButtonStyle}>
           <ChevronLeftGlyph />
           Docs
         </button>

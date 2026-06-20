@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="9" fill="url(#verity-lg)" />
+  <path d="M16 7.5l6.4 8.5-6.4 8.5L9.6 16 16 7.5z" fill="#fff" fill-opacity=".96" />
+  <circle cx="16" cy="16" r="2.5" fill="url(#verity-lg)" />
+  <defs>
+    <linearGradient id="verity-lg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5b54f0" />
+      <stop offset="1" stop-color="#8b82ff" />
+    </linearGradient>
+  </defs>
+</svg>

@@ -64,6 +64,7 @@ export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void
             <textarea
               data-testid="compose-input-modal"
               autoFocus
+              autoCapitalize="sentences"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -77,7 +78,7 @@ export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void
             />
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", borderTop: "1px solid var(--hairline)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 20px", paddingBottom: "calc(14px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--hairline)" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px", borderRadius: 10, background: "var(--accent-soft)", color: "var(--accent)", fontSize: 12.5, fontWeight: 600 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M2 12h20M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" /></svg>
             Public · {writeRelayUrls.length} relays

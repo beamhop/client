@@ -205,7 +205,7 @@ const readerTagStyle: CSSProperties = {
 };
 
 const ArticleReader = (): ReactNode => {
-  const { state, navigate, publish, toast } = useStore();
+  const { state, navigate, goBack, publish, toast } = useStore();
   const { pubkey } = state.nav.params;
   const id = state.nav.params.id ?? state.nav.params.identifier;
   const article = useResolveArticle(pubkey, id);
@@ -304,7 +304,7 @@ const ArticleReader = (): ReactNode => {
   return (
     <div data-testid="view-article-reader">
       <div style={topBarStyle}>
-        <button type="button" data-testid="reader-back" onClick={() => navigate("home")} style={chevronButtonStyle}>
+        <button type="button" data-testid="reader-back" onClick={goBack} style={chevronButtonStyle}>
           <ChevronLeft />
           Back
         </button>

@@ -12,6 +12,7 @@ import { HomeIcon } from "../ui/icons.tsx";
 import { displayName, avatarStyle, initials, timeAgo } from "../lib/format.ts";
 import { compileMutes, arrangeFeed, evaluateNote, evaluateRepost, evaluateArticle, type FeedRow } from "../lib/mute.ts";
 import { Compose } from "../ui/Compose.tsx";
+import { haptic } from "../lib/haptics.ts";
 
 const AGENTS_KEY = "verity.agents.v1";
 
@@ -76,6 +77,7 @@ const Composer = ({
     setBusy(true);
     try {
       await publish(buildNote(content));
+      haptic("success");
       toast(`Published to ${writeRelayUrls.length} relays`, "check");
       setText("");
     } catch {
@@ -550,9 +552,12 @@ const MutedRow = ({
 };
 
 export const HomeView = (): ReactNode => {
-  const { state, publish, toast, toggleBookmark, readRelayUrls } = useStore();
+  const { state, publish, toast, toggleBookmark, readRelayUrls, setRefreshHandler } = useStore();
   const pubkey = state.identity?.pubkey ?? "";
   const [feedTab, setFeedTab] = useState<FeedTab>("forYou");
+  // Cap the rendered window so a long-scrolled feed doesn't keep hundreds of
+  // PostCards mounted (iOS low-RAM tab kills). Grows as the user scrolls down.
+  const [renderCap, setRenderCap] = useState(40);
 
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
@@ -574,7 +579,16 @@ export const HomeView = (): ReactNode => {
   }, [followedAuthors, isFollowingFeed]);
 
   const feedEnabled = !isFollowingFeed || followedAuthors.length > 0;
-  const { items, loading, loadingMore, hasMore, loadMore } = useTimelineFeed(filter, [filter], feedEnabled);
+  const { items, loading, loadingMore, hasMore, loadMore, refresh } = useTimelineFeed(filter, [filter], feedEnabled);
+
+  // Register this feed's refresh for the shell-level pull-to-refresh gesture.
+  useEffect(() => {
+    setRefreshHandler(refresh);
+    return () => setRefreshHandler(null);
+  }, [refresh, setRefreshHandler]);
+
+  // Reset the render window when the feed identity changes.
+  useEffect(() => setRenderCap(40), [feedTab]);
 
   // Home feed = top-level posts plus repost rows, minus optimistically-deleted rows.
   const timelineItems = useMemo(
@@ -639,9 +653,12 @@ export const HomeView = (): ReactNode => {
       if (frame) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         frame = 0;
-        if (loading || loadingMore || !hasMore) return;
         const distanceFromBottom = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
-        if (distanceFromBottom < 640) void loadMore();
+        if (distanceFromBottom >= 640) return;
+        // Reveal more of the already-loaded window first, then page the network.
+        setRenderCap((c) => c + 24);
+        if (loading || loadingMore || !hasMore) return;
+        void loadMore();
       });
     };
 
@@ -655,6 +672,7 @@ export const HomeView = (): ReactNode => {
 
   const like = useCallback(
     (note: Note): void => {
+      haptic("light");
       const cur = engagement.get(note.id);
       if (cur?.liked) {
         const eventId = cur.likedEventId;
@@ -822,7 +840,7 @@ export const HomeView = (): ReactNode => {
   );
 
   return (
-    <div data-testid="view-home" style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px 120px" }}>
+    <div data-testid="view-home" style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px calc(120px + var(--sab))" }}>
       <FeedTabs active={feedTab} onChange={setFeedTab} />
 
       <Composer pubkey={pubkey} meName={meName} picture={state.me?.picture} />
@@ -863,7 +881,7 @@ export const HomeView = (): ReactNode => {
         </>
       ) : (
         <>
-          {rows.map((row: FeedRow<TimelineItem>) =>
+          {rows.slice(0, renderCap).map((row: FeedRow<TimelineItem>) =>
             row.kind === "item" ? (
               renderItem(row.item)
             ) : (

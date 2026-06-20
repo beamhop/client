@@ -349,8 +349,8 @@ const TopicPill = ({ topic, onClick }: { topic: string; onClick: () => void }): 
     <button
       type="button"
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -428,8 +428,8 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
       role="button"
       tabIndex={0}
       onClick={onOpen}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       style={{
         display: "flex",
         gap: 16,
@@ -493,8 +493,8 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
           <button
             type="button"
             onClick={onLike}
-            onMouseEnter={() => setLikeHover(true)}
-            onMouseLeave={() => setLikeHover(false)}
+            onPointerEnter={() => setLikeHover(true)}
+            onPointerLeave={() => setLikeHover(false)}
             title="Like"
             style={cardActionStyle(liked || likeHover ? "var(--danger)" : "var(--text-3)")}
           >
@@ -509,8 +509,8 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
             <button
               type="button"
               onClick={onCardDelete}
-              onMouseEnter={() => setDelHover(true)}
-              onMouseLeave={() => setDelHover(false)}
+              onPointerEnter={() => setDelHover(true)}
+              onPointerLeave={() => setDelHover(false)}
               title="Delete article"
               style={cardActionStyle(delHover ? "var(--danger)" : "var(--text-3)")}
             >
@@ -564,8 +564,8 @@ const PersonRow = ({ pubkey }: { pubkey: string }): ReactNode => {
   return (
     <div
       data-testid="explore-person"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -582,8 +582,8 @@ const PersonRow = ({ pubkey }: { pubkey: string }): ReactNode => {
     >
       <span
         onClick={onOpen}
-        onMouseEnter={() => setAvatarHover(true)}
-        onMouseLeave={() => setAvatarHover(false)}
+        onPointerEnter={() => setAvatarHover(true)}
+        onPointerLeave={() => setAvatarHover(false)}
         style={{ ...avatarWrap(44, true), filter: avatarHover ? "brightness(.94)" : "none" }}
       >
         <span style={avatarStyle(pubkey, 44, profile?.picture)}>
@@ -596,8 +596,8 @@ const PersonRow = ({ pubkey }: { pubkey: string }): ReactNode => {
         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <span
             onClick={onOpen}
-            onMouseEnter={() => setNameHover(true)}
-            onMouseLeave={() => setNameHover(false)}
+            onPointerEnter={() => setNameHover(true)}
+            onPointerLeave={() => setNameHover(false)}
             style={{
               fontWeight: 700,
               fontSize: 15,
@@ -624,9 +624,10 @@ const PersonRow = ({ pubkey }: { pubkey: string }): ReactNode => {
         data-testid="follow-button"
         type="button"
         onClick={() => void toggleFollow(pubkey)}
-        onMouseDown={() => setPressed(true)}
-        onMouseUp={() => setPressed(false)}
-        onMouseLeave={() => setPressed(false)}
+        onPointerDown={() => setPressed(true)}
+        onPointerUp={() => setPressed(false)}
+        onPointerLeave={() => setPressed(false)}
+        onPointerCancel={() => setPressed(false)}
         style={{ ...followStyle(following), transform: pressed ? "scale(.95)" : "none" }}
       >
         {followLabel}
@@ -836,13 +837,14 @@ export const ExploreView = (): ReactNode => {
             setQuery(e.target.value);
             if (!e.target.value.trim()) setSearchTerm("");
           }}
+          enterKeyHint="search"
           placeholder="Search people, handles, or NIP-05 domains…"
           style={{
             flex: 1,
             border: "none",
             background: "transparent",
             outline: "none",
-            fontSize: 15,
+            fontSize: 16,
             color: "var(--text)",
             fontFamily: "inherit",
           }}

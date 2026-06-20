@@ -3,6 +3,7 @@ import { useStore, type ViewId } from "../state/store.tsx";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
 import { evaluateNotification } from "../lib/mute.ts";
 import { useEscapeKey, useBodyScrollLock } from "../lib/hooks.ts";
+import { haptic } from "../lib/haptics.ts";
 import { useCompiledMutes } from "../state/hooks.ts";
 import { shortNpub } from "../nostr/keys.ts";
 import { PALETTE_ORDER, paletteBanner, type PaletteId } from "../lib/theme.ts";
@@ -55,7 +56,8 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
   return (
     <aside
       data-testid="sidebar"
-      style={{ width: 236, flexShrink: 0, display: "flex", flexDirection: "column", padding: "16px 12px", gap: 6, height: "100vh", position: "sticky", top: 0, overflowY: "auto" }}
+      className="vy-chrome"
+      style={{ width: 236, flexShrink: 0, display: "flex", flexDirection: "column", padding: "16px 12px", gap: 6, height: "var(--app-h)", position: "sticky", top: 0, overflowY: "auto" }}
     >
       <div data-testid="sidebar-logo" style={{ display: "flex", alignItems: "center", gap: 11, padding: "8px 10px 16px" }}>
         <Logo size={32} />
@@ -238,7 +240,7 @@ const MoreSheet = ({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ margin: "0 10px calc(10px + env(safe-area-inset-bottom))", padding: "8px 8px 12px", borderRadius: 18, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)", animation: "verity-slideup .22s ease" }}
+        style={{ margin: "0 calc(10px + var(--sar)) calc(10px + var(--sab)) calc(10px + var(--sal))", padding: "8px 8px 12px", borderRadius: 18, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)", animation: "verity-slideup .22s ease" }}
       >
         <span aria-hidden style={{ display: "block", width: 38, height: 4, borderRadius: 999, background: "var(--glass-border)", margin: "4px auto 10px" }} />
         {items.map((d) => (
@@ -284,7 +286,7 @@ export const MobileNav = ({ onCompose, onOpenPalette }: { onCompose: () => void;
   const moreActive = moreOpen || hidden.some((d) => d.active(view));
 
   const tab = (d: MobileDest): ReactNode => (
-    <button key={d.id} data-testid={d.testid} onClick={() => navigate(d.id)} style={tabStyle(d.active(view))}>
+    <button key={d.id} data-testid={d.testid} onClick={() => { haptic("selection"); navigate(d.id); }} style={tabStyle(d.active(view))}>
       <span style={{ display: "flex", position: "relative" }}>
         {d.icon(24)}
         {d.id === "notifications" && unreadNotifications > 0 && notifBadge(unreadNotifications)}
@@ -296,7 +298,8 @@ export const MobileNav = ({ onCompose, onOpenPalette }: { onCompose: () => void;
     <>
       <nav
         data-testid="bottom-nav"
-        style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", padding: "8px 6px calc(8px + env(safe-area-inset-bottom))", margin: "0 10px 10px", borderRadius: 14, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}
+        className="vy-chrome"
+        style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", padding: "8px 6px calc(8px + var(--sab))", margin: "0 calc(10px + var(--sar)) 10px calc(10px + var(--sal))", borderRadius: 14, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}
       >
         <div data-testid="bottom-nav-left" style={sideGroupStyle}>{leftTabs.map(tab)}</div>
         <button

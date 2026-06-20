@@ -93,7 +93,7 @@ const buildThreadTree = (
 };
 
 export const PostDetailView = (): ReactNode => {
-  const { state, client, readRelayUrls, publish, toast, toggleBookmark, navigate } = useStore();
+  const { state, client, readRelayUrls, publish, toast, toggleBookmark, goBack } = useStore();
   const id = state.nav.params.id;
   const [note, setNote] = useState<Note | null>(null);
   const [replies, setReplies] = useState<Note[]>([]);
@@ -316,7 +316,7 @@ export const PostDetailView = (): ReactNode => {
   return (
     <div data-testid="view-post-detail" style={{ minHeight: "100%" }}>
       <div style={topBarStyle}>
-        <button type="button" data-testid="post-detail-back" onClick={() => navigate("home")} style={buttonStyle}>
+        <button type="button" data-testid="post-detail-back" onClick={goBack} style={buttonStyle}>
           <ChevronLeft />
           Back
         </button>

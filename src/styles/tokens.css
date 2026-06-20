@@ -3,13 +3,27 @@
    Light/dark themes + accent palettes applied via JS on :root
    ============================================================ */
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; }
+  /* Keep iOS from inflating font sizes in landscape, and kill the grey tap flash. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
     font-family: 'Hanken Grotesk', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     background: var(--bg-base, #e7e9f4);
+    -webkit-tap-highlight-color: transparent;
   }
   :root {
+    color-scheme: light;
+    /* Stable viewport height for the locked shell: svh doesn't resize as the iOS
+       toolbar shows/hides (dvh would jump). 100vh is the pre-svh fallback. */
+    --app-h: 100vh;
+    --app-h: 100svh;
+    --sat: env(safe-area-inset-top);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    --sar: env(safe-area-inset-right);
+    /* Sticky header grows under the notch/Dynamic Island via the top inset. */
+    --header-h: calc(74px + env(safe-area-inset-top));
     --bg-base:#f4f5f7;
     --text:#16181d; --text-2:#565b66; --text-3:#9196a1;
     --accent:#5b54f0; --accent-2:#5b54f0; --accent-soft:rgba(91,84,240,.10); --accent-ink:#4a43d6; --on-accent:#ffffff;
@@ -22,6 +36,7 @@
     --grad:#5b54f0;
   }
   [data-theme="dark"] {
+    color-scheme: dark;
     --bg-base:#0c0d11;
     --text:#edeef3; --text-2:#9a9fac; --text-3:#676c78;
     --accent:#8b82ff; --accent-2:#8b82ff; --accent-soft:rgba(139,130,255,.16); --accent-ink:#b6aeff; --on-accent:#ffffff;
@@ -36,7 +51,9 @@
   ::-webkit-scrollbar { width:9px; height:9px; }
   ::-webkit-scrollbar-thumb { background:rgba(130,130,170,.3); border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
   ::-webkit-scrollbar-thumb:hover { background:rgba(130,130,170,.5); border:2px solid transparent; background-clip:padding-box; }
-  textarea, input { font-family: inherit; }
+  /* 16px floor stops iOS Safari from auto-zooming on focus. Inline styles >=16
+     still win; sub-16 inline sizes were removed at the call sites. */
+  textarea, input, select { font-family: inherit; font-size: 16px; }
   @keyframes pop { 0%{transform:scale(1)} 40%{transform:scale(1.32)} 70%{transform:scale(.92)} 100%{transform:scale(1)} }
   @keyframes slideUp { from{opacity:0; transform:translateY(14px)} to{opacity:1; transform:none} }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
@@ -112,3 +129,46 @@ a { color: inherit; }
 .verity-fadein { animation: verity-fade .25s ease; }
 .verity-slideup { animation: verity-slideup .3s ease; }
 .verity-pop { animation: verity-pop .45s ease; }
+
+/* ===== Mobile: touch feedback ===== */
+/* manipulation kills the legacy double-tap-zoom delay; tap-highlight off everywhere interactive. */
+button, a, [role="button"], [role="tab"], [role="switch"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* App chrome shouldn't be text-selectable or show the iOS callout on long-press. */
+.vy-chrome { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* Touch press feedback for class-styled controls (inline-styled ones use pointer handlers). */
+.vy-press { transition: transform .12s ease, background .15s ease; }
+.vy-press:active { transform: scale(.96); }
+/* Only attach hover affordances on devices that actually hover (avoids sticky hover on touch). */
+@media (hover: hover) { .vy-hover:hover { background: var(--glass-strong); } }
+
+/* ===== Mobile: directional page transitions via the View Transitions API =====
+   Used only where document.startViewTransition exists (iOS 18.2+, modern Chrome);
+   older browsers fall back to the keyed .verity-fadein. Direction is driven by
+   html[data-nav-dir] set in the store before the transition starts. */
+@keyframes vy-vt-in-right { from { transform: translateX(100%); } }
+@keyframes vy-vt-out-left { to { transform: translateX(-28%); opacity: .6; } }
+@keyframes vy-vt-in-left { from { transform: translateX(-28%); opacity: .6; } }
+@keyframes vy-vt-out-right { to { transform: translateX(100%); } }
+::view-transition-group(root) { animation-duration: .32s; }
+html[data-nav-dir="forward"]::view-transition-old(root) {
+  z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-left;
+}
+html[data-nav-dir="forward"]::view-transition-new(root) {
+  z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-right;
+}
+html[data-nav-dir="back"]::view-transition-old(root) {
+  z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-right;
+}
+html[data-nav-dir="back"]::view-transition-new(root) {
+  z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verity-fadein, .verity-slideup, .verity-pop, .verity-bubble-pop { animation-duration: .01ms !important; }
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
+}

@@ -1975,7 +1975,7 @@ const AgentWizard = ({
 const DEFAULT_BIO = "A new agent you own — acting on the network on your behalf.";
 
 export const AgentsView = (): ReactNode => {
-  const { state, navigate, toast } = useStore();
+  const { state, navigate, goBack, toast } = useStore();
   const [agents, setAgents] = useState<Agent[]>(() => loadAgents());
   const [wizard, setWizard] = useState<"create" | "edit" | null>(null);
 
@@ -2105,7 +2105,7 @@ export const AgentsView = (): ReactNode => {
     if (!detailAgent) {
       return (
         <div data-testid="view-agent-detail" style={{ maxWidth: 1000, margin: "0 auto", padding: "14px 22px 120px" }}>
-          <BackButton onClick={() => navigate("agents")} />
+          <BackButton onClick={goBack} />
           <p style={{ fontSize: 14, color: "var(--text-3)" }}>This agent was not found. It may have been deleted.</p>
         </div>
       );
@@ -2116,7 +2116,7 @@ export const AgentsView = (): ReactNode => {
           agent={detailAgent}
           tab={detailTab}
           setTab={setDetailTab}
-          onBack={() => navigate("agents")}
+          onBack={goBack}
           onCopyNpub={() => copyNpub(detailAgent.npub)}
           onToggle={() => toggleStatus(detailAgent)}
           onEdit={() => setWizard("edit")}

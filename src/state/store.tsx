@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import type { Event as NostrEvent, EventTemplate, Filter } from "nostr-tools";
 import { NostrClient, nowSeconds } from "../nostr/client.ts";
 import { Kind, type Profile, type RelayInfo } from "../nostr/types.ts";
@@ -90,6 +91,9 @@ export type Toast = {
 
 export type Nav = { view: ViewId; params: Record<string, string | undefined> };
 
+/** Direction of the last navigation, used to pick the push vs pop transition. */
+export type NavDir = "forward" | "back" | "none";
+
 export type NotificationType = "reply" | "mention" | "reaction" | "zap" | "dm";
 
 export type NotificationItem = {
@@ -112,6 +116,7 @@ type State = {
   theme: ThemeMode;
   palette: PaletteId;
   nav: Nav;
+  navDir: NavDir;
   toasts: Toast[];
   notifications: NotificationItem[];
   notificationReadIds: string[];
@@ -131,7 +136,7 @@ type Action =
   | { type: "setContacts"; contacts: string[] }
   | { type: "setTheme"; theme: ThemeMode }
   | { type: "setPalette"; palette: PaletteId }
-  | { type: "navigate"; nav: Nav }
+  | { type: "navigate"; nav: Nav; dir: NavDir }
   | { type: "setNotifications"; notifications: NotificationItem[] }
   | { type: "addNotification"; notification: NotificationItem }
   | { type: "setNotificationReadIds"; ids: string[] }
@@ -173,7 +178,7 @@ const reducer = (state: State, action: Action): State => {
     case "setPalette":
       return { ...state, palette: action.palette };
     case "navigate":
-      return { ...state, nav: action.nav };
+      return { ...state, nav: action.nav, navDir: action.dir };
     case "setNotifications":
       return {
         ...state,
@@ -224,6 +229,9 @@ const NOTIFICATION_READ_KEY = "verity.notifications.read.v1";
 const MUTES_KEY = "verity.mutes.v1";
 const MUTES_RELAY_AT_KEY = "verity.mutes.relayAt.v1";
 const DEVELOPER_MODE_KEY = "verity.developerMode.v1";
+
+// Browser/status-bar tint per theme; kept in sync with --bg-base in tokens.css.
+const BG_BY_MODE: Record<ThemeMode, string> = { light: "#f4f5f7", dark: "#0c0d11" };
 
 const notificationReadKey = (pubkey: string): string => `${NOTIFICATION_READ_KEY}:${pubkey}`;
 
@@ -592,6 +600,9 @@ export type Store = {
   readRelayUrls: string[];
   writeRelayUrls: string[];
   navigate: (view: ViewId, params?: Record<string, string | undefined>) => void;
+  goBack: () => void;
+  setRefreshHandler: (fn: (() => void | Promise<void>) | null) => void;
+  runRefresh: () => Promise<void>;
   toast: (text: string, tone?: Toast["tone"], action?: ToastAction) => void;
   markNotificationRead: (eventId: string) => void;
   markAllNotificationsRead: () => void;
@@ -649,6 +660,7 @@ export const StoreProvider = ({
     theme: "light",
     palette: "Cobalt",
     nav: typeof window === "undefined" ? { view: "home", params: {} } : parseHashRoute(window.location.hash),
+    navDir: "none",
     toasts: [],
     notifications: [],
     notificationReadIds: [],
@@ -663,6 +675,12 @@ export const StoreProvider = ({
   const clientRef = useRef(client ?? new NostrClient());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const profileCache = useRef(new Map<string, Promise<Profile | null>>());
+  // Monotonic history index mirrored into history.state.vi so popstate can tell
+  // back from forward and pick the matching transition direction.
+  const histIndexRef = useRef(0);
+  // The active view registers its pull-to-refresh handler here so the shell-level
+  // gesture can trigger it without prop-drilling through every view.
+  const refreshHandlerRef = useRef<(() => void | Promise<void>) | null>(null);
   const mutePublishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // True once the initial relay fetch for the current identity has been attempted
   // (success or failure). Blocks publishing until we've had a chance to merge the
@@ -676,19 +694,44 @@ export const StoreProvider = ({
     muteRef.current = compileMutes(state.muteSettings.rules);
   }, [state.muteSettings.rules]);
 
-  // ---- hash routing ----
-  useEffect(() => {
-    const applyHash = (): void => {
-      dispatch({ type: "navigate", nav: normalizeNav(parseHashRoute(window.location.hash)) });
-    };
-    if (!window.location.hash || window.location.hash === "#") {
-      window.history.replaceState(null, "", routeToHash({ view: "home", params: {} }));
-    } else {
-      applyHash();
+  // Wrap a nav-induced DOM update in a directional View Transition where supported
+  // (iOS 18.2+, modern Chrome); otherwise apply synchronously (older iOS falls back
+  // to the keyed fade). prefers-reduced-motion always takes the synchronous path.
+  const runNavTransition = useCallback((apply: () => void, dir: NavDir): void => {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+    const reduce =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (typeof doc.startViewTransition !== "function" || reduce) {
+      apply();
+      return;
     }
-    window.addEventListener("hashchange", applyHash);
-    return () => window.removeEventListener("hashchange", applyHash);
+    document.documentElement.dataset.navDir = dir;
+    doc.startViewTransition(() => flushSync(apply));
   }, []);
+
+  // ---- history routing (push/pop with direction) ----
+  useEffect(() => {
+    const onPop = (): void => {
+      const idx = (window.history.state as { vi?: number } | null)?.vi;
+      const nextIndex = typeof idx === "number" ? idx : 0;
+      const dir: NavDir =
+        nextIndex < histIndexRef.current ? "back" : nextIndex > histIndexRef.current ? "forward" : "none";
+      histIndexRef.current = nextIndex;
+      runNavTransition(
+        () => dispatch({ type: "navigate", nav: normalizeNav(parseHashRoute(window.location.hash)), dir }),
+        dir,
+      );
+    };
+    const initialHash =
+      !window.location.hash || window.location.hash === "#"
+        ? routeToHash({ view: "home", params: {} })
+        : window.location.hash;
+    window.history.replaceState({ vi: 0 }, "", initialHash);
+    histIndexRef.current = 0;
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [runNavTransition]);
 
   // ---- boot ----
   useEffect(() => {
@@ -725,7 +768,12 @@ export const StoreProvider = ({
   // ---- apply theme/palette to root + document ----
   useEffect(() => {
     if (rootRef.current) applyPalette(rootRef.current, state.palette, state.theme);
+    // Mirror the theme onto <html> so --bg-base resolves correctly for the body,
+    // safe-area regions, and overscroll gutter — not just the inner app div.
+    document.documentElement.dataset.theme = state.theme;
     document.documentElement.style.background = "var(--bg-base)";
+    // Keep the browser/status-bar tint in step with the active theme.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", BG_BY_MODE[state.theme]);
   }, [state.palette, state.theme, state.ready]);
 
   const readRelayUrls = useMemo(() => readRelays(state.relays), [state.relays]);
@@ -890,11 +938,36 @@ export const StoreProvider = ({
     };
   }, [state.identity?.pubkey, readRelayUrls, toast]);
 
-  const navigate = useCallback((view: ViewId, params: Record<string, string | undefined> = {}) => {
-    const nav = normalizeNav({ view, params });
-    const hash = routeToHash(nav);
-    if (window.location.hash !== hash) window.location.hash = hash;
-    dispatch({ type: "navigate", nav });
+  const navigate = useCallback(
+    (view: ViewId, params: Record<string, string | undefined> = {}) => {
+      const nav = normalizeNav({ view, params });
+      const hash = routeToHash(nav);
+      if (hash !== window.location.hash) {
+        const nextIndex = histIndexRef.current + 1;
+        histIndexRef.current = nextIndex;
+        try {
+          window.history.pushState({ vi: nextIndex }, "", hash);
+        } catch {
+          window.location.hash = hash;
+        }
+      }
+      runNavTransition(() => dispatch({ type: "navigate", nav, dir: "forward" }), "forward");
+    },
+    [runNavTransition],
+  );
+
+  // Pop browser history when we can (gives a real reverse transition + edge-swipe
+  // parity); fall back to Home so a leaf view in PWA standalone is never a dead end.
+  const goBack = useCallback(() => {
+    if (histIndexRef.current > 0) window.history.back();
+    else navigate("home");
+  }, [navigate]);
+
+  const setRefreshHandler = useCallback((fn: (() => void | Promise<void>) | null) => {
+    refreshHandlerRef.current = fn;
+  }, []);
+  const runRefresh = useCallback(async (): Promise<void> => {
+    await refreshHandlerRef.current?.();
   }, []);
 
   const markNotificationRead = useCallback(
@@ -1270,6 +1343,9 @@ export const StoreProvider = ({
     readRelayUrls,
     writeRelayUrls,
     navigate,
+    goBack,
+    setRefreshHandler,
+    runRefresh,
     toast,
     markNotificationRead,
     markAllNotificationsRead,

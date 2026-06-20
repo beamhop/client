@@ -76,7 +76,7 @@ export const CommandPalette = ({ onClose, onCompose }: { onClose: () => void; on
       <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 580, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 14, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "verity-scale .18s cubic-bezier(.2,.9,.3,1)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "13px 16px", borderBottom: "1px solid var(--hairline)" }}>
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-          <input ref={inputRef} data-testid="palette-input" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onKey} placeholder="Type a command or search…" style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 16, color: "var(--text)", fontFamily: "inherit" }} />
+          <input ref={inputRef} data-testid="palette-input" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onKey} enterKeyHint="search" placeholder="Type a command or search…" style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 16, color: "var(--text)", fontFamily: "inherit" }} />
           <span style={{ fontSize: 11, color: "var(--text-3)", background: "var(--glass-2)", padding: "3px 7px", borderRadius: 6, fontFamily: "'JetBrains Mono',monospace" }}>esc</span>
         </div>
         <div data-testid="palette-list" style={{ maxHeight: 344, overflowY: "auto", padding: 6 }}>
@@ -100,7 +100,7 @@ export const CommandPalette = ({ onClose, onCompose }: { onClose: () => void; on
           ))}
           {results.length === 0 && <div style={{ padding: "28px 16px", textAlign: "center", fontSize: 13.5, color: "var(--text-3)" }}>No commands match “{query}”</div>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "9px 16px", borderTop: "1px solid var(--hairline)", fontSize: 11.5, color: "var(--text-3)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "9px 16px", paddingBottom: "calc(9px + env(safe-area-inset-bottom))", borderTop: "1px solid var(--hairline)", fontSize: 11.5, color: "var(--text-3)" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ fontFamily: "'JetBrains Mono',monospace", background: "var(--glass-2)", padding: "2px 6px", borderRadius: 5 }}>↑↓</span> navigate</span>
           <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ fontFamily: "'JetBrains Mono',monospace", background: "var(--glass-2)", padding: "2px 6px", borderRadius: 5 }}>↵</span> run</span>
         </div>

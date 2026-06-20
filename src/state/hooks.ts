@@ -63,12 +63,15 @@ export const useFeed = (
   loadingMore: boolean;
   hasMore: boolean;
   loadMore: () => Promise<void>;
+  refresh: () => Promise<void>;
+  refreshing: boolean;
 } => {
   const { client, readRelayUrls } = useStore();
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const byIdRef = useRef<Map<string, Note>>(new Map());
   const pagingRef = useRef(false);
   const feedVersionRef = useRef(0);
@@ -154,7 +157,26 @@ export const useFeed = (
     }
   }, [addEvent, client, enabled, flush, hasMore, loading, readRelayUrls, stableFilter]);
 
-  return { notes, loading, loadingMore, hasMore, loadMore };
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!enabled || readRelayUrls.length === 0 || refreshing) return;
+    setRefreshing(true);
+    const feedVersion = feedVersionRef.current;
+    try {
+      // Online-only pull-to-refresh: one-shot fetch of the newest events merged
+      // into the live set (no teardown → no flash-to-empty); addEvent dedups by id.
+      const events = await client.list(readRelayUrls, { ...stableFilter, limit: feedLimit(stableFilter) });
+      if (feedVersion !== feedVersionRef.current) return;
+      let added = 0;
+      for (const event of events) if (addEvent(event)) added++;
+      if (added > 0) flush();
+    } catch {
+      // Keep current notes on failure.
+    } finally {
+      if (feedVersion === feedVersionRef.current) setRefreshing(false);
+    }
+  }, [addEvent, client, enabled, flush, readRelayUrls, refreshing, stableFilter]);
+
+  return { notes, loading, loadingMore, hasMore, loadMore, refresh, refreshing };
 };
 
 /** Live-subscribe to notes and reposts, resolving kind-6 reposts to note rows. */
@@ -168,12 +190,15 @@ export const useTimelineFeed = (
   loadingMore: boolean;
   hasMore: boolean;
   loadMore: () => Promise<void>;
+  refresh: () => Promise<void>;
+  refreshing: boolean;
 } => {
   const { client, readRelayUrls } = useStore();
   const [items, setItems] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const notesByIdRef = useRef<Map<string, Note>>(new Map());
   const itemsByIdRef = useRef<Map<string, TimelineItem>>(new Map());
   const repostsByIdRef = useRef<Map<string, NostrEvent>>(new Map());
@@ -361,7 +386,26 @@ export const useTimelineFeed = (
     }
   }, [addEvent, client, enabled, flush, hasMore, loading, readRelayUrls, stableFilter]);
 
-  return { items, loading, loadingMore, hasMore, loadMore };
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!enabled || readRelayUrls.length === 0 || refreshing) return;
+    setRefreshing(true);
+    const feedVersion = feedVersionRef.current;
+    try {
+      // Online-only pull-to-refresh: one-shot fetch of the newest events merged
+      // into the live set (no teardown → no flash-to-empty); addEvent dedups by id.
+      const events = await client.list(readRelayUrls, { ...stableFilter, limit: feedLimit(stableFilter) });
+      if (feedVersion !== feedVersionRef.current) return;
+      let added = 0;
+      for (const event of events) if (addEvent(event, feedVersion)) added++;
+      if (added > 0) flush();
+    } catch {
+      // Keep current items on failure.
+    } finally {
+      if (feedVersion === feedVersionRef.current) setRefreshing(false);
+    }
+  }, [addEvent, client, enabled, flush, readRelayUrls, refreshing, stableFilter]);
+
+  return { items, loading, loadingMore, hasMore, loadMore, refresh, refreshing };
 };
 
 export type Engagement = {

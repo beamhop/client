@@ -152,7 +152,7 @@ const fieldInput: CSSProperties = {
   background: "var(--glass-2)",
   padding: "11px 14px",
   outline: "none",
-  fontSize: 14.5,
+  fontSize: 16,
   color: "var(--text)",
   fontFamily: "inherit",
 };

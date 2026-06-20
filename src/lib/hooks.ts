@@ -12,13 +12,31 @@ export function useEscapeKey(callback: () => void, enabled: boolean): void {
   }, [enabled])
 }
 
-/** Locks body scroll while enabled is true, restoring the previous overflow on cleanup. */
+/** Locks body scroll while enabled is true, restoring scroll position on cleanup. */
 export function useBodyScrollLock(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
+    const { body } = document
+    const scrollY = window.scrollY
+    const prev = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+    }
+    // iOS ignores overflow:hidden for touchmove — pinning the body is the only
+    // reliable lock. Preserve and restore the scroll offset around the lock.
+    body.style.overflow = 'hidden'
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
+    return () => {
+      body.style.overflow = prev.overflow
+      body.style.position = prev.position
+      body.style.top = prev.top
+      body.style.width = prev.width
+      window.scrollTo(0, scrollY)
+    }
   }, [enabled])
 }
 
