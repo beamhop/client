@@ -1,0 +1,26 @@
+{
+  "name": "@verity/client",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Verity — a glass-morphic Nostr client with first-class Documentations (NIP-23 long-form)",
+  "scripts": {
+    "dev": "bun --hot run src/server.ts",
+    "build": "bun run scripts/build.ts",
+    "start": "NODE_ENV=production bun run src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src",
+    "test:e2e": "bun test e2e"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.10.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.7.0"
+  }
+}
