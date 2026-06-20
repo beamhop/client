@@ -5,7 +5,7 @@ import type { Note } from "../nostr/types.ts";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
 
 /** Compose modal — faithful to the design (verity-glass.html 1536-1561). */
-export const Compose = ({ onClose, replyTo }: { onClose: () => void; replyTo?: Note }): ReactNode => {
+export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void; replyTo?: Note; onPublished?: (note: Note) => void }): ReactNode => {
   const { state, publish, toast, writeRelayUrls, navigate } = useStore();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -18,8 +18,20 @@ export const Compose = ({ onClose, replyTo }: { onClose: () => void; replyTo?: N
     if (!content || busy) return;
     setBusy(true);
     try {
-      await publish(buildNote(content, replyTo));
+      const eventId = await publish(buildNote(content, replyTo));
       toast(`Published to ${writeRelayUrls.length} relays`, "check");
+      if (replyTo && onPublished) {
+        const myPubkey = state.identity?.pubkey ?? "";
+        onPublished({
+          id: eventId,
+          pubkey: myPubkey,
+          content,
+          createdAt: Math.floor(Date.now() / 1000),
+          tags: buildNote(content, replyTo).tags,
+          replyTo: replyTo.id,
+          rootId: replyTo.rootId ?? replyTo.id,
+        });
+      }
       setText("");
       onClose();
       if (!replyTo) navigate("home");

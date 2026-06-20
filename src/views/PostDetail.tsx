@@ -242,7 +242,16 @@ export const PostDetailView = (): ReactNode => {
         )}
       </div>
 
-      {replyTarget && <Compose replyTo={replyTarget} onClose={() => setReplyTarget(null)} />}
+      {replyTarget && (
+        <Compose
+          replyTo={replyTarget}
+          onClose={() => setReplyTarget(null)}
+          onPublished={(note) => {
+            setReplies((prev) => [note, ...prev]);
+            setReplyTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 };

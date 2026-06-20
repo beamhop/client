@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useStore, type ViewId } from "../state/store.tsx";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
 import { shortNpub } from "../nostr/keys.ts";
@@ -15,6 +15,7 @@ import {
   ProfileIcon,
   ShieldIcon,
   PlusIcon,
+  MoreIcon,
   SunIcon,
   MoonIcon,
   ChevronDownIcon,
@@ -168,72 +169,175 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
   );
 };
 
-const MOBILE_TABS: { id: ViewId; testid: string; icon: ReactNode; active: (v: ViewId) => boolean }[] = [
-  { id: "home", testid: "tab-home", icon: <HomeIcon size={24} />, active: (v) => v === "home" || v === "postDetail" },
-  { id: "explore", testid: "tab-explore", icon: <SearchIcon size={24} />, active: (v) => v === "explore" },
-  { id: "notifications", testid: "tab-notifications", icon: <BellIcon size={24} />, active: (v) => v === "notifications" },
-  { id: "docs", testid: "tab-docs", icon: <DocsIcon size={24} />, active: (v) => v.startsWith("doc") },
+type MobileDest = {
+  id: ViewId;
+  testid: string;
+  label: string;
+  icon: (size: number) => ReactNode;
+  active: (v: ViewId) => boolean;
+};
+
+/**
+ * Every bottom-nav destination in priority order. The compose button always
+ * sits dead-centre with an equal number of tabs on each side; the lowest
+ * priority destinations that don't fit fold into the "More" sheet instead of
+ * overflowing the bar. `security` effectively always lives in "More".
+ */
+const MOBILE_DESTS: MobileDest[] = [
+  { id: "home", testid: "tab-home", label: "Home", icon: (s) => <HomeIcon size={s} />, active: (v) => v === "home" || v === "postDetail" },
+  { id: "explore", testid: "tab-explore", label: "Explore", icon: (s) => <SearchIcon size={s} />, active: (v) => v === "explore" },
+  { id: "notifications", testid: "tab-notifications", label: "Notifications", icon: (s) => <BellIcon size={s} />, active: (v) => v === "notifications" },
+  { id: "messages", testid: "tab-messages", label: "Messages", icon: (s) => <MessagesIcon size={s} />, active: (v) => v === "messages" },
+  { id: "profile", testid: "tab-profile", label: "Profile", icon: (s) => <ProfileIcon size={s} />, active: (v) => v === "profile" },
+  { id: "agents", testid: "tab-agents", label: "Agents", icon: (s) => <AgentsIcon size={s} />, active: (v) => v === "agents" || v === "agentDetail" },
+  { id: "docs", testid: "tab-docs", label: "Docs", icon: (s) => <DocsIcon size={s} />, active: (v) => v.startsWith("doc") },
+  { id: "security", testid: "tab-security", label: "Keys & Security", icon: (s) => <ShieldIcon size={s} />, active: (v) => v === "security" },
 ];
-const MOBILE_TABS_RIGHT: { id: ViewId; testid: string; icon: ReactNode; active: (v: ViewId) => boolean }[] = [
-  { id: "messages", testid: "tab-messages", icon: <MessagesIcon size={24} />, active: (v) => v === "messages" },
-  { id: "agents", testid: "tab-agents", icon: <AgentsIcon size={24} />, active: (v) => v === "agents" || v === "agentDetail" },
-  { id: "profile", testid: "tab-profile", icon: <ProfileIcon size={24} />, active: (v) => v === "profile" },
-];
+
+/**
+ * Largest symmetric per-side tab count (2–4) that fits `innerWidth` without the
+ * bar overflowing. The compose button is the exact centre: `slots` buttons sit
+ * on each side, the final right-side slot being the "More" overflow trigger.
+ */
+export const mobileNavSlots = (innerWidth: number): number => {
+  const COMPOSE_FOOTPRINT = 56; // raised compose button + breathing room
+  const TAB_FOOTPRINT = 54; // icon + horizontal padding per tab
+  const available = innerWidth - 32; // nav side margins (20) + inner padding (12)
+  const fit = Math.floor((available - COMPOSE_FOOTPRINT) / (2 * TAB_FOOTPRINT));
+  return Math.max(2, Math.min(4, fit));
+};
+
+const sideGroupStyle: CSSProperties = { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-around" };
+
+const notifBadge = (count: number): ReactNode => (
+  <span style={{ position: "absolute", right: -5, top: -5, minWidth: 15, height: 15, padding: "0 3px", borderRadius: 999, background: "var(--danger)", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+    {count > 9 ? "9+" : count}
+  </span>
+);
+
+const MoreSheet = ({
+  items,
+  unread,
+  view,
+  onNavigate,
+  onClose,
+}: {
+  items: MobileDest[];
+  unread: number;
+  view: ViewId;
+  onNavigate: (id: ViewId) => void;
+  onClose: () => void;
+}): ReactNode => {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      data-testid="more-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="More destinations"
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, zIndex: 40, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "rgba(6,7,13,.5)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "verity-fade .16s ease" }}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        style={{ margin: "0 10px calc(10px + env(safe-area-inset-bottom))", padding: "8px 8px 12px", borderRadius: 18, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)", animation: "verity-slideup .22s ease" }}
+      >
+        <span aria-hidden style={{ display: "block", width: 38, height: 4, borderRadius: 999, background: "var(--glass-border)", margin: "4px auto 10px" }} />
+        {items.map((d) => (
+          <button key={d.id} data-testid={`more-${d.id}`} onClick={() => onNavigate(d.id)} style={navStyle(d.active(view))}>
+            <span style={{ display: "flex", position: "relative" }}>
+              {d.icon(21)}
+              {d.id === "notifications" && unread > 0 && notifBadge(unread)}
+            </span>
+            <span style={{ flex: 1, textAlign: "left" }}>{d.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export const MobileNav = ({ onCompose }: { onCompose: () => void }): ReactNode => {
   const { state, navigate } = useStore();
   const view = state.nav.view;
   const unreadNotifications = state.notifications.filter((n) => !n.read).length;
-  const tabIcon = (tabId: ViewId, icon: ReactNode): ReactNode => (
-    <span style={{ display: "flex", position: "relative" }}>
-      {icon}
-      {tabId === "notifications" && unreadNotifications > 0 && (
-        <span
-          style={{
-            position: "absolute",
-            right: -5,
-            top: -5,
-            minWidth: 15,
-            height: 15,
-            padding: "0 3px",
-            borderRadius: 999,
-            background: "var(--danger)",
-            color: "#fff",
-            fontSize: 9,
-            fontWeight: 800,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            lineHeight: 1,
-          }}
-        >
-          {unreadNotifications > 9 ? "9+" : unreadNotifications}
-        </span>
-      )}
-    </span>
+  const [slots, setSlots] = useState<number>(() => (typeof window === "undefined" ? 3 : mobileNavSlots(window.innerWidth)));
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    const onResize = (): void => setSlots(mobileNavSlots(window.innerWidth));
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const visibleCount = 2 * slots - 1; // last right slot is reserved for "More"
+  const leftTabs = MOBILE_DESTS.slice(0, slots);
+  const rightTabs = MOBILE_DESTS.slice(slots, visibleCount);
+  const hidden = MOBILE_DESTS.slice(visibleCount);
+  const moreActive = moreOpen || hidden.some((d) => d.active(view));
+
+  const tab = (d: MobileDest): ReactNode => (
+    <button key={d.id} data-testid={d.testid} onClick={() => navigate(d.id)} style={tabStyle(d.active(view))}>
+      <span style={{ display: "flex", position: "relative" }}>
+        {d.icon(24)}
+        {d.id === "notifications" && unreadNotifications > 0 && notifBadge(unreadNotifications)}
+      </span>
+    </button>
   );
+
   return (
-    <nav
-      data-testid="bottom-nav"
-      style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", justifyContent: "space-around", padding: "8px 6px calc(8px + env(safe-area-inset-bottom))", margin: "0 10px 10px", borderRadius: 14, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}
-    >
-      {MOBILE_TABS.map((t) => (
-        <button key={t.id} data-testid={t.testid} onClick={() => navigate(t.id)} style={tabStyle(t.active(view))}>
-          {tabIcon(t.id, t.icon)}
-        </button>
-      ))}
-      <button
-        data-testid="compose-button-mobile"
-        onClick={onCompose}
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 52, height: 52, marginTop: -18, border: "1px solid rgba(255,255,255,.3)", borderRadius: 12, background: "var(--accent)", color: "var(--on-accent)", cursor: "pointer", transition: "transform .15s" }}
+    <>
+      <nav
+        data-testid="bottom-nav"
+        style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 20, display: "flex", alignItems: "center", padding: "8px 6px calc(8px + env(safe-area-inset-bottom))", margin: "0 10px 10px", borderRadius: 14, background: "var(--glass-strong)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}
       >
-        <PlusIcon size={24} stroke={2.4} />
-      </button>
-      {MOBILE_TABS_RIGHT.map((t) => (
-        <button key={t.id} data-testid={t.testid} onClick={() => navigate(t.id)} style={tabStyle(t.active(view))}>
-          {t.icon}
+        <div data-testid="bottom-nav-left" style={sideGroupStyle}>{leftTabs.map(tab)}</div>
+        <button
+          data-testid="compose-button-mobile"
+          onClick={onCompose}
+          style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", width: 52, height: 52, marginTop: -18, border: "1px solid rgba(255,255,255,.3)", borderRadius: 12, background: "var(--accent)", color: "var(--on-accent)", cursor: "pointer", transition: "transform .15s" }}
+        >
+          <PlusIcon size={24} stroke={2.4} />
         </button>
-      ))}
-    </nav>
+        <div data-testid="bottom-nav-right" style={sideGroupStyle}>
+          {rightTabs.map(tab)}
+          <button
+            data-testid="tab-more"
+            aria-label="More"
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen(true)}
+            style={tabStyle(moreActive)}
+          >
+            <MoreIcon size={24} />
+          </button>
+        </div>
+      </nav>
+      {moreOpen && (
+        <MoreSheet
+          items={hidden}
+          unread={unreadNotifications}
+          view={view}
+          onNavigate={(id) => {
+            navigate(id);
+            setMoreOpen(false);
+          }}
+          onClose={() => setMoreOpen(false)}
+        />
+      )}
+    </>
   );
 };
