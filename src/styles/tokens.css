@@ -149,23 +149,26 @@ button, a, [role="button"], [role="tab"], [role="switch"] {
 /* ===== Mobile: directional page transitions via the View Transitions API =====
    Used only where document.startViewTransition exists (iOS 18.2+, modern Chrome);
    older browsers fall back to the keyed .verity-fadein. Direction is driven by
-   html[data-nav-dir] set in the store before the transition starts. */
+   html[data-nav-dir] set in the store before the transition starts.
+   Scoped to touch devices — desktop gets an instant swap. */
 @keyframes vy-vt-in-right { from { transform: translateX(100%); } }
 @keyframes vy-vt-out-left { to { transform: translateX(-28%); opacity: .6; } }
 @keyframes vy-vt-in-left { from { transform: translateX(-28%); opacity: .6; } }
 @keyframes vy-vt-out-right { to { transform: translateX(100%); } }
-::view-transition-group(root) { animation-duration: .32s; }
-html[data-nav-dir="forward"]::view-transition-old(root) {
-  z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-left;
-}
-html[data-nav-dir="forward"]::view-transition-new(root) {
-  z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-right;
-}
-html[data-nav-dir="back"]::view-transition-old(root) {
-  z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-right;
-}
-html[data-nav-dir="back"]::view-transition-new(root) {
-  z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-left;
+@media (hover: none) and (pointer: coarse) {
+  ::view-transition-group(root) { animation-duration: .32s; }
+  html[data-nav-dir="forward"]::view-transition-old(root) {
+    z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-left;
+  }
+  html[data-nav-dir="forward"]::view-transition-new(root) {
+    z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-right;
+  }
+  html[data-nav-dir="back"]::view-transition-old(root) {
+    z-index: 2; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-out-right;
+  }
+  html[data-nav-dir="back"]::view-transition-new(root) {
+    z-index: 1; animation: .32s cubic-bezier(.32,.72,0,1) both vy-vt-in-left;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
