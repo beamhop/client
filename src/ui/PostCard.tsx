@@ -6,6 +6,7 @@ import { parseMedia, type Embed } from "../lib/media.ts";
 import { actionStyle, avatarWrap, statusDot, postCardStyle } from "./styles.ts";
 import { CloseIcon, ImageIcon, VerifiedSeal } from "./icons.tsx";
 import type { Engagement } from "../state/hooks.ts";
+import { BubblePop } from "./BubblePop.tsx";
 
 type PostCardProps = {
   note: Note;
@@ -16,7 +17,7 @@ type PostCardProps = {
   agentOwner?: string;
   online?: boolean;
   onReply?: () => void;
-  onRepost?: () => void;
+  onRepost?: () => boolean | void;
   onLike?: () => void;
   onBookmark?: () => void;
   onShare?: () => void;
@@ -440,6 +441,7 @@ export const PostCard = ({
   const [hover, setHover] = useState(false);
   const [likePop, setLikePop] = useState(false);
   const [repostPop, setRepostPop] = useState(false);
+  const [unrepostBubbleKey, setUnrepostBubbleKey] = useState(0);
 
   const handleLike = (): void => {
     if (!e?.liked) {
@@ -449,11 +451,15 @@ export const PostCard = ({
     onLike?.();
   };
   const handleRepost = (): void => {
-    if (!e?.reposted) {
+    const wasReposted = Boolean(e?.reposted);
+    const handled = onRepost?.();
+    if (handled === false) return;
+    if (wasReposted) {
+      setUnrepostBubbleKey((key) => key + 1);
+    } else {
       setRepostPop(true);
       setTimeout(() => setRepostPop(false), 520);
     }
-    onRepost?.();
   };
   const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey: note.pubkey });
   const handle = profile?.nip05 ?? `${note.pubkey.slice(0, 8)}…${note.pubkey.slice(-4)}`;
@@ -535,7 +541,9 @@ export const PostCard = ({
               <span>{e && e.replies > 0 ? fmtCount(e.replies) : ""}</span>
             </button>
             <button onClick={(event) => runAction(event, handleRepost)} style={actionStyle(Boolean(e?.reposted), "var(--success)")}>
-              <span style={{ display: "flex" }} className={repostPop ? "verity-pop" : undefined}><RepostGlyph /></span>
+              <BubblePop activeKey={unrepostBubbleKey} message="Unreposted" tone="success">
+                <span style={{ display: "flex" }} className={repostPop ? "verity-pop" : undefined}><RepostGlyph /></span>
+              </BubblePop>
               <span>{e && e.reposts > 0 ? fmtCount(e.reposts) : ""}</span>
             </button>
             <button onClick={(event) => runAction(event, handleLike)} style={actionStyle(Boolean(e?.liked), "var(--danger)")}>

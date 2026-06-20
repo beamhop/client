@@ -1,6 +1,8 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -12,6 +14,7 @@ import { useFeed, useEngagement } from "../state/hooks.ts";
 import type { Engagement } from "../state/hooks.ts";
 import { Kind, ARTICLE_MARKER, type LongForm, type Note } from "../nostr/types.ts";
 import { decodeLongForm, decodeNote, buildReaction, buildRepost } from "../nostr/events.ts";
+import { nowSeconds } from "../nostr/client.ts";
 import { EmptyState, Spinner } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
 import { SearchIcon, VerifiedSeal } from "../ui/icons.tsx";
@@ -95,6 +98,9 @@ type RelaySearchResults = {
   notes: Note[];
   people: string[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
 };
 
 const normalizeSearchInput = (value: string): string =>
@@ -111,6 +117,14 @@ const dedupeEvents = (events: NostrEvent[]): NostrEvent[] => {
   return [...byId.values()];
 };
 
+const oldestNoteCreatedAt = (notes: Iterable<Note>): number | undefined => {
+  let oldest: number | undefined;
+  for (const note of notes) {
+    if (oldest === undefined || note.createdAt < oldest) oldest = note.createdAt;
+  }
+  return oldest;
+};
+
 const noteMatchesSearch = (event: NostrEvent, lowerQuery: string, tag: string | null): boolean => {
   if (event.kind !== Kind.Note) return false;
   if (event.content.toLowerCase().includes(lowerQuery)) return true;
@@ -125,36 +139,31 @@ const useRelaySearch = (query: string): RelaySearchResults => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [people, setPeople] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const byIdRef = useRef<Map<string, Note>>(new Map());
+  const pagingRef = useRef(false);
+  const searchVersionRef = useRef(0);
 
-  useEffect(() => {
-    const term = normalizeSearchInput(query);
-    if (!term || readRelayUrls.length === 0) {
-      setNotes([]);
-      setPeople([]);
-      setLoading(false);
-      return;
-    }
+  const fetchPage = useCallback(
+    async (term: string, until?: number, includeProfiles = false): Promise<{ notes: Note[]; people: string[] }> => {
+      const lowerTerm = term.toLowerCase();
+      const tag = tagCandidate(term);
+      const withCursor = (filter: Filter): Filter => (until === undefined ? filter : { ...filter, until });
+      const list = async (filter: Filter): Promise<NostrEvent[]> => {
+        try {
+          return await client.list(readRelayUrls, filter);
+        } catch {
+          return [];
+        }
+      };
 
-    let cancelled = false;
-    const lowerTerm = term.toLowerCase();
-    const tag = tagCandidate(term);
-    const list = async (filter: Filter): Promise<NostrEvent[]> => {
-      try {
-        return await client.list(readRelayUrls, filter);
-      } catch {
-        return [];
-      }
-    };
-
-    setLoading(true);
-    void (async () => {
       const [searchEvents, recentEvents, tagEvents, profileEvents] = await Promise.all([
-        list({ kinds: [Kind.Note], search: term, limit: SEARCH_LIMIT }),
-        list({ kinds: [Kind.Note], limit: RECENT_SEARCH_LIMIT }),
-        tag ? list({ kinds: [Kind.Note], "#t": [tag], limit: SEARCH_LIMIT }) : Promise.resolve([]),
-        list({ kinds: [Kind.Metadata], search: term, limit: PROFILE_SEARCH_LIMIT }),
+        list(withCursor({ kinds: [Kind.Note], search: term, limit: SEARCH_LIMIT })),
+        list(withCursor({ kinds: [Kind.Note], limit: RECENT_SEARCH_LIMIT })),
+        tag ? list(withCursor({ kinds: [Kind.Note], "#t": [tag], limit: SEARCH_LIMIT })) : Promise.resolve([]),
+        includeProfiles ? list({ kinds: [Kind.Metadata], search: term, limit: PROFILE_SEARCH_LIMIT }) : Promise.resolve([]),
       ]);
-      if (cancelled) return;
 
       const nextNotes = dedupeEvents([...searchEvents, ...tagEvents, ...recentEvents])
         .filter((event) => noteMatchesSearch(event, lowerTerm, tag))
@@ -171,17 +180,90 @@ const useRelaySearch = (query: string): RelaySearchResults => {
         if (nextPeople.length >= 6) break;
       }
 
-      setNotes(nextNotes);
-      setPeople(nextPeople);
+      return { notes: nextNotes, people: nextPeople };
+    },
+    [client, readRelayUrls],
+  );
+
+  const flush = useCallback(() => {
+    setNotes([...byIdRef.current.values()].sort((a, b) => b.createdAt - a.createdAt));
+  }, []);
+
+  useEffect(() => {
+    const term = normalizeSearchInput(query);
+    if (!term || readRelayUrls.length === 0) {
+      searchVersionRef.current++;
+      byIdRef.current = new Map();
+      setNotes([]);
+      setPeople([]);
+      setLoading(false);
+      setLoadingMore(false);
+      setHasMore(false);
+      return;
+    }
+
+    let cancelled = false;
+    const searchVersion = searchVersionRef.current + 1;
+    searchVersionRef.current = searchVersion;
+    byIdRef.current = new Map();
+    pagingRef.current = false;
+
+    setLoading(true);
+    setLoadingMore(false);
+    setHasMore(true);
+    setNotes([]);
+    void (async () => {
+      const page = await fetchPage(term, undefined, true);
+      if (cancelled || searchVersion !== searchVersionRef.current) return;
+
+      for (const note of page.notes) {
+        if (!byIdRef.current.has(note.id)) byIdRef.current.set(note.id, note);
+      }
+      flush();
+      setPeople(page.people);
+      setHasMore(page.notes.length > 0);
       setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [client, query, readRelayUrls]);
+  }, [fetchPage, flush, query, readRelayUrls]);
 
-  return { notes, people, loading };
+  const loadMore = useCallback(async (): Promise<void> => {
+    const term = normalizeSearchInput(query);
+    if (!term || readRelayUrls.length === 0 || loading || loadingMore || !hasMore || pagingRef.current) return;
+    const oldest = oldestNoteCreatedAt(byIdRef.current.values());
+    if (oldest === undefined) {
+      setHasMore(false);
+      return;
+    }
+
+    pagingRef.current = true;
+    const searchVersion = searchVersionRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchPage(term, oldest, false);
+      if (searchVersion !== searchVersionRef.current) return;
+      let added = 0;
+      for (const note of page.notes) {
+        if (byIdRef.current.has(note.id)) continue;
+        byIdRef.current.set(note.id, note);
+        added++;
+      }
+      if (added > 0) flush();
+      else setHasMore(false);
+    } catch {
+      if (searchVersion === searchVersionRef.current) setHasMore(false);
+    } finally {
+      if (searchVersion === searchVersionRef.current) {
+        pagingRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [fetchPage, flush, hasMore, loading, loadingMore, query, readRelayUrls]);
+
+  return { notes, people, loading, loadingMore, hasMore, loadMore };
 };
 
 // ---------------------------------------------------------------------------
@@ -588,7 +670,7 @@ export const ExploreView = (): ReactNode => {
         : { kinds: [Kind.Note], limit: 50 },
     [topic],
   );
-  const { notes, loading } = useFeed(filter, [topic]);
+  const { notes, loading, loadingMore, hasMore, loadMore } = useFeed(filter, [topic]);
   const search = useRelaySearch(searchTerm);
   const searchActive = searchTerm.length > 0;
   const visibleNotes = searchActive ? search.notes : notes;
@@ -605,17 +687,83 @@ export const ExploreView = (): ReactNode => {
     void publish(buildReaction(note, "+")).then(() => toast("Liked", "check"));
   };
 
-  const repost = (note: Note): void => {
+  const repost = (note: Note): boolean => {
     const cur = engagement.get(note.id);
-    if (cur?.reposted) return;
+    if (cur?.reposted) {
+      const eventIds = cur.repostedEventIds ?? [];
+      if (eventIds.length === 0) return false;
+      setOptimistic((o) => ({
+        ...o,
+        [note.id]: {
+          ...o[note.id],
+          reposted: false,
+          reposts: Math.max(0, (cur.reposts ?? eventIds.length) - eventIds.length),
+          repostedEventIds: [],
+        },
+      }));
+      void publish({
+        kind: 5,
+        created_at: nowSeconds(),
+        tags: eventIds.map((eventId) => ["e", eventId]),
+        content: "",
+      });
+      return true;
+    }
     setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 } }));
-    void publish(buildRepost(note)).then(() => toast("Reposted to your followers", "repost"));
+    void publish(buildRepost(note)).then((eventId) => {
+      toast("Reposted to your followers", "repost");
+      setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], repostedEventIds: [eventId] } }));
+    });
+    return true;
   };
 
   const share = (note: Note): void => {
     const link = `${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id: note.id } })}`;
     void navigator.clipboard?.writeText(link).then(() => toast("Post link copied", "copy"));
   };
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const scrollRoot = document.querySelector<HTMLElement>('[data-testid="main-scroll"]');
+    if (!scrollRoot) return;
+
+    let frame = 0;
+    const checkForMore = (): void => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const distanceFromBottom = scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
+        if (distanceFromBottom >= 640) return;
+
+        if (searchActive) {
+          if (!search.loading && !search.loadingMore && search.hasMore) void search.loadMore();
+          return;
+        }
+
+        if (topic && !loading && !loadingMore && hasMore) void loadMore();
+      });
+    };
+
+    scrollRoot.addEventListener("scroll", checkForMore, { passive: true });
+    checkForMore();
+    return () => {
+      scrollRoot.removeEventListener("scroll", checkForMore);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [
+    hasMore,
+    loadMore,
+    loading,
+    loadingMore,
+    notes.length,
+    search.hasMore,
+    search.loadMore,
+    search.loading,
+    search.loadingMore,
+    search.notes.length,
+    searchActive,
+    topic,
+  ]);
 
   const submit = async (): Promise<void> => {
     const value = query.trim();
@@ -776,6 +924,11 @@ export const ExploreView = (): ReactNode => {
                       onShare={() => share(note)}
                     />
                   ))}
+                  {search.loadingMore && (
+                    <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
+                      <Spinner size={20} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -812,6 +965,11 @@ export const ExploreView = (): ReactNode => {
                   onShare={() => share(note)}
                 />
               ))}
+              {loadingMore && (
+                <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
+                  <Spinner size={20} />
+                </div>
+              )}
             </div>
           )}
         </div>

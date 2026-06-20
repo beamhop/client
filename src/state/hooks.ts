@@ -130,6 +130,7 @@ export type Engagement = {
   liked: boolean;
   reposted: boolean;
   likedEventId?: string;
+  repostedEventIds?: string[];
 };
 
 const empty: Engagement = { likes: 0, reposts: 0, replies: 0, liked: false, reposted: false };
@@ -170,7 +171,10 @@ export const useEngagement = (
           }
         } else if (ev.kind === Kind.Repost) {
           cur.reposts++;
-          if (ev.pubkey === me) cur.reposted = true;
+          if (ev.pubkey === me) {
+            cur.reposted = true;
+            cur.repostedEventIds = [...(cur.repostedEventIds ?? []), ev.id];
+          }
         } else if (ev.kind === Kind.Note) {
           cur.replies++;
         }

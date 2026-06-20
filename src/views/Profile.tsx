@@ -989,14 +989,37 @@ export const ProfileView = (): ReactNode => {
   );
 
   const repost = useCallback(
-    (note: Note): void => {
+    (note: Note): boolean => {
       const cur = engagement.get(note.id);
-      if (cur?.reposted) return;
+      if (cur?.reposted) {
+        const eventIds = cur.repostedEventIds ?? [];
+        if (eventIds.length === 0) return false;
+        setOptimistic((o) => ({
+          ...o,
+          [note.id]: {
+            ...o[note.id],
+            reposted: false,
+            reposts: Math.max(0, (cur.reposts ?? eventIds.length) - eventIds.length),
+            repostedEventIds: [],
+          },
+        }));
+        void publish({
+          kind: 5,
+          created_at: nowSeconds(),
+          tags: eventIds.map((eventId) => ["e", eventId]),
+          content: "",
+        });
+        return true;
+      }
       setOptimistic((o) => ({
         ...o,
         [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 },
       }));
-      void publish(buildRepost(note)).then(() => toast("Reposted to your followers", "repost"));
+      void publish(buildRepost(note)).then((eventId) => {
+        toast("Reposted to your followers", "repost");
+        setOptimistic((o) => ({ ...o, [note.id]: { ...o[note.id], repostedEventIds: [eventId] } }));
+      });
+      return true;
     },
     [engagement, publish, toast],
   );
