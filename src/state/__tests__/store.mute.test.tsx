@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { finalizeEvent, generateSecretKey, getPublicKey } from "nostr-tools";
-import { act, renderHookWithStore, waitFor } from "../../../test/render.tsx";
+import { act, renderHookWithStore, waitFor, clientWithFakePool } from "../../../test/render.tsx";
 import { useStore } from "../store.tsx";
 import { Kind } from "../../nostr/types.ts";
 import type { Identity } from "../../nostr/keys.ts";
@@ -10,6 +10,7 @@ import {
   parseMuteSettings,
   serializeMuteSettings,
 } from "../../lib/mute.ts";
+import { buildMuteList } from "../../nostr/nip51.ts";
 
 const sk = generateSecretKey();
 const me = getPublicKey(sk);
@@ -232,5 +233,128 @@ describe("ingestion filter", () => {
       expect(result.current.state.notifications.some((n) => n.pubkey === allowedAuthor)).toBe(true),
     );
     expect(result.current.state.notifications.some((n) => n.pubkey === mutedAuthor)).toBe(false);
+  });
+});
+
+describe("NIP-51 relay sync — union merge on login", () => {
+  test("merges remote rules with local rules so neither side loses entries added offline", async () => {
+    // Local has "local-rule"; relay has "remote-rule". After login both should be present.
+    seedMutes(me, {
+      display: "hidden",
+      rules: [createRule({ type: "keyword", value: "local-rule" })],
+    });
+
+    const remoteSettings: MuteSettings = {
+      display: "hidden",
+      rules: [createRule({ type: "keyword", value: "remote-rule" })],
+    };
+    const template = await buildMuteList(remoteSettings, myIdentity);
+    // created_at must be > 0 (the default lastMergedRelayAt) so the merge triggers.
+    const remoteEvent = finalizeEvent({ ...template, created_at: 1 }, sk);
+
+    // Configure the pool BEFORE rendering so the resolver is in place when the
+    // login fetch fires immediately on mount.
+    const { client, pool } = clientWithFakePool();
+    pool.getResolver = (filter) => (filter.kinds?.includes(10000) ? remoteEvent : null);
+    const { result } = renderHookWithStore(() => useStore(), { identity: myIdentity, client });
+
+    await waitFor(() =>
+      expect(
+        result.current.state.muteSettings.rules.some(
+          (r) => r.type === "keyword" && r.value === "local-rule",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(
+        result.current.state.muteSettings.rules.some(
+          (r) => r.type === "keyword" && r.value === "remote-rule",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  test("skips relay event when its created_at is not newer than the last merged timestamp", async () => {
+    // Seed the relay-at marker so it looks like we've already merged this event.
+    localStorage.setItem(`verity.mutes.relayAt.v1:${me}`, "999");
+
+    seedMutes(me, {
+      display: "hidden",
+      rules: [createRule({ type: "keyword", value: "existing" })],
+    });
+
+    const remoteSettings: MuteSettings = {
+      display: "hidden",
+      rules: [createRule({ type: "keyword", value: "should-not-appear" })],
+    };
+    // created_at = 500, which is < lastMergedRelayAt (999) → should be skipped.
+    const template = await buildMuteList(remoteSettings, myIdentity);
+    const staleEvent = finalizeEvent({ ...template, created_at: 500 }, sk);
+
+    const { client, pool } = clientWithFakePool();
+    pool.getResolver = (filter) => (filter.kinds?.includes(10000) ? staleEvent : null);
+    const { result } = renderHookWithStore(() => useStore(), { identity: myIdentity, client });
+
+    await waitFor(() => expect(result.current.state.identity?.pubkey).toBe(me));
+    // Give the fetch time to complete, then assert the stale event was ignored.
+    await waitFor(() =>
+      expect(
+        result.current.state.muteSettings.rules.some(
+          (r) => r.type === "keyword" && r.value === "existing",
+        ),
+      ).toBe(true),
+    );
+    expect(
+      result.current.state.muteSettings.rules.some(
+        (r) => r.type === "keyword" && r.value === "should-not-appear",
+      ),
+    ).toBe(false);
+  });
+
+  test("expiresAt is preserved through the relay round-trip", async () => {
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24h from now
+    const remoteSettings: MuteSettings = {
+      display: "hidden",
+      rules: [createRule({ type: "keyword", value: "temp-mute", expiresAt })],
+    };
+    const template = await buildMuteList(remoteSettings, myIdentity);
+    const remoteEvent = finalizeEvent({ ...template, created_at: 1 }, sk);
+
+    const { client, pool } = clientWithFakePool();
+    pool.getResolver = (filter) => (filter.kinds?.includes(10000) ? remoteEvent : null);
+    const { result } = renderHookWithStore(() => useStore(), { identity: myIdentity, client });
+
+    await waitFor(() =>
+      expect(
+        result.current.state.muteSettings.rules.some(
+          (r) => r.type === "keyword" && r.value === "temp-mute" && r.expiresAt !== undefined,
+        ),
+      ).toBe(true),
+    );
+
+    const rule = result.current.state.muteSettings.rules.find(
+      (r) => r.type === "keyword" && r.value === "temp-mute",
+    );
+    // Round-tripped through unix seconds, so within 1000ms of original.
+    expect(Math.abs((rule?.expiresAt ?? 0) - expiresAt)).toBeLessThan(1000);
+  });
+});
+
+describe("NIP-51 relay sync — publish failure toast", () => {
+  test("shows a warn toast when the relay publish fails", async () => {
+    const { result, pool } = renderHookWithStore(() => useStore(), { identity: myIdentity });
+    await waitFor(() => expect(result.current.state.identity?.pubkey).toBe(me));
+
+    pool.publishAccepts = false;
+    act(() => result.current.addMuteRule({ type: "keyword", value: "relay-fail-test" }));
+
+    // Wait for the 1500ms debounce to fire and the toast to appear.
+    await waitFor(
+      () =>
+        expect(
+          result.current.state.toasts.some((t) => t.tone === "warn" && t.text.includes("Mute list")),
+        ).toBe(true),
+      { timeout: 4000 },
+    );
   });
 });

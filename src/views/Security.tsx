@@ -8,6 +8,7 @@ import type { RelayInfo } from "../nostr/types.ts";
 import { PrimaryButton, GhostButton, Modal } from "../ui/primitives.tsx";
 import { timeAgo } from "../lib/format.ts";
 import type { MuteRule } from "../lib/mute.ts";
+import type { FollowSet, BookmarkSet } from "../lib/lists.ts";
 import {
   TTL_PRESETS,
   expiryFromTtl,
@@ -280,8 +281,14 @@ export const SecurityView = (): ReactNode => {
     setMuteDisplay,
     exportMuteSettings,
     importMuteSettings,
+    createFollowSet,
+    updateFollowSet,
+    deleteFollowSet,
+    createBookmarkSet,
+    updateBookmarkSet,
+    deleteBookmarkSet,
   } = useStore();
-  const { identity, me, relays, muteSettings } = state;
+  const { identity, me, relays, muteSettings, followSets, bookmarkSets } = state;
 
   const [revealed, setRevealed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
@@ -296,6 +303,14 @@ export const SecurityView = (): ReactNode => {
   const [muteTtl, setMuteTtl] = useState(-1);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  // ── follow set drafts ──
+  const [newFollowSetName, setNewFollowSetName] = useState("");
+  const [newFollowSetPrivate, setNewFollowSetPrivate] = useState(false);
+
+  // ── bookmark set drafts ──
+  const [newBookmarkSetName, setNewBookmarkSetName] = useState("");
+  const [newBookmarkSetPrivate, setNewBookmarkSetPrivate] = useState(false);
 
   // The signing-key access timestamp is the closest "real" audit signal we
   // have locally: it advances whenever the user reveals their key this session.
@@ -1038,8 +1053,9 @@ export const SecurityView = (): ReactNode => {
           <span style={{ fontSize: 11.5, color: "var(--text-3)" }}>This device only</span>
         </div>
         <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>
-          Hide words, accounts, and patterns from your feed, articles, and notifications. Account
-          mutes also cover direct messages. Rules stay on this device and apply to everyone.
+          Hide words, accounts, and patterns from your feed, articles, and notifications. Mute rules
+          sync across your devices via Nostr (NIP-51). Regex rules use a custom tag and only sync to
+          this client.
         </p>
 
         {/* DISPLAY MODE */}
@@ -1283,6 +1299,302 @@ export const SecurityView = (): ReactNode => {
             style={{ display: "none" }}
           />
         </div>
+      </div>
+
+      {/* ── Follow lists (NIP-51) ── */}
+      <h3 style={{ ...h3Title, margin: "24px 0 12px" }}>Follow lists</h3>
+      <div style={{ ...glassCard, padding: 18, marginBottom: 14 }}>
+        {followSets.length === 0 ? (
+          <p
+            style={{
+              margin: "0 0 14px",
+              padding: "16px 14px",
+              borderRadius: 9,
+              background: "var(--glass-2)",
+              border: "1px dashed var(--hairline)",
+              fontSize: 13,
+              color: "var(--text-3)",
+              textAlign: "center",
+            }}
+          >
+            No follow lists yet. Create one below.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+            {followSets.map((set: FollowSet) => (
+              <div
+                key={set.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  padding: "10px 12px",
+                  borderRadius: 9,
+                  background: "var(--glass-2)",
+                  border: "1px solid var(--hairline)",
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    color: "var(--text)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {set.name}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                  {set.pubkeys.length} {set.pubkeys.length === 1 ? "person" : "people"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void updateFollowSet(set.id, { isPrivate: !set.isPrivate })}
+                  aria-pressed={set.isPrivate}
+                  title={set.isPrivate ? "Private — click to make public" : "Public — click to make private"}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "6px 11px",
+                    border: set.isPrivate ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+                    borderRadius: 8,
+                    background: set.isPrivate ? "var(--accent-soft)" : "var(--glass)",
+                    color: set.isPrivate ? "var(--accent)" : "var(--text-3)",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    transition: "all .15s",
+                    flexShrink: 0,
+                  }}
+                >
+                  {set.isPrivate ? "🔒 Private" : "Public"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteFollowSet(set.id)}
+                  aria-label={`Delete follow list ${set.name}`}
+                  style={{
+                    display: "flex",
+                    padding: 8,
+                    border: "none",
+                    borderRadius: 9,
+                    background: "transparent",
+                    color: "var(--danger)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" stroke="currentColor">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>New list</span>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = newFollowSetName.trim();
+            if (!name) return;
+            void createFollowSet(name, newFollowSetPrivate);
+            setNewFollowSetName("");
+            setNewFollowSetPrivate(false);
+          }}
+          style={{ display: "flex", gap: 9, alignItems: "center" }}
+        >
+          <input
+            value={newFollowSetName}
+            onChange={(e) => setNewFollowSetName(e.target.value)}
+            placeholder="List name"
+            aria-label="Follow list name"
+            style={muteInput}
+          />
+          <button
+            type="button"
+            onClick={() => setNewFollowSetPrivate((v) => !v)}
+            aria-pressed={newFollowSetPrivate}
+            title={newFollowSetPrivate ? "Private — click to make public" : "Public — click to make private"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 13px",
+              border: newFollowSetPrivate ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+              borderRadius: 9,
+              background: newFollowSetPrivate ? "var(--accent-soft)" : "var(--glass)",
+              color: newFollowSetPrivate ? "var(--accent)" : "var(--text-3)",
+              fontWeight: 700,
+              fontSize: 12.5,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              transition: "all .15s",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {newFollowSetPrivate ? "🔒 Private" : "Public"}
+          </button>
+          <PrimaryButton type="submit" style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+            Create
+          </PrimaryButton>
+        </form>
+      </div>
+
+      {/* ── Bookmark lists (NIP-51) ── */}
+      <h3 style={{ ...h3Title, margin: "24px 0 12px" }}>Bookmark lists</h3>
+      <div style={{ ...glassCard, padding: 18, marginBottom: 14 }}>
+        {bookmarkSets.length === 0 ? (
+          <p
+            style={{
+              margin: "0 0 14px",
+              padding: "16px 14px",
+              borderRadius: 9,
+              background: "var(--glass-2)",
+              border: "1px dashed var(--hairline)",
+              fontSize: 13,
+              color: "var(--text-3)",
+              textAlign: "center",
+            }}
+          >
+            No bookmark lists yet. Create one below.
+          </p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+            {bookmarkSets.map((set: BookmarkSet) => (
+              <div
+                key={set.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 9,
+                  padding: "10px 12px",
+                  borderRadius: 9,
+                  background: "var(--glass-2)",
+                  border: "1px solid var(--hairline)",
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    color: "var(--text)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {set.name}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                  {set.eventIds.length} {set.eventIds.length === 1 ? "bookmark" : "bookmarks"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void updateBookmarkSet(set.id, { isPrivate: !set.isPrivate })}
+                  aria-pressed={set.isPrivate}
+                  title={set.isPrivate ? "Private — click to make public" : "Public — click to make private"}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "6px 11px",
+                    border: set.isPrivate ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+                    borderRadius: 8,
+                    background: set.isPrivate ? "var(--accent-soft)" : "var(--glass)",
+                    color: set.isPrivate ? "var(--accent)" : "var(--text-3)",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    fontFamily: "inherit",
+                    cursor: "pointer",
+                    transition: "all .15s",
+                    flexShrink: 0,
+                  }}
+                >
+                  {set.isPrivate ? "🔒 Private" : "Public"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteBookmarkSet(set.id)}
+                  aria-label={`Delete bookmark list ${set.name}`}
+                  style={{
+                    display: "flex",
+                    padding: 8,
+                    border: "none",
+                    borderRadius: 9,
+                    background: "transparent",
+                    color: "var(--danger)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" stroke="currentColor">
+                    <path d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>New list</span>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = newBookmarkSetName.trim();
+            if (!name) return;
+            void createBookmarkSet(name, newBookmarkSetPrivate);
+            setNewBookmarkSetName("");
+            setNewBookmarkSetPrivate(false);
+          }}
+          style={{ display: "flex", gap: 9, alignItems: "center" }}
+        >
+          <input
+            value={newBookmarkSetName}
+            onChange={(e) => setNewBookmarkSetName(e.target.value)}
+            placeholder="List name"
+            aria-label="Bookmark list name"
+            style={muteInput}
+          />
+          <button
+            type="button"
+            onClick={() => setNewBookmarkSetPrivate((v) => !v)}
+            aria-pressed={newBookmarkSetPrivate}
+            title={newBookmarkSetPrivate ? "Private — click to make public" : "Public — click to make private"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 13px",
+              border: newBookmarkSetPrivate ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+              borderRadius: 9,
+              background: newBookmarkSetPrivate ? "var(--accent-soft)" : "var(--glass)",
+              color: newBookmarkSetPrivate ? "var(--accent)" : "var(--text-3)",
+              fontWeight: 700,
+              fontSize: 12.5,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              transition: "all .15s",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {newBookmarkSetPrivate ? "🔒 Private" : "Public"}
+          </button>
+          <PrimaryButton type="submit" style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+            Create
+          </PrimaryButton>
+        </form>
       </div>
 
       {/* ── Sign out (required by view brief; outside the design region) ── */}

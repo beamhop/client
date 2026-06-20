@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Event as NostrEvent, EventTemplate, Filter } from "nostr-tools";
-import { NostrClient } from "../nostr/client.ts";
+import { NostrClient, nowSeconds } from "../nostr/client.ts";
 import { Kind, type Profile, type RelayInfo } from "../nostr/types.ts";
 import { decodeProfile, buildContacts, tagValue } from "../nostr/events.ts";
 import {
@@ -44,6 +44,24 @@ import {
   updateRule,
   mergeSettings,
 } from "../lib/mute.ts";
+import {
+  type FollowSet,
+  type BookmarkSet,
+  createFollowSet,
+  addPubkeyToFollowSet,
+  removePubkeyFromFollowSet,
+  createBookmarkSet,
+  addEventIdToBookmarkSet,
+  removeEventIdFromBookmarkSet,
+} from "../lib/lists.ts";
+import {
+  buildMuteList,
+  parseMuteList,
+  buildFollowSet,
+  parseFollowSet,
+  buildBookmarkSet,
+  parseBookmarkSet,
+} from "../nostr/nip51.ts";
 
 export type ViewId =
   | "home"
@@ -99,6 +117,8 @@ type State = {
   notificationReadIds: string[];
   bookmarks: string[]; // local-only note ids
   muteSettings: MuteSettings; // local-only soft-mute rules + display mode
+  followSets: FollowSet[];
+  bookmarkSets: BookmarkSet[];
   developerMode: boolean;
   ready: boolean;
 };
@@ -119,6 +139,8 @@ type Action =
   | { type: "dropToast"; id: number }
   | { type: "setBookmarks"; bookmarks: string[] }
   | { type: "setMuteSettings"; muteSettings: MuteSettings }
+  | { type: "setFollowSets"; followSets: FollowSet[] }
+  | { type: "setBookmarkSets"; bookmarkSets: BookmarkSet[] }
   | { type: "setDeveloperMode"; developerMode: boolean }
   | { type: "ready" };
 
@@ -186,6 +208,10 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, bookmarks: action.bookmarks };
     case "setMuteSettings":
       return { ...state, muteSettings: action.muteSettings };
+    case "setFollowSets":
+      return { ...state, followSets: action.followSets };
+    case "setBookmarkSets":
+      return { ...state, bookmarkSets: action.bookmarkSets };
     case "setDeveloperMode":
       return { ...state, developerMode: action.developerMode };
     case "ready":
@@ -196,11 +222,13 @@ const reducer = (state: State, action: Action): State => {
 const BOOKMARKS_KEY = "verity.bookmarks.v1";
 const NOTIFICATION_READ_KEY = "verity.notifications.read.v1";
 const MUTES_KEY = "verity.mutes.v1";
+const MUTES_RELAY_AT_KEY = "verity.mutes.relayAt.v1";
 const DEVELOPER_MODE_KEY = "verity.developerMode.v1";
 
 const notificationReadKey = (pubkey: string): string => `${NOTIFICATION_READ_KEY}:${pubkey}`;
 
 const mutesKey = (pubkey: string): string => `${MUTES_KEY}:${pubkey}`;
+const mutesRelayAtKey = (pubkey: string): string => `${MUTES_RELAY_AT_KEY}:${pubkey}`;
 
 const loadDeveloperMode = (): boolean => {
   try {
@@ -214,7 +242,9 @@ const saveDeveloperMode = (enabled: boolean): void => {
   localStorage.setItem(DEVELOPER_MODE_KEY, enabled ? "true" : "false");
 };
 
-// Soft mutes are local-only and identity-scoped (like notification read state).
+// Mute rules are identity-scoped. relayAt tracks the created_at of the last
+// relay event we merged, so we don't blindly overwrite local changes with an
+// older remote snapshot on re-login.
 const loadMuteSettings = (pubkey: string | undefined): MuteSettings => {
   if (!pubkey) return { ...EMPTY_MUTE_SETTINGS };
   try {
@@ -227,6 +257,18 @@ const loadMuteSettings = (pubkey: string | undefined): MuteSettings => {
 const saveMuteSettings = (pubkey: string | undefined, settings: MuteSettings): void => {
   if (!pubkey) return;
   localStorage.setItem(mutesKey(pubkey), serializeMuteSettings(settings));
+};
+
+const loadMuteRelayAt = (pubkey: string): number => {
+  try {
+    return Number(localStorage.getItem(mutesRelayAtKey(pubkey)) ?? "0");
+  } catch {
+    return 0;
+  }
+};
+
+const saveMuteRelayAt = (pubkey: string, createdAt: number): void => {
+  localStorage.setItem(mutesRelayAtKey(pubkey), String(createdAt));
 };
 
 const loadNotificationReadIds = (pubkey: string | undefined): string[] => {
@@ -568,7 +610,20 @@ export type Store = {
   setMuteDisplay: (display: MuteDisplay) => void;
   exportMuteSettings: () => string;
   importMuteSettings: (json: string) => boolean;
-  publish: (template: EventTemplate) => Promise<string>;
+  followSets: FollowSet[];
+  bookmarkSets: BookmarkSet[];
+  createFollowSet: (name: string, isPrivate: boolean) => Promise<void>;
+  updateFollowSet: (id: string, patch: Partial<Pick<FollowSet, "name" | "isPrivate" | "pubkeys">>) => Promise<void>;
+  deleteFollowSet: (id: string) => Promise<void>;
+  addToFollowSet: (setId: string, pubkey: string) => Promise<void>;
+  removeFromFollowSet: (setId: string, pubkey: string) => Promise<void>;
+  createFollowSetAndAdd: (name: string, isPrivate: boolean, pubkey: string) => Promise<void>;
+  createBookmarkSet: (name: string, isPrivate: boolean) => Promise<void>;
+  updateBookmarkSet: (id: string, patch: Partial<Pick<BookmarkSet, "name" | "isPrivate" | "eventIds">>) => Promise<void>;
+  deleteBookmarkSet: (id: string) => Promise<void>;
+  addToBookmarkSet: (setId: string, eventId: string) => Promise<void>;
+  removeFromBookmarkSet: (setId: string, eventId: string) => Promise<void>;
+  publish: (template: EventTemplate, relays?: string[]) => Promise<string>;
   fetchProfile: (pubkey: string) => Promise<Profile | null>;
   signOut: () => void;
   rootRef: React.RefObject<HTMLDivElement | null>;
@@ -599,6 +654,8 @@ export const StoreProvider = ({
     notificationReadIds: [],
     bookmarks: [],
     muteSettings: { ...EMPTY_MUTE_SETTINGS },
+    followSets: [],
+    bookmarkSets: [],
     developerMode: false,
     ready: false,
   });
@@ -606,6 +663,11 @@ export const StoreProvider = ({
   const clientRef = useRef(client ?? new NostrClient());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const profileCache = useRef(new Map<string, Promise<Profile | null>>());
+  const mutePublishTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // True once the initial relay fetch for the current identity has been attempted
+  // (success or failure). Blocks publishing until we've had a chance to merge the
+  // relay copy — otherwise empty local state can overwrite the relay on first login.
+  const muteRelayFetchDone = useRef<boolean>(false);
 
   // Compiled mute matcher, kept current via a ref so the long-lived notification
   // subscription can filter without re-subscribing on every rule change.
@@ -654,6 +716,7 @@ export const StoreProvider = ({
   // ---- load per-identity notification read state + mute rules ----
   useEffect(() => {
     const pubkey = state.identity?.pubkey;
+    muteRelayFetchDone.current = false; // block publish until relay sync completes for this identity
     dispatch({ type: "setNotifications", notifications: [] });
     dispatch({ type: "setNotificationReadIds", ids: loadNotificationReadIds(pubkey) });
     dispatch({ type: "setMuteSettings", muteSettings: loadMuteSettings(pubkey) });
@@ -669,18 +732,62 @@ export const StoreProvider = ({
   const writeRelayUrls = useMemo(() => writeRelays(state.relays), [state.relays]);
   useEffect(() => { profileCache.current.clear() }, [readRelayUrls])
 
-  // ---- load own profile + contacts when identity changes ----
+  const toast = useCallback((text: string, tone: Toast["tone"] = "info", action?: ToastAction) => {
+    const id = toastSeq++;
+    dispatch({ type: "pushToast", toast: { id, text, tone, action } });
+    setTimeout(() => dispatch({ type: "dropToast", id }), 3200);
+  }, []);
+
+  // ---- debounced NIP-51 mute list publish ----
+  useEffect(() => {
+    if (!state.ready) return;
+    const identity = state.identity;
+    if (!identity || writeRelayUrls.length === 0) return;
+
+    // Block until the initial relay fetch for this identity is done — otherwise
+    // empty local state (e.g. after clearing browser storage) overwrites the relay.
+    if (!muteRelayFetchDone.current) return;
+
+    if (mutePublishTimer.current !== null) clearTimeout(mutePublishTimer.current);
+    mutePublishTimer.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const template = await buildMuteList(state.muteSettings, identity);
+          await clientRef.current.publish(writeRelayUrls, identity, template);
+        } catch {
+          toast("Mute list failed to sync — changes are saved locally", "warn");
+        }
+      })();
+    }, 1500);
+
+    return () => {
+      if (mutePublishTimer.current !== null) clearTimeout(mutePublishTimer.current);
+    };
+  }, [state.muteSettings, state.identity, state.ready, writeRelayUrls, toast]);
+
+  // ---- load own profile + contacts + NIP-51 lists when identity changes ----
   useEffect(() => {
     const id = state.identity;
     if (!id || readRelayUrls.length === 0) return;
     const client = clientRef.current;
     let cancelled = false;
     void (async () => {
-      const [profileEvent, contactsEvent] = await Promise.all([
-        client.get(readRelayUrls, { kinds: [Kind.Metadata], authors: [id.pubkey] }),
-        client.get(readRelayUrls, { kinds: [Kind.Contacts], authors: [id.pubkey] }),
-      ]);
+      const localMuteSettings = loadMuteSettings(id.pubkey);
+      const lastMergedRelayAt = loadMuteRelayAt(id.pubkey);
+
+      // Fetch everything in one round-trip so the mute list arrives before the
+      // publish debounce can fire with stale (empty) local state.
+      const [profileEvent, contactsEvent, muteListEvent, followSetEvents, bookmarkSetEvents] =
+        await Promise.all([
+          client.get(readRelayUrls, { kinds: [Kind.Metadata], authors: [id.pubkey] }),
+          client.get(readRelayUrls, { kinds: [Kind.Contacts], authors: [id.pubkey] }),
+          client.get(readRelayUrls, { kinds: [10000], authors: [id.pubkey] }),
+          client.list(readRelayUrls, { kinds: [30000], authors: [id.pubkey] }),
+          client.list(readRelayUrls, { kinds: [30003], authors: [id.pubkey] }),
+        ]);
+
       if (cancelled) return;
+
       dispatch({
         type: "setMe",
         me: profileEvent ? decodeProfile(profileEvent) : { pubkey: id.pubkey },
@@ -689,17 +796,60 @@ export const StoreProvider = ({
         const follows = contactsEvent.tags.flatMap((t) => (t[0] === "p" && t[1] ? [t[1]] : []));
         dispatch({ type: "setContacts", contacts: follows });
       }
-    })();
+
+      if (muteListEvent && muteListEvent.created_at > lastMergedRelayAt) {
+        try {
+          const remoteSettings = await parseMuteList(muteListEvent, id);
+          // Union merge: keep every rule from both sides so neither device loses
+          // rules added offline. Explicit removals still propagate because the
+          // next publish sends the full current state.
+          const merged = mergeSettings(localMuteSettings, remoteSettings);
+          saveMuteRelayAt(id.pubkey, muteListEvent.created_at);
+          dispatch({ type: "setMuteSettings", muteSettings: merged });
+        } catch {
+          // Decryption failure (key rotation, etc.) — keep local settings
+        }
+      }
+
+      // Unblock publishing now that we've merged from the relay. Set before
+      // dispatching follow/bookmark sets so any subsequent muteSettings change
+      // (e.g. from an account switch mid-fetch) doesn't race.
+      muteRelayFetchDone.current = true;
+
+      const followSets: FollowSet[] = (
+        await Promise.all(
+          followSetEvents.map(async (event) => {
+            try {
+              return await parseFollowSet(event, id);
+            } catch {
+              return null;
+            }
+          }),
+        )
+      ).filter((s): s is FollowSet => s !== null);
+      dispatch({ type: "setFollowSets", followSets });
+
+      const bookmarkSets: BookmarkSet[] = (
+        await Promise.all(
+          bookmarkSetEvents.map(async (event) => {
+            try {
+              return await parseBookmarkSet(event, id);
+            } catch {
+              return null;
+            }
+          }),
+        )
+      ).filter((s): s is BookmarkSet => s !== null);
+      dispatch({ type: "setBookmarkSets", bookmarkSets });
+    })().catch(() => {
+      // Fetch failed entirely (e.g. all relays offline) — unblock publishing so
+      // user-initiated changes can still be sent when connectivity returns.
+      muteRelayFetchDone.current = true;
+    });
     return () => {
       cancelled = true;
     };
   }, [state.identity, readRelayUrls]);
-
-  const toast = useCallback((text: string, tone: Toast["tone"] = "info", action?: ToastAction) => {
-    const id = toastSeq++;
-    dispatch({ type: "pushToast", toast: { id, text, tone, action } });
-    setTimeout(() => dispatch({ type: "dropToast", id }), 3200);
-  }, []);
 
   // ---- notifications: backfill silently, toast + ping only after EOSE ----
   useEffect(() => {
@@ -801,9 +951,9 @@ export const StoreProvider = ({
   }, [toast]);
 
   const publish = useCallback(
-    async (template: EventTemplate): Promise<string> => {
+    async (template: EventTemplate, relays?: string[]): Promise<string> => {
       if (!state.identity) throw new Error("Sign in first");
-      const event = await clientRef.current.publish(writeRelayUrls, state.identity, template);
+      const event = await clientRef.current.publish(relays ?? writeRelayUrls, state.identity, template);
       return event.id;
     },
     [state.identity, writeRelayUrls],
@@ -920,6 +1070,185 @@ export const StoreProvider = ({
     [readRelayUrls],
   );
 
+  // ---- follow set helpers ----
+
+  const publishFollowSet = useCallback(
+    async (set: FollowSet): Promise<void> => {
+      const identity = state.identity;
+      if (!identity || writeRelayUrls.length === 0) return;
+      try {
+        const template = await buildFollowSet(set, identity);
+        await clientRef.current.publish(writeRelayUrls, identity, template);
+      } catch {
+        toast("Could not save list", "warn");
+      }
+    },
+    [state.identity, writeRelayUrls, toast],
+  );
+
+  const createFollowSetCallback = useCallback(
+    async (name: string, isPrivate: boolean): Promise<void> => {
+      const next = createFollowSet(name, isPrivate);
+      const updated = [...state.followSets, next];
+      dispatch({ type: "setFollowSets", followSets: updated });
+      await publishFollowSet(next);
+    },
+    [state.followSets, publishFollowSet],
+  );
+
+  const createFollowSetAndAdd = useCallback(
+    async (name: string, isPrivate: boolean, pubkey: string): Promise<void> => {
+      const next = addPubkeyToFollowSet(createFollowSet(name, isPrivate), pubkey);
+      dispatch({ type: "setFollowSets", followSets: [...state.followSets, next] });
+      await publishFollowSet(next);
+    },
+    [state.followSets, publishFollowSet],
+  );
+
+  const updateFollowSet = useCallback(
+    async (id: string, patch: Partial<Pick<FollowSet, "name" | "isPrivate" | "pubkeys">>): Promise<void> => {
+      const set = state.followSets.find((s) => s.id === id);
+      if (!set) return;
+      const updated = { ...set, ...patch };
+      const next = state.followSets.map((s) => (s.id === id ? updated : s));
+      dispatch({ type: "setFollowSets", followSets: next });
+      await publishFollowSet(updated);
+    },
+    [state.followSets, publishFollowSet],
+  );
+
+  const deleteFollowSet = useCallback(
+    async (id: string): Promise<void> => {
+      const set = state.followSets.find((s) => s.id === id);
+      if (!set) return;
+      const next = state.followSets.filter((s) => s.id !== id);
+      dispatch({ type: "setFollowSets", followSets: next });
+      const identity = state.identity;
+      if (identity && set.eventId && writeRelayUrls.length > 0) {
+        try {
+          await clientRef.current.publish(writeRelayUrls, identity, {
+            kind: 5,
+            created_at: nowSeconds(),
+            tags: [["e", set.eventId]],
+            content: "",
+          });
+        } catch {
+          toast("Could not save list", "warn");
+        }
+      }
+    },
+    [state.followSets, state.identity, writeRelayUrls, toast],
+  );
+
+  const addToFollowSet = useCallback(
+    async (setId: string, pubkey: string): Promise<void> => {
+      const set = state.followSets.find((s) => s.id === setId);
+      if (!set) return;
+      const updated = addPubkeyToFollowSet(set, pubkey);
+      const next = state.followSets.map((s) => (s.id === setId ? updated : s));
+      dispatch({ type: "setFollowSets", followSets: next });
+      await publishFollowSet(updated);
+    },
+    [state.followSets, publishFollowSet],
+  );
+
+  const removeFromFollowSet = useCallback(
+    async (setId: string, pubkey: string): Promise<void> => {
+      const set = state.followSets.find((s) => s.id === setId);
+      if (!set) return;
+      const updated = removePubkeyFromFollowSet(set, pubkey);
+      const next = state.followSets.map((s) => (s.id === setId ? updated : s));
+      dispatch({ type: "setFollowSets", followSets: next });
+      await publishFollowSet(updated);
+    },
+    [state.followSets, publishFollowSet],
+  );
+
+  // ---- bookmark set helpers ----
+
+  const publishBookmarkSet = useCallback(
+    async (set: BookmarkSet): Promise<void> => {
+      const identity = state.identity;
+      if (!identity || writeRelayUrls.length === 0) return;
+      try {
+        const template = await buildBookmarkSet(set, identity);
+        await clientRef.current.publish(writeRelayUrls, identity, template);
+      } catch {
+        toast("Could not save list", "warn");
+      }
+    },
+    [state.identity, writeRelayUrls, toast],
+  );
+
+  const createBookmarkSetCallback = useCallback(
+    async (name: string, isPrivate: boolean): Promise<void> => {
+      const next = createBookmarkSet(name, isPrivate);
+      const updated = [...state.bookmarkSets, next];
+      dispatch({ type: "setBookmarkSets", bookmarkSets: updated });
+      await publishBookmarkSet(next);
+    },
+    [state.bookmarkSets, publishBookmarkSet],
+  );
+
+  const updateBookmarkSet = useCallback(
+    async (id: string, patch: Partial<Pick<BookmarkSet, "name" | "isPrivate" | "eventIds">>): Promise<void> => {
+      const set = state.bookmarkSets.find((s) => s.id === id);
+      if (!set) return;
+      const updated = { ...set, ...patch };
+      const next = state.bookmarkSets.map((s) => (s.id === id ? updated : s));
+      dispatch({ type: "setBookmarkSets", bookmarkSets: next });
+      await publishBookmarkSet(updated);
+    },
+    [state.bookmarkSets, publishBookmarkSet],
+  );
+
+  const deleteBookmarkSet = useCallback(
+    async (id: string): Promise<void> => {
+      const set = state.bookmarkSets.find((s) => s.id === id);
+      if (!set) return;
+      const next = state.bookmarkSets.filter((s) => s.id !== id);
+      dispatch({ type: "setBookmarkSets", bookmarkSets: next });
+      const identity = state.identity;
+      if (identity && set.eventId && writeRelayUrls.length > 0) {
+        try {
+          await clientRef.current.publish(writeRelayUrls, identity, {
+            kind: 5,
+            created_at: nowSeconds(),
+            tags: [["e", set.eventId]],
+            content: "",
+          });
+        } catch {
+          toast("Could not save list", "warn");
+        }
+      }
+    },
+    [state.bookmarkSets, state.identity, writeRelayUrls, toast],
+  );
+
+  const addToBookmarkSet = useCallback(
+    async (setId: string, eventId: string): Promise<void> => {
+      const set = state.bookmarkSets.find((s) => s.id === setId);
+      if (!set) return;
+      const updated = addEventIdToBookmarkSet(set, eventId);
+      const next = state.bookmarkSets.map((s) => (s.id === setId ? updated : s));
+      dispatch({ type: "setBookmarkSets", bookmarkSets: next });
+      await publishBookmarkSet(updated);
+    },
+    [state.bookmarkSets, publishBookmarkSet],
+  );
+
+  const removeFromBookmarkSet = useCallback(
+    async (setId: string, eventId: string): Promise<void> => {
+      const set = state.bookmarkSets.find((s) => s.id === setId);
+      if (!set) return;
+      const updated = removeEventIdFromBookmarkSet(set, eventId);
+      const next = state.bookmarkSets.map((s) => (s.id === setId ? updated : s));
+      dispatch({ type: "setBookmarkSets", bookmarkSets: next });
+      await publishBookmarkSet(updated);
+    },
+    [state.bookmarkSets, publishBookmarkSet],
+  );
+
   const signOut = useCallback(() => {
     clearPersisted();
     dispatch({ type: "setIdentity", identity: null });
@@ -929,6 +1258,8 @@ export const StoreProvider = ({
     dispatch({ type: "setNotificationReadIds", ids: [] });
     dispatch({ type: "setBookmarks", bookmarks: [] });
     dispatch({ type: "setMuteSettings", muteSettings: EMPTY_MUTE_SETTINGS });
+    dispatch({ type: "setFollowSets", followSets: [] });
+    dispatch({ type: "setBookmarkSets", bookmarkSets: [] });
     toast("Signed out", "info");
   }, [toast]);
 
@@ -956,6 +1287,19 @@ export const StoreProvider = ({
     setMuteDisplay,
     exportMuteSettings,
     importMuteSettings,
+    followSets: state.followSets,
+    bookmarkSets: state.bookmarkSets,
+    createFollowSet: createFollowSetCallback,
+    updateFollowSet,
+    deleteFollowSet,
+    addToFollowSet,
+    removeFromFollowSet,
+    createFollowSetAndAdd,
+    createBookmarkSet: createBookmarkSetCallback,
+    updateBookmarkSet,
+    deleteBookmarkSet,
+    addToBookmarkSet,
+    removeFromBookmarkSet,
     publish,
     fetchProfile,
     signOut,

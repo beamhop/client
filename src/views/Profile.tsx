@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -19,20 +20,22 @@ import {
   buildRepost,
 } from "../nostr/events.ts";
 import { nowSeconds } from "../nostr/client.ts";
-import { npubOf, shortNpub } from "../nostr/keys.ts";
+import { npubOf, shortNpub, type Identity } from "../nostr/keys.ts";
 import { paletteBanner } from "../lib/theme.ts";
 import { parseMedia } from "../lib/media.ts";
+import type { FollowSet, BookmarkSet } from "../lib/lists.ts";
+import { parseFollowSet, parseBookmarkSet } from "../nostr/nip51.ts";
 import { countWords, readingMinutes } from "../lib/markdown.ts";
 import { timeAgo, displayName, avatarStyle, initials, fmtCount } from "../lib/format.ts";
-import { Modal, Spinner, EmptyState } from "../ui/primitives.tsx";
+import { Modal, Spinner, EmptyState, Avatar } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
 import { ProfileToastChip } from "../ui/ProfileToastChip.tsx";
 import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { followStyle, profileTabStyle, statusDot } from "../ui/styles.ts";
-import { MessagesIcon, VerifiedSeal } from "../ui/icons.tsx";
+import { MessagesIcon, VerifiedSeal, ChevronDownIcon, CheckIcon } from "../ui/icons.tsx";
 import { Compose } from "../ui/Compose.tsx";
 
-type TabId = "posts" | "articles" | "replies" | "media" | "following" | "followers";
+type TabId = "posts" | "articles" | "replies" | "media" | "following" | "followers" | "lists";
 type PeopleTabId = Extract<TabId, "following" | "followers">;
 
 const uniquePubkeys = (pubkeys: Iterable<string>): string[] => {
@@ -784,11 +787,170 @@ const PeoplePanel = ({
 };
 
 // ---------------------------------------------------------------------------
+// Lists panel (NIP-51 follow sets + bookmark sets)
+// ---------------------------------------------------------------------------
+
+const listSectionHeadingStyle: CSSProperties = {
+  margin: "0 0 10px",
+  fontFamily: "'Space Grotesk',sans-serif",
+  fontSize: 15,
+  fontWeight: 700,
+  color: "var(--text-2)",
+};
+
+const listCardStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "13px 15px",
+  border: "1px solid var(--glass-border)",
+  borderRadius: 12,
+  background: "var(--glass)",
+};
+
+const MemberAvatar = ({ pubkey, offset }: { pubkey: string; offset: number }): ReactNode => {
+  const profile = useProfile(pubkey);
+  return (
+    <span style={{ position: "relative", zIndex: 5 - offset, marginLeft: offset === 0 ? 0 : -7, flexShrink: 0 }}>
+      <Avatar
+        pubkey={pubkey}
+        size={24}
+        name={profile?.displayName ?? profile?.name}
+        picture={profile?.picture ?? undefined}
+      />
+    </span>
+  );
+};
+
+const MemberPreviews = ({ pubkeys }: { pubkeys: string[] }): ReactNode => {
+  const shown = pubkeys.slice(0, 5);
+  const extra = pubkeys.length - shown.length;
+  if (shown.length === 0) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      {shown.map((pk, i) => (
+        <MemberAvatar key={pk} pubkey={pk} offset={i} />
+      ))}
+      {extra > 0 && (
+        <span style={{ fontSize: 11, color: "var(--text-3)", marginLeft: 6, whiteSpace: "nowrap" }}>
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+};
+
+const ListSkeleton = (): ReactNode => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    {[80, 65, 50].map((w) => (
+      <div
+        key={w}
+        style={{
+          ...listCardStyle,
+          background: "var(--glass)",
+          border: "1px solid var(--glass-border)",
+          opacity: 0.55,
+        }}
+      >
+        <div
+          style={{
+            height: 14,
+            width: `${w}%`,
+            borderRadius: 6,
+            background: "var(--text-3)",
+            opacity: 0.3,
+          }}
+        />
+        <div style={{ height: 24, width: 72, borderRadius: 6, background: "var(--text-3)", opacity: 0.2 }} />
+      </div>
+    ))}
+  </div>
+);
+
+const ListsPanel = ({
+  followSets,
+  bookmarkSets,
+  isMe,
+  loading = false,
+}: {
+  followSets: FollowSet[];
+  bookmarkSets: BookmarkSet[];
+  isMe: boolean;
+  loading?: boolean;
+}): ReactNode => {
+  const hasAny = followSets.length > 0 || bookmarkSets.length > 0;
+
+  return (
+    <div
+      data-testid="profile-panel-lists"
+      style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20, animation: "fadeIn .2s ease" }}
+    >
+      {loading ? (
+        <ListSkeleton />
+      ) : !hasAny ? (
+        <EmptyState
+          title="No public lists yet"
+          hint={isMe ? "Lists you create will appear here." : "This person hasn't made any public lists."}
+        />
+      ) : (
+        <>
+          {followSets.length > 0 && (
+            <div>
+              <h3 style={listSectionHeadingStyle}>Follow lists</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {followSets.map((set) => (
+                  <div key={set.id} style={listCardStyle}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14.5, color: "var(--text)" }}>
+                        {set.name}
+                        {isMe && set.isPrivate && (
+                          <span style={{ marginLeft: 6, fontSize: 13 }} title="Private">🔒</span>
+                        )}
+                      </span>
+                      <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                        {set.pubkeys.length} {set.pubkeys.length === 1 ? "person" : "people"}
+                      </span>
+                    </div>
+                    <MemberPreviews pubkeys={set.pubkeys} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {bookmarkSets.length > 0 && (
+            <div>
+              <h3 style={listSectionHeadingStyle}>Bookmark lists</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {bookmarkSets.map((set) => (
+                  <div key={set.id} style={listCardStyle}>
+                    <span style={{ fontWeight: 600, fontSize: 14.5, color: "var(--text)" }}>
+                      {set.name}
+                      {isMe && set.isPrivate && (
+                        <span style={{ marginLeft: 6, fontSize: 13 }} title="Private">🔒</span>
+                      )}
+                    </span>
+                    <span style={{ fontSize: 13, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                      {set.eventIds.length} {set.eventIds.length === 1 ? "bookmark" : "bookmarks"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
 // Profile view
 // ---------------------------------------------------------------------------
 
 export const ProfileView = (): ReactNode => {
-  const { state, client, readRelayUrls, writeRelayUrls, publish, toggleFollow, toggleMuteAccount, toggleBookmark, toast, navigate } = useStore();
+  const { state, client, readRelayUrls, writeRelayUrls, publish, toggleFollow, toggleMuteAccount, toggleBookmark, addToFollowSet, removeFromFollowSet, createFollowSetAndAdd, toast, navigate } = useStore();
   const myPubkey = state.identity?.pubkey;
   const paramPubkey = state.nav.params.pubkey;
   const pubkey = paramPubkey ?? myPubkey;
@@ -798,7 +960,8 @@ export const ProfileView = (): ReactNode => {
     state.nav.params.tab === "replies" ||
     state.nav.params.tab === "media" ||
     state.nav.params.tab === "following" ||
-    state.nav.params.tab === "followers"
+    state.nav.params.tab === "followers" ||
+    state.nav.params.tab === "lists"
       ? state.nav.params.tab
       : "posts";
 
@@ -817,6 +980,9 @@ export const ProfileView = (): ReactNode => {
   const [theirFollowingPubkeys, setTheirFollowingPubkeys] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [profileFollowSets, setProfileFollowSets] = useState<FollowSet[]>([]);
+  const [profileBookmarkSets, setProfileBookmarkSets] = useState<BookmarkSet[]>([]);
+  const [listsLoading, setListsLoading] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
@@ -971,6 +1137,49 @@ export const ProfileView = (): ReactNode => {
     };
   }, [pubkey, isMe, readRelayUrls, client]);
 
+  // ---- public NIP-51 lists for the viewed profile (kind:30000, kind:30003) ----
+  useEffect(() => {
+    // For our own profile we read from the store directly — no extra fetch.
+    if (!pubkey || isMe || readRelayUrls.length === 0) {
+      setProfileFollowSets([]);
+      setProfileBookmarkSets([]);
+      setListsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setProfileFollowSets([]);
+    setProfileBookmarkSets([]);
+    setListsLoading(true);
+    void (async () => {
+      const [followEvents, bookmarkEvents] = await Promise.all([
+        client.list(readRelayUrls, { kinds: [Kind.FollowSet], authors: [pubkey] }),
+        client.list(readRelayUrls, { kinds: [Kind.BookmarkSet], authors: [pubkey] }),
+      ]);
+      if (cancelled) return;
+
+      // For other users we only show public lists (content === ""). Pass a
+      // dummy identity — parseFollowSet/parseBookmarkSet will return null on
+      // private lists (decryption fails), which we filter out.
+      const dummyIdentity = { pubkey: "", privkey: undefined } as unknown as Identity;
+
+      const parsedFollowSets = (
+        await Promise.all(followEvents.map((e) => parseFollowSet(e, dummyIdentity)))
+      ).flatMap((s) => (s && !s.isPrivate ? [s] : []));
+
+      const parsedBookmarkSets = (
+        await Promise.all(bookmarkEvents.map((e) => parseBookmarkSet(e, dummyIdentity)))
+      ).flatMap((s) => (s && !s.isPrivate ? [s] : []));
+
+      if (cancelled) return;
+      setProfileFollowSets(parsedFollowSets);
+      setProfileBookmarkSets(parsedBookmarkSets);
+      setListsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pubkey, isMe, readRelayUrls, client]);
+
   const myFollowingPubkeys = useMemo(() => uniquePubkeys(state.contacts), [state.contacts]);
   const live = useMemo(() => notes.filter((n) => !deleted.has(n.id)), [notes, deleted]);
   const posts = useMemo(() => live.filter((n) => n.replyTo === undefined), [live]);
@@ -1115,10 +1324,38 @@ export const ProfileView = (): ReactNode => {
   const handle = profile?.nip05?.replace(/^_@/, "");
   const following = state.contacts.includes(pubkey);
   const muted = state.muteSettings.rules.some((r) => r.type === "account" && r.pubkey === pubkey);
+
+  const listsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [listsMenuOpen, setListsMenuOpen] = useState(false);
+  const [showNewListForm, setShowNewListForm] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [newListPrivate, setNewListPrivate] = useState(false);
+
+  useEffect(() => {
+    if (!listsMenuOpen) {
+      setShowNewListForm(false);
+      setNewListName("");
+      setNewListPrivate(false);
+      return;
+    }
+    const onPointerDown = (e: PointerEvent): void => {
+      if (listsMenuRef.current && !listsMenuRef.current.contains(e.target as Node)) {
+        setListsMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [listsMenuOpen]);
   const followingPubkeys = isMe ? myFollowingPubkeys : theirFollowingPubkeys;
   const followingCount = followingPubkeys === null ? null : followingPubkeys.length;
   const followerCount = followerPubkeys === null ? null : followerPubkeys.length;
   const activePeoplePubkeys = tab === "following" ? followingPubkeys : followerPubkeys;
+
+  // For own profile: use store sets (includes private). For others: fetched public sets.
+  const visibleFollowSets: FollowSet[] = isMe ? state.followSets : profileFollowSets;
+  const visibleBookmarkSets: BookmarkSet[] = isMe ? state.bookmarkSets : profileBookmarkSets;
+
+  const showListsTab = true;
 
   const renderNoteCard = (note: Note): ReactNode => {
     const e = engagement.get(note.id);
@@ -1239,6 +1476,199 @@ export const ProfileView = (): ReactNode => {
               >
                 {muted ? "Unmute" : "Mute"}
               </button>
+              {state.identity && (
+                <div ref={listsMenuRef} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    data-testid="profile-lists"
+                    onClick={() => setListsMenuOpen((o) => !o)}
+                    style={{
+                      ...followStyle(true),
+                      background: "var(--glass)",
+                      color: "var(--text)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    Lists
+                    <ChevronDownIcon size={12} />
+                  </button>
+                  {listsMenuOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        right: 0,
+                        minWidth: 200,
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--glass-border)",
+                        borderRadius: 10,
+                        boxShadow: "var(--glass-shadow)",
+                        padding: "6px 0",
+                        zIndex: 50,
+                      }}
+                    >
+                      {state.followSets.map((set) => {
+                        const inList = set.pubkeys.includes(pubkey);
+                        return (
+                          <button
+                            key={set.id}
+                            type="button"
+                            onClick={() => {
+                              if (inList) void removeFromFollowSet(set.id, pubkey);
+                              else void addToFollowSet(set.id, pubkey);
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              width: "100%",
+                              padding: "9px 14px",
+                              border: "none",
+                              background: inList ? "var(--accent-soft)" : "none",
+                              color: "var(--text)",
+                              fontSize: 13,
+                              fontFamily: "inherit",
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span style={{ opacity: inList ? 1 : 0, color: "var(--accent)" }}>
+                              <CheckIcon size={13} stroke={2.5} />
+                            </span>
+                            <span style={{ flex: 1 }}>{set.name}</span>
+                            {set.isPrivate && (
+                              <span style={{ color: "var(--text-3)", fontSize: 11 }}>🔒</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {state.followSets.length > 0 && (
+                        <div style={{ height: 1, background: "var(--glass-border)", margin: "4px 0" }} />
+                      )}
+                      {showNewListForm ? (
+                        <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+                          <input
+                            autoFocus
+                            placeholder="List name"
+                            value={newListName}
+                            onChange={(e) => setNewListName(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && newListName.trim()) {
+                                void createFollowSetAndAdd(newListName.trim(), newListPrivate, pubkey).then(() => {
+                                  setShowNewListForm(false);
+                                  setNewListName("");
+                                  setNewListPrivate(false);
+                                });
+                              } else if (e.key === "Escape") {
+                                setShowNewListForm(false);
+                                setNewListName("");
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              fontSize: 13,
+                              fontFamily: "inherit",
+                              background: "var(--bg)",
+                              color: "var(--text)",
+                              border: "1px solid var(--glass-border)",
+                              borderRadius: 6,
+                              outline: "none",
+                              boxSizing: "border-box",
+                            }}
+                          />
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => setNewListPrivate((p) => !p)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                                flex: 1,
+                                padding: "5px 6px",
+                                border: "1px solid var(--glass-border)",
+                                borderRadius: 6,
+                                background: newListPrivate ? "var(--accent-soft)" : "none",
+                                color: newListPrivate ? "var(--accent)" : "var(--text-3)",
+                                fontSize: 12,
+                                fontFamily: "inherit",
+                                cursor: "pointer",
+                              }}
+                            >
+                              🔒 Private
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!newListName.trim()}
+                              onClick={() => {
+                                if (!newListName.trim()) return;
+                                void createFollowSetAndAdd(newListName.trim(), newListPrivate, pubkey).then(() => {
+                                  setShowNewListForm(false);
+                                  setNewListName("");
+                                  setNewListPrivate(false);
+                                });
+                              }}
+                              style={{
+                                padding: "5px 10px",
+                                border: "none",
+                                borderRadius: 6,
+                                background: "var(--accent)",
+                                color: "#fff",
+                                fontSize: 12,
+                                fontFamily: "inherit",
+                                cursor: newListName.trim() ? "pointer" : "default",
+                                opacity: newListName.trim() ? 1 : 0.45,
+                              }}
+                            >
+                              Create
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setShowNewListForm(false); setNewListName(""); }}
+                              style={{
+                                padding: "5px 8px",
+                                border: "1px solid var(--glass-border)",
+                                borderRadius: 6,
+                                background: "none",
+                                color: "var(--text-3)",
+                                fontSize: 12,
+                                fontFamily: "inherit",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowNewListForm(true)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            width: "100%",
+                            padding: "9px 14px",
+                            border: "none",
+                            background: "none",
+                            color: "var(--text-3)",
+                            fontSize: 13,
+                            fontFamily: "inherit",
+                            cursor: "pointer",
+                            textAlign: "left",
+                          }}
+                        >
+                          <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> New list…
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1386,6 +1816,35 @@ export const ProfileView = (): ReactNode => {
           )}
         </div>
 
+        {/* tabs — other profiles */}
+        {!isMe && (
+          <div
+            role="tablist"
+            style={{
+              display: "flex",
+              gap: 20,
+              marginTop: 22,
+              borderBottom: "1px solid var(--hairline)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => openTab("posts")}
+              style={profileTabStyle(!isPeopleTab(tab) && tab !== "lists")}
+            >
+              Posts
+            </button>
+            <button
+              type="button"
+              data-testid="profile-tab-lists"
+              onClick={() => openTab("lists")}
+              style={profileTabStyle(tab === "lists")}
+            >
+              Lists
+            </button>
+          </div>
+        )}
+
         {/* tabs (me only) */}
         {isMe && (
           <div
@@ -1416,6 +1875,11 @@ export const ProfileView = (): ReactNode => {
             <button type="button" data-testid="profile-tab-followers" onClick={() => openTab("followers")} style={profileTabStyle(tab === "followers")}>
               Followers
             </button>
+            {showListsTab && (
+              <button type="button" data-testid="profile-tab-lists" onClick={() => openTab("lists")} style={profileTabStyle(tab === "lists")}>
+                Lists
+              </button>
+            )}
           </div>
         )}
 
@@ -1428,6 +1892,13 @@ export const ProfileView = (): ReactNode => {
             contacts={state.contacts}
             onOpenProfile={(personPubkey) => navigate("profile", { pubkey: personPubkey })}
             onToggleFollow={(personPubkey) => void toggleFollow(personPubkey)}
+          />
+        ) : tab === "lists" ? (
+          <ListsPanel
+            followSets={visibleFollowSets}
+            bookmarkSets={visibleBookmarkSets}
+            isMe={isMe}
+            loading={!isMe && listsLoading}
           />
         ) : loading && notes.length === 0 ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>

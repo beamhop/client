@@ -256,7 +256,7 @@ export const Modal = ({
   width?: number;
 }): ReactNode => (
   <div
-    onClick={onClose}
+    onClick={(e) => { e.stopPropagation(); onClose(); }}
     style={{
       position: "fixed",
       inset: 0,

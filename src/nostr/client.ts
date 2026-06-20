@@ -12,6 +12,10 @@ import type { EventTemplate } from "nostr-tools";
 export class NostrClient {
   private pool = new SimplePool();
   private localEvents = new Map<string, NostrEvent>();
+  // NIP-09: client-side deletion registry. Persists for the session so that
+  // relay results (from relays that don't honour deletion) are filtered out.
+  private deletedIds = new Set<string>();          // specific event IDs (e tags)
+  private deletedAddrs = new Set<string>();        // "kind:pubkey:d-tag" (a tags)
 
   /** One-shot query: collect events matching a filter until EOSE, deduped by id. */
   async list(relays: string[], filter: Filter): Promise<NostrEvent[]> {
@@ -19,6 +23,7 @@ export class NostrClient {
       ? []
       : await this.pool.querySync(relays, filter, { maxWait: 4000 });
     const events = dedupe([...relayEvents, ...this.localMatching(filter)])
+      .filter((ev) => !this.isDeleted(ev))
       .sort((a, b) => b.created_at - a.created_at);
     return typeof filter.limit === "number" ? events.slice(0, filter.limit) : events;
   }
@@ -29,7 +34,7 @@ export class NostrClient {
       ? null
       : await this.pool.get(relays, filter, { maxWait: 4000 });
     return [relayEvent, ...this.localMatching(filter)]
-      .filter((event): event is NostrEvent => event !== null)
+      .filter((event): event is NostrEvent => event !== null && !this.isDeleted(event))
       .sort((a, b) => b.created_at - a.created_at)[0] ?? null;
   }
 
@@ -46,7 +51,7 @@ export class NostrClient {
       onevent: (event) => {
         if (seen.has(event.id)) return;
         seen.add(event.id);
-        onEvent(event);
+        if (!this.isDeleted(event)) onEvent(event);
       },
       oneose: () => onEose?.(),
     });
@@ -66,6 +71,7 @@ export class NostrClient {
       throw new Error("No relay accepted the event");
     });
     this.localEvents.set(event.id, event);
+    if (event.kind === 5) this.recordDeletion(event.tags);
     if (this.localEvents.size > 500) {
       const oldest = this.localEvents.keys().next().value
       if (oldest !== undefined) this.localEvents.delete(oldest)
@@ -79,6 +85,40 @@ export class NostrClient {
 
   destroy(): void {
     this.pool.destroy()
+  }
+
+  private isDeleted(event: NostrEvent): boolean {
+    if (this.deletedIds.has(event.id)) return true;
+    const dTag = event.tags.find((t) => t[0] === "d")?.[1];
+    if (dTag !== undefined && this.deletedAddrs.has(`${event.kind}:${event.pubkey}:${dTag}`)) return true;
+    return false;
+  }
+
+  // Register deleted event IDs and addresses, and evict from localEvents.
+  private recordDeletion(tags: string[][]): void {
+    for (const tag of tags) {
+      const tagName = tag[0];
+      const val = tag[1];
+      if (!tagName || !val) continue;
+      if (tagName === "e") {
+        this.deletedIds.add(val);
+        this.localEvents.delete(val);
+      } else if (tagName === "a") {
+        this.deletedAddrs.add(val);
+        // evict matching addressable events from localEvents
+        const sep0 = val.indexOf(":");
+        const sep1 = val.indexOf(":", sep0 + 1);
+        if (sep0 < 0 || sep1 < 0) continue;
+        const kind = Number(val.slice(0, sep0));
+        const pubkey = val.slice(sep0 + 1, sep1);
+        const dTag = val.slice(sep1 + 1);
+        for (const [id, ev] of this.localEvents) {
+          if (ev.kind === kind && ev.pubkey === pubkey && ev.tags.some((t) => t[0] === "d" && t[1] === dTag)) {
+            this.localEvents.delete(id);
+          }
+        }
+      }
+    }
   }
 
   private localMatching(filter: Filter): NostrEvent[] {

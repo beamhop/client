@@ -15,6 +15,9 @@ export const Kind = {
   Mention: 24,
   Report: 1984,
   ZapReceipt: 9735,
+  MuteList: 10000,
+  FollowSet: 30000,
+  BookmarkSet: 30003,
   LongForm: 30023,
   LongFormDraft: 30024,
 } as const;

@@ -13,7 +13,7 @@ import { Kind, DOC_MARKER, type LongForm } from "../nostr/types.ts";
 import { decodeLongForm, buildLongForm } from "../nostr/events.ts";
 import { nowSeconds } from "../nostr/client.ts";
 import { renderMarkdown, countWords, readingMinutes } from "../lib/markdown.ts";
-import { Spinner } from "../ui/primitives.tsx";
+import { Spinner, Modal, GhostButton, PrimaryButton } from "../ui/primitives.tsx";
 import { avatarStyle, initials, displayName, timeAgo } from "../lib/format.ts";
 import { VerifiedSeal } from "../ui/icons.tsx";
 import { EventJsonButton } from "../ui/EventJsonModal.tsx";
@@ -523,10 +523,11 @@ const ReaderTagPill = ({ label }: { label: string }): ReactNode => (
 );
 
 const DocReader = (): ReactNode => {
-  const { state, navigate, publish, toast } = useStore();
+  const { state, readRelayUrls, writeRelayUrls, navigate, publish, toast } = useStore();
   const { id, pubkey } = state.nav.params;
   const doc = useResolveDoc(pubkey, id);
   const profile = useProfile(doc?.pubkey);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const rendered = useMemo(() => renderMarkdown(doc?.body ?? ""), [doc?.body]);
 
@@ -557,12 +558,14 @@ const DocReader = (): ReactNode => {
 
   const onDelete = async (): Promise<void> => {
     try {
-      await publish({
-        kind: 5,
-        created_at: nowSeconds(),
-        tags: [["a", `${Kind.LongForm}:${doc.pubkey}:${doc.identifier}`]],
-        content: "",
-      });
+      // NIP-09: addressable events need both ["a"] (coordinate) and ["e"] (event ID).
+      // Some relays only honour one or the other, so we include both.
+      const tags: string[][] = [["a", `${Kind.LongForm}:${doc.pubkey}:${doc.identifier}`]];
+      if (doc.event) tags.push(["e", doc.event.id]);
+      // Broadcast to all relays (read ∪ write) — the doc may be on a read-only relay
+      // that would never see a write-only publish.
+      const allRelays = [...new Set([...readRelayUrls, ...writeRelayUrls])];
+      await publish({ kind: 5, created_at: nowSeconds(), tags, content: "" }, allRelays);
       docCache.delete(cacheKey(doc.pubkey, doc.identifier));
       toast("Doc deleted", "check");
       navigate("docs");
@@ -611,7 +614,7 @@ const DocReader = (): ReactNode => {
             <button
               type="button"
               data-testid="doc-reader-delete"
-              onClick={() => void onDelete()}
+              onClick={() => setConfirmingDelete(true)}
               title="Delete doc"
               style={{ ...iconButtonStyle, color: "var(--text-3)" }}
             >
@@ -733,6 +736,27 @@ const DocReader = (): ReactNode => {
           </aside>
         )}
       </div>
+      {confirmingDelete && (
+        <Modal onClose={() => setConfirmingDelete(false)} width={380}>
+          <div style={{ padding: 28 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 19, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: "var(--text)" }}>
+              Delete document?
+            </h2>
+            <p style={{ margin: "0 0 24px", fontSize: 14.5, color: "var(--text-2)", lineHeight: 1.55 }}>
+              This publishes a deletion request to your relays. It cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <GhostButton onClick={() => setConfirmingDelete(false)}>Cancel</GhostButton>
+              <PrimaryButton
+                style={{ background: "var(--danger)", borderColor: "var(--danger)" }}
+                onClick={() => { setConfirmingDelete(false); void onDelete(); }}
+              >
+                Delete
+              </PrimaryButton>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

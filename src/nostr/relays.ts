@@ -2,13 +2,14 @@ import type { RelayInfo } from "./types.ts";
 
 const STORAGE_KEY = "verity.relays.v1";
 
-/** A sensible default relay set with broad reach and good uptime. */
+/** Beamhop relay first; community relays included but disabled by default. */
 export const DEFAULT_RELAYS: readonly RelayInfo[] = [
-  { url: "wss://relay.damus.io", enabled: true, read: true, write: true, status: "disconnected" },
-  { url: "wss://nos.lol", enabled: true, read: true, write: true, status: "disconnected" },
-  { url: "wss://relay.nostr.band", enabled: true, read: true, write: true, status: "disconnected" },
-  { url: "wss://relay.primal.net", enabled: true, read: true, write: true, status: "disconnected" },
-  { url: "wss://nostr.wine", enabled: true, read: true, write: false, status: "disconnected" },
+  { url: "wss://relay2.beamhop.com", enabled: true, read: true, write: true, status: "disconnected" },
+  { url: "wss://relay.damus.io", enabled: false, read: true, write: true, status: "disconnected" },
+  { url: "wss://nos.lol", enabled: false, read: true, write: true, status: "disconnected" },
+  { url: "wss://relay.nostr.band", enabled: false, read: true, write: true, status: "disconnected" },
+  { url: "wss://relay.primal.net", enabled: false, read: true, write: true, status: "disconnected" },
+  { url: "wss://nostr.wine", enabled: false, read: true, write: false, status: "disconnected" },
 ];
 
 const normalizeStoredRelay = (relay: unknown): RelayInfo | null => {
