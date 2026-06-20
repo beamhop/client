@@ -1,11 +1,15 @@
 /** Production build: bundle the HTML entry (TS/TSX/CSS) into dist/. */
-import { rm } from "node:fs/promises";
+import { copyFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
-await rm("dist", { recursive: true, force: true });
+const OUTDIR = "dist";
+const CUSTOM_DOMAIN = "app.beamhop.com";
+
+await rm(OUTDIR, { recursive: true, force: true });
 
 const result = await Bun.build({
   entrypoints: ["src/index.html"],
-  outdir: "dist",
+  outdir: OUTDIR,
   minify: true,
   sourcemap: "linked",
   naming: "[dir]/[name]-[hash].[ext]",
@@ -17,5 +21,20 @@ if (!result.success) {
   process.exit(1);
 }
 
-console.log(`Built ${result.outputs.length} artifacts into dist/`);
-for (const out of result.outputs) console.log(`  ${out.path.replace(process.cwd() + "/", "")}`);
+const htmlFiles = (await readdir(OUTDIR)).filter((file) => file.endsWith(".html"));
+if (htmlFiles.length !== 1) {
+  console.error(`Expected one HTML entrypoint in ${OUTDIR}/, found ${htmlFiles.length}`);
+  process.exit(1);
+}
+
+const bundledHtml = join(OUTDIR, htmlFiles[0] ?? "");
+const indexHtml = join(OUTDIR, "index.html");
+if (bundledHtml !== indexHtml) await rename(bundledHtml, indexHtml);
+
+await copyFile(indexHtml, join(OUTDIR, "404.html"));
+await writeFile(join(OUTDIR, "CNAME"), `${CUSTOM_DOMAIN}\n`);
+await writeFile(join(OUTDIR, ".nojekyll"), "");
+
+const outputs = await readdir(OUTDIR);
+console.log(`Built ${outputs.length} artifacts into ${OUTDIR}/`);
+for (const out of outputs) console.log(`  ${join(OUTDIR, out)}`);
