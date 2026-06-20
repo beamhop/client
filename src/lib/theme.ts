@@ -55,6 +55,6 @@ export const saveTheme = (mode: ThemeMode): void => localStorage.setItem(THEME_K
 
 export const loadPalette = (): PaletteId => {
   const saved = localStorage.getItem(PALETTE_KEY);
-  return saved && (PALETTE_ORDER as readonly string[]).includes(saved) ? (saved as PaletteId) : "Cobalt";
+  return saved && (PALETTE_ORDER as readonly string[]).includes(saved) ? (saved as PaletteId) : "Ember";
 };
 export const savePalette = (id: PaletteId): void => localStorage.setItem(PALETTE_KEY, id);

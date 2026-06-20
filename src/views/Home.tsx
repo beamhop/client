@@ -1,196 +1,73 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { Filter } from "nostr-tools";
-import { useStore, useProfile } from "../state/store.tsx";
+import { nip19 } from "nostr-tools";
+import { useStore } from "../state/store.tsx";
 import { useFeed, useEngagement, type Engagement } from "../state/hooks.ts";
-import { Kind, type Note } from "../nostr/types.ts";
-import { buildNote, buildReaction, buildRepost } from "../nostr/events.ts";
-import { Avatar, AuthorChip, Spinner, EmptyState, PrimaryButton, glass } from "../ui/primitives.tsx";
-import { HeartIcon, ReplyIcon, RepostIcon, BookmarkIcon, HomeIcon } from "../ui/icons.tsx";
-import { timeAgo, fmtCount, displayName } from "../lib/format.ts";
+import { Kind, ARTICLE_MARKER, type Note, type LongForm } from "../nostr/types.ts";
+import { buildNote, buildReaction, buildRepost, decodeLongForm } from "../nostr/events.ts";
+import { nowSeconds } from "../nostr/client.ts";
+import { Avatar, Spinner, EmptyState } from "../ui/primitives.tsx";
+import { PostCard } from "../ui/PostCard.tsx";
+import { HomeIcon } from "../ui/icons.tsx";
+import { displayName, avatarStyle, initials, timeAgo } from "../lib/format.ts";
 import { Compose } from "../ui/Compose.tsx";
 
-const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif)$/i;
-const VIDEO_RE = /\.(mp4|webm|mov)$/i;
-const URL_RE = /(https?:\/\/[^\s]+)/g;
+const AGENTS_KEY = "verity.agents.v1";
 
-/** Split content into plain text, links, and media embeds. */
-const renderContent = (content: string): { body: ReactNode; embeds: string[] } => {
-  const embeds: string[] = [];
-  const parts: ReactNode[] = [];
-  let last = 0;
-  let key = 0;
-  for (const match of content.matchAll(URL_RE)) {
-    const url = match[0];
-    const start = match.index;
-    if (start > last) parts.push(content.slice(last, start));
-    last = start + url.length;
-    if (IMAGE_RE.test(url) || VIDEO_RE.test(url)) {
-      embeds.push(url);
-      continue; // strip media URLs from the text body
-    }
-    parts.push(
-      <a
-        key={`l${key++}`}
-        href={url}
-        target="_blank"
-        rel="noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        style={{ color: "var(--accent)", textDecoration: "none", wordBreak: "break-word" }}
-      >
-        {url}
-      </a>,
+/** Pubkeys of locally-defined AI agents, used to flag agent-authored posts. */
+const loadAgentPubkeys = (): Set<string> => {
+  if (typeof localStorage === "undefined") return new Set();
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(AGENTS_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return new Set();
+    const keys = parsed.flatMap((a) =>
+      typeof a === "object" && a !== null && typeof (a as { pubkeyHex?: unknown }).pubkeyHex === "string"
+        ? [(a as { pubkeyHex: string }).pubkeyHex]
+        : [],
     );
+    return new Set(keys);
+  } catch {
+    return new Set();
   }
-  if (last < content.length) parts.push(content.slice(last));
-  return { body: parts, embeds };
 };
 
-const Embed = ({ url }: { url: string }): ReactNode => {
-  const common: CSSProperties = {
-    width: "100%",
-    maxHeight: 420,
-    borderRadius: 12,
-    border: "1px solid var(--glass-border)",
-    objectFit: "cover",
-    display: "block",
-  };
-  if (VIDEO_RE.test(url)) return <video src={url} controls style={common} />;
-  return <img src={url} alt="" loading="lazy" style={common} />;
-};
+/** Accent globe glyph for the relay/scope pill. */
+const GlobeGlyph = (): ReactNode => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M2 12h20M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z" />
+  </svg>
+);
 
-const actionBtn = (active: boolean, hue: string): CSSProperties => ({
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "6px 9px",
-  border: "none",
-  borderRadius: 9,
-  background: "transparent",
-  color: active ? hue : "var(--text-3)",
-  fontSize: 13,
-  fontWeight: 600,
-  fontFamily: "inherit",
-  fontVariantNumeric: "tabular-nums",
-  cursor: "pointer",
-  transition: "background .15s, color .15s",
-});
+/** Edit/pencil glyph for the "Write article" button. */
+const PencilGlyph = (): ReactNode => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </svg>
+);
 
-const PostCard = ({
-  note,
-  engagement,
-  onLike,
-  onRepost,
-  onReply,
+const BookGlyph = (): ReactNode => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+);
+
+/** Inline composer card — design lines 220-238. */
+const Composer = ({
+  pubkey,
+  meName,
+  picture,
 }: {
-  note: Note;
-  engagement: Engagement;
-  onLike: () => void;
-  onRepost: () => void;
-  onReply: () => void;
+  pubkey: string;
+  meName: string;
+  picture: string | undefined;
 }): ReactNode => {
-  const { state, toggleBookmark, navigate } = useStore();
-  const profile = useProfile(note.pubkey);
-  const [popKey, setPopKey] = useState(0);
-  const { body, embeds } = useMemo(() => renderContent(note.content), [note.content]);
-  const bookmarked = state.bookmarks.includes(note.id);
-
-  const handle =
-    profile?.nip05 ??
-    displayName({ name: profile?.name, displayName: profile?.displayName, pubkey: note.pubkey });
-
-  const openAuthor = (): void => navigate("profile", { pubkey: note.pubkey });
-
-  return (
-    <article
-      style={{ ...glass, borderRadius: 16, padding: 16, transition: "background .15s, border-color .15s" }}
-    >
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <AuthorChip pubkey={note.pubkey} size={42} subtitle={handle} onClick={openAuthor} />
-        <span style={{ fontSize: 13, color: "var(--text-3)", whiteSpace: "nowrap", flexShrink: 0 }}>
-          {timeAgo(note.createdAt)}
-        </span>
-      </div>
-
-      {body && (
-        <p
-          style={{
-            margin: "11px 0 0",
-            fontSize: 15.5,
-            lineHeight: 1.55,
-            color: "var(--text)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {body}
-        </p>
-      )}
-
-      {embeds.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 11 }}>
-          {embeds.map((url) => (
-            <Embed key={url} url={url} />
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 12, marginLeft: -6 }}>
-        <button type="button" onClick={onReply} style={actionBtn(false, "var(--accent)")}>
-          <ReplyIcon size={17} />
-          <span>{engagement.replies > 0 ? fmtCount(engagement.replies) : ""}</span>
-        </button>
-        <button type="button" onClick={onRepost} style={actionBtn(engagement.reposted, "var(--success)")}>
-          <RepostIcon size={17} />
-          <span>{engagement.reposts > 0 ? fmtCount(engagement.reposts) : ""}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setPopKey((k) => k + 1);
-            onLike();
-          }}
-          style={actionBtn(engagement.liked, "var(--danger)")}
-        >
-          <span key={popKey} className="verity-pop" style={{ display: "flex" }}>
-            <HeartIcon size={17} filled={engagement.liked} />
-          </span>
-          <span>{engagement.likes > 0 ? fmtCount(engagement.likes) : ""}</span>
-        </button>
-        <div style={{ flex: 1 }} />
-        <button
-          type="button"
-          onClick={() => toggleBookmark(note.id)}
-          style={actionBtn(bookmarked, "var(--accent)")}
-          aria-label="Bookmark"
-        >
-          <BookmarkIcon size={17} filled={bookmarked} />
-        </button>
-      </div>
-    </article>
-  );
-};
-
-export const HomeView = (): ReactNode => {
-  const { state, publish, toast, writeRelayUrls } = useStore();
-  const pubkey = state.identity?.pubkey ?? "";
-
+  const { publish, toast, writeRelayUrls, navigate } = useStore();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  const [replyTarget, setReplyTarget] = useState<Note | null>(null);
-  const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
-
-  const filter = useMemo<Filter>(() => {
-    const authors = [...new Set([...state.contacts, pubkey].filter(Boolean))];
-    if (authors.length <= 1) return { kinds: [Kind.Note], limit: 60 };
-    return { kinds: [Kind.Note], authors, limit: 80 };
-  }, [state.contacts, pubkey]);
-
-  const { notes, loading } = useFeed(filter, [filter]);
-
-  // Home feed = top-level notes only (no replies).
-  const topLevel = useMemo(() => notes.filter((n) => n.replyTo === undefined), [notes]);
-  const visibleNoteIds = useMemo(() => topLevel.map((n) => n.id), [topLevel]);
-  const engagement = useEngagement(visibleNoteIds, optimistic);
+  const [articleHover, setArticleHover] = useState(false);
+  const canPost = text.trim().length > 0 && !busy;
 
   const post = async (): Promise<void> => {
     const content = text.trim();
@@ -207,82 +84,388 @@ export const HomeView = (): ReactNode => {
     }
   };
 
-  const like = (note: Note): void => {
-    const cur = engagement.get(note.id);
-    if (cur?.liked) return;
-    setOptimistic((o) => ({
-      ...o,
-      [note.id]: { ...o[note.id], liked: true, likes: (cur?.likes ?? 0) + 1 },
-    }));
-    void publish(buildReaction(note, "+")).then(() => toast("Liked", "check"));
+  const postBtnStyle: CSSProperties = {
+    padding: "9px 18px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,.25)",
+    background: canPost ? "var(--accent)" : "var(--glass-2)",
+    color: canPost ? "var(--on-accent)" : "var(--text-3)",
+    fontWeight: 700,
+    fontSize: 13.5,
+    fontFamily: "inherit",
+    cursor: canPost ? "pointer" : "default",
+    transition: "filter .2s, transform .12s",
   };
 
-  const repost = (note: Note): void => {
-    const cur = engagement.get(note.id);
-    if (cur?.reposted) return;
-    setOptimistic((o) => ({
-      ...o,
-      [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 },
-    }));
-    void publish(buildRepost(note)).then(() => toast("Reposted to your followers", "repost"));
-  };
+  return (
+    <div
+      data-testid="composer"
+      style={{
+        background: "var(--glass)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: 13,
+        padding: 16,
+        boxShadow: "var(--glass-shadow)",
+        marginBottom: 18,
+      }}
+    >
+      <div style={{ display: "flex", gap: 13 }}>
+        <Avatar pubkey={pubkey} size={44} name={meName} picture={picture} />
+        <textarea
+          data-testid="composer-input"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Share something with your workspace…"
+          style={{
+            flex: 1,
+            border: "none",
+            background: "transparent",
+            resize: "none",
+            outline: "none",
+            fontSize: 17,
+            lineHeight: 1.5,
+            color: "var(--text)",
+            fontFamily: "inherit",
+            minHeight: 52,
+            paddingTop: 8,
+          }}
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          marginTop: 10,
+          paddingTop: 12,
+          borderTop: "1px solid var(--hairline)",
+        }}
+      >
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "5px 10px",
+            borderRadius: 10,
+            background: "var(--accent-soft)",
+            color: "var(--accent)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
+        >
+          <GlobeGlyph />
+          Workspace · {writeRelayUrls.length} relays
+        </span>
+        <button
+          type="button"
+          data-testid="open-article-editor"
+          onClick={() => navigate("articleEditor")}
+          onMouseEnter={() => setArticleHover(true)}
+          onMouseLeave={() => setArticleHover(false)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "5px 11px",
+            border: `1px solid ${articleHover ? "var(--accent)" : "var(--glass-border)"}`,
+            borderRadius: 10,
+            background: articleHover ? "var(--accent-soft)" : "transparent",
+            color: articleHover ? "var(--accent)" : "var(--text-2)",
+            fontSize: 12.5,
+            fontWeight: 700,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            transition: "all .15s",
+          }}
+        >
+          <PencilGlyph />
+          Write article
+        </button>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 12.5, color: "var(--text-3)", fontVariantNumeric: "tabular-nums" }}>
+          {text.length}
+        </span>
+        <button
+          type="button"
+          data-testid="post-submit"
+          onClick={() => void post()}
+          disabled={!canPost}
+          style={postBtnStyle}
+        >
+          {busy ? "Posting…" : "Post"}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/** Lightweight "Articles in your network" strip — NIP-23 kind 30023 (verity-article). */
+const ArticlesStrip = (): ReactNode => {
+  const { client, readRelayUrls, navigate, state } = useStore();
+  const [articles, setArticles] = useState<LongForm[]>([]);
+  const [seeAllHover, setSeeAllHover] = useState(false);
+
+  useEffect(() => {
+    if (readRelayUrls.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const events = await client.list(readRelayUrls, {
+        kinds: [Kind.LongForm],
+        "#t": [ARTICLE_MARKER],
+        limit: 12,
+      });
+      if (cancelled) return;
+      const byKey = new Map<string, LongForm>();
+      for (const ev of events) {
+        const a = decodeLongForm(ev);
+        const key = `${a.pubkey}:${a.identifier}`;
+        const prev = byKey.get(key);
+        if (!prev || a.updatedAt > prev.updatedAt) byKey.set(key, a);
+      }
+      setArticles([...byKey.values()].sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 3));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [client, readRelayUrls]);
+
+  if (articles.length === 0) return null;
+
+  return (
+    <div data-testid="feed-articles" style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+          padding: "0 2px",
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontFamily: "'Space Grotesk',sans-serif",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "var(--text)",
+          }}
+        >
+          <span style={{ color: "var(--accent)", display: "flex" }}>
+            <BookGlyph />
+          </span>
+          Articles in your network
+        </h3>
+        <button
+          type="button"
+          onClick={() => navigate("docs")}
+          onMouseEnter={() => setSeeAllHover(true)}
+          onMouseLeave={() => setSeeAllHover(false)}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: seeAllHover ? "var(--accent)" : "var(--text-3)",
+            fontWeight: 600,
+            fontSize: 12.5,
+            fontFamily: "inherit",
+            cursor: "pointer",
+          }}
+        >
+          See all
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {articles.map((a) => (
+          <ArticleCard key={`${a.pubkey}:${a.identifier}`} article={a} mine={a.pubkey === state.identity?.pubkey} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const ArticleCard = ({ article, mine }: { article: LongForm; mine: boolean }): ReactNode => {
+  const { navigate } = useStore();
+  const [hover, setHover] = useState(false);
+  const open = (): void => navigate("articleReader", { id: article.identifier, pubkey: article.pubkey });
+  // Reading time at ~220 wpm; cheap word count is sufficient for a strip badge.
+  const minutes = Math.max(1, Math.round(article.body.trim().split(/\s+/).filter(Boolean).length / 220));
+
+  return (
+    <div
+      data-testid="article-card"
+      role="button"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") open();
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex",
+        gap: 16,
+        alignItems: "stretch",
+        width: "100%",
+        padding: 15,
+        border: `1px solid ${hover ? "var(--text-3)" : "var(--glass-border)"}`,
+        borderRadius: 14,
+        background: hover ? "var(--glass-2)" : "var(--glass)",
+        cursor: "pointer",
+        transition: "border-color .15s, background .15s",
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+          <span style={avatarStyle(article.pubkey, 32, article.image)}>
+            {!article.image && initials(article.pubkey.slice(0, 4))}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>
+            {`${article.pubkey.slice(0, 8)}…`}
+          </span>
+          <span style={{ fontSize: 12.5, color: "var(--text-3)" }}>· {timeAgo(article.publishedAt)}</span>
+        </div>
+        <h3
+          style={{
+            margin: 0,
+            fontFamily: "'Space Grotesk',sans-serif",
+            fontSize: 18,
+            lineHeight: 1.28,
+            fontWeight: 700,
+            letterSpacing: "-.012em",
+            color: "var(--text)",
+            textWrap: "pretty",
+          }}
+        >
+          {article.title}
+        </h3>
+        {article.summary && (
+          <p style={{ margin: "5px 0 0", fontSize: 14, lineHeight: 1.5, color: "var(--text-2)" }}>
+            {article.summary}
+          </p>
+        )}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginTop: 11,
+            fontSize: 12.5,
+            color: "var(--text-3)",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <BookGlyph />
+            {minutes} min read
+          </span>
+          <div style={{ flex: 1 }} />
+          {mine && <span style={{ color: "var(--text-3)" }}>Yours</span>}
+        </div>
+      </div>
+      {article.image && (
+        <span
+          style={{
+            width: 104,
+            minWidth: 104,
+            alignSelf: "stretch",
+            minHeight: 98,
+            borderRadius: 11,
+            border: "1px solid var(--glass-border)",
+            background: `center/cover no-repeat url("${article.image}")`,
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export const HomeView = (): ReactNode => {
+  const { state, publish, toast, toggleBookmark } = useStore();
+  const pubkey = state.identity?.pubkey ?? "";
+
+  const [replyTarget, setReplyTarget] = useState<Note | null>(null);
+  const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
+  const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const agentPubkeys = useMemo(() => loadAgentPubkeys(), []);
+
+  const filter = useMemo<Filter>(() => {
+    const authors = [...new Set([...state.contacts, pubkey].filter(Boolean))];
+    if (authors.length <= 1) return { kinds: [Kind.Note], limit: 60 };
+    return { kinds: [Kind.Note], authors, limit: 80 };
+  }, [state.contacts, pubkey]);
+
+  const { notes, loading } = useFeed(filter, [filter]);
+
+  // Home feed = top-level notes only (no replies), minus optimistically-deleted ones.
+  const topLevel = useMemo(
+    () => notes.filter((n) => n.replyTo === undefined && !deleted.has(n.id)),
+    [notes, deleted],
+  );
+  const visibleNoteIds = useMemo(() => topLevel.map((n) => n.id), [topLevel]);
+  const engagement = useEngagement(visibleNoteIds, optimistic);
+
+  const like = useCallback(
+    (note: Note): void => {
+      const cur = engagement.get(note.id);
+      if (cur?.liked) return;
+      setOptimistic((o) => ({
+        ...o,
+        [note.id]: { ...o[note.id], liked: true, likes: (cur?.likes ?? 0) + 1 },
+      }));
+      void publish(buildReaction(note, "+")).then(() => toast("Liked", "check"));
+    },
+    [engagement, publish, toast],
+  );
+
+  const repost = useCallback(
+    (note: Note): void => {
+      const cur = engagement.get(note.id);
+      if (cur?.reposted) return;
+      setOptimistic((o) => ({
+        ...o,
+        [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 },
+      }));
+      void publish(buildRepost(note)).then(() => toast("Reposted to your followers", "repost"));
+    },
+    [engagement, publish, toast],
+  );
+
+  const share = useCallback(
+    (note: Note): void => {
+      const link = `https://njump.me/${nip19.noteEncode(note.id)}`;
+      void navigator.clipboard.writeText(link).then(() => toast("Link copied to clipboard", "copy"));
+    },
+    [toast],
+  );
+
+  const remove = useCallback(
+    (note: Note): void => {
+      setDeleted((d) => new Set(d).add(note.id));
+      void publish({
+        kind: 5,
+        created_at: nowSeconds(),
+        tags: [["e", note.id]],
+        content: "",
+      })
+        .then(() => toast("Post deleted", "info"))
+        .catch(() => toast("Could not delete post", "warn"));
+    },
+    [publish, toast],
+  );
 
   const meName = state.me
     ? displayName({ name: state.me.name, displayName: state.me.displayName, pubkey })
     : "You";
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px 120px" }}>
-      {/* composer */}
-      <div style={{ ...glass, borderRadius: 14, padding: 16, marginBottom: 18 }}>
-        <div style={{ display: "flex", gap: 13 }}>
-          <Avatar pubkey={pubkey} size={44} name={meName} picture={state.me?.picture} />
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="What's happening on the network?"
-            style={{
-              flex: 1,
-              border: "none",
-              background: "transparent",
-              resize: "none",
-              outline: "none",
-              fontSize: 17,
-              lineHeight: 1.5,
-              color: "var(--text)",
-              fontFamily: "inherit",
-              minHeight: 52,
-              paddingTop: 8,
-            }}
-          />
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginTop: 10,
-            paddingTop: 12,
-            borderTop: "1px solid var(--hairline)",
-          }}
-        >
-          <div style={{ flex: 1 }} />
-          <span
-            style={{
-              fontSize: 12.5,
-              color: text.length > 280 ? "var(--warn)" : "var(--text-3)",
-              fontFamily: "'JetBrains Mono',monospace",
-            }}
-          >
-            {text.length}
-          </span>
-          <PrimaryButton onClick={() => void post()} disabled={!text.trim() || busy}>
-            {busy ? "Posting…" : "Post"}
-          </PrimaryButton>
-        </div>
-      </div>
+    <div data-testid="view-home" style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px 120px" }}>
+      <Composer pubkey={pubkey} meName={meName} picture={state.me?.picture} />
 
-      {/* feed */}
+      <ArticlesStrip />
+
       {loading && topLevel.length === 0 ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "56px 0" }}>
           <Spinner size={26} />
@@ -294,24 +477,21 @@ export const HomeView = (): ReactNode => {
           hint="Follow a few people on Explore, or share the first post — it'll show up right here."
         />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {topLevel.map((note) => (
-            <PostCard
-              key={note.id}
-              note={note}
-              engagement={engagement.get(note.id) ?? {
-                likes: 0,
-                reposts: 0,
-                replies: 0,
-                liked: false,
-                reposted: false,
-              }}
-              onLike={() => like(note)}
-              onRepost={() => repost(note)}
-              onReply={() => setReplyTarget(note)}
-            />
-          ))}
-        </div>
+        topLevel.map((note) => (
+          <PostCard
+            key={note.id}
+            note={note}
+            engagement={engagement.get(note.id)}
+            bookmarked={state.bookmarks.includes(note.id)}
+            isAgent={agentPubkeys.has(note.pubkey)}
+            onReply={() => setReplyTarget(note)}
+            onRepost={() => repost(note)}
+            onLike={() => like(note)}
+            onBookmark={() => toggleBookmark(note.id)}
+            onShare={() => share(note)}
+            onDelete={() => remove(note)}
+          />
+        ))
       )}
 
       {replyTarget && <Compose replyTo={replyTarget} onClose={() => setReplyTarget(null)} />}

@@ -94,3 +94,4 @@ button { font-family: inherit; }
 a { color: inherit; }
 .verity-fadein { animation: verity-fade .25s ease; }
 .verity-slideup { animation: verity-slideup .3s ease; }
+.verity-pop { animation: verity-pop .45s ease; }
