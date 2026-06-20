@@ -703,8 +703,7 @@ const ArticleEditor = (): ReactNode => {
       }
     }, 0);
     return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, existing]);
+  }, [mode, body]);
 
   // Auto-grow the title textarea.
   const autoGrowTitle = useCallback(() => {

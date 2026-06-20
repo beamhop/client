@@ -6,6 +6,7 @@ import { Kind, type DirectMessage } from "../nostr/types.ts";
 import { EmptyState, Spinner } from "../ui/primitives.tsx";
 import { MessagesIcon } from "../ui/icons.tsx";
 import { avatarStyle, initials, displayName } from "../lib/format.ts";
+import { compileMutes, evaluateDm } from "../lib/mute.ts";
 import { avatarWrap, statusDot } from "../ui/styles.ts";
 
 const MOBILE_BREAKPOINT = 900;
@@ -86,6 +87,9 @@ export const MessagesView = (): ReactNode => {
   const me = identity?.pubkey;
   const isMobile = useIsMobile();
 
+  // Client-only soft mute: DMs honour account rules only (never keyword/regex).
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+
   // Decoded messages keyed by event id (dedupes across both subscriptions).
   const [byId, setById] = useState<ReadonlyMap<string, DirectMessage>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -145,13 +149,16 @@ export const MessagesView = (): ReactNode => {
       groups.set(dm.pubkey, list);
     }
     for (const peer of pending) if (!groups.has(peer)) groups.set(peer, []);
-    const convs = [...groups.entries()].map(([peer, msgs]) => {
-      const messages = [...msgs].sort((a, b) => a.createdAt - b.createdAt);
-      const last = messages[messages.length - 1];
-      return { peer, messages, lastAt: last ? last.createdAt : 0 };
-    });
+    const convs = [...groups.entries()]
+      // Drop account-muted peers up front so their unread/last-message never aggregates.
+      .filter(([peer]) => !evaluateDm(muted, { pubkey: peer }))
+      .map(([peer, msgs]) => {
+        const messages = [...msgs].sort((a, b) => a.createdAt - b.createdAt);
+        const last = messages[messages.length - 1];
+        return { peer, messages, lastAt: last ? last.createdAt : 0 };
+      });
     return convs.sort((a, b) => b.lastAt - a.lastAt);
-  }, [byId, pending]);
+  }, [byId, pending, muted]);
 
   const activeConv = useMemo<Conversation | null>(() => {
     if (!active) return null;

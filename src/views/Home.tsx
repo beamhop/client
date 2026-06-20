@@ -9,6 +9,7 @@ import { Avatar, Spinner, EmptyState } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
 import { HomeIcon } from "../ui/icons.tsx";
 import { displayName, avatarStyle, initials, timeAgo } from "../lib/format.ts";
+import { compileMutes, arrangeFeed, evaluateNote, evaluateRepost, evaluateArticle, type FeedRow } from "../lib/mute.ts";
 import { Compose } from "../ui/Compose.tsx";
 
 const AGENTS_KEY = "verity.agents.v1";
@@ -210,6 +211,7 @@ const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
   const { client, readRelayUrls, navigate, state } = useStore();
   const [articles, setArticles] = useState<LongForm[]>([]);
   const [seeAllHover, setSeeAllHover] = useState(false);
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
 
   useEffect(() => {
     if (readRelayUrls.length === 0 || authors?.length === 0) {
@@ -240,7 +242,13 @@ const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
     };
   }, [authors, client, readRelayUrls]);
 
-  if (articles.length === 0) return null;
+  // Articles always hard-hide muted content, regardless of feed display mode.
+  const visibleArticles = useMemo(
+    () => articles.filter((a) => !evaluateArticle(muted, a)),
+    [articles, muted],
+  );
+
+  if (visibleArticles.length === 0) return null;
 
   return (
     <div data-testid="feed-articles" style={{ marginBottom: 14 }}>
@@ -289,7 +297,7 @@ const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
         </button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {articles.map((a) => (
+        {visibleArticles.map((a) => (
           <ArticleCard key={`${a.pubkey}:${a.identifier}`} article={a} mine={a.pubkey === state.identity?.pubkey} />
         ))}
       </div>
@@ -481,6 +489,64 @@ const mergeTimelineItems = (items: TimelineItem[], optimisticReposts: TimelineIt
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
 };
 
+/**
+ * Collapsed group of consecutive muted feed items ("summary" display mode).
+ * Each group toggles independently via local state; keys stay stable across
+ * collapse/expand because the wrapping render keys the row by its first item.
+ */
+const MutedRow = ({
+  items,
+  render,
+}: {
+  items: TimelineItem[];
+  render: (item: TimelineItem) => ReactNode;
+}): ReactNode => {
+  const [expanded, setExpanded] = useState(false);
+  const count = items.length;
+
+  const toggleStyle: CSSProperties = {
+    width: "100%",
+    padding: "11px 14px",
+    border: "1px dashed var(--glass-border)",
+    borderRadius: 12,
+    background: "var(--glass)",
+    color: "var(--text-3)",
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "color .15s, border-color .15s",
+  };
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        data-testid="muted-row-toggle"
+        onClick={() => setExpanded(true)}
+        style={{ ...toggleStyle, marginBottom: 14 }}
+      >
+        {"Show " + count + " muted"}
+      </button>
+    );
+  }
+
+  return (
+    <div data-testid="muted-row-expanded" style={{ marginBottom: 14 }}>
+      {items.map((item) => render(item))}
+      <button
+        type="button"
+        data-testid="muted-row-toggle"
+        onClick={() => setExpanded(false)}
+        style={toggleStyle}
+      >
+        {"Hide " + count + " muted"}
+      </button>
+    </div>
+  );
+};
+
 export const HomeView = (): ReactNode => {
   const { state, publish, toast, toggleBookmark, readRelayUrls } = useStore();
   const pubkey = state.identity?.pubkey ?? "";
@@ -521,6 +587,20 @@ export const HomeView = (): ReactNode => {
         return item.type === "repost" || item.note.replyTo === undefined;
       }),
     [items, optimisticReposts, isFollowingFeed, followedAuthorSet, deleted, suppressedRepostKeys],
+  );
+  // Client-only soft mute, applied after the existing follow/reply/delete filtering.
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const rows = useMemo(
+    () =>
+      arrangeFeed(
+        timelineItems,
+        (it) =>
+          it.type === "repost"
+            ? evaluateRepost(muted, { repostedBy: it.repostedBy, note: it.note })
+            : evaluateNote(muted, it.note),
+        state.muteSettings.display,
+      ),
+    [timelineItems, muted, state.muteSettings.display],
   );
   const visibleNoteIds = useMemo(() => [...new Set(timelineItems.map((item) => item.note.id))], [timelineItems]);
   const engagement = useEngagement(visibleNoteIds, optimistic);
@@ -569,7 +649,7 @@ export const HomeView = (): ReactNode => {
       scrollRoot.removeEventListener("scroll", checkForMore);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [feedEnabled, hasMore, loadMore, loading, loadingMore, items.length, timelineItems.length]);
+  }, [feedEnabled, hasMore, loadMore, loading, loadingMore, items.length, timelineItems.length, rows.length]);
 
   const like = useCallback(
     (note: Note): void => {
@@ -713,6 +793,31 @@ export const HomeView = (): ReactNode => {
     ? displayName({ name: state.me.name, displayName: state.me.displayName, pubkey })
     : "You";
 
+  // Shared per-item render — reused for plain rows and inside expanded muted groups.
+  const renderItem = useCallback(
+    (item: TimelineItem): ReactNode => {
+      const note = item.note;
+      return (
+        <PostCard
+          key={item.id}
+          note={note}
+          engagement={engagement.get(note.id)}
+          bookmarked={state.bookmarks.includes(note.id)}
+          repostedBy={item.type === "repost" ? item.repostedBy : undefined}
+          repostedAt={item.type === "repost" ? item.createdAt : undefined}
+          isAgent={agentPubkeys.has(note.pubkey)}
+          onReply={() => setReplyTarget(note)}
+          onRepost={() => repost(note)}
+          onLike={() => like(note)}
+          onBookmark={() => toggleBookmark(note.id)}
+          onShare={() => share(note)}
+          onDelete={() => remove(note)}
+        />
+      );
+    },
+    [engagement, state.bookmarks, agentPubkeys, repost, like, toggleBookmark, share, remove],
+  );
+
   return (
     <div data-testid="view-home" style={{ maxWidth: 640, margin: "0 auto", padding: "6px 18px 120px" }}>
       <FeedTabs active={feedTab} onChange={setFeedTab} />
@@ -738,28 +843,30 @@ export const HomeView = (): ReactNode => {
             </div>
           )}
         </>
+      ) : rows.length === 0 ? (
+        // Items exist but every one matches a mute rule (hidden display mode):
+        // show a neutral notice rather than the misleading "feed is quiet" state.
+        <>
+          <EmptyState
+            icon={<HomeIcon size={32} />}
+            title="Everything here is muted"
+            hint={`${timelineItems.length} ${timelineItems.length === 1 ? "post is" : "posts are"} hidden by your mute rules. Manage them in Keys & Security.`}
+          />
+          {loadingMore && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
+              <Spinner size={20} />
+            </div>
+          )}
+        </>
       ) : (
         <>
-          {timelineItems.map((item) => {
-            const note = item.note;
-            return (
-              <PostCard
-                key={item.id}
-                note={note}
-                engagement={engagement.get(note.id)}
-                bookmarked={state.bookmarks.includes(note.id)}
-                repostedBy={item.type === "repost" ? item.repostedBy : undefined}
-                repostedAt={item.type === "repost" ? item.createdAt : undefined}
-                isAgent={agentPubkeys.has(note.pubkey)}
-                onReply={() => setReplyTarget(note)}
-                onRepost={() => repost(note)}
-                onLike={() => like(note)}
-                onBookmark={() => toggleBookmark(note.id)}
-                onShare={() => share(note)}
-                onDelete={() => remove(note)}
-              />
-            );
-          })}
+          {rows.map((row: FeedRow<TimelineItem>) =>
+            row.kind === "item" ? (
+              renderItem(row.item)
+            ) : (
+              <MutedRow key={`muted:${row.items[0]?.id ?? ""}`} items={row.items} render={renderItem} />
+            ),
+          )}
           {loadingMore && (
             <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 4px" }}>
               <Spinner size={20} />

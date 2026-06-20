@@ -785,7 +785,7 @@ const PeoplePanel = ({
 // ---------------------------------------------------------------------------
 
 export const ProfileView = (): ReactNode => {
-  const { state, client, readRelayUrls, writeRelayUrls, publish, toggleFollow, toggleBookmark, toast, navigate } = useStore();
+  const { state, client, readRelayUrls, writeRelayUrls, publish, toggleFollow, toggleMuteAccount, toggleBookmark, toast, navigate } = useStore();
   const myPubkey = state.identity?.pubkey;
   const paramPubkey = state.nav.params.pubkey;
   const pubkey = paramPubkey ?? myPubkey;
@@ -1111,6 +1111,7 @@ export const ProfileView = (): ReactNode => {
   const banner = profile?.banner;
   const handle = profile?.nip05?.replace(/^_@/, "");
   const following = state.contacts.includes(pubkey);
+  const muted = state.muteSettings.rules.some((r) => r.type === "account" && r.pubkey === pubkey);
   const followingPubkeys = isMe ? myFollowingPubkeys : theirFollowingPubkeys;
   const followingCount = followingPubkeys === null ? null : followingPubkeys.length;
   const followerCount = followerPubkeys === null ? null : followerPubkeys.length;
@@ -1222,6 +1223,18 @@ export const ProfileView = (): ReactNode => {
                 style={followStyle(following)}
               >
                 {following ? "Following" : "Follow"}
+              </button>
+              <button
+                type="button"
+                data-testid="profile-mute"
+                onClick={() => toggleMuteAccount(pubkey)}
+                style={{
+                  ...followStyle(true),
+                  background: "var(--glass)",
+                  color: "var(--text)",
+                }}
+              >
+                {muted ? "Unmute" : "Mute"}
               </button>
             </div>
           )}

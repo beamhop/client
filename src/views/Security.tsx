@@ -1,11 +1,21 @@
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { nip19 } from "nostr-tools";
 import { useStore } from "../state/store.tsx";
-import { npubOf, nsecOf } from "../nostr/keys.ts";
+import { npubOf, nsecOf, shortNpub } from "../nostr/keys.ts";
 import { normalizeRelayUrl, DEFAULT_RELAYS } from "../nostr/relays.ts";
 import type { RelayInfo } from "../nostr/types.ts";
 import { PrimaryButton, GhostButton, Modal } from "../ui/primitives.tsx";
 import { timeAgo } from "../lib/format.ts";
+import type { MuteRule } from "../lib/mute.ts";
+import {
+  TTL_PRESETS,
+  expiryFromTtl,
+  isRuleExpired,
+  validateRegex,
+  MAX_REGEX_LENGTH,
+  MAX_KEYWORD_LENGTH,
+} from "../lib/mute.ts";
 
 const mono = "'JetBrains Mono',monospace";
 const heading = "'Space Grotesk',sans-serif";
@@ -75,6 +85,37 @@ const keyActionButton: CSSProperties = {
   transition: "all .15s",
 };
 
+const muteInput: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: "10px 13px",
+  borderRadius: 9,
+  border: "1px solid var(--glass-border)",
+  background: "var(--glass-2)",
+  color: "var(--text)",
+  fontSize: 13,
+  outline: "none",
+};
+
+const muteBackupButton: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 7,
+  padding: "8px 14px",
+  border: "1px solid var(--glass-border)",
+  borderRadius: 11,
+  background: "var(--glass)",
+  WebkitBackdropFilter: "var(--blur)",
+  backdropFilter: "var(--blur)",
+  boxShadow: "var(--glass-shadow)",
+  color: "var(--text)",
+  fontWeight: 700,
+  fontSize: 12.5,
+  fontFamily: "inherit",
+  cursor: "pointer",
+  transition: "all .15s",
+};
+
 /* ── inline SVGs (paths verbatim from spec) ─────────────────────────────── */
 
 const svgBase = {
@@ -138,6 +179,21 @@ const DownloadGlyph = (): ReactNode => (
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <path d="M7 10l5 5 5-5" />
     <path d="M12 15V3" />
+  </svg>
+);
+
+const UploadGlyph = (): ReactNode => (
+  <svg width={14} height={14} {...svgBase} stroke="currentColor">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="M7 9l5-5 5 5" />
+    <path d="M12 4v12" />
+  </svg>
+);
+
+const MuteGlyph = (): ReactNode => (
+  <svg width={17} height={17} {...svgBase} stroke="var(--accent)">
+    <path d="M11 5 6 9H2v6h4l5 4z" />
+    <path d="M23 9 17 15M17 9l6 6" />
   </svg>
 );
 
@@ -212,13 +268,33 @@ const knobStyle = (on: boolean): CSSProperties => ({
 /* ── component ──────────────────────────────────────────────────────────── */
 
 export const SecurityView = (): ReactNode => {
-  const { state, setRelays, toast, signOut } = useStore();
-  const { identity, me, relays } = state;
+  const {
+    state,
+    setRelays,
+    toast,
+    signOut,
+    addMuteRule,
+    removeMuteRule,
+    updateMuteRule,
+    setMuteDisplay,
+    exportMuteSettings,
+    importMuteSettings,
+  } = useStore();
+  const { identity, me, relays, muteSettings } = state;
 
   const [revealed, setRevealed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => loadPrefs());
   const [draftRelay, setDraftRelay] = useState("");
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+
+  // ── soft-mute drafts (this card only) ──
+  const [muteKeyword, setMuteKeyword] = useState("");
+  const [muteAccount, setMuteAccount] = useState("");
+  const [muteRegex, setMuteRegex] = useState("");
+  // Index into TTL_PRESETS, or -1 for "Permanent". Shared by all add controls.
+  const [muteTtl, setMuteTtl] = useState(-1);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // The signing-key access timestamp is the closest "real" audit signal we
   // have locally: it advances whenever the user reveals their key this session.
@@ -233,6 +309,13 @@ export const SecurityView = (): ReactNode => {
     () => (identity?.kind === "local" ? nsecOf(identity.secretKey) : ""),
     [identity],
   );
+
+  const muteGroups = useMemo(() => {
+    const accounts = muteSettings.rules.filter((r) => r.type === "account");
+    const keywords = muteSettings.rules.filter((r) => r.type === "keyword");
+    const patterns = muteSettings.rules.filter((r) => r.type === "regex");
+    return { accounts, keywords, patterns };
+  }, [muteSettings.rules]);
 
   if (!identity) return null;
 
@@ -296,6 +379,89 @@ export const SecurityView = (): ReactNode => {
   const resetRelays = (): void => {
     setRelays(DEFAULT_RELAYS.map((r) => ({ ...r })));
     toast("Relays reset to defaults", "check");
+  };
+
+  // ── soft mute (client-only, per-account, device-local) ──
+
+  // A preset index of -1 means "Permanent" → omit expiresAt entirely.
+  const draftExpiry = (): number | undefined => {
+    const preset = TTL_PRESETS[muteTtl];
+    return preset ? expiryFromTtl(preset.ms) : undefined;
+  };
+
+  const addMuteKeyword = (): void => {
+    const value = muteKeyword.trim();
+    if (!value) return;
+    addMuteRule({ type: "keyword", value, expiresAt: draftExpiry() });
+    setMuteKeyword("");
+    toast("Muted word", "check");
+  };
+
+  const addMuteAccount = (): void => {
+    // Lowercase so mixed-case hex is accepted and stored canonically (bech32
+    // npubs are lowercase already, so this is safe for both forms).
+    const raw = muteAccount.trim().toLowerCase();
+    if (!raw) return;
+    let hex: string | null = null;
+    if (/^[0-9a-f]{64}$/.test(raw)) {
+      hex = raw;
+    } else {
+      try {
+        const decoded = nip19.decode(raw);
+        if (decoded.type === "npub") hex = decoded.data;
+      } catch {
+        // fall through to the warning below
+      }
+    }
+    if (!hex) {
+      toast("Enter a valid npub or 64-char hex", "warn");
+      return;
+    }
+    addMuteRule({ type: "account", pubkey: hex, expiresAt: draftExpiry() });
+    setMuteAccount("");
+    toast("Muted account", "check");
+  };
+
+  const regexValidation = validateRegex(muteRegex);
+  const regexError = muteRegex.length > 0 && !regexValidation.ok ? regexValidation.error : "";
+
+  const addMuteRegex = (): void => {
+    if (!regexValidation.ok) return;
+    addMuteRule({ type: "regex", source: muteRegex, expiresAt: draftExpiry() });
+    setMuteRegex("");
+    toast("Muted pattern", "check");
+  };
+
+  const muteRuleLabel = (rule: MuteRule): string => {
+    switch (rule.type) {
+      case "keyword":
+        return rule.value;
+      case "account":
+        return /^[0-9a-f]{64}$/.test(rule.pubkey) ? shortNpub(rule.pubkey) : rule.pubkey.slice(0, 12);
+      case "regex":
+        return `/${rule.source}/${rule.flags}`;
+    }
+  };
+
+  const exportMutes = (): void => {
+    const blob = new Blob([exportMuteSettings()], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "verity-mutes.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast("Mute rules exported", "check");
+  };
+
+  const importMutes = (file: File): void => {
+    void file
+      .text()
+      .then((text) => {
+        const ok = importMuteSettings(text);
+        toast(ok ? "Mute rules imported" : "Import failed — invalid file", ok ? "check" : "warn");
+      })
+      .catch(() => toast("Import failed — could not read file", "warn"));
   };
 
   // ── compliance posture (real-derived where possible) ──
@@ -854,6 +1020,262 @@ export const SecurityView = (): ReactNode => {
         </form>
       </div>
 
+      {/* ── Muted content (client-only soft mute; device-local) ── */}
+      <h3 style={{ ...h3Title, margin: "24px 0 12px" }}>Muted content</h3>
+      <div style={{ ...glassCard, padding: 18, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <MuteGlyph />
+          <h3 style={h3Title}>Mute rules</h3>
+          <span style={{ fontSize: 11.5, color: "var(--text-3)" }}>This device only</span>
+        </div>
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>
+          Hide words, accounts, and patterns from your feed, articles, and notifications. Account
+          mutes also cover direct messages. Rules stay on this device and apply to everyone.
+        </p>
+
+        {/* DISPLAY MODE */}
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>Feed display</span>
+        <div style={{ display: "flex", gap: 9, marginBottom: 18 }} role="group" aria-label="Mute display mode">
+          <MuteChoice
+            label="Hide completely"
+            active={muteSettings.display === "hidden"}
+            testId="mute-display-hidden"
+            onClick={() => setMuteDisplay("hidden")}
+          />
+          <MuteChoice
+            label="Show summary"
+            active={muteSettings.display === "summary"}
+            testId="mute-display-summary"
+            onClick={() => setMuteDisplay("summary")}
+          />
+        </div>
+
+        {/* EXPIRY (shared by the add controls) */}
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>Duration for new mutes</span>
+        <div
+          style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}
+          role="group"
+          aria-label="Mute duration"
+        >
+          <MuteChoice
+            label="Permanent"
+            active={muteTtl === -1}
+            testId="mute-ttl-permanent"
+            onClick={() => setMuteTtl(-1)}
+          />
+          {TTL_PRESETS.map((preset, i) => (
+            <MuteChoice
+              key={preset.label}
+              label={preset.label}
+              active={muteTtl === i}
+              testId={`mute-ttl-${i}`}
+              onClick={() => setMuteTtl(i)}
+            />
+          ))}
+        </div>
+
+        {/* ADD: keyword */}
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>Mute a word</span>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addMuteKeyword();
+          }}
+          style={{ display: "flex", gap: 9, marginBottom: 16 }}
+        >
+          <input
+            value={muteKeyword}
+            onChange={(e) => setMuteKeyword(e.target.value)}
+            maxLength={MAX_KEYWORD_LENGTH}
+            placeholder="word or phrase"
+            aria-label="Word to mute"
+            style={muteInput}
+          />
+          <PrimaryButton type="submit" style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+            Mute word
+          </PrimaryButton>
+        </form>
+
+        {/* ADD: account */}
+        <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>Mute an account</span>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            addMuteAccount();
+          }}
+          style={{ display: "flex", gap: 9, marginBottom: 16 }}
+        >
+          <input
+            value={muteAccount}
+            onChange={(e) => setMuteAccount(e.target.value)}
+            placeholder="npub1… or 64-char hex"
+            aria-label="Account to mute"
+            style={{ ...muteInput, fontFamily: mono }}
+          />
+          <PrimaryButton type="submit" style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+            Mute account
+          </PrimaryButton>
+        </form>
+
+        {/* ADVANCED: regex (secondary / collapsible) */}
+        <button
+          type="button"
+          data-testid="mute-advanced-toggle"
+          onClick={() => setShowAdvanced((v) => !v)}
+          aria-expanded={showAdvanced}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: 0,
+            marginBottom: showAdvanced ? 10 : 0,
+            border: "none",
+            background: "transparent",
+            color: "var(--text-3)",
+            fontFamily: "inherit",
+            fontSize: 12.5,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          <span style={{ transform: showAdvanced ? "rotate(90deg)" : "none", transition: "transform .15s" }}>
+            ›
+          </span>
+          Advanced · regular expression
+        </button>
+        {showAdvanced && (
+          <div style={{ marginTop: 2 }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addMuteRegex();
+              }}
+              style={{ display: "flex", gap: 9 }}
+            >
+              <input
+                value={muteRegex}
+                onChange={(e) => setMuteRegex(e.target.value)}
+                maxLength={MAX_REGEX_LENGTH}
+                placeholder="^spam.*$"
+                aria-label="Regex pattern to mute"
+                aria-invalid={regexError.length > 0}
+                style={{
+                  ...muteInput,
+                  fontFamily: mono,
+                  borderColor: regexError ? "var(--danger)" : "var(--glass-border)",
+                }}
+              />
+              <PrimaryButton
+                type="submit"
+                disabled={!regexValidation.ok}
+                style={{
+                  padding: "10px 16px",
+                  whiteSpace: "nowrap",
+                  opacity: regexValidation.ok ? 1 : 0.55,
+                  cursor: regexValidation.ok ? "pointer" : "not-allowed",
+                }}
+              >
+                Mute pattern
+              </PrimaryButton>
+            </form>
+            {regexError && (
+              <p
+                role="alert"
+                style={{ margin: "7px 0 0", fontSize: 12, color: "var(--danger)", fontFamily: mono }}
+              >
+                {regexError}
+              </p>
+            )}
+            <p style={{ margin: "7px 0 0", fontSize: 11.5, color: "var(--text-3)" }}>
+              Patterns are matched case-insensitively against text content.
+            </p>
+          </div>
+        )}
+
+        {/* RULE LIST */}
+        <div style={{ marginTop: 20 }}>
+          {muteSettings.rules.length === 0 ? (
+            <p
+              style={{
+                margin: 0,
+                padding: "16px 14px",
+                borderRadius: 9,
+                background: "var(--glass-2)",
+                border: "1px dashed var(--hairline)",
+                fontSize: 13,
+                color: "var(--text-3)",
+                textAlign: "center",
+              }}
+            >
+              No mute rules yet. Add a word, account, or pattern above.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <MuteRuleGroup
+                title="Accounts"
+                rules={muteGroups.accounts}
+                label={muteRuleLabel}
+                onToggle={(id, enabled) => updateMuteRule(id, { enabled })}
+                onRemove={removeMuteRule}
+              />
+              <MuteRuleGroup
+                title="Keywords"
+                rules={muteGroups.keywords}
+                label={muteRuleLabel}
+                onToggle={(id, enabled) => updateMuteRule(id, { enabled })}
+                onRemove={removeMuteRule}
+              />
+              <MuteRuleGroup
+                title="Patterns"
+                rules={muteGroups.patterns}
+                label={muteRuleLabel}
+                onToggle={(id, enabled) => updateMuteRule(id, { enabled })}
+                onRemove={removeMuteRule}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* BACKUP */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 9,
+            marginTop: 20,
+            paddingTop: 16,
+            borderTop: "1px solid var(--hairline)",
+          }}
+        >
+          <span style={{ ...cardLabel, flex: 1, minWidth: 0 }}>Backup</span>
+          <PressButton testId="mute-export" onClick={exportMutes} style={muteBackupButton}>
+            <DownloadGlyph />
+            Export
+          </PressButton>
+          <PressButton
+            testId="mute-import"
+            onClick={() => importInputRef.current?.click()}
+            style={muteBackupButton}
+          >
+            <UploadGlyph />
+            Import
+          </PressButton>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json"
+            data-testid="mute-import-input"
+            aria-label="Import mute rules file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importMutes(file);
+              e.target.value = "";
+            }}
+            style={{ display: "none" }}
+          />
+        </div>
+      </div>
+
       {/* ── Sign out (required by view brief; outside the design region) ── */}
       <button
         type="button"
@@ -1065,3 +1487,147 @@ const RelayToggle = ({
     {label}
   </button>
 );
+
+/* ── soft-mute controls ─────────────────────────────────────────────────── */
+
+const MuteChoice = ({
+  label,
+  active,
+  testId,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  testId: string;
+  onClick: () => void;
+}): ReactNode => (
+  <button
+    type="button"
+    data-testid={testId}
+    onClick={onClick}
+    aria-pressed={active}
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "8px 14px",
+      border: active ? "1px solid var(--accent)" : "1px solid var(--glass-border)",
+      borderRadius: 9,
+      background: active ? "var(--accent-soft)" : "var(--glass)",
+      color: active ? "var(--accent)" : "var(--text-3)",
+      fontWeight: 700,
+      fontSize: 12.5,
+      fontFamily: "inherit",
+      cursor: "pointer",
+      transition: "all .15s",
+    }}
+  >
+    {label}
+  </button>
+);
+
+const muteExpiryLabel = (rule: MuteRule, now: number): string => {
+  if (rule.expiresAt === undefined) return "";
+  if (isRuleExpired(rule, now)) return "";
+  return `expires ${new Date(rule.expiresAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })}`;
+};
+
+const MuteRuleGroup = ({
+  title,
+  rules,
+  label,
+  onToggle,
+  onRemove,
+}: {
+  title: string;
+  rules: readonly MuteRule[];
+  label: (rule: MuteRule) => string;
+  onToggle: (id: string, enabled: boolean) => void;
+  onRemove: (id: string) => void;
+}): ReactNode => {
+  if (rules.length === 0) return null;
+  const now = Date.now();
+  return (
+    <div>
+      <span style={{ ...cardLabel, display: "block", marginBottom: 8 }}>
+        {title} · {rules.length}
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rules.map((rule) => {
+          const expired = isRuleExpired(rule, now);
+          const expiry = muteExpiryLabel(rule, now);
+          return (
+            <div
+              key={rule.id}
+              data-testid={`mute-rule-${rule.id}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                padding: "10px 12px",
+                borderRadius: 9,
+                background: rule.enabled ? "var(--glass-2)" : "var(--glass)",
+                border: "1px solid var(--hairline)",
+                opacity: rule.enabled && !expired ? 1 : 0.62,
+              }}
+            >
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontFamily: mono,
+                  fontSize: 12.5,
+                  color: "var(--text-2)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={label(rule)}
+              >
+                {label(rule)}
+              </span>
+              {expired ? (
+                <span style={{ fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                  expired
+                </span>
+              ) : (
+                expiry && (
+                  <span style={{ fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>
+                    {expiry}
+                  </span>
+                )
+              )}
+              <RelayToggle
+                label={rule.enabled ? "On" : "Off"}
+                active={rule.enabled}
+                onClick={() => onToggle(rule.id, !rule.enabled)}
+              />
+              <button
+                type="button"
+                onClick={() => onRemove(rule.id)}
+                aria-label={`Remove mute rule ${label(rule)}`}
+                style={{
+                  display: "flex",
+                  padding: 8,
+                  border: "none",
+                  borderRadius: 9,
+                  background: "transparent",
+                  color: "var(--danger)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width={16} height={16} {...svgBase} strokeWidth={2.2} stroke="currentColor">
+                  <path d="M6 6l12 12M18 6 6 18" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

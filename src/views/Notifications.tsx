@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useProfile, useStore, type NotificationItem, type NotificationType } from "../state/store.tsx";
 import { avatarStyle, displayName, initials, timeAgo } from "../lib/format.ts";
+import { compileMutes, evaluateNotification } from "../lib/mute.ts";
 import { BellIcon, HeartIcon, MessagesIcon, ReplyIcon } from "../ui/icons.tsx";
 import { EmptyState } from "../ui/primitives.tsx";
 
@@ -143,8 +144,15 @@ export const NotificationsView = (): ReactNode => {
   const { state, navigate, markNotificationRead, markAllNotificationsRead } = useStore();
   const [filter, setFilter] = useState<FilterId>("all");
 
-  const unread = useMemo(() => state.notifications.filter((n) => !n.read), [state.notifications]);
-  const items = filter === "unread" ? unread : state.notifications;
+  // Filter muted sources at render so rules added mid-session hide existing
+  // notifications and the unread count below reflects only visible items.
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const visible = useMemo(
+    () => state.notifications.filter((n) => !evaluateNotification(muted, { pubkey: n.pubkey, content: n.content })),
+    [state.notifications, muted],
+  );
+  const unread = useMemo(() => visible.filter((n) => !n.read), [visible]);
+  const items = filter === "unread" ? unread : visible;
 
   const openNotification = (item: NotificationItem): void => {
     markNotificationRead(item.eventId);

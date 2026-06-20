@@ -29,6 +29,21 @@ import {
   savePalette,
   applyPalette,
 } from "../lib/theme.ts";
+import {
+  type MuteSettings,
+  type MuteRuleInput,
+  type MuteRulePatch,
+  type MuteDisplay,
+  EMPTY_MUTE_SETTINGS,
+  compileMutes,
+  evaluateNotification,
+  parseMuteSettings,
+  serializeMuteSettings,
+  addRule,
+  removeRule,
+  updateRule,
+  mergeSettings,
+} from "../lib/mute.ts";
 
 export type ViewId =
   | "home"
@@ -82,11 +97,12 @@ type State = {
   notifications: NotificationItem[];
   notificationReadIds: string[];
   bookmarks: string[]; // local-only note ids
+  muteSettings: MuteSettings; // local-only soft-mute rules + display mode
   ready: boolean;
 };
 
 type Action =
-  | { type: "init"; identity: Identity | null; relays: RelayInfo[]; theme: ThemeMode; palette: PaletteId; bookmarks: string[]; notificationReadIds: string[] }
+  | { type: "init"; identity: Identity | null; relays: RelayInfo[]; theme: ThemeMode; palette: PaletteId; bookmarks: string[]; notificationReadIds: string[]; muteSettings: MuteSettings }
   | { type: "setIdentity"; identity: Identity | null }
   | { type: "setMe"; me: Profile | null }
   | { type: "setRelays"; relays: RelayInfo[] }
@@ -100,6 +116,7 @@ type Action =
   | { type: "pushToast"; toast: Toast }
   | { type: "dropToast"; id: number }
   | { type: "setBookmarks"; bookmarks: string[] }
+  | { type: "setMuteSettings"; muteSettings: MuteSettings }
   | { type: "ready" };
 
 const reducer = (state: State, action: Action): State => {
@@ -114,6 +131,7 @@ const reducer = (state: State, action: Action): State => {
         bookmarks: action.bookmarks,
         notificationReadIds: action.notificationReadIds,
         notifications: applyNotificationReadState(state.notifications, action.notificationReadIds),
+        muteSettings: action.muteSettings,
         ready: true,
       };
     case "setIdentity":
@@ -162,6 +180,8 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, toasts: state.toasts.filter((t) => t.id !== action.id) };
     case "setBookmarks":
       return { ...state, bookmarks: action.bookmarks };
+    case "setMuteSettings":
+      return { ...state, muteSettings: action.muteSettings };
     case "ready":
       return { ...state, ready: true };
   }
@@ -169,8 +189,26 @@ const reducer = (state: State, action: Action): State => {
 
 const BOOKMARKS_KEY = "verity.bookmarks.v1";
 const NOTIFICATION_READ_KEY = "verity.notifications.read.v1";
+const MUTES_KEY = "verity.mutes.v1";
 
 const notificationReadKey = (pubkey: string): string => `${NOTIFICATION_READ_KEY}:${pubkey}`;
+
+const mutesKey = (pubkey: string): string => `${MUTES_KEY}:${pubkey}`;
+
+// Soft mutes are local-only and identity-scoped (like notification read state).
+const loadMuteSettings = (pubkey: string | undefined): MuteSettings => {
+  if (!pubkey) return { ...EMPTY_MUTE_SETTINGS };
+  try {
+    return parseMuteSettings(JSON.parse(localStorage.getItem(mutesKey(pubkey)) ?? "null"));
+  } catch {
+    return { ...EMPTY_MUTE_SETTINGS };
+  }
+};
+
+const saveMuteSettings = (pubkey: string | undefined, settings: MuteSettings): void => {
+  if (!pubkey) return;
+  localStorage.setItem(mutesKey(pubkey), serializeMuteSettings(settings));
+};
 
 const loadNotificationReadIds = (pubkey: string | undefined): string[] => {
   if (!pubkey) return [];
@@ -492,6 +530,13 @@ export type Store = {
   setPalette: (id: PaletteId) => void;
   toggleFollow: (pubkey: string) => Promise<void>;
   toggleBookmark: (noteId: string) => void;
+  addMuteRule: (input: MuteRuleInput) => void;
+  removeMuteRule: (id: string) => void;
+  updateMuteRule: (id: string, patch: MuteRulePatch) => void;
+  toggleMuteAccount: (pubkey: string) => void;
+  setMuteDisplay: (display: MuteDisplay) => void;
+  exportMuteSettings: () => string;
+  importMuteSettings: (json: string) => boolean;
   publish: (template: EventTemplate) => Promise<string>;
   fetchProfile: (pubkey: string) => Promise<Profile | null>;
   signOut: () => void;
@@ -522,12 +567,20 @@ export const StoreProvider = ({
     notifications: [],
     notificationReadIds: [],
     bookmarks: [],
+    muteSettings: { ...EMPTY_MUTE_SETTINGS },
     ready: false,
   });
 
   const clientRef = useRef(client ?? new NostrClient());
   const rootRef = useRef<HTMLDivElement | null>(null);
   const profileCache = useRef(new Map<string, Promise<Profile | null>>());
+
+  // Compiled mute matcher, kept current via a ref so the long-lived notification
+  // subscription can filter without re-subscribing on every rule change.
+  const muteRef = useRef(compileMutes(state.muteSettings.rules));
+  useEffect(() => {
+    muteRef.current = compileMutes(state.muteSettings.rules);
+  }, [state.muteSettings.rules]);
 
   // ---- hash routing ----
   useEffect(() => {
@@ -560,14 +613,16 @@ export const StoreProvider = ({
       palette: loadPalette(),
       bookmarks,
       notificationReadIds: loadNotificationReadIds(identity?.pubkey),
+      muteSettings: loadMuteSettings(identity?.pubkey),
     });
   }, []);
 
-  // ---- load per-identity notification read state ----
+  // ---- load per-identity notification read state + mute rules ----
   useEffect(() => {
     const pubkey = state.identity?.pubkey;
     dispatch({ type: "setNotifications", notifications: [] });
     dispatch({ type: "setNotificationReadIds", ids: loadNotificationReadIds(pubkey) });
+    dispatch({ type: "setMuteSettings", muteSettings: loadMuteSettings(pubkey) });
   }, [state.identity?.pubkey]);
 
   // ---- apply theme/palette to root + document ----
@@ -631,6 +686,7 @@ export const StoreProvider = ({
         (event) => {
           const notification = buildNotification(event, me);
           if (!notification) return;
+          if (evaluateNotification(muteRef.current, notification)) return;
           dispatch({ type: "addNotification", notification });
           if (live) {
             toast(notificationToastText(notification), "info");
@@ -743,6 +799,72 @@ export const StoreProvider = ({
     [state.bookmarks, toast],
   );
 
+  const persistMutes = useCallback(
+    (next: MuteSettings) => {
+      saveMuteSettings(state.identity?.pubkey, next);
+      dispatch({ type: "setMuteSettings", muteSettings: next });
+    },
+    [state.identity?.pubkey],
+  );
+
+  const addMuteRule = useCallback(
+    (input: MuteRuleInput) => persistMutes(addRule(state.muteSettings, input)),
+    [state.muteSettings, persistMutes],
+  );
+
+  const removeMuteRule = useCallback(
+    (id: string) => persistMutes(removeRule(state.muteSettings, id)),
+    [state.muteSettings, persistMutes],
+  );
+
+  const updateMuteRule = useCallback(
+    (id: string, patch: MuteRulePatch) => persistMutes(updateRule(state.muteSettings, id, patch)),
+    [state.muteSettings, persistMutes],
+  );
+
+  const setMuteDisplay = useCallback(
+    (display: MuteDisplay) => persistMutes({ ...state.muteSettings, display }),
+    [state.muteSettings, persistMutes],
+  );
+
+  const toggleMuteAccount = useCallback(
+    (pubkey: string) => {
+      if (pubkey === state.identity?.pubkey) {
+        toast("You can't mute yourself", "warn");
+        return;
+      }
+      const existing = state.muteSettings.rules.find(
+        (r) => r.type === "account" && r.pubkey === pubkey,
+      );
+      if (existing) {
+        persistMutes(removeRule(state.muteSettings, existing.id));
+        toast("Account unmuted", "info");
+      } else {
+        persistMutes(addRule(state.muteSettings, { type: "account", pubkey }));
+        toast("Account muted", "check");
+      }
+    },
+    [state.muteSettings, state.identity?.pubkey, persistMutes, toast],
+  );
+
+  const exportMuteSettings = useCallback(
+    (): string => serializeMuteSettings(state.muteSettings),
+    [state.muteSettings],
+  );
+
+  const importMuteSettings = useCallback(
+    (json: string): boolean => {
+      try {
+        const incoming = parseMuteSettings(JSON.parse(json));
+        persistMutes(mergeSettings(state.muteSettings, incoming));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [state.muteSettings, persistMutes],
+  );
+
   const fetchProfile = useCallback(
     (pubkey: string): Promise<Profile | null> => {
       const cache = profileCache.current;
@@ -781,6 +903,13 @@ export const StoreProvider = ({
     setPalette,
     toggleFollow,
     toggleBookmark,
+    addMuteRule,
+    removeMuteRule,
+    updateMuteRule,
+    toggleMuteAccount,
+    setMuteDisplay,
+    exportMuteSettings,
+    importMuteSettings,
     publish,
     fetchProfile,
     signOut,

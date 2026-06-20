@@ -3,8 +3,8 @@ import type { Note } from "../nostr/types.ts";
 import { useProfile, useStore } from "../state/store.tsx";
 import { displayName, initials, avatarStyle, timeAgo, fmtCount } from "../lib/format.ts";
 import { parseMedia, type Embed } from "../lib/media.ts";
-import { actionStyle, avatarWrap, statusDot, postCardStyle } from "./styles.ts";
-import { CloseIcon, ImageIcon, VerifiedSeal } from "./icons.tsx";
+import { actionStyle, avatarWrap, statusDot, postCardStyle, navStyle } from "./styles.ts";
+import { CloseIcon, ImageIcon, MoreIcon, VerifiedSeal } from "./icons.tsx";
 import type { Engagement } from "../state/hooks.ts";
 import { BubblePop } from "./BubblePop.tsx";
 
@@ -471,7 +471,7 @@ export const PostCard = ({
   onDelete,
   onOpen,
 }: PostCardProps): ReactNode => {
-  const { navigate, state } = useStore();
+  const { navigate, state, toggleMuteAccount, addMuteRule, toast } = useStore();
   const profile = useProfile(note.pubkey);
   const repostProfile = useProfile(repostedBy);
   const [hover, setHover] = useState(false);
@@ -481,6 +481,12 @@ export const PostCard = ({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [exiting, setExiting] = useState(false);
   const exitActionRef = useRef<(() => void) | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Inline "mute a word" capture; null means the input is collapsed.
+  const [wordDraft, setWordDraft] = useState<string | null>(null);
+  // Floating "mute this phrase" button anchored to the live text selection.
+  const contentRef = useRef<HTMLParagraphElement | null>(null);
+  const [phraseSel, setPhraseSel] = useState<{ value: string; x: number; y: number } | null>(null);
 
   // Shrink + dissolve the card, then run the destructive action so the row
   // stays mounted for the duration of the animation before its parent drops it.
@@ -503,6 +509,51 @@ export const PostCard = ({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [confirmDelete]);
+
+  // Close the overflow menu on Escape so it behaves like the delete popover.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+        setWordDraft(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  // Show the floating "Mute this phrase" button while a non-empty selection
+  // lives inside this card's content element; hide it otherwise.
+  useEffect(() => {
+    const onSelect = (): void => {
+      const el = contentRef.current;
+      const selection = window.getSelection();
+      const value = selection?.toString().trim() ?? "";
+      if (!el || !value || !selection || selection.rangeCount === 0) {
+        setPhraseSel(null);
+        return;
+      }
+      const range = selection.getRangeAt(0);
+      // Only react to selections anchored within this card's text.
+      if (!el.contains(range.commonAncestorContainer)) {
+        setPhraseSel(null);
+        return;
+      }
+      // The floating button is absolutely positioned within the <article>
+      // (its position:relative ancestor), so measure offsets against that box,
+      // not the inset content element, or it lands shifted by the avatar column.
+      const cardBox = (el.closest("article") ?? el).getBoundingClientRect();
+      const selBox = range.getBoundingClientRect();
+      setPhraseSel({
+        value,
+        x: selBox.left - cardBox.left + selBox.width / 2,
+        y: selBox.top - cardBox.top,
+      });
+    };
+    document.addEventListener("selectionchange", onSelect);
+    return () => document.removeEventListener("selectionchange", onSelect);
+  }, []);
 
   const handleLike = (): void => {
     if (!e?.liked) {
@@ -546,6 +597,10 @@ export const PostCard = ({
       setConfirmDelete(false);
       return;
     }
+    if (menuOpen) {
+      closeMenu();
+      return;
+    }
     if (onOpen) onOpen();
     else navigate("postDetail", { id: note.id });
   };
@@ -556,6 +611,28 @@ export const PostCard = ({
   const runAction = (event: MouseEvent<HTMLButtonElement>, action: (() => void) | undefined): void => {
     event.stopPropagation();
     action?.();
+  };
+
+  const authorMuted = state.muteSettings.rules.some((r) => r.type === "account" && r.pubkey === note.pubkey);
+  const closeMenu = (): void => {
+    setMenuOpen(false);
+    setWordDraft(null);
+  };
+  const submitWord = (): void => {
+    const value = (wordDraft ?? "").trim();
+    if (!value) return;
+    addMuteRule({ type: "keyword", value });
+    toast("Muted word", "check");
+    closeMenu();
+  };
+  const mutePhrase = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation();
+    const value = phraseSel?.value.trim() ?? "";
+    if (!value) return;
+    addMuteRule({ type: "keyword", value });
+    toast("Muted phrase", "check");
+    window.getSelection()?.removeAllRanges();
+    setPhraseSel(null);
   };
 
   return (
@@ -577,6 +654,7 @@ export const PostCard = ({
       onMouseLeave={() => setHover(false)}
       style={{
         ...postCardStyle,
+        position: "relative",
         background: hover ? "var(--glass-2)" : "var(--glass)",
         borderColor: hover ? "var(--text-3)" : "var(--glass-border)",
         cursor: "pointer",
@@ -614,7 +692,7 @@ export const PostCard = ({
             <span onClick={openAuthor} style={{ fontSize: 13.5, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>{handle}</span>
             <span style={{ fontSize: 13.5, color: "var(--text-3)" }}>· {timeAgo(note.createdAt)}</span>
           </div>
-          {text && <p style={{ margin: "7px 0 0", fontSize: 15.5, lineHeight: 1.55, color: "var(--text)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", textWrap: "pretty" }}>{text}</p>}
+          {text && <p ref={contentRef} style={{ margin: "7px 0 0", fontSize: 15.5, lineHeight: 1.55, color: "var(--text)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", textWrap: "pretty" }}>{text}</p>}
           {embeds.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 11 }}>
               {images.length > 0 && <PhotoGallery images={images} authorName={name} />}
@@ -694,9 +772,135 @@ export const PostCard = ({
                 )}
               </span>
             )}
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMenuOpen((open) => !open);
+                  setWordDraft(null);
+                }}
+                style={actionStyle(menuOpen, "var(--accent)")}
+                title="More"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                data-testid="post-more"
+              >
+                <MoreIcon size={17} />
+              </button>
+              {menuOpen && (
+                <span
+                  role="menu"
+                  aria-label="Post options"
+                  onClick={(event) => event.stopPropagation()}
+                  style={{ ...confirmPopoverStyle, minWidth: 184, padding: 6, gap: 2 }}
+                >
+                  {!isMine && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="post-mute-author"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleMuteAccount(note.pubkey);
+                        closeMenu();
+                      }}
+                      style={navStyle(false)}
+                    >
+                      {authorMuted ? "Unmute author" : "Mute author"}
+                    </button>
+                  )}
+                  {wordDraft === null ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="post-mute-word"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setWordDraft("");
+                      }}
+                      style={navStyle(false)}
+                    >
+                      Mute a word…
+                    </button>
+                  ) : (
+                    <span style={{ display: "flex", gap: 6, padding: "4px 4px 2px" }}>
+                      <input
+                        autoFocus
+                        value={wordDraft}
+                        placeholder="word to mute"
+                        data-testid="post-mute-word-input"
+                        onChange={(event) => setWordDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitWord();
+                          } else if (event.key === "Escape") {
+                            setWordDraft(null);
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          padding: "7px 10px",
+                          borderRadius: 9,
+                          border: "1px solid var(--glass-border)",
+                          background: "var(--glass)",
+                          color: "var(--text)",
+                          fontSize: 13,
+                          fontFamily: "inherit",
+                          outline: "none",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        data-testid="post-mute-word-submit"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          submitWord();
+                        }}
+                        style={{ ...confirmButtonBase, background: "var(--accent)", color: "var(--on-accent)", borderColor: "var(--accent)" }}
+                      >
+                        Mute
+                      </button>
+                    </span>
+                  )}
+                </span>
+              )}
+            </span>
           </div>
         </div>
       </div>
+      {phraseSel && (
+        <button
+          type="button"
+          data-testid="post-mute-phrase"
+          onClick={mutePhrase}
+          style={{
+            position: "absolute",
+            left: phraseSel.x,
+            top: phraseSel.y,
+            transform: "translate(-50%, calc(-100% - 8px))",
+            zIndex: 12,
+            whiteSpace: "nowrap",
+            padding: "6px 12px",
+            borderRadius: 9,
+            border: "1px solid var(--glass-border)",
+            background: "var(--glass-strong)",
+            color: "var(--text)",
+            fontSize: 12.5,
+            fontWeight: 800,
+            fontFamily: "inherit",
+            cursor: "pointer",
+            boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            animation: "verity-scale .14s ease",
+          }}
+        >
+          Mute this phrase
+        </button>
+      )}
     </article>
   );
 };

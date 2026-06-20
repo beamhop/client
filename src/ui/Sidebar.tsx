@@ -1,6 +1,7 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useStore, type ViewId } from "../state/store.tsx";
 import { displayName, initials, avatarStyle } from "../lib/format.ts";
+import { compileMutes, evaluateNotification } from "../lib/mute.ts";
 import { shortNpub } from "../nostr/keys.ts";
 import { PALETTE_ORDER, paletteBanner, type PaletteId } from "../lib/theme.ts";
 import { navStyle, tabStyle } from "./styles.ts";
@@ -42,7 +43,14 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
   const pubkey = state.identity?.pubkey ?? "";
   const name = state.me ? displayName({ name: state.me.name, displayName: state.me.displayName, pubkey }) : "You";
   const relayCount = state.relays.filter((r) => r.enabled && (r.read || r.write)).length;
-  const unreadNotifications = state.notifications.filter((n) => !n.read).length;
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const unreadNotifications = useMemo(
+    () =>
+      state.notifications.filter(
+        (n) => !n.read && !evaluateNotification(muted, { pubkey: n.pubkey, content: n.content }),
+      ).length,
+    [state.notifications, muted],
+  );
 
   return (
     <aside
@@ -273,7 +281,14 @@ const MoreSheet = ({
 export const MobileNav = ({ onCompose, onOpenPalette }: { onCompose: () => void; onOpenPalette: () => void }): ReactNode => {
   const { state, navigate } = useStore();
   const view = state.nav.view;
-  const unreadNotifications = state.notifications.filter((n) => !n.read).length;
+  const muted = useMemo(() => compileMutes(state.muteSettings.rules), [state.muteSettings.rules]);
+  const unreadNotifications = useMemo(
+    () =>
+      state.notifications.filter(
+        (n) => !n.read && !evaluateNotification(muted, { pubkey: n.pubkey, content: n.content }),
+      ).length,
+    [state.notifications, muted],
+  );
   const [slots, setSlots] = useState<number>(() => (typeof window === "undefined" ? 3 : mobileNavSlots(window.innerWidth)));
   const [moreOpen, setMoreOpen] = useState(false);
 
