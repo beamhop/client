@@ -4,6 +4,7 @@ import { useStore, useProfile } from "../state/store.tsx";
 import { decodeDm, encryptDm, buildDm } from "../nostr/dm.ts";
 import { Kind, type DirectMessage } from "../nostr/types.ts";
 import { EmptyState, Spinner } from "../ui/primitives.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { MessagesIcon } from "../ui/icons.tsx";
 import { avatarStyle, initials, displayName } from "../lib/format.ts";
 import { compileMutes, evaluateDm } from "../lib/mute.ts";
@@ -714,8 +715,16 @@ const Bubble = ({ message, mine }: { message: DirectMessage; mine: boolean }): R
     <div style={row}>
       <div>
         <div style={bubble}>{message.content}</div>
-        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4, padding: "0 4px", textAlign: mine ? "right" : "left" }}>
-          {clock(message.createdAt)}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: mine ? "flex-end" : "flex-start", gap: 4, marginTop: 4, padding: "0 4px" }}>
+          <span style={{ fontSize: 11, color: "var(--text-3)", textAlign: mine ? "right" : "left" }}>
+            {clock(message.createdAt)}
+          </span>
+          <EventJsonButton
+            event={message.event}
+            label="Original direct message event"
+            title="View raw direct message event"
+            style={{ width: 22, height: 22, minWidth: 22, borderRadius: 7 }}
+          />
         </div>
       </div>
     </div>

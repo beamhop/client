@@ -14,6 +14,7 @@ import { decodeLongForm, buildLongForm } from "../nostr/events.ts";
 import { renderMarkdown, countWords, readingMinutes } from "../lib/markdown.ts";
 import { Avatar, Spinner } from "../ui/primitives.tsx";
 import { VerifiedSeal } from "../ui/icons.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { timeAgo, fmtCount, displayName } from "../lib/format.ts";
 import { PALETTES } from "../lib/theme.ts";
 
@@ -307,6 +308,7 @@ const ArticleReader = (): ReactNode => {
           Back
         </button>
         <div style={{ flex: 1 }} />
+        <EventJsonButton event={article.event} label="Original article event" />
         <button
           type="button"
           title="Copy link"

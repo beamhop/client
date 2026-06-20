@@ -3,6 +3,7 @@ import type { Event as NostrEvent, EventTemplate } from "nostr-tools";
 import type { Identity } from "./keys.ts";
 import { Kind, type DirectMessage } from "./types.ts";
 import { nowSeconds } from "./client.ts";
+import { withOriginalEvent } from "./events.ts";
 
 /**
  * NIP-04 encrypted DMs. When a NIP-07 signer exposes nip04 we defer to it so the
@@ -55,13 +56,13 @@ export const decodeDm = async (
   if (!peer) return null;
   try {
     const content = await decryptDm(identity, peer, event.content);
-    return {
+    return withOriginalEvent({
       id: event.id,
       pubkey: peer,
       content,
       createdAt: event.created_at,
       fromMe: event.pubkey === me,
-    };
+    }, event);
   } catch {
     return null;
   }

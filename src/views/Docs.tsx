@@ -16,6 +16,7 @@ import { renderMarkdown, countWords, readingMinutes } from "../lib/markdown.ts";
 import { Spinner } from "../ui/primitives.tsx";
 import { avatarStyle, initials, displayName, timeAgo } from "../lib/format.ts";
 import { VerifiedSeal } from "../ui/icons.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 
 /**
  * Module-level cache of resolved docs keyed by `pubkey:identifier`. The reader
@@ -271,6 +272,7 @@ const DocCard = ({ doc, onOpen }: { doc: LongForm; onOpen: () => void }): ReactN
           ))}
         </div>
       </div>
+      <EventJsonButton event={doc.event} label="Original documentation event" />
       <ChevronRightGlyph />
     </div>
   );
@@ -576,6 +578,7 @@ const DocReader = (): ReactNode => {
           Docs
         </button>
         <div style={{ flex: 1 }} />
+        <EventJsonButton event={doc.event} label="Original documentation event" />
         <button type="button" onClick={() => void onShare()} title="Copy link" style={iconButtonStyle}>
           <ShareGlyph />
         </button>

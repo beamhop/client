@@ -35,6 +35,7 @@ export type Profile = {
   lud16?: string;
   website?: string;
   role?: string;
+  event?: NostrEvent;
 };
 
 /** A feed note (kind 1) normalized for the UI. */
@@ -46,6 +47,7 @@ export type Note = {
   tags: string[][];
   replyTo?: string;
   rootId?: string;
+  event?: NostrEvent;
 };
 
 /** Long-form content (kind 30023): both blog Articles and Documentation. */
@@ -61,6 +63,7 @@ export type LongForm = {
   updatedAt: number;
   hashtags: string[];
   kind: "doc" | "article";
+  event?: NostrEvent;
 };
 
 /** Direct message conversation peer + decrypted messages. */
@@ -70,6 +73,7 @@ export type DirectMessage = {
   content: string;
   createdAt: number;
   fromMe: boolean;
+  event?: NostrEvent;
 };
 
 /** A reaction (kind 7) — content "+", "🤙", etc. */
@@ -78,6 +82,7 @@ export type Reaction = {
   pubkey: string;
   targetId: string;
   content: string;
+  event?: NostrEvent;
 };
 
 export type RelayStatus = "connecting" | "connected" | "error" | "disconnected";

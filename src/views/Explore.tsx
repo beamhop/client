@@ -17,6 +17,7 @@ import { decodeLongForm, decodeNote, buildReaction, buildRepost } from "../nostr
 import { nowSeconds } from "../nostr/client.ts";
 import { EmptyState, Spinner } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { SearchIcon, VerifiedSeal } from "../ui/icons.tsx";
 import { followStyle, statusDot, avatarWrap } from "../ui/styles.ts";
 import {
@@ -502,6 +503,7 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
           </button>
 
           <span style={{ flex: 1 }} />
+          <EventJsonButton event={article.event} label="Original article event" />
 
           {isMine && (
             <button

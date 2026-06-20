@@ -26,6 +26,7 @@ export type TimelineItem =
       note: Note;
       repostedBy: string;
       repostEventId: string;
+      repostEvent?: NostrEvent;
     };
 
 const sortTimelineItems = (items: Iterable<TimelineItem>): TimelineItem[] =>
@@ -197,6 +198,7 @@ export const useTimelineFeed = (
       note,
       repostedBy: event.pubkey,
       repostEventId: event.id,
+      repostEvent: event,
     });
     return true;
   }, []);

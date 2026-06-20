@@ -4,6 +4,7 @@ import { avatarStyle, displayName, initials, timeAgo } from "../lib/format.ts";
 import { compileMutes, evaluateNotification } from "../lib/mute.ts";
 import { BellIcon, HeartIcon, MessagesIcon, ReplyIcon } from "../ui/icons.tsx";
 import { EmptyState } from "../ui/primitives.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 
 type FilterId = "all" | "unread";
 
@@ -106,7 +107,19 @@ const NotificationRow = ({
   const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey: item.pubkey });
 
   return (
-    <button type="button" data-testid="notification-row" onClick={() => onOpen(item)} style={rowStyle(!item.read)}>
+    <div
+      role="button"
+      tabIndex={0}
+      data-testid="notification-row"
+      onClick={() => onOpen(item)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(item);
+        }
+      }}
+      style={rowStyle(!item.read)}
+    >
       <span style={{ position: "relative", flexShrink: 0 }}>
         <span style={avatarStyle(item.pubkey, 42, profile?.picture)}>{!profile?.picture && initials(name)}</span>
         {!item.read && (
@@ -136,7 +149,8 @@ const NotificationRow = ({
           {timeAgo(item.createdAt)}
         </span>
       </span>
-    </button>
+      <EventJsonButton event={item.event} label="Original notification event" />
+    </div>
   );
 };
 

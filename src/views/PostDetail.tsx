@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Filter } from "nostr-tools";
 import { useStore, routeToHash } from "../state/store.tsx";
 import { useEngagement, type Engagement } from "../state/hooks.ts";
@@ -38,6 +38,13 @@ const buttonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const focusedHighlightStyle: CSSProperties = {
+  borderRadius: 12,
+  outline: "2px solid var(--accent)",
+  outlineOffset: 2,
+  background: "var(--accent-soft)",
+};
+
 const ChevronLeft = (): ReactNode => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m15 18-6-6 6-6" />
@@ -54,15 +61,51 @@ const ShareGlyph = (): ReactNode => (
 const postLink = (id: string): string =>
   `${location.origin}${location.pathname}${location.search}${routeToHash({ view: "postDetail", params: { id } })}`;
 
+// Depth-first tree builder used for both thread mode (from thread root) and
+// standalone reply mode (from the viewed post). skipId excludes a note from
+// the child list — used to omit the thread root that is rendered separately.
+const buildThreadTree = (
+  startId: string,
+  notes: Note[],
+  skipId: string | null,
+): Array<{ note: Note; depth: number }> => {
+  const knownIds = new Set([startId, ...notes.map((n) => n.id)]);
+  const byParent = new Map<string, Note[]>();
+  for (const n of notes) {
+    if (skipId !== null && n.id === skipId) continue;
+    const parentId = n.replyTo && knownIds.has(n.replyTo) ? n.replyTo : startId;
+    const bucket = byParent.get(parentId);
+    if (bucket) bucket.push(n);
+    else byParent.set(parentId, [n]);
+  }
+  const result: Array<{ note: Note; depth: number }> = [];
+  const visited = new Set<string>();
+  const walk = (parentId: string, depth: number): void => {
+    if (visited.has(parentId)) return;
+    visited.add(parentId);
+    for (const child of (byParent.get(parentId) ?? []).sort((a, b) => a.createdAt - b.createdAt)) {
+      result.push({ note: child, depth });
+      walk(child.id, depth + 1);
+    }
+  };
+  walk(startId, 0);
+  return result;
+};
+
 export const PostDetailView = (): ReactNode => {
   const { state, client, readRelayUrls, publish, toast, toggleBookmark, navigate } = useStore();
   const id = state.nav.params.id;
   const [note, setNote] = useState<Note | null>(null);
   const [replies, setReplies] = useState<Note[]>([]);
+  // Populated when the viewed post belongs to a thread (has a rootId).
+  // Contains the thread root + all posts in the thread.
+  const [threadNotes, setThreadNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyTarget, setReplyTarget] = useState<Note | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Engagement>>>({});
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
+
+  const focusedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) {
@@ -77,19 +120,44 @@ export const PostDetailView = (): ReactNode => {
     setLoading(true);
     setNote(null);
     setReplies([]);
+    setThreadNotes([]);
     void (async () => {
-      const [target, replyEvents] = await Promise.all([
-        client.get(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], ids: [id] } satisfies Filter),
-        client.list(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], "#e": [id], limit: 100 } satisfies Filter),
-      ]);
+      const targetEvent = await client.get(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], ids: [id] } satisfies Filter);
       if (cancelled) return;
-      setNote(target ? decodeNote(target) : null);
-      setReplies(
-        replyEvents
-          .map(decodeNote)
-          .filter((reply) => reply.id !== id)
-          .sort((a, b) => a.createdAt - b.createdAt),
-      );
+      if (!targetEvent) {
+        setLoading(false);
+        return;
+      }
+      const decoded = decodeNote(targetEvent);
+      setNote(decoded);
+
+      const { rootId } = decoded;
+      if (rootId) {
+        // Fetch the thread root and every post that references the root.
+        const [rootEvent, threadEvents] = await Promise.all([
+          client.get(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], ids: [rootId] } satisfies Filter),
+          client.list(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], "#e": [rootId], limit: 200 } satisfies Filter),
+        ]);
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const all: Note[] = [];
+        const add = (n: Note): void => {
+          if (!seen.has(n.id)) { seen.add(n.id); all.push(n); }
+        };
+        if (rootEvent) add(decodeNote(rootEvent));
+        threadEvents.forEach((e) => add(decodeNote(e)));
+        add(decoded); // guarantee the focused post is always present
+        setThreadNotes(all.sort((a, b) => a.createdAt - b.createdAt));
+      } else {
+        const replyEvents = await client.list(readRelayUrls, { kinds: [Kind.Note, Kind.Mention], "#e": [id], limit: 100 } satisfies Filter);
+        if (cancelled) return;
+        setReplies(
+          replyEvents
+            .map(decodeNote)
+            .filter((reply) => reply.id !== id)
+            .sort((a, b) => a.createdAt - b.createdAt),
+        );
+      }
       setLoading(false);
     })();
     return () => {
@@ -97,12 +165,48 @@ export const PostDetailView = (): ReactNode => {
     };
   }, [client, readRelayUrls, id]);
 
+  // Scroll the focused post into view after the thread finishes loading.
+  useEffect(() => {
+    if (!loading && note?.rootId && focusedRef.current) {
+      const timer = setTimeout(() => focusedRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, note?.id]);
+
+  const isInThread = Boolean(note?.rootId) && threadNotes.length > 0;
+
   const visibleReplies = useMemo(() => replies.filter((reply) => !deleted.has(reply.id)), [replies, deleted]);
+
+  const visibleThreadNotes = useMemo(() => threadNotes.filter((n) => !deleted.has(n.id)), [threadNotes, deleted]);
+
   const visibleIds = useMemo(
-    () => [note?.id, ...visibleReplies.map((reply) => reply.id)].filter((value): value is string => Boolean(value)),
-    [note?.id, visibleReplies],
+    () =>
+      isInThread
+        ? visibleThreadNotes.map((n) => n.id)
+        : [note?.id, ...visibleReplies.map((r) => r.id)].filter((v): v is string => Boolean(v)),
+    [isInThread, note?.id, visibleReplies, visibleThreadNotes],
   );
+
   const engagement = useEngagement(visibleIds, optimistic);
+
+  // Thread mode: full tree from the thread root, excluding root itself (rendered at top).
+  const threadedNotes = useMemo(
+    (): Array<{ note: Note; depth: number }> =>
+      isInThread && note?.rootId ? buildThreadTree(note.rootId, visibleThreadNotes, note.rootId) : [],
+    [isInThread, note?.rootId, visibleThreadNotes],
+  );
+
+  // Standalone mode: replies threaded under the viewed post.
+  const threadedReplies = useMemo(
+    (): Array<{ note: Note; depth: number }> =>
+      !isInThread && id ? buildThreadTree(id, visibleReplies, null) : [],
+    [isInThread, id, visibleReplies],
+  );
+
+  const threadRootNote = useMemo(
+    () => (isInThread && note?.rootId ? visibleThreadNotes.find((n) => n.id === note.rootId) ?? null : null),
+    [isInThread, note?.rootId, visibleThreadNotes],
+  );
 
   const like = useCallback(
     (target: Note): void => {
@@ -204,6 +308,11 @@ export const PostDetailView = (): ReactNode => {
     />
   );
 
+  const depthWrapStyle = (depth: number): CSSProperties | undefined =>
+    depth > 0
+      ? { marginLeft: Math.min(depth, 4) * 18, borderLeft: "2px solid var(--hairline)", paddingLeft: 14 }
+      : undefined;
+
   return (
     <div data-testid="view-post-detail" style={{ minHeight: "100%" }}>
       <div style={topBarStyle}>
@@ -227,16 +336,34 @@ export const PostDetailView = (): ReactNode => {
           </div>
         ) : !note || deleted.has(note.id) ? (
           <EmptyState title="Post not found" hint="This post may not be available on your configured relays." />
+        ) : isInThread ? (
+          <>
+            {threadRootNote && renderPost(threadRootNote, "Thread")}
+            {threadedNotes.map(({ note: n, depth }) => {
+              const isFocused = n.id === id;
+              return (
+                <div key={n.id} ref={isFocused ? focusedRef : undefined} style={depthWrapStyle(depth)}>
+                  <div style={isFocused ? focusedHighlightStyle : undefined}>
+                    {renderPost(n)}
+                  </div>
+                </div>
+              );
+            })}
+          </>
         ) : (
           <>
             {renderPost(note, "Post")}
             <div style={{ margin: "22px 0 12px", fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
               Replies
             </div>
-            {visibleReplies.length === 0 ? (
+            {threadedReplies.length === 0 ? (
               <EmptyState title="No replies yet" hint="Start the conversation from this post." />
             ) : (
-              visibleReplies.map((reply) => renderPost(reply))
+              threadedReplies.map(({ note: reply, depth }) => (
+                <div key={reply.id} style={depthWrapStyle(depth)}>
+                  {renderPost(reply)}
+                </div>
+              ))
             )}
           </>
         )}

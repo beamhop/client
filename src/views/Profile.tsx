@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import type { Filter } from "nostr-tools";
+import type { Event as NostrEvent, Filter } from "nostr-tools";
 import { useStore, useProfile, routeToHash } from "../state/store.tsx";
 import { useEngagement, type Engagement } from "../state/hooks.ts";
 import { ARTICLE_MARKER, Kind, type LongForm, type Note, type Profile } from "../nostr/types.ts";
@@ -26,6 +26,8 @@ import { countWords, readingMinutes } from "../lib/markdown.ts";
 import { timeAgo, displayName, avatarStyle, initials, fmtCount } from "../lib/format.ts";
 import { Modal, Spinner, EmptyState } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
+import { ProfileToastChip } from "../ui/ProfileToastChip.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { followStyle, profileTabStyle, statusDot } from "../ui/styles.ts";
 import { MessagesIcon, VerifiedSeal } from "../ui/icons.tsx";
 import { Compose } from "../ui/Compose.tsx";
@@ -565,6 +567,7 @@ const ArticleCard = ({
             <BookIcon /> {mins} min read
           </span>
           <div style={{ flex: 1 }} />
+          <EventJsonButton event={article.event} label="Original article event" />
           {isMine && (
             <button
               type="button"
@@ -809,7 +812,7 @@ export const ProfileView = (): ReactNode => {
   const [tab, setTab] = useState<TabId>(routeTab);
   const [notes, setNotes] = useState<Note[]>([]);
   const [articles, setArticles] = useState<LongForm[]>([]);
-  const [repostedNotes, setRepostedNotes] = useState<Array<{ repostAt: number; note: Note }>>([]);
+  const [repostedNotes, setRepostedNotes] = useState<Array<{ repostAt: number; note: Note; repostEvent?: NostrEvent }>>([]);
   const [followerPubkeys, setFollowerPubkeys] = useState<string[] | null>(null);
   const [theirFollowingPubkeys, setTheirFollowingPubkeys] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -914,7 +917,7 @@ export const ProfileView = (): ReactNode => {
       const byId = new Map(noteEvents.map((e) => [e.id, decodeNote(e)]));
       const resolved = liveReposts.flatMap(([noteId, re]) => {
         const note = byId.get(noteId);
-        return note ? [{ repostAt: re.created_at, note }] : [];
+        return note ? [{ repostAt: re.created_at, note, repostEvent: re }] : [];
       });
       setRepostedNotes(resolved);
     })();
@@ -982,9 +985,9 @@ export const ProfileView = (): ReactNode => {
 
   // merged posts + reposts sorted by timestamp (for the Posts tab)
   const postFeed = useMemo(() => {
-    type FeedItem = { at: number; type: "own"; note: Note } | { at: number; type: "repost"; note: Note };
+    type FeedItem = { at: number; type: "own"; note: Note } | { at: number; type: "repost"; note: Note; repostEvent?: NostrEvent };
     const own: FeedItem[] = posts.map((n) => ({ at: n.createdAt, type: "own", note: n }));
-    const reposts: FeedItem[] = repostedNotes.map((r) => ({ at: r.repostAt, type: "repost", note: r.note }));
+    const reposts: FeedItem[] = repostedNotes.map((r) => ({ at: r.repostAt, type: "repost", note: r.note, repostEvent: r.repostEvent }));
     return [...own, ...reposts].sort((a, b) => b.at - a.at);
   }, [posts, repostedNotes]);
 
@@ -1481,6 +1484,12 @@ export const ProfileView = (): ReactNode => {
                         <path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
                       </svg>
                       You reposted
+                      <EventJsonButton
+                        event={item.repostEvent}
+                        label="Original repost event"
+                        title="View raw repost event"
+                        style={{ width: 24, height: 24, minWidth: 24, borderRadius: 7 }}
+                      />
                     </div>
                     {renderNoteCard(item.note)}
                   </div>
@@ -1565,28 +1574,37 @@ export const ProfileView = (): ReactNode => {
                     padding: 16,
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12.5,
-                      color: "var(--text-3)",
-                      marginBottom: 10,
-                    }}
-                  >
-                    <ChainIcon />
-                    Replying to{" "}
-                    <span
-                      style={{
-                        color: "var(--accent)",
-                        fontWeight: 600,
-                        fontFamily: "'JetBrains Mono',monospace",
-                      }}
-                    >
-                      {note.replyTo ? `${note.replyTo.slice(0, 10)}…` : "a note"}
-                    </span>
-                  </div>
+                  {(() => {
+                    const replyAuthorPubkey = note.tags.find((t) => t[0] === "p")?.[1];
+                    return (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          fontSize: 12.5,
+                          color: "var(--text-3)",
+                          marginBottom: 10,
+                        }}
+                      >
+                        <ChainIcon />
+                        Replying to{" "}
+                        {replyAuthorPubkey ? (
+                          <ProfileToastChip pubkey={replyAuthorPubkey} />
+                        ) : (
+                          <span
+                            style={{
+                              color: "var(--accent)",
+                              fontWeight: 600,
+                              fontFamily: "'JetBrains Mono',monospace",
+                            }}
+                          >
+                            {note.replyTo ? `${note.replyTo.slice(0, 10)}…` : "a note"}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {renderNoteCard(note)}
                 </article>
               ))

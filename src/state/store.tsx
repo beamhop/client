@@ -83,6 +83,7 @@ export type NotificationItem = {
   content: string;
   targetId?: string;
   read: boolean;
+  event?: NostrEvent;
 };
 
 type State = {
@@ -98,11 +99,12 @@ type State = {
   notificationReadIds: string[];
   bookmarks: string[]; // local-only note ids
   muteSettings: MuteSettings; // local-only soft-mute rules + display mode
+  developerMode: boolean;
   ready: boolean;
 };
 
 type Action =
-  | { type: "init"; identity: Identity | null; relays: RelayInfo[]; theme: ThemeMode; palette: PaletteId; bookmarks: string[]; notificationReadIds: string[]; muteSettings: MuteSettings }
+  | { type: "init"; identity: Identity | null; relays: RelayInfo[]; theme: ThemeMode; palette: PaletteId; bookmarks: string[]; notificationReadIds: string[]; muteSettings: MuteSettings; developerMode: boolean }
   | { type: "setIdentity"; identity: Identity | null }
   | { type: "setMe"; me: Profile | null }
   | { type: "setRelays"; relays: RelayInfo[] }
@@ -117,6 +119,7 @@ type Action =
   | { type: "dropToast"; id: number }
   | { type: "setBookmarks"; bookmarks: string[] }
   | { type: "setMuteSettings"; muteSettings: MuteSettings }
+  | { type: "setDeveloperMode"; developerMode: boolean }
   | { type: "ready" };
 
 const reducer = (state: State, action: Action): State => {
@@ -132,6 +135,7 @@ const reducer = (state: State, action: Action): State => {
         notificationReadIds: action.notificationReadIds,
         notifications: applyNotificationReadState(state.notifications, action.notificationReadIds),
         muteSettings: action.muteSettings,
+        developerMode: action.developerMode,
         ready: true,
       };
     case "setIdentity":
@@ -159,10 +163,10 @@ const reducer = (state: State, action: Action): State => {
         ),
       };
     case "addNotification": {
-      const notification = {
-        ...action.notification,
-        read: state.notificationReadIds.includes(action.notification.eventId),
-      };
+      const notification = cloneNotificationWithRead(
+        action.notification,
+        state.notificationReadIds.includes(action.notification.eventId),
+      );
       return {
         ...state,
         notifications: sortNotifications(dedupeNotifications([notification, ...state.notifications])),
@@ -182,6 +186,8 @@ const reducer = (state: State, action: Action): State => {
       return { ...state, bookmarks: action.bookmarks };
     case "setMuteSettings":
       return { ...state, muteSettings: action.muteSettings };
+    case "setDeveloperMode":
+      return { ...state, developerMode: action.developerMode };
     case "ready":
       return { ...state, ready: true };
   }
@@ -190,10 +196,23 @@ const reducer = (state: State, action: Action): State => {
 const BOOKMARKS_KEY = "verity.bookmarks.v1";
 const NOTIFICATION_READ_KEY = "verity.notifications.read.v1";
 const MUTES_KEY = "verity.mutes.v1";
+const DEVELOPER_MODE_KEY = "verity.developerMode.v1";
 
 const notificationReadKey = (pubkey: string): string => `${NOTIFICATION_READ_KEY}:${pubkey}`;
 
 const mutesKey = (pubkey: string): string => `${MUTES_KEY}:${pubkey}`;
+
+const loadDeveloperMode = (): boolean => {
+  try {
+    return localStorage.getItem(DEVELOPER_MODE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+const saveDeveloperMode = (enabled: boolean): void => {
+  localStorage.setItem(DEVELOPER_MODE_KEY, enabled ? "true" : "false");
+};
 
 // Soft mutes are local-only and identity-scoped (like notification read state).
 const loadMuteSettings = (pubkey: string | undefined): MuteSettings => {
@@ -244,7 +263,12 @@ const applyNotificationReadState = (
   readIds: string[],
 ): NotificationItem[] => {
   const read = new Set(readIds);
-  return (items ?? []).map((item) => ({ ...item, read: read.has(item.eventId) }));
+  return (items ?? []).map((item) => cloneNotificationWithRead(item, read.has(item.eventId)));
+};
+
+const cloneNotificationWithRead = (item: NotificationItem, read: boolean): NotificationItem => {
+  const clone = { ...item, read };
+  return item.event ? withNotificationEvent(clone, item.event) : clone;
 };
 
 const tagValue = (event: NostrEvent, key: string): string | undefined =>
@@ -262,7 +286,7 @@ const buildNotification = (event: NostrEvent, me: string): NotificationItem | nu
 
   if (event.kind === Kind.Note || event.kind === Kind.Mention) {
     const targetId = notificationTarget(event);
-    return {
+    return withNotificationEvent({
       id: event.id,
       eventId: event.id,
       type: targetId ? "reply" : "mention",
@@ -271,11 +295,11 @@ const buildNotification = (event: NostrEvent, me: string): NotificationItem | nu
       content: event.content,
       targetId,
       read: false,
-    };
+    }, event);
   }
 
   if (event.kind === Kind.Reaction) {
-    return {
+    return withNotificationEvent({
       id: event.id,
       eventId: event.id,
       type: "reaction",
@@ -284,11 +308,11 @@ const buildNotification = (event: NostrEvent, me: string): NotificationItem | nu
       content: event.content || "+",
       targetId: notificationTarget(event),
       read: false,
-    };
+    }, event);
   }
 
   if (event.kind === Kind.ZapReceipt) {
-    return {
+    return withNotificationEvent({
       id: event.id,
       eventId: event.id,
       type: "zap",
@@ -297,11 +321,11 @@ const buildNotification = (event: NostrEvent, me: string): NotificationItem | nu
       content: tagValue(event, "amount") ?? event.content,
       targetId: notificationTarget(event),
       read: false,
-    };
+    }, event);
   }
 
   if (event.kind === Kind.EncryptedDM || event.kind === Kind.PrivateDirectMessage) {
-    return {
+    return withNotificationEvent({
       id: event.id,
       eventId: event.id,
       type: "dm",
@@ -309,10 +333,19 @@ const buildNotification = (event: NostrEvent, me: string): NotificationItem | nu
       createdAt: event.created_at,
       content: "",
       read: false,
-    };
+    }, event);
   }
 
   return null;
+};
+
+const withNotificationEvent = (notification: NotificationItem, event: NostrEvent): NotificationItem => {
+  Object.defineProperty(notification, "event", {
+    value: event,
+    enumerable: false,
+    configurable: true,
+  });
+  return notification;
 };
 
 const notificationToastText = (notification: NotificationItem): string => {
@@ -528,6 +561,7 @@ export type Store = {
   setRelays: (relays: RelayInfo[]) => void;
   toggleTheme: () => void;
   setPalette: (id: PaletteId) => void;
+  setDeveloperMode: (enabled: boolean) => void;
   toggleFollow: (pubkey: string) => Promise<void>;
   toggleBookmark: (noteId: string) => void;
   addMuteRule: (input: MuteRuleInput) => void;
@@ -568,6 +602,7 @@ export const StoreProvider = ({
     notificationReadIds: [],
     bookmarks: [],
     muteSettings: { ...EMPTY_MUTE_SETTINGS },
+    developerMode: false,
     ready: false,
   });
 
@@ -614,6 +649,7 @@ export const StoreProvider = ({
       bookmarks,
       notificationReadIds: loadNotificationReadIds(identity?.pubkey),
       muteSettings: loadMuteSettings(identity?.pubkey),
+      developerMode: loadDeveloperMode(),
     });
   }, []);
 
@@ -759,6 +795,12 @@ export const StoreProvider = ({
     [state.theme, toast],
   );
 
+  const setDeveloperMode = useCallback((enabled: boolean) => {
+    saveDeveloperMode(enabled);
+    dispatch({ type: "setDeveloperMode", developerMode: enabled });
+    toast(enabled ? "Developer mode enabled" : "Developer mode disabled", enabled ? "check" : "info");
+  }, [toast]);
+
   const publish = useCallback(
     async (template: EventTemplate): Promise<string> => {
       if (!state.identity) throw new Error("Sign in first");
@@ -901,6 +943,7 @@ export const StoreProvider = ({
     setRelays,
     toggleTheme,
     setPalette,
+    setDeveloperMode,
     toggleFollow,
     toggleBookmark,
     addMuteRule,

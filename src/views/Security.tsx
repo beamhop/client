@@ -273,6 +273,7 @@ export const SecurityView = (): ReactNode => {
     setRelays,
     toast,
     signOut,
+    setDeveloperMode,
     addMuteRule,
     removeMuteRule,
     updateMuteRule,
@@ -761,6 +762,14 @@ export const SecurityView = (): ReactNode => {
           on={prefs.delegation}
           testId="toggle-delegation"
           onToggle={() => setPrefs((p) => ({ ...p, delegation: !p.delegation }))}
+          border
+        />
+        <GovRow
+          title="Developer mode"
+          detail="Show raw Nostr event JSON controls on posts, articles, docs, messages, and notifications."
+          on={state.developerMode}
+          testId="toggle-developer-mode"
+          onToggle={() => setDeveloperMode(!state.developerMode)}
         />
       </div>
 

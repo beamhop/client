@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import type { Event as NostrEvent } from "nostr-tools";
 import type { Note } from "../nostr/types.ts";
 import { useProfile, useStore } from "../state/store.tsx";
 import { displayName, initials, avatarStyle, timeAgo, fmtCount } from "../lib/format.ts";
@@ -7,6 +8,7 @@ import { actionStyle, avatarWrap, statusDot, postCardStyle, navStyle } from "./s
 import { CloseIcon, ImageIcon, MoreIcon, VerifiedSeal } from "./icons.tsx";
 import type { Engagement } from "../state/hooks.ts";
 import { BubblePop } from "./BubblePop.tsx";
+import { EventJsonButton } from "./EventJsonModal.tsx";
 
 type PostCardProps = {
   note: Note;
@@ -15,6 +17,7 @@ type PostCardProps = {
   pinnedLabel?: string;
   repostedBy?: string;
   repostedAt?: number;
+  repostEvent?: NostrEvent;
   isAgent?: boolean;
   agentOwner?: string;
   online?: boolean;
@@ -460,6 +463,7 @@ export const PostCard = ({
   pinnedLabel,
   repostedBy,
   repostedAt,
+  repostEvent,
   isAgent,
   agentOwner,
   online,
@@ -668,6 +672,12 @@ export const PostCard = ({
           <RepostGlyph />
           <span>{repostLabel}</span>
           {repostedAt !== undefined && <span style={{ fontWeight: 600 }}>· {timeAgo(repostedAt)}</span>}
+          <EventJsonButton
+            event={repostEvent}
+            label="Original repost event"
+            title="View raw repost event"
+            style={{ width: 24, height: 24, minWidth: 24, borderRadius: 7 }}
+          />
         </div>
       )}
       {pinnedLabel && (
@@ -723,6 +733,7 @@ export const PostCard = ({
             <button onClick={(event) => runAction(event, onShare)} style={actionStyle(false, "var(--accent)")} title="Share">
               <ShareGlyph />
             </button>
+            <EventJsonButton event={note.event} label="Original post event" style={actionStyle(false, "var(--accent)")} />
             {isMine && onDelete && (
               <span style={{ position: "relative", display: "inline-flex" }}>
                 <button

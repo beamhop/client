@@ -7,6 +7,7 @@ import { buildNote, buildReaction, buildRepost, decodeLongForm } from "../nostr/
 import { nowSeconds } from "../nostr/client.ts";
 import { Avatar, Spinner, EmptyState } from "../ui/primitives.tsx";
 import { PostCard } from "../ui/PostCard.tsx";
+import { EventJsonButton } from "../ui/EventJsonModal.tsx";
 import { HomeIcon } from "../ui/icons.tsx";
 import { displayName, avatarStyle, initials, timeAgo } from "../lib/format.ts";
 import { compileMutes, arrangeFeed, evaluateNote, evaluateRepost, evaluateArticle, type FeedRow } from "../lib/mute.ts";
@@ -380,6 +381,7 @@ const ArticleCard = ({ article, mine }: { article: LongForm; mine: boolean }): R
             {minutes} min read
           </span>
           <div style={{ flex: 1 }} />
+          <EventJsonButton event={article.event} label="Original article event" />
           {mine && <span style={{ color: "var(--text-3)" }}>Yours</span>}
         </div>
       </div>
@@ -805,6 +807,7 @@ export const HomeView = (): ReactNode => {
           bookmarked={state.bookmarks.includes(note.id)}
           repostedBy={item.type === "repost" ? item.repostedBy : undefined}
           repostedAt={item.type === "repost" ? item.createdAt : undefined}
+          repostEvent={item.type === "repost" ? item.repostEvent : undefined}
           isAgent={agentPubkeys.has(note.pubkey)}
           onReply={() => setReplyTarget(note)}
           onRepost={() => repost(note)}

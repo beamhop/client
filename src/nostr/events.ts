@@ -12,6 +12,15 @@ import { nowSeconds } from "./client.ts";
 
 // ---------- decoders: NostrEvent -> domain ----------
 
+export const withOriginalEvent = <T extends object>(value: T, event: NostrEvent): T => {
+  Object.defineProperty(value, "event", {
+    value: event,
+    enumerable: false,
+    configurable: true,
+  });
+  return value;
+};
+
 export const decodeProfile = (event: NostrEvent): Profile => {
   let meta: Record<string, unknown> = {};
   try {
@@ -21,7 +30,7 @@ export const decodeProfile = (event: NostrEvent): Profile => {
   }
   const str = (k: string): string | undefined =>
     typeof meta[k] === "string" ? (meta[k] as string) : undefined;
-  return {
+  return withOriginalEvent({
     pubkey: event.pubkey,
     name: str("name"),
     displayName: str("display_name") ?? str("displayName"),
@@ -32,7 +41,7 @@ export const decodeProfile = (event: NostrEvent): Profile => {
     lud16: str("lud16"),
     website: str("website"),
     role: str("role"),
-  };
+  }, event);
 };
 
 export const decodeNote = (event: NostrEvent): Note => {
@@ -44,7 +53,7 @@ export const decodeNote = (event: NostrEvent): Note => {
     eTags.find((t) => t[3] === "reply") ??
     root ??
     [...eTags].reverse().find((t) => t[3] === undefined);
-  return {
+  return withOriginalEvent({
     id: event.id,
     pubkey: event.pubkey,
     content: event.content,
@@ -52,13 +61,13 @@ export const decodeNote = (event: NostrEvent): Note => {
     tags: event.tags,
     replyTo: reply?.[1],
     rootId: root?.[1],
-  };
+  }, event);
 };
 
 export const decodeReaction = (event: NostrEvent): Reaction | null => {
   const target = [...event.tags].reverse().find((t) => t[0] === "e");
   if (!target?.[1]) return null;
-  return { id: event.id, pubkey: event.pubkey, targetId: target[1], content: event.content };
+  return withOriginalEvent({ id: event.id, pubkey: event.pubkey, targetId: target[1], content: event.content }, event);
 };
 
 export type RepostPointer = {
@@ -116,7 +125,7 @@ export const decodeLongForm = (event: NostrEvent): LongForm => {
   const markers = event.tags.flatMap((t) => (t[0] === "t" && t[1] ? [t[1]] : []));
   const kind: LongForm["kind"] = markers.includes(DOC_MARKER) ? "doc" : "article";
   const published = Number(tagValue(event, "published_at") ?? event.created_at);
-  return {
+  return withOriginalEvent({
     id: event.id,
     pubkey: event.pubkey,
     identifier: tagValue(event, "d") ?? event.id,
@@ -128,7 +137,7 @@ export const decodeLongForm = (event: NostrEvent): LongForm => {
     updatedAt: event.created_at,
     hashtags: markers.filter((m) => m !== DOC_MARKER && m !== ARTICLE_MARKER),
     kind,
-  };
+  }, event);
 };
 
 // ---------- builders: domain -> EventTemplate ----------
