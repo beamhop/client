@@ -1,5 +1,1 @@
-[test]
-# Order matters: setup.ts registers the happy-dom globals (window/document/
-# localStorage/...) BEFORE teardown.ts imports testing-library, whose `screen`
-# helper binds to `document` at import time.
-preload = ["./test/setup.ts", "./test/teardown.ts"]
+# Per-package test setup is in packages/*/bunfig.toml and apps/*/bunfig.toml

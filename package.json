@@ -1,30 +1,22 @@
 {
-  "name": "@beamhop/client",
-  "version": "0.1.0",
-  "type": "module",
+  "name": "beamhop",
+  "version": "0.0.0",
   "private": true,
-  "description": "Beamhop — a glass-morphic Nostr client with first-class Documentations (NIP-23 long-form)",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "bun --hot run src/server.ts",
-    "build": "bun run scripts/build.ts",
-    "start": "NODE_ENV=production bun run src/server.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test src",
-    "test:e2e": "bun test e2e"
-  },
-  "dependencies": {
-    "nostr-tools": "^2.10.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "web-haptics": "^0.0.6"
+    "dev": "bun --cwd apps/client run dev",
+    "build": "bun --cwd apps/client run build",
+    "start": "bun --cwd apps/client run start",
+    "typecheck": "bun run --filter='*' typecheck",
+    "test": "bun run --filter='*' test",
+    "test:e2e": "bun --cwd apps/client run test:e2e"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.10.6",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.2",
     "@types/bun": "^1.3.14",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
     "typescript": "^5.7.0"
   }
 }
