@@ -151,6 +151,7 @@ export const App = (): ReactNode => {
     return (
       <div style={{ minHeight: "var(--app-h)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <Spinner size={28} />
+        <PitchModal />
       </div>
     );
   }
@@ -159,6 +160,7 @@ export const App = (): ReactNode => {
     return (
       <div ref={rootRef}>
         <Onboarding />
+        <PitchModal />
         <Toasts />
       </div>
     );
