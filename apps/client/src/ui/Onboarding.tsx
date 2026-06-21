@@ -74,8 +74,9 @@ export const Onboarding = (): ReactNode => {
           </span>
         </div>
         <p style={{ color: "var(--text-2)", fontSize: 15, lineHeight: 1.6, margin: "0 0 24px" }}>
-          A Nostr client where identity is signed and clear — with first-class{" "}
-          <strong style={{ color: "var(--text)" }}>Documentations</strong>.
+          Your identity is a <strong style={{ color: "var(--text)" }}>private key</strong> that only you
+          hold — keep it safe, and it&rsquo;s the only thing you need to sign in anywhere. Secure, sovereign,
+          and built for first-class <strong style={{ color: "var(--text)" }}>Documentations</strong>.
         </p>
 
         {mode === "choose" && (
