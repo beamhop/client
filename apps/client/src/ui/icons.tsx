@@ -210,8 +210,17 @@ export const VerifiedSeal = ({ size = 14 }: { size?: number }): ReactNode => (
 export const Logo = ({ size = 32 }: { size?: number }): ReactNode => (
   <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
     <rect width="32" height="32" rx="9" fill="url(#beamhop-lg)" />
-    <path d="M16 7.5l6.4 8.5-6.4 8.5L9.6 16 16 7.5z" fill="#fff" fillOpacity=".96" />
-    <circle cx="16" cy="16" r="2.5" fill="url(#beamhop-lg)" />
+    <g
+      transform="translate(16 16) scale(0.78) translate(-12 -12)"
+      stroke="var(--on-accent, #fff)"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="5" cy="12" r="2.8" fill="var(--on-accent, #fff)" stroke="none" />
+      <circle cx="19" cy="12" r="2.8" fill="var(--on-accent, #fff)" stroke="none" />
+      <path d="M7.6 12h6.4M11.6 8.3 15.7 12l-4.1 3.7" fill="none" />
+    </g>
     <defs>
       <linearGradient id="beamhop-lg" x1="0" y1="0" x2="32" y2="32">
         <stop stopColor="var(--accent)" />

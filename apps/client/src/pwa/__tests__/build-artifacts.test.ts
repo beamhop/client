@@ -10,6 +10,8 @@ describe("committed PWA icon assets", () => {
     "public/icons/icon-512.png",
     "public/icons/icon-512-maskable.png",
     "public/icons/apple-touch-icon-180.png",
+    "public/icons/favicon.svg",
+    "public/icons/favicon-32.png",
   ];
 
   for (const icon of icons) {

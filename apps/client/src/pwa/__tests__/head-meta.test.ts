@@ -29,4 +29,9 @@ describe("runtime-injected PWA links (main.tsx)", () => {
     expect(mainTsx).toContain('addHeadLink("apple-touch-icon"');
     expect(mainTsx).toContain("/icons/apple-touch-icon-180.png");
   });
+
+  it("links an SVG favicon with a PNG fallback at runtime", () => {
+    expect(mainTsx).toContain("/icons/favicon.svg");
+    expect(mainTsx).toContain("/icons/favicon-32.png");
+  });
 });
