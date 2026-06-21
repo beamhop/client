@@ -754,6 +754,7 @@ export const HomeView = (): ReactNode => {
         ...o,
         [note.id]: { ...o[note.id], reposted: true, reposts: (cur?.reposts ?? 0) + 1 },
       }));
+      haptic("medium");
       void publish(buildRepost(note)).then(
         (eventId) => {
           toast("Reposted to your followers", "repost");

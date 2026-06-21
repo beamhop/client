@@ -1,65 +1,53 @@
-// Dependency-free haptics with a swappable driver seam.
+// Haptics via web-haptics (https://github.com/lochie/web-haptics), with a
+// swappable driver seam for testability and future native overrides.
 //
-// WHY a seam: iOS Safari ships NO Web Vibration API — `navigator.vibrate` is
-// `undefined` there — so the built-in web driver is a graceful no-op on iOS. The
-// real value of this module is that a native driver (e.g. @capacitor/haptics)
-// can be slotted in at boot via `setHapticDriver` without touching any call
-// sites. Everything else (enabled flag, throttle) lives above the driver so it
-// applies uniformly regardless of which driver is active.
+// WHY web-haptics over raw navigator.vibrate: the library drives both the
+// Vibration API and a silent AudioContext click, which means it reaches iOS
+// Safari (where navigator.vibrate is undefined) via the audio path. It also
+// ships richer intensity-aware patterns (nudge, soft, rigid) that we map to
+// new semantic intents below.
 
-export type HapticIntent = "light" | "medium" | "heavy" | "success" | "warning" | "selection";
+import { WebHaptics } from "web-haptics";
+
+export type HapticIntent =
+  | "light"
+  | "medium"
+  | "heavy"
+  | "success"
+  | "warning"
+  | "selection"
+  | "nudge";
 
 export interface HapticDriver {
   impact: (intent: HapticIntent) => void;
 }
 
-// Vibration patterns per intent. A single number is a one-shot buzz; an array is
-// an on/off millisecond sequence (used to give success/warning a distinct
-// "texture"). Kept `readonly` so they can't be mutated in place — we hand a
-// fresh mutable copy to `navigator.vibrate` (which wants `number | number[]`)
-// via spread.
-const PATTERNS: Readonly<Record<HapticIntent, readonly number[] | number>> = {
-  light: 10,
-  medium: 20,
-  heavy: 30,
-  selection: 8,
-  success: [12, 40, 12],
-  warning: [20, 60, 20],
+// Lazily created so importing this module has no side effects.
+let _haptics: WebHaptics | undefined;
+const getHaptics = (): WebHaptics => {
+  if (!_haptics) _haptics = new WebHaptics({ showSwitch: false });
+  return _haptics;
 };
 
-// The built-in web driver. Feature-detect once at module load: on iOS Safari
-// (and any non-vibrating environment) `navigator.vibrate` is absent, so this
-// becomes a hard no-op rather than throwing.
-const webVibrateSupported = (): boolean =>
-  typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
-
+// The default driver delegates to web-haptics, which handles feature detection
+// and iOS fallback internally.
 const webDriver: HapticDriver = {
   impact: (intent) => {
-    if (!webVibrateSupported()) return;
-    const pattern = PATTERNS[intent];
-    // Spread-copy: `navigator.vibrate` wants a mutable `number | number[]`, and
-    // we never want it mutating our shared literal.
-    navigator.vibrate(typeof pattern === "number" ? pattern : [...pattern]);
+    void getHaptics().trigger(intent);
   },
 };
 
 const STORAGE_KEY = "beamhop.haptics.v1";
 
-// Module-level mutable state. `driver` defaults to the web driver and can be
-// swapped at boot. `enabled` is lazily hydrated from localStorage on first read
-// (so importing this module has no side effects / no storage access). `lastFire`
-// powers the throttle.
 let driver: HapticDriver = webDriver;
 let enabled: boolean | undefined;
 let lastFire = 0;
 
-// Min gap between fires. WHY: a burst of toasts / rapid list selections would
-// otherwise machine-gun the motor into an unpleasant continuous buzz.
+// Min gap between fires — prevents toast/selection bursts from machine-gunning
+// the motor into an unpleasant continuous buzz.
 const THROTTLE_MS = 120;
 
 const loadEnabled = (): boolean => {
-  // Tolerate localStorage throwing (private mode, disabled storage). Absence of
-  // a stored value means default ON.
   try {
     return localStorage.getItem(STORAGE_KEY) !== "false";
   } catch {
@@ -78,7 +66,7 @@ export const setHapticsEnabled = (next: boolean): void => {
   try {
     localStorage.setItem(STORAGE_KEY, next ? "true" : "false");
   } catch {
-    // Persistence is best-effort; the in-memory flag still takes effect.
+    // Persistence is best-effort; in-memory flag still takes effect.
   }
 };
 
@@ -87,7 +75,7 @@ export const isHapticsEnabled = (): boolean => {
   return enabled;
 };
 
-/** Fire a haptic. No-ops when: disabled, unsupported (no driver), or throttled (<120ms since last). Never throws. */
+/** Fire a haptic. No-ops when disabled or throttled (<120ms since last). Never throws. */
 export const haptic = (intent: HapticIntent): void => {
   if (!isHapticsEnabled()) return;
   const now = Date.now();

@@ -12,6 +12,7 @@ import {
 import { flushSync } from "react-dom";
 import type { Event as NostrEvent, EventTemplate, Filter } from "nostr-tools";
 import { NostrClient, nowSeconds } from "../nostr/client.ts";
+import { haptic } from "../lib/haptics.ts";
 import { Kind, type Profile, type RelayInfo } from "../nostr/types.ts";
 import { decodeProfile, buildContacts, tagValue } from "../nostr/events.ts";
 import {
@@ -925,6 +926,7 @@ export const StoreProvider = ({
           if (live) {
             toast(notificationToastText(notification), "info");
             playNotificationPing();
+            haptic("nudge");
           }
         },
         () => {
