@@ -319,7 +319,7 @@ const TrashGlyph = (): ReactNode => (
 
 const h3Style: CSSProperties = {
   margin: "0 0 12px",
-  fontFamily: "'Space Grotesk',sans-serif",
+  fontFamily: "'Geist',sans-serif",
   fontSize: 15,
   fontWeight: 700,
   color: "var(--text)",
@@ -457,7 +457,7 @@ const ArticleCard = ({ article }: { article: LongForm }): ReactNode => {
         <h3
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 18,
             lineHeight: 1.28,
             fontWeight: 700,
@@ -611,7 +611,7 @@ const PersonRow = ({ pubkey }: { pubkey: string }): ReactNode => {
           {verified && <VerifiedSeal size={15} />}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
-          <span style={{ fontSize: 13, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace" }}>
+          <span style={{ fontSize: 13, color: "var(--text-3)", fontFamily: "'Geist Mono',monospace" }}>
             {handle}
           </span>
         </div>
@@ -857,7 +857,7 @@ export const ExploreView = (): ReactNode => {
             background: "var(--glass-2)",
             padding: "4px 8px",
             borderRadius: 8,
-            fontFamily: "'JetBrains Mono',monospace",
+            fontFamily: "'Geist Mono',monospace",
             cursor: "pointer",
           }}
         >
@@ -986,7 +986,7 @@ export const ExploreView = (): ReactNode => {
 
       {/* [4] people header */}
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+        <h3 style={{ margin: 0, fontFamily: "'Geist',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
           People in your network
         </h3>
         <span style={{ fontSize: 13, color: "var(--text-3)" }}>Following {state.contacts.length}</span>

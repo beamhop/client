@@ -15,6 +15,7 @@ import { PALETTE_ORDER, paletteBanner, type PaletteId } from "@beamhop/lib";
 import { HomeView } from "./views/Home.tsx";
 import { ExploreView } from "./views/Explore.tsx";
 import { NotificationsView } from "./views/Notifications.tsx";
+import { MentionsView } from "./views/Mentions.tsx";
 import { DocsView } from "./views/Docs.tsx";
 import { MessagesView } from "./views/Messages.tsx";
 import { AgentsView } from "./views/Agents.tsx";
@@ -27,6 +28,7 @@ const HEADERS: Partial<Record<ViewId, { title: string; subtitle: string }>> = {
   home: { title: "Home", subtitle: "Your network, freshest first" },
   explore: { title: "Explore", subtitle: "Find people, posts, and topics" },
   notifications: { title: "Notifications", subtitle: "Replies, mentions, reactions, zaps, and messages" },
+  mentions: { title: "Mentions", subtitle: "Posts that tag or @-mention you" },
   docs: { title: "Documentations", subtitle: "Long-form knowledge, signed and versioned" },
   messages: { title: "Messages", subtitle: "End-to-end encrypted · NIP-04" },
   agents: { title: "Agents", subtitle: "Autonomous identities you own" },
@@ -38,6 +40,7 @@ const HEADER_WIDTH: Partial<Record<ViewId, number | null>> = {
   home: 640,
   explore: 680,
   notifications: 720,
+  mentions: 640,
   docs: 760,
   messages: null,
   agents: 820,
@@ -79,6 +82,8 @@ const renderView = (view: ViewId): ReactNode => {
       return <ExploreView />;
     case "notifications":
       return <NotificationsView />;
+    case "mentions":
+      return <MentionsView />;
     case "docs":
     case "docReader":
     case "docEditor":
@@ -170,7 +175,7 @@ export const App = (): ReactNode => {
     height: "var(--app-h)",
     display: "flex",
     flexDirection: "column",
-    fontFamily: "'Hanken Grotesk',sans-serif",
+    fontFamily: "'Geist',sans-serif",
     overflow: "hidden",
     transition: "color .3s",
   };
@@ -211,7 +216,7 @@ export const App = (): ReactNode => {
                 <div style={headerInner}>
                   {isMobile && <Logo size={26} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h1 data-testid="header-title" style={{ margin: 0, fontFamily: "'Space Grotesk',sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.1 }}>{header.title}</h1>
+                    <h1 data-testid="header-title" style={{ margin: 0, fontFamily: "'Geist',sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.1 }}>{header.title}</h1>
                     {header.subtitle && <p data-testid="header-subtitle" style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--text-3)" }}>{header.subtitle}</p>}
                   </div>
                   {isMobile && (

@@ -13,6 +13,7 @@ import {
   HomeIcon,
   SearchIcon,
   BellIcon,
+  AtIcon,
   DocsIcon,
   MessagesIcon,
   AgentsIcon,
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { id: "home", testid: "nav-home", label: "Home", icon: <HomeIcon />, active: (v) => v === "home" || v === "postDetail" },
   { id: "explore", testid: "nav-explore", label: "Explore", icon: <SearchIcon />, active: (v) => v === "explore" },
   { id: "notifications", testid: "nav-notifications", label: "Notifications", icon: <BellIcon />, active: (v) => v === "notifications" },
+  { id: "mentions", testid: "nav-mentions", label: "Mentions", icon: <AtIcon />, active: (v) => v === "mentions" },
   { id: "docs", testid: "nav-docs", label: "Docs", icon: <DocsIcon />, active: (v) => v.startsWith("doc") },
   { id: "messages", testid: "nav-messages", label: "Messages", icon: <MessagesIcon />, active: (v) => v === "messages" },
   { id: "agents", testid: "nav-agents", label: "Agents", icon: <AgentsIcon />, active: (v) => v === "agents" || v === "agentDetail" },
@@ -61,7 +63,7 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
     >
       <div data-testid="sidebar-logo" style={{ display: "flex", alignItems: "center", gap: 11, padding: "8px 10px 16px" }}>
         <Logo size={32} />
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>Beamhop</span>
+        <span style={{ fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-.02em" }}>Beamhop</span>
       </div>
 
       <nav data-testid="sidebar-nav" style={{ display: "flex", flexDirection: "column", gap: 4, padding: "0 2px" }}>
@@ -158,7 +160,7 @@ export const Sidebar = ({ onCompose }: { onCompose: () => void }): ReactNode => 
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
             {state.me?.nip05 && <VerifiedSeal size={13} />}
           </span>
-          <span style={{ display: "block", fontSize: 11.5, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ display: "block", fontSize: 11.5, color: "var(--text-3)", fontFamily: "'Geist Mono',monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {state.me?.nip05 ?? (pubkey && shortNpub(pubkey))}
           </span>
         </span>
@@ -187,6 +189,7 @@ const MOBILE_DESTS: MobileDest[] = [
   { id: "notifications", testid: "tab-notifications", label: "Notifications", icon: (s) => <BellIcon size={s} />, active: (v) => v === "notifications" },
   { id: "messages", testid: "tab-messages", label: "Messages", icon: (s) => <MessagesIcon size={s} />, active: (v) => v === "messages" },
   { id: "profile", testid: "tab-profile", label: "Profile", icon: (s) => <ProfileIcon size={s} />, active: (v) => v === "profile" },
+  { id: "mentions", testid: "tab-mentions", label: "Mentions", icon: (s) => <AtIcon size={s} />, active: (v) => v === "mentions" },
   { id: "agents", testid: "tab-agents", label: "Agents", icon: (s) => <AgentsIcon size={s} />, active: (v) => v === "agents" || v === "agentDetail" },
   { id: "docs", testid: "tab-docs", label: "Docs", icon: (s) => <DocsIcon size={s} />, active: (v) => v.startsWith("doc") },
   { id: "security", testid: "tab-security", label: "Keys & Security", icon: (s) => <ShieldIcon size={s} />, active: (v) => v === "security" },

@@ -9,6 +9,7 @@ import { CloseIcon, HeartIcon, ImageIcon, MoreIcon, RepostIcon, ShareIcon, Trash
 import type { Engagement } from "@beamhop/state";
 import { BubblePop } from "./BubblePop.tsx";
 import { EventJsonButton } from "./EventJsonModal.tsx";
+import { PostContent } from "./PostContent.tsx";
 
 type PostCardProps = {
   note: Note;
@@ -161,7 +162,7 @@ const PhotoGallery = ({
                   overflow: "hidden",
                   border: "1px solid var(--glass-border)",
                   background: "var(--glass-2)",
-                  boxShadow: "0 18px 36px -24px rgba(20,22,45,.55)",
+                  boxShadow: "0 18px 36px -24px rgba(0,0,0,.55)",
                   opacity: 0.9 - index * 0.18,
                   transform: `rotate(${stackHover ? 2.6 + depth * 1.7 : 1.1 + depth * 0.9}deg) translate(${stackHover ? depth * 2 : 0}px, ${stackHover ? depth * 2 : 0}px)`,
                   transition: "transform .22s ease, opacity .22s ease",
@@ -188,7 +189,7 @@ const PhotoGallery = ({
             background: "var(--glass-2)",
             color: "inherit",
             cursor: "zoom-in",
-            boxShadow: stackHover ? "0 24px 52px -28px rgba(20,22,45,.72)" : "0 16px 34px -26px rgba(20,22,45,.55)",
+            boxShadow: stackHover ? "0 24px 52px -28px rgba(0,0,0,.72)" : "0 16px 34px -26px rgba(0,0,0,.55)",
             transform: pressed ? "translateY(1px) scale(.992)" : stackHover ? "translateY(-2px)" : "none",
             transition: "transform .18s ease, box-shadow .18s ease, border-color .18s ease",
           }}
@@ -419,7 +420,7 @@ const confirmPopoverStyle: CSSProperties = {
   borderRadius: 13,
   border: "1px solid var(--glass-border)",
   background: "var(--glass-strong)",
-  boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
+  boxShadow: "0 18px 44px -22px rgba(0,0,0,.6)",
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
   animation: "beamhop-scale .14s ease",
@@ -679,10 +680,10 @@ export const PostCard = ({
                 <AgentSpark /> AI AGENT
               </span>
             )}
-            <span onClick={openAuthor} style={{ fontSize: 13.5, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace", cursor: "pointer" }}>{handle}</span>
+            <span onClick={openAuthor} style={{ fontSize: 13.5, color: "var(--text-3)", fontFamily: "'Geist Mono',monospace", cursor: "pointer" }}>{handle}</span>
             <span style={{ fontSize: 13.5, color: "var(--text-3)" }}>· {timeAgo(note.createdAt)}</span>
           </div>
-          {text && <p ref={contentRef} style={{ margin: "7px 0 0", fontSize: 15.5, lineHeight: 1.55, color: "var(--text)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", textWrap: "pretty" }}>{text}</p>}
+          {text && <p ref={contentRef} style={{ margin: "7px 0 0", fontSize: 15.5, lineHeight: 1.55, color: "var(--text)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", textWrap: "pretty" }}><PostContent text={text} /></p>}
           {embeds.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 11 }}>
               {images.length > 0 && <PhotoGallery images={images} authorName={name} />}
@@ -883,7 +884,7 @@ export const PostCard = ({
             fontWeight: 800,
             fontFamily: "inherit",
             cursor: "pointer",
-            boxShadow: "0 18px 44px -22px rgba(20,22,45,.6)",
+            boxShadow: "0 18px 44px -22px rgba(0,0,0,.6)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             animation: "beamhop-scale .14s ease",

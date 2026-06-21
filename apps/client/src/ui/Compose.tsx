@@ -62,7 +62,7 @@ export const Compose = ({ onClose, replyTo, onPublished }: { onClose: () => void
         style={{ width: "100%", maxWidth: 560, maxHeight: cardMaxHeight, display: "flex", flexDirection: "column", background: "var(--glass-strong)", border: "1px solid var(--glass-border)", borderRadius: 16, boxShadow: "var(--glass-shadow-lg)", overflow: "hidden", animation: "beamhop-scale .24s cubic-bezier(.2,.9,.3,1)" }}
       >
         <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: "1px solid var(--hairline)" }}>
-          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 17 }}>{replyTo ? "Reply" : "New post"}</span>
+          <span style={{ fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 17 }}>{replyTo ? "Reply" : "New post"}</span>
           <button data-testid="compose-close" type="button" onClick={onClose} style={{ display: "flex", padding: 7, border: "none", borderRadius: 10, background: "transparent", color: "var(--text-2)", cursor: "pointer" }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>

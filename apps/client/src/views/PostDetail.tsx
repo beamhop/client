@@ -353,7 +353,7 @@ export const PostDetailView = (): ReactNode => {
         ) : (
           <>
             {renderPost(note, "Post")}
-            <div style={{ margin: "22px 0 12px", fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+            <div style={{ margin: "22px 0 12px", fontFamily: "'Geist',sans-serif", fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
               Replies
             </div>
             {threadedReplies.length === 0 ? (

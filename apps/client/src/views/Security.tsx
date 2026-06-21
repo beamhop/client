@@ -19,8 +19,8 @@ import {
   MAX_KEYWORD_LENGTH,
 } from "@beamhop/lib";
 
-const mono = "'JetBrains Mono',monospace";
-const heading = "'Space Grotesk',sans-serif";
+const mono = "'Geist Mono',monospace";
+const heading = "'Geist',sans-serif";
 
 /* ── shared style fragments (exact design recipe) ───────────────────────── */
 
@@ -263,7 +263,7 @@ const knobStyle = (on: boolean): CSSProperties => ({
   height: 20,
   borderRadius: "50%",
   background: "#fff",
-  boxShadow: "0 1px 3px rgba(20,22,45,.2)",
+  boxShadow: "0 1px 3px rgba(0,0,0,.2)",
   transition: "left .18s",
 });
 

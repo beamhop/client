@@ -51,11 +51,11 @@ export const RightRail = ({ onOpenPalette }: { onOpenPalette: () => void }): Rea
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
         <span style={{ fontSize: 13.5, color: "var(--text-3)", flex: 1 }}>Search people & posts</span>
-        <span style={{ fontSize: 11, color: "var(--text-3)", background: "var(--glass-2)", padding: "3px 7px", borderRadius: 6, fontFamily: "'JetBrains Mono',monospace" }}>⌘K</span>
+        <span style={{ fontSize: 11, color: "var(--text-3)", background: "var(--glass-2)", padding: "3px 7px", borderRadius: 6, fontFamily: "'Geist Mono',monospace" }}>⌘K</span>
       </div>
 
       <div data-testid="curate-card" style={{ background: "var(--glass)", border: "1px solid var(--glass-border)", borderRadius: 12, padding: 6, marginBottom: 16, boxShadow: "var(--glass-shadow)" }}>
-        <h3 style={{ margin: 0, padding: "14px 14px 10px", fontFamily: "'Space Grotesk',sans-serif", fontSize: 15.5, fontWeight: 700 }}>Curate your feed</h3>
+        <h3 style={{ margin: 0, padding: "14px 14px 10px", fontFamily: "'Geist',sans-serif", fontSize: 15.5, fontWeight: 700 }}>Curate your feed</h3>
         {suggested.length === 0 ? (
           <div style={{ padding: "4px 14px 14px", fontSize: 12.5, color: "var(--text-3)" }}>Looking for people to follow…</div>
         ) : (
@@ -66,13 +66,13 @@ export const RightRail = ({ onOpenPalette }: { onOpenPalette: () => void }): Rea
       <div data-testid="org-security" style={{ position: "relative", overflow: "hidden", background: "linear-gradient(150deg,var(--accent-soft),var(--glass))", border: "1px solid var(--glass-border)", borderRadius: 12, padding: 18, boxShadow: "var(--glass-shadow)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-3.5 8-9.5V5l-8-3-8 3v7.5C4 18.5 12 22 12 22z" /><path d="m9 12 2 2 4-4" /></svg>
-          <h3 style={{ margin: 0, fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, fontWeight: 700 }}>Org security</h3>
+          <h3 style={{ margin: 0, fontFamily: "'Geist',sans-serif", fontSize: 15, fontWeight: 700 }}>Org security</h3>
         </div>
         <p style={{ margin: "0 0 12px", fontSize: 13, lineHeight: 1.5, color: "var(--text-2)" }}>
           {nip05Domain ? (
             <>
               Your identity is verified on{" "}
-              <strong style={{ color: "var(--text)", fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5 }}>{nip05Domain}</strong> and all messages are end-to-end encrypted.
+              <strong style={{ color: "var(--text)", fontFamily: "'Geist Mono',monospace", fontSize: 12.5 }}>{nip05Domain}</strong> and all messages are end-to-end encrypted.
             </>
           ) : (
             <>Your keys live in this browser and all direct messages are end-to-end encrypted.</>

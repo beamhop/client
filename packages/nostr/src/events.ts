@@ -9,6 +9,7 @@ import {
   type Reaction,
 } from "./types.ts";
 import { nowSeconds } from "./client.ts";
+import { mentionedPubkeys } from "./mentions.ts";
 
 // ---------- decoders: NostrEvent -> domain ----------
 
@@ -178,12 +179,23 @@ const extractHashtags = (content: string): string[] => {
 
 export const buildNote = (content: string, replyTo?: Note): EventTemplate => {
   const tags: string[][] = [];
+  const pTagged = new Set<string>();
+  const addP = (pubkey: string): void => {
+    if (pTagged.has(pubkey)) return;
+    pTagged.add(pubkey);
+    tags.push(["p", pubkey]);
+  };
   if (replyTo) {
     const root = replyTo.rootId ?? replyTo.id;
     tags.push(["e", root, "", "root"]);
     if (replyTo.rootId) tags.push(["e", replyTo.id, "", "reply"]);
-    tags.push(["p", replyTo.pubkey]);
+    addP(replyTo.pubkey);
   }
+  // NIP-27: every inline `@npub`/`nostr:npub`/`nprofile` mention needs a matching
+  // `p` tag, otherwise the mentioned user is never notified (their client filters
+  // by `#p`, and relays can't match on free-text content). De-dupe against the
+  // reply target so a reply that also @-mentions its parent isn't tagged twice.
+  for (const pubkey of mentionedPubkeys(content)) addP(pubkey);
   for (const tag of extractHashtags(content)) tags.push(["t", tag]);
   return { kind: Kind.Note, created_at: nowSeconds(), tags, content };
 };

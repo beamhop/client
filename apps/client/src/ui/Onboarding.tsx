@@ -63,13 +63,13 @@ export const Onboarding = (): ReactNode => {
         padding: 24,
         background: "var(--bg-base)",
         color: "var(--text)",
-        fontFamily: "'Hanken Grotesk',sans-serif",
+        fontFamily: "'Geist',sans-serif",
       }}
     >
       <div style={{ ...glass, width: "100%", maxWidth: 460, padding: 32 }} className="beamhop-slideup">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <Logo size={40} />
-          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "-.02em" }}>
+          <span style={{ fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: "-.02em" }}>
             Beamhop
           </span>
         </div>
@@ -116,7 +116,7 @@ export const Onboarding = (): ReactNode => {
                 border: "1px solid var(--glass-border)",
                 background: "var(--glass-2)",
                 color: "var(--text)",
-                fontFamily: "'JetBrains Mono',monospace",
+                fontFamily: "'Geist Mono',monospace",
                 fontSize: 16,
                 resize: "none",
               }}
@@ -180,7 +180,7 @@ const KeyField = ({
       <span
         style={{
           flex: 1,
-          fontFamily: "'JetBrains Mono',monospace",
+          fontFamily: "'Geist Mono',monospace",
           fontSize: 12,
           color: "var(--text-2)",
           overflow: "hidden",

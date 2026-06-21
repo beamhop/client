@@ -7,7 +7,12 @@ export const ProfileToastChip = ({ pubkey }: { pubkey: string }): ReactNode => {
   const { navigate } = useStore();
   const profile = useProfile(pubkey);
   const name = displayName({ name: profile?.name, displayName: profile?.displayName, pubkey });
-  const handle = profile?.nip05 ?? shortNpub(pubkey);
+  // Prefer the human-readable profile name; fall back to a NIP-05 handle, and
+  // only show the raw key (monospace) when the profile has neither — typically
+  // while it's still loading or for a user with no metadata.
+  const hasName = Boolean(profile?.displayName?.trim() || profile?.name?.trim());
+  const label = hasName ? name : (profile?.nip05 ?? shortNpub(pubkey));
+  const isRawKey = !hasName && !profile?.nip05;
 
   return (
     <button
@@ -21,6 +26,7 @@ export const ProfileToastChip = ({ pubkey }: { pubkey: string }): ReactNode => {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        verticalAlign: "middle",
         gap: 7,
         minWidth: 0,
         maxWidth: "min(220px, 46vw)",
@@ -53,10 +59,10 @@ export const ProfileToastChip = ({ pubkey }: { pubkey: string }): ReactNode => {
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          fontFamily: profile?.nip05 ? "inherit" : "'JetBrains Mono',monospace",
+          fontFamily: isRawKey ? "'Geist Mono',monospace" : "inherit",
         }}
       >
-        {handle}
+        {label}
       </span>
     </button>
   );

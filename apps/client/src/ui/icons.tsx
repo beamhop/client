@@ -39,6 +39,12 @@ export const BellIcon = (p: IconProps): ReactNode => (
     <path d="M10 21a2 2 0 0 0 4 0" />
   </Svg>
 );
+export const AtIcon = (p: IconProps): ReactNode => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
+  </Svg>
+);
 export const DocsIcon = (p: IconProps): ReactNode => (
   <Svg {...p}>
     <path d="M4 4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />

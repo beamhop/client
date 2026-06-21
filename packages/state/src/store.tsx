@@ -72,6 +72,7 @@ export type ViewId =
   | "docReader"
   | "docEditor"
   | "notifications"
+  | "mentions"
   | "messages"
   | "agents"
   | "agentDetail"
@@ -232,7 +233,7 @@ const MUTES_RELAY_AT_KEY = "beamhop.mutes.relayAt.v1";
 const DEVELOPER_MODE_KEY = "beamhop.developerMode.v1";
 
 // Browser/status-bar tint per theme; kept in sync with --bg-base in tokens.css.
-const BG_BY_MODE: Record<ThemeMode, string> = { light: "#f4f5f7", dark: "#0c0d11" };
+const BG_BY_MODE: Record<ThemeMode, string> = { light: "#fafafa", dark: "#0a0a0a" };
 
 const notificationReadKey = (pubkey: string): string => `${NOTIFICATION_READ_KEY}:${pubkey}`;
 
@@ -494,6 +495,8 @@ export const routeToHash = (nav: Nav): string => {
       return "#/explore";
     case "notifications":
       return "#/notifications";
+    case "mentions":
+      return "#/mentions";
     case "docs":
       return "#/docs";
     case "docReader":
@@ -544,6 +547,8 @@ export const parseHashRoute = (hash: string): Nav => {
       return { view: "explore", params: {} };
     case "notifications":
       return { view: "notifications", params: {} };
+    case "mentions":
+      return { view: "mentions", params: {} };
     case "docs":
     case "d":
       if (second === "new") return { view: "docEditor", params: {} };
@@ -659,7 +664,7 @@ export const StoreProvider = ({
     relays: [],
     contacts: [],
     theme: "light",
-    palette: "Cobalt",
+    palette: "White",
     nav: typeof window === "undefined" ? { view: "home", params: {} } : parseHashRoute(window.location.hash),
     navDir: "none",
     toasts: [],

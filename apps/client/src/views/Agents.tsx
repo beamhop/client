@@ -346,7 +346,7 @@ const ListStat = ({
   <div>
     <div
       style={{
-        fontFamily: "'Space Grotesk',sans-serif",
+        fontFamily: "'Geist',sans-serif",
         fontSize: 26,
         fontWeight: 700,
         lineHeight: 1,
@@ -381,7 +381,7 @@ const AgentCard = ({ agent, onOpen }: { agent: Agent; onOpen: () => void }): Rea
         cursor: "pointer",
         fontFamily: "inherit",
         transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover ? "0 10px 30px -16px rgba(20,22,45,.28)" : "none",
+        boxShadow: hover ? "0 10px 30px -16px rgba(0,0,0,.28)" : "none",
         transition: "all .18s",
       }}
     >
@@ -423,7 +423,7 @@ const AgentCard = ({ agent, onOpen }: { agent: Agent; onOpen: () => void }): Rea
             style={{
               fontSize: 12.5,
               color: "var(--text-3)",
-              fontFamily: "'JetBrains Mono',monospace",
+              fontFamily: "'Geist Mono',monospace",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -468,7 +468,7 @@ const AgentCard = ({ agent, onOpen }: { agent: Agent; onOpen: () => void }): Rea
           { v: agent.stats.dms, l: "DMs" },
         ].map((s) => (
           <span key={s.l} style={{ fontSize: 12, color: "var(--text-2)" }}>
-            <b style={{ color: "var(--text)", fontFamily: "'Space Grotesk',sans-serif" }}>{s.v}</b> {s.l}
+            <b style={{ color: "var(--text)", fontFamily: "'Geist',sans-serif" }}>{s.v}</b> {s.l}
           </span>
         ))}
       </div>
@@ -611,7 +611,7 @@ type DetailLayout = "timeline" | "dashboard";
 
 const sectionTitle: CSSProperties = {
   margin: "0 0 12px",
-  fontFamily: "'Space Grotesk',sans-serif",
+  fontFamily: "'Geist',sans-serif",
   fontSize: 15,
   fontWeight: 700,
 };
@@ -897,7 +897,7 @@ const ConnectionsTab = ({ agent }: { agent: Agent }): ReactNode => (
                 style={{
                   fontSize: 12,
                   color: "var(--text-3)",
-                  fontFamily: "'JetBrains Mono',monospace",
+                  fontFamily: "'Geist Mono',monospace",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -1008,7 +1008,7 @@ const CopyNpubButton = ({ npub, onCopy }: { npub: string; onCopy: () => void }):
         background: "transparent",
         color: hover ? "var(--accent)" : "var(--text-3)",
         fontSize: 12,
-        fontFamily: "'JetBrains Mono',monospace",
+        fontFamily: "'Geist Mono',monospace",
         cursor: "pointer",
         transition: "color .15s",
       }}
@@ -1061,7 +1061,7 @@ const AgentDetail = ({
             <h2
               style={{
                 margin: 0,
-                fontFamily: "'Space Grotesk',sans-serif",
+                fontFamily: "'Geist',sans-serif",
                 fontSize: 24,
                 fontWeight: 700,
                 letterSpacing: "-.02em",
@@ -1088,7 +1088,7 @@ const AgentDetail = ({
             <StatusPill status={agent.status} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13.5, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace" }}>
+            <span style={{ fontSize: 13.5, color: "var(--text-3)", fontFamily: "'Geist Mono',monospace" }}>
               {agent.handle || shortNpub(agent.pubkeyHex)}
             </span>
             <CopyNpubButton npub={shortNpub(agent.pubkeyHex)} onCopy={onCopyNpub} />
@@ -1152,7 +1152,7 @@ const AgentDetail = ({
               border: "1px solid var(--glass-border)",
             }}
           >
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 22, fontWeight: 700, lineHeight: 1 }}>
+            <div style={{ fontFamily: "'Geist',sans-serif", fontSize: 22, fontWeight: 700, lineHeight: 1 }}>
               {st.value}
             </div>
             <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 5 }}>{st.label}</div>
@@ -1308,7 +1308,7 @@ const WizardInput = ({
       style={{
         ...inputStyle,
         marginBottom,
-        fontFamily: mono ? "'JetBrains Mono',monospace" : "inherit",
+        fontFamily: mono ? "'Geist Mono',monospace" : "inherit",
         borderColor: focus ? "var(--accent)" : "var(--glass-border)",
       }}
     />
@@ -1318,7 +1318,7 @@ const WizardInput = ({
 const SectionHeader = ({ children }: { children: ReactNode }): ReactNode => (
   <div
     style={{
-      fontFamily: "'Space Grotesk',sans-serif",
+      fontFamily: "'Geist',sans-serif",
       fontSize: 14,
       fontWeight: 700,
       color: "var(--text-3)",
@@ -1517,7 +1517,7 @@ const CheckRow = ({
         style={{
           fontSize: 12,
           color: "var(--text-3)",
-          fontFamily: mono ? "'JetBrains Mono',monospace" : "inherit",
+          fontFamily: mono ? "'Geist Mono',monospace" : "inherit",
           overflow: mono ? "hidden" : "visible",
           textOverflow: mono ? "ellipsis" : "clip",
           whiteSpace: mono ? "nowrap" : "normal",
@@ -1650,10 +1650,10 @@ const ReviewSection = ({ form }: { form: WizardForm }): ReactNode => {
           </span>
         </span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
+          <div style={{ fontWeight: 700, fontSize: 16, fontFamily: "'Geist',sans-serif" }}>
             {form.name || "New Agent"}
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--text-3)", fontFamily: "'JetBrains Mono',monospace" }}>{handle}</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-3)", fontFamily: "'Geist Mono',monospace" }}>{handle}</div>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -1886,7 +1886,7 @@ const AgentWizard = ({
             </svg>
           </span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{ margin: 0, fontFamily: "'Space Grotesk',sans-serif", fontSize: 17, fontWeight: 700 }}>
+            <h3 style={{ margin: 0, fontFamily: "'Geist',sans-serif", fontSize: 17, fontWeight: 700 }}>
               {mode === "create" ? "Create agent" : "Edit agent"}
             </h3>
             <p style={{ margin: "1px 0 0", fontSize: 12, color: "var(--text-3)" }}>

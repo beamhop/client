@@ -322,7 +322,7 @@ const NewConversation = ({ onStart }: { onStart: (raw: string) => void }): React
             outline: "none",
             fontSize: 16,
             color: "var(--text)",
-            fontFamily: "'JetBrains Mono',monospace",
+            fontFamily: "'Geist Mono',monospace",
           }}
         />
         <button

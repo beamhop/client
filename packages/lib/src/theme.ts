@@ -10,10 +10,11 @@ export const PALETTES: Record<PaletteId, Palette> = {
     light: { a: "#e0563a", a2: "#f0913e", soft: "rgba(224,86,58,.13)", ink: "#c4452a" },
     dark: { a: "#ff7a52", a2: "#ffab63", soft: "rgba(255,122,82,.18)", ink: "#ff9270" },
   },
+  // Vercel/Geist monochrome: ink-near-black accent on light, pure white on dark.
   White: {
-    banner: "#1b1c20",
-    light: { a: "#1b1c20", a2: "#1b1c20", soft: "rgba(27,28,32,.07)", ink: "#000000", onAccent: "#ffffff" },
-    dark: { a: "#ffffff", a2: "#ffffff", soft: "rgba(255,255,255,.13)", ink: "#ffffff", onAccent: "#0c0d11" },
+    banner: "#171717",
+    light: { a: "#171717", a2: "#171717", soft: "rgba(0,0,0,.06)", ink: "#000000", onAccent: "#ffffff" },
+    dark: { a: "#ffffff", a2: "#ededed", soft: "rgba(255,255,255,.10)", ink: "#ffffff", onAccent: "#0a0a0a" },
   },
   Crimson: {
     banner: "linear-gradient(120deg,#e0335f,#f5617e 55%,#f59e0b)",
@@ -55,6 +56,6 @@ export const saveTheme = (mode: ThemeMode): void => localStorage.setItem(THEME_K
 
 export const loadPalette = (): PaletteId => {
   const saved = localStorage.getItem(PALETTE_KEY);
-  return saved && (PALETTE_ORDER as readonly string[]).includes(saved) ? (saved as PaletteId) : "Ember";
+  return saved && (PALETTE_ORDER as readonly string[]).includes(saved) ? (saved as PaletteId) : "White";
 };
 export const savePalette = (id: PaletteId): void => localStorage.setItem(PALETTE_KEY, id);

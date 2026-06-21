@@ -85,7 +85,7 @@ export const BubblePop = ({
             border: `1px solid ${color}`,
             background: "var(--glass-strong)",
             color,
-            boxShadow: "0 14px 34px -18px rgba(20,22,45,.58)",
+            boxShadow: "0 14px 34px -18px rgba(0,0,0,.58)",
             fontSize: 12,
             fontWeight: 800,
             lineHeight: 1,

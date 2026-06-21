@@ -143,6 +143,95 @@ describe("useTimelineFeed", () => {
     });
     expect(result.current.hasMore).toBe(false);
   });
+
+  test("without buffering, post-EOSE live arrivals prepend immediately (default)", () => {
+    const { result, pool } = renderHookWithStore(() =>
+      useTimelineFeed({ kinds: [Kind.Note, Kind.Repost] }, []),
+    );
+    act(() => {
+      pool.emit(mkNote("seed", 100));
+      pool.eose();
+    });
+    act(() => pool.emit(mkNote("after", 200)));
+    expect(result.current.items.map((i) => i.note.content)).toEqual(["after", "seed"]);
+    expect(result.current.pending).toHaveLength(0);
+  });
+
+  describe("with buffering", () => {
+    const renderBuffered = () =>
+      renderHookWithStore(() => useTimelineFeed({ kinds: [Kind.Note, Kind.Repost] }, [], true, { buffer: true }));
+
+    test("holds post-EOSE arrivals in pending, then showPending releases them", () => {
+      const { result, pool } = renderBuffered();
+      act(() => {
+        pool.emit(mkNote("seed", 100));
+        pool.eose();
+      });
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["seed"]);
+      expect(result.current.pending).toHaveLength(0);
+
+      // Live arrivals after EOSE are held back rather than prepended.
+      act(() => {
+        pool.emit(mkNote("live-1", 200));
+        pool.emit(mkNote("live-2", 300));
+      });
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["seed"]);
+      expect(result.current.pending.map((i) => i.note.content)).toEqual(["live-2", "live-1"]);
+
+      // Releasing prepends them newest-first and clears the buffer.
+      act(() => result.current.showPending());
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["live-2", "live-1", "seed"]);
+      expect(result.current.pending).toHaveLength(0);
+    });
+
+    test("seeds an empty feed instead of buffering, then buffers once a baseline exists", () => {
+      const { result, pool } = renderBuffered();
+      // EOSE arrives before any stored event (fast relay): first arrival shows.
+      act(() => pool.eose());
+      act(() => pool.emit(mkNote("first", 100)));
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["first"]);
+      expect(result.current.pending).toHaveLength(0);
+
+      // Now there is something to protect, so the next arrival buffers.
+      act(() => pool.emit(mkNote("second", 200)));
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["first"]);
+      expect(result.current.pending.map((i) => i.note.content)).toEqual(["second"]);
+    });
+
+    test("loadMore reveals older items without disturbing the pending buffer", async () => {
+      const { result, pool } = renderBuffered();
+      act(() => {
+        pool.emit(mkNote("seed", 500));
+        pool.eose();
+      });
+      act(() => pool.emit(mkNote("live", 600)));
+      expect(result.current.pending).toHaveLength(1);
+
+      pool.querySyncResult = [mkNote("older", 300)];
+      await act(async () => {
+        await result.current.loadMore();
+      });
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["seed", "older"]);
+      expect(result.current.pending.map((i) => i.note.content)).toEqual(["live"]);
+    });
+
+    test("refresh absorbs the buffer into the visible feed", async () => {
+      const { result, pool } = renderBuffered();
+      act(() => {
+        pool.emit(mkNote("seed", 100));
+        pool.eose();
+      });
+      act(() => pool.emit(mkNote("live", 200)));
+      expect(result.current.pending).toHaveLength(1);
+
+      pool.querySyncResult = [];
+      await act(async () => {
+        await result.current.refresh();
+      });
+      expect(result.current.items.map((i) => i.note.content)).toEqual(["live", "seed"]);
+      expect(result.current.pending).toHaveLength(0);
+    });
+  });
 });
 
 describe("useEngagement", () => {

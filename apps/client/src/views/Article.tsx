@@ -394,7 +394,7 @@ const ArticleReader = (): ReactNode => {
           data-testid="reader-title"
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 42,
             lineHeight: 1.14,
             fontWeight: 700,
@@ -438,7 +438,7 @@ const ArticleReader = (): ReactNode => {
                 marginTop: 2,
               }}
             >
-              <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>{handle}</span>
+              <span style={{ fontFamily: "'Geist Mono',monospace" }}>{handle}</span>
               <span>·</span>
               <span>{timeAgo(article.publishedAt)}</span>
               <span>·</span>
@@ -1083,7 +1083,7 @@ const ArticleEditor = (): ReactNode => {
             background: "transparent",
             resize: "none",
             outline: "none",
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 38,
             lineHeight: 1.18,
             fontWeight: 700,
@@ -1186,17 +1186,17 @@ const ArticleEditor = (): ReactNode => {
             overflowX: "auto",
           }}
         >
-          <button type="button" title="Heading 1" onClick={() => tbFmt("h1")} style={{ ...tbBaseStyle, padding: "0 8px", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 14 }}>
+          <button type="button" title="Heading 1" onClick={() => tbFmt("h1")} style={{ ...tbBaseStyle, padding: "0 8px", fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 14 }}>
             H1
           </button>
-          <button type="button" title="Heading 2" onClick={() => tbFmt("h2")} style={{ ...tbBaseStyle, padding: "0 8px", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 13 }}>
+          <button type="button" title="Heading 2" onClick={() => tbFmt("h2")} style={{ ...tbBaseStyle, padding: "0 8px", fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 13 }}>
             H2
           </button>
           <TbSep />
-          <button type="button" title="Bold" onClick={() => tbFmt("bold")} style={{ ...tbBaseStyle, fontFamily: "'Space Grotesk',sans-serif", fontWeight: 800, fontSize: 15 }}>
+          <button type="button" title="Bold" onClick={() => tbFmt("bold")} style={{ ...tbBaseStyle, fontFamily: "'Geist',sans-serif", fontWeight: 800, fontSize: 15 }}>
             B
           </button>
-          <button type="button" title="Italic" onClick={() => tbFmt("italic")} style={{ ...tbBaseStyle, fontFamily: "'Space Grotesk',sans-serif", fontStyle: "italic", fontWeight: 600, fontSize: 15 }}>
+          <button type="button" title="Italic" onClick={() => tbFmt("italic")} style={{ ...tbBaseStyle, fontFamily: "'Geist',sans-serif", fontStyle: "italic", fontWeight: 600, fontSize: 15 }}>
             I
           </button>
           <TbSep />
@@ -1249,7 +1249,7 @@ const ArticleEditor = (): ReactNode => {
               background: "transparent",
               resize: "vertical",
               outline: "none",
-              fontFamily: "'JetBrains Mono',monospace",
+              fontFamily: "'Geist Mono',monospace",
               fontSize: 14.5,
               lineHeight: 1.7,
               color: "var(--text)",

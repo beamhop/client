@@ -100,8 +100,8 @@ export const EventJsonButton = ({
         <Modal onClose={() => setOpen(false)} width={820}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "15px 18px", borderBottom: "1px solid var(--hairline)" }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 800, color: "var(--text)" }}>{label}</div>
-              <div style={{ marginTop: 2, fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ fontFamily: "'Geist',sans-serif", fontSize: 16, fontWeight: 800, color: "var(--text)" }}>{label}</div>
+              <div style={{ marginTop: 2, fontFamily: "'Geist Mono',monospace", fontSize: 11.5, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 kind {event.kind} · {event.id}
               </div>
             </div>
@@ -122,7 +122,7 @@ export const EventJsonButton = ({
               overflow: "auto",
               background: "var(--glass-2)",
               color: "var(--text)",
-              fontFamily: "'JetBrains Mono',monospace",
+              fontFamily: "'Geist Mono',monospace",
               fontSize: 12.5,
               lineHeight: 1.55,
               whiteSpace: "pre-wrap",

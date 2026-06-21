@@ -17,9 +17,12 @@ import {
   deletedEventIdsByAuthor,
 } from "../events.ts";
 import { Kind, DOC_MARKER, ARTICLE_MARKER, type Note } from "../types.ts";
+import { getPublicKey } from "nostr-tools";
+import { npubOf } from "../keys.ts";
 
 const sk = generateSecretKey();
 const sign = (t: EventTemplate) => finalizeEvent(t, sk);
+const newPubkey = (): string => getPublicKey(generateSecretKey());
 
 describe("note round-trip", () => {
   test("a built note decodes back to its content", () => {
@@ -62,6 +65,33 @@ describe("note round-trip", () => {
     expect(tmpl.tags).toContainEqual(["p", root.pubkey]);
     const decoded = decodeNote(sign(tmpl));
     expect(decoded.replyTo).toBe(root.id);
+  });
+
+  test("inline @npub / nostr: mentions become NIP-27 p-tags", () => {
+    const a = newPubkey();
+    const b = newPubkey();
+    const tmpl = buildNote(`hi @${npubOf(a)} and nostr:${npubOf(b)}`);
+    expect(tmpl.tags).toContainEqual(["p", a]);
+    expect(tmpl.tags).toContainEqual(["p", b]);
+  });
+
+  test("a mention p-tag is not duplicated with the reply target's p-tag", () => {
+    const author = newPubkey();
+    const root: Note = {
+      id: "c".repeat(64),
+      pubkey: author,
+      content: "root",
+      createdAt: 1,
+      tags: [],
+    };
+    // Replying to `author` while also @-mentioning them in the body.
+    const tmpl = buildNote(`thanks @${npubOf(author)}`, root);
+    expect(tmpl.tags.filter((t) => t[0] === "p" && t[1] === author)).toHaveLength(1);
+  });
+
+  test("a note without mentions carries no p-tags", () => {
+    const tmpl = buildNote("just shipping today #beamhop");
+    expect(tmpl.tags.some((t) => t[0] === "p")).toBe(false);
   });
 });
 

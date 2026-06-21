@@ -1,15 +1,18 @@
 /* ============================================================
-   Beamhop design tokens — extracted from "Beamhop Glass" design
-   Light/dark themes + accent palettes applied via JS on :root
+   Beamhop design tokens — Vercel/Geist-inspired monochrome system.
+   Strict neutral grayscale: near-white #fafafa surfaces, ink #171717
+   type, hairline borders, restrained shadows. Color carries meaning
+   only (success/danger/warn + the active accent palette). Light/dark
+   neutrals live here; accent palettes are applied via JS on :root.
    ============================================================ */
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; overscroll-behavior: none; }
   /* Keep iOS from inflating font sizes in landscape, and kill the grey tap flash. */
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   body {
-    font-family: 'Hanken Grotesk', system-ui, sans-serif;
+    font-family: 'Geist', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    background: var(--bg-base, #e7e9f4);
+    background: var(--bg-base, #fafafa);
     -webkit-tap-highlight-color: transparent;
   }
   :root {
@@ -26,33 +29,35 @@
     --header-h: calc(74px + env(safe-area-inset-top));
     /* Mobile bottom nav clearance: 52px content + 8px top pad + (8px + sab) bottom pad + 10px margin. */
     --mobile-nav-h: calc(78px + var(--sab));
-    --bg-base:#f4f5f7;
-    --text:#16181d; --text-2:#565b66; --text-3:#9196a1;
-    --accent:#5b54f0; --accent-2:#5b54f0; --accent-soft:rgba(91,84,240,.10); --accent-ink:#4a43d6; --on-accent:#ffffff;
+    --bg-base:#fafafa;
+    --text:#171717; --text-2:#666666; --text-3:#8f8f8f;
+    /* Neutral ink fallback (the active palette overrides these via JS on mount). */
+    --accent:#171717; --accent-2:#171717; --accent-soft:rgba(0,0,0,.06); --accent-ink:#000000; --on-accent:#ffffff;
     --success:#10a974; --success-soft:rgba(16,169,116,.12); --danger:#e83e5e; --warn:#e0911f;
-    --glass:#ffffff; --glass-strong:#ffffff; --glass-2:#f3f4f6;
-    --glass-border:#e6e7eb; --hairline:#edeef1;
+    --glass:#ffffff; --glass-strong:#ffffff; --glass-2:#f2f2f2;
+    --glass-border:#eaeaea; --hairline:#f0f0f0;
     --blur:none;
     --glass-shadow:none;
-    --glass-shadow-lg:0 14px 38px -16px rgba(20,22,45,.22);
-    --grad:#5b54f0;
+    --glass-shadow-lg:0 12px 32px -10px rgba(0,0,0,.16);
+    --grad:#171717;
   }
   [data-theme="dark"] {
     color-scheme: dark;
-    --bg-base:#0c0d11;
-    --text:#edeef3; --text-2:#9a9fac; --text-3:#676c78;
-    --accent:#8b82ff; --accent-2:#8b82ff; --accent-soft:rgba(139,130,255,.16); --accent-ink:#b6aeff; --on-accent:#ffffff;
+    --bg-base:#0a0a0a;
+    --text:#ededed; --text-2:#a1a1a1; --text-3:#6f6f6f;
+    /* Neutral white fallback (the active palette overrides these via JS on mount). */
+    --accent:#ffffff; --accent-2:#ededed; --accent-soft:rgba(255,255,255,.10); --accent-ink:#ffffff; --on-accent:#0a0a0a;
     --success:#2fd39a; --success-soft:rgba(47,211,154,.14); --danger:#ff5a7a; --warn:#fbbf24;
-    --glass:#15171c; --glass-strong:#181a20; --glass-2:#1d2027;
-    --glass-border:#262932; --hairline:#22242b;
+    --glass:#111111; --glass-strong:#161616; --glass-2:#1a1a1a;
+    --glass-border:#2e2e2e; --hairline:#242424;
     --blur:none;
     --glass-shadow:none;
     --glass-shadow-lg:0 16px 44px -16px rgba(0,0,0,.72);
-    --grad:#8b82ff;
+    --grad:#ffffff;
   }
   ::-webkit-scrollbar { width:9px; height:9px; }
-  ::-webkit-scrollbar-thumb { background:rgba(130,130,170,.3); border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
-  ::-webkit-scrollbar-thumb:hover { background:rgba(130,130,170,.5); border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb { background:rgba(128,128,128,.32); border-radius:10px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(128,128,128,.5); border:2px solid transparent; background-clip:padding-box; }
   /* 16px floor stops iOS Safari from auto-zooming on focus. Inline styles >=16
      still win; sub-16 inline sizes were removed at the call sites. */
   textarea, input, select { font-family: inherit; font-size: 16px; }
@@ -65,12 +70,12 @@
   @keyframes navmark { from{transform:scaleY(0); opacity:0} to{transform:scaleY(1); opacity:1} }
   @keyframes ripple { from{transform:scale(.6); opacity:.5} to{transform:scale(2.4); opacity:0} }
   /* ===== ARTICLE PROSE (rendered markdown + live editor) ===== */
-  .vy-prose{ color:var(--text); font-size:18px; line-height:1.75; font-family:'Hanken Grotesk',sans-serif; word-break:break-word; }
+  .vy-prose{ color:var(--text); font-size:18px; line-height:1.75; font-family:'Geist',sans-serif; word-break:break-word; }
   .vy-prose > *:first-child{ margin-top:0; }
   .vy-prose > *:last-child{ margin-bottom:0; }
-  .vy-prose h1{ font-family:'Space Grotesk',sans-serif; font-size:30px; line-height:1.2; font-weight:700; letter-spacing:-.022em; margin:1.5em 0 .5em; }
-  .vy-prose h2{ font-family:'Space Grotesk',sans-serif; font-size:23px; line-height:1.28; font-weight:700; letter-spacing:-.014em; margin:1.5em 0 .45em; }
-  .vy-prose h3{ font-family:'Space Grotesk',sans-serif; font-size:19px; line-height:1.35; font-weight:700; margin:1.4em 0 .4em; }
+  .vy-prose h1{ font-family:'Geist',sans-serif; font-size:30px; line-height:1.2; font-weight:700; letter-spacing:-.022em; margin:1.5em 0 .5em; }
+  .vy-prose h2{ font-family:'Geist',sans-serif; font-size:23px; line-height:1.28; font-weight:700; letter-spacing:-.014em; margin:1.5em 0 .45em; }
+  .vy-prose h3{ font-family:'Geist',sans-serif; font-size:19px; line-height:1.35; font-weight:700; margin:1.4em 0 .4em; }
   .vy-prose p{ margin:0 0 1.05em; }
   .vy-prose a{ color:var(--accent); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1.5px; }
   .vy-prose strong{ font-weight:700; color:var(--text); }
@@ -80,23 +85,23 @@
   .vy-prose li::marker{ color:var(--text-3); }
   .vy-prose blockquote{ margin:1.25em 0; padding:.5em 1.15em; border-left:3px solid var(--accent); color:var(--text-2); font-style:italic; }
   .vy-prose blockquote p{ margin:.3em 0; }
-  .vy-prose code{ font-family:'JetBrains Mono',monospace; font-size:.85em; background:var(--glass-2); border:1px solid var(--glass-border); border-radius:5px; padding:.13em .42em; }
+  .vy-prose code{ font-family:'Geist Mono',monospace; font-size:.85em; background:var(--glass-2); border:1px solid var(--glass-border); border-radius:5px; padding:.13em .42em; }
   .vy-prose pre{ margin:1.25em 0; padding:16px 18px; background:var(--glass-2); border:1px solid var(--glass-border); border-radius:11px; overflow-x:auto; }
   .vy-prose pre code{ background:none; border:none; padding:0; font-size:13.5px; line-height:1.65; color:var(--text); white-space:pre; }
   .vy-prose img{ max-width:100%; border-radius:11px; margin:1.3em 0; border:1px solid var(--glass-border); display:block; background:var(--glass-2); min-height:48px; }
   .vy-prose hr{ border:none; border-top:1px solid var(--glass-border); margin:2em 0; }
   .vy-prose table{ width:100%; border-collapse:collapse; margin:1.3em 0; font-size:15px; display:block; overflow-x:auto; }
   .vy-prose th, .vy-prose td{ border:1px solid var(--glass-border); padding:9px 13px; text-align:left; }
-  .vy-prose th{ background:var(--glass-2); font-weight:700; font-family:'Space Grotesk',sans-serif; }
+  .vy-prose th{ background:var(--glass-2); font-weight:700; font-family:'Geist',sans-serif; }
   .vy-editor{ min-height:340px; }
   .vy-editor:focus{ outline:none; }
   .vy-editor:empty:before{ content:attr(data-placeholder); color:var(--text-3); }
   /* ===== MARKDOWN SOURCE EDITOR (syntax highlight overlay) ===== */
   .vy-cm{ position:relative; }
-  .vy-cm-pre, .vy-cm-ta{ box-sizing:border-box; margin:0; padding:16px 18px; font-family:'JetBrains Mono',monospace; font-size:14px; line-height:1.7; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; tab-size:2; border:1px solid var(--glass-border); border-radius:13px; }
+  .vy-cm-pre, .vy-cm-ta{ box-sizing:border-box; margin:0; padding:16px 18px; font-family:'Geist Mono',monospace; font-size:14px; line-height:1.7; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; tab-size:2; border:1px solid var(--glass-border); border-radius:13px; }
   .vy-cm-pre{ position:relative; min-height:440px; color:var(--text); background:var(--glass); overflow:hidden; }
   .vy-cm-ta{ position:absolute; inset:0; width:100%; height:100%; resize:none; outline:none; background:transparent; color:transparent; -webkit-text-fill-color:transparent; caret-color:var(--accent); border-color:transparent; overflow:hidden; }
-  .vy-cm-ta::selection{ background:rgba(91,84,240,.24); }
+  .vy-cm-ta::selection{ background:color-mix(in srgb, var(--accent) 22%, transparent); }
   .vy-cm-ta::placeholder{ color:var(--text-3); -webkit-text-fill-color:var(--text-3); }
   /* ===== DOC TABLE OF CONTENTS ===== */
   .vy-doc-toc-aside{ width:204px; min-width:204px; }
@@ -108,6 +113,7 @@
 @keyframes beamhop-scale { from { opacity: 0; transform: scale(.97) translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes beamhop-slideup { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes beamhop-toast { from { opacity: 0; transform: translateY(20px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes beamhop-pill-in { from { opacity: 0; transform: translateY(-10px) scale(.92); } to { opacity: 1; transform: none; } }
 @keyframes beamhop-pop { 0%{transform:scale(1)} 40%{transform:scale(1.32)} 70%{transform:scale(.92)} 100%{transform:scale(1)} }
 @keyframes beamhop-bubble-pop {
   0% { opacity: 0; transform: translate(-50%, 7px) scale(.72); filter: blur(.2px); }

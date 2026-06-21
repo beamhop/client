@@ -29,8 +29,8 @@ describe("theme persistence", () => {
 });
 
 describe("palette persistence", () => {
-  test("defaults to Ember when nothing is stored", () => {
-    expect(loadPalette()).toBe("Ember");
+  test("defaults to White when nothing is stored", () => {
+    expect(loadPalette()).toBe("White");
   });
 
   test("round-trips a valid palette id", () => {
@@ -38,9 +38,9 @@ describe("palette persistence", () => {
     expect(loadPalette()).toBe("Cobalt");
   });
 
-  test("an unknown stored palette falls back to Ember", () => {
+  test("an unknown stored palette falls back to White", () => {
     localStorage.setItem("beamhop.palette.v1", "Chartreuse");
-    expect(loadPalette()).toBe("Ember");
+    expect(loadPalette()).toBe("White");
   });
 
   test("every id in PALETTE_ORDER has a defined palette", () => {

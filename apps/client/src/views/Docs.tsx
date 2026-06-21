@@ -236,7 +236,7 @@ const DocCard = ({ doc, onOpen }: { doc: LongForm; onOpen: () => void }): ReactN
         <h3
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 17,
             lineHeight: 1.3,
             fontWeight: 700,
@@ -443,7 +443,7 @@ const DocsList = (): ReactNode => {
       ) : isEmpty ? (
         <div data-testid="docs-empty" style={{ textAlign: "center", padding: "72px 20px", color: "var(--text-3)" }}>
           <EmptyFileGlyph />
-          <p style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: "var(--text-2)", fontFamily: "'Space Grotesk',sans-serif" }}>
+          <p style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: "var(--text-2)", fontFamily: "'Geist',sans-serif" }}>
             {emptyLabel}
           </p>
           <p style={{ margin: "5px 0 0", fontSize: 13.5 }}>Try a different search, or start a new doc.</p>
@@ -646,7 +646,7 @@ const DocReader = (): ReactNode => {
             data-testid="doc-reader-title"
             style={{
               margin: 0,
-              fontFamily: "'Space Grotesk',sans-serif",
+              fontFamily: "'Geist',sans-serif",
               fontSize: 38,
               lineHeight: 1.15,
               fontWeight: 700,
@@ -739,7 +739,7 @@ const DocReader = (): ReactNode => {
       {confirmingDelete && (
         <Modal onClose={() => setConfirmingDelete(false)} width={380}>
           <div style={{ padding: 28 }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 19, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif", color: "var(--text)" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 19, fontWeight: 700, fontFamily: "'Geist',sans-serif", color: "var(--text)" }}>
               Delete document?
             </h2>
             <p style={{ margin: "0 0 24px", fontSize: 14.5, color: "var(--text-2)", lineHeight: 1.55 }}>
@@ -929,7 +929,7 @@ const DocEditor = (): ReactNode => {
             background: "var(--glass-2)",
             padding: "4px 8px",
             borderRadius: 7,
-            fontFamily: "'JetBrains Mono',monospace",
+            fontFamily: "'Geist Mono',monospace",
             whiteSpace: "nowrap",
           }}
         >
@@ -981,7 +981,7 @@ const DocEditor = (): ReactNode => {
           placeholder="Document title"
           style={{
             ...fieldBase,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 34,
             lineHeight: 1.2,
             fontWeight: 700,
@@ -999,7 +999,7 @@ const DocEditor = (): ReactNode => {
           placeholder="Short description — what this doc covers"
           style={{
             ...fieldBase,
-            fontFamily: "'Hanken Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 16,
             lineHeight: 1.5,
             color: "var(--text-2)",
@@ -1105,7 +1105,7 @@ const DocEditor = (): ReactNode => {
                 width: "100%",
                 resize: "none",
                 outline: "none",
-                fontFamily: "'JetBrains Mono',monospace",
+                fontFamily: "'Geist Mono',monospace",
                 fontSize: 14,
                 lineHeight: 1.7,
                 whiteSpace: "pre-wrap",

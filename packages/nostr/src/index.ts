@@ -2,6 +2,7 @@ export * from "./types.ts";
 export * from "./client.ts";
 export * from "./events.ts";
 export * from "./keys.ts";
+export * from "./mentions.ts";
 export * from "./dm.ts";
 export * from "./nip44.ts";
 export * from "./nip51.ts";

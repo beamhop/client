@@ -3,7 +3,7 @@
  *
  * Served at /manifest.webmanifest in both dev (src/server.ts) and prod
  * (scripts/build.ts writes it into dist/). Colors mirror the LIGHT theme
- * default (tokens.css `--bg-base` #f4f5f7); a runtime <meta name="theme-color">
+ * default (tokens.css `--bg-base` #fafafa); a runtime <meta name="theme-color">
  * updater (owned by another agent) swaps the live tag per active theme.
  */
 
@@ -39,8 +39,8 @@ export const manifest: WebAppManifest = {
   scope: "/",
   display: "standalone",
   orientation: "portrait",
-  background_color: "#f4f5f7",
-  theme_color: "#f4f5f7",
+  background_color: "#fafafa",
+  theme_color: "#fafafa",
   icons: [
     { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
     { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

@@ -118,7 +118,7 @@ export const AuthorChip = ({
           style={{
             fontSize: 12.5,
             color: "var(--text-3)",
-            fontFamily: "'JetBrains Mono',monospace",
+            fontFamily: "'Geist Mono',monospace",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",

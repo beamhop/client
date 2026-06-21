@@ -101,7 +101,7 @@ export const segStyle = (active: boolean): CSSProperties => ({
   fontSize: 12.5,
   fontFamily: "inherit",
   cursor: "pointer",
-  boxShadow: active ? "0 1px 3px rgba(20,22,45,.12)" : "none",
+  boxShadow: active ? "0 1px 3px rgba(0,0,0,.12)" : "none",
   transition: "all .15s",
 });
 

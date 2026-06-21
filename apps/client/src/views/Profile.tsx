@@ -243,7 +243,7 @@ const EditProfileModal = ({
           borderBottom: "1px solid var(--hairline)",
         }}
       >
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 17 }}>
+        <span style={{ fontFamily: "'Geist',sans-serif", fontWeight: 700, fontSize: 17 }}>
           Edit profile
         </span>
         <button
@@ -541,7 +541,7 @@ const ArticleCard = ({
         <h3
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 18,
             lineHeight: 1.28,
             fontWeight: 700,
@@ -688,7 +688,7 @@ const PersonRow = ({
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               color: "var(--text-3)",
-              fontFamily: "'JetBrains Mono',monospace",
+              fontFamily: "'Geist Mono',monospace",
               fontSize: 12.5,
               marginTop: 2,
             }}
@@ -751,7 +751,7 @@ const PeoplePanel = ({
         <h3
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 17,
             lineHeight: 1.2,
             fontWeight: 700,
@@ -792,7 +792,7 @@ const PeoplePanel = ({
 
 const listSectionHeadingStyle: CSSProperties = {
   margin: "0 0 10px",
-  fontFamily: "'Space Grotesk',sans-serif",
+  fontFamily: "'Geist',sans-serif",
   fontSize: 15,
   fontWeight: 700,
   color: "var(--text-2)",
@@ -1679,7 +1679,7 @@ export const ProfileView = (): ReactNode => {
             <h2
               style={{
                 margin: 0,
-                fontFamily: "'Space Grotesk',sans-serif",
+                fontFamily: "'Geist',sans-serif",
                 fontSize: 24,
                 fontWeight: 700,
                 letterSpacing: "-.02em",
@@ -1690,10 +1690,11 @@ export const ProfileView = (): ReactNode => {
             {profile?.nip05 && <VerifiedSeal size={20} />}
           </div>
 
-          {handle && (
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5, flexWrap: "wrap" }}
-            >
+          {/* identity chips — verified handle (when present) + copyable public key */}
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}
+          >
+            {handle && (
               <span
                 style={{
                   display: "inline-flex",
@@ -1710,8 +1711,46 @@ export const ProfileView = (): ReactNode => {
                 <CheckMini />
                 {handle}
               </span>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              data-testid="profile-npub-copy"
+              onClick={copyNpub}
+              title={npubOf(pubkey)}
+              aria-label="Copy public key"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                minWidth: 0,
+                maxWidth: "100%",
+                padding: "4px 11px 4px 9px",
+                border: "1px solid var(--glass-border)",
+                borderRadius: 999,
+                background: "var(--glass)",
+                color: "var(--text-2)",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: 12.5,
+                fontWeight: 600,
+                transition: "background .15s, border-color .15s",
+              }}
+            >
+              <KeyLinkIcon />
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontFamily: "'Geist Mono',monospace",
+                }}
+              >
+                {shortNpub(pubkey)}
+              </span>
+              <CopyMini />
+            </button>
+          </div>
 
           {profile?.about && (
             <p
@@ -1750,7 +1789,7 @@ export const ProfileView = (): ReactNode => {
               onClick={() => openTab("following")}
               style={statButtonStyle(tab === "following")}
             >
-              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
+              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Geist',sans-serif" }}>
                 {followingCount === null ? "—" : fmtCount(followingCount)}
               </strong>{" "}
               Following
@@ -1761,59 +1800,19 @@ export const ProfileView = (): ReactNode => {
               onClick={() => openTab("followers")}
               style={statButtonStyle(tab === "followers")}
             >
-              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
+              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Geist',sans-serif" }}>
                 {followerCount === null ? "—" : fmtCount(followerCount)}
               </strong>{" "}
               Followers
             </button>
             <span style={{ fontSize: 14, color: "var(--text-2)" }}>
-              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Space Grotesk',sans-serif" }}>
+              <strong style={{ color: "var(--text)", fontSize: 16, fontFamily: "'Geist',sans-serif" }}>
                 {fmtCount(posts.length)}
               </strong>{" "}
               Posts
             </span>
           </div>
 
-          {/* npub copy (me only) */}
-          {isMe && (
-            <button
-              type="button"
-              data-testid="profile-npub-copy"
-              onClick={copyNpub}
-              title={npubOf(pubkey)}
-              style={{
-                marginTop: 16,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                width: "100%",
-                padding: "11px 14px",
-                border: "1px solid var(--glass-border)",
-                borderRadius: 9,
-                background: "var(--glass)",
-                boxShadow: "var(--glass-shadow)",
-                cursor: "pointer",
-                transition: "all .18s",
-              }}
-            >
-              <KeyLinkIcon />
-              <span
-                style={{
-                  flex: 1,
-                  textAlign: "left",
-                  fontFamily: "'JetBrains Mono',monospace",
-                  fontSize: 12.5,
-                  color: "var(--text-2)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {shortNpub(pubkey)}
-              </span>
-              <CopyMini />
-            </button>
-          )}
         </div>
 
         {/* tabs — other profiles */}
@@ -2067,7 +2066,7 @@ export const ProfileView = (): ReactNode => {
                             style={{
                               color: "var(--accent)",
                               fontWeight: 600,
-                              fontFamily: "'JetBrains Mono',monospace",
+                              fontFamily: "'Geist Mono',monospace",
                             }}
                           >
                             {note.replyTo ? `${note.replyTo.slice(0, 10)}…` : "a note"}

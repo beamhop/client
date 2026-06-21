@@ -19,8 +19,8 @@ describe("web app manifest", () => {
     expect(manifest.short_name).toBe("Beamhop");
     expect(manifest.id).toBe("/");
     expect(manifest.orientation).toBe("portrait");
-    expect(manifest.background_color).toBe("#f4f5f7");
-    expect(manifest.theme_color).toBe("#f4f5f7");
+    expect(manifest.background_color).toBe("#fafafa");
+    expect(manifest.theme_color).toBe("#fafafa");
   });
 
   it("ships 192 + 512 'any' icons and a maskable icon", () => {

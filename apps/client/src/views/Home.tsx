@@ -55,6 +55,13 @@ const BookGlyph = (): ReactNode => (
   </svg>
 );
 
+/** Upward arrow for the "new posts" pill. */
+const ArrowUpGlyph = (): ReactNode => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </svg>
+);
+
 /** Inline composer card — design lines 220-238. */
 const Composer = ({
   pubkey,
@@ -270,7 +277,7 @@ const ArticlesStrip = ({ authors }: { authors?: string[] }): ReactNode => {
             display: "flex",
             alignItems: "center",
             gap: 8,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 14,
             fontWeight: 700,
             color: "var(--text)",
@@ -352,7 +359,7 @@ const ArticleCard = ({ article, mine }: { article: LongForm; mine: boolean }): R
         <h3
           style={{
             margin: 0,
-            fontFamily: "'Space Grotesk',sans-serif",
+            fontFamily: "'Geist',sans-serif",
             fontSize: 18,
             lineHeight: 1.28,
             fontWeight: 700,
@@ -579,7 +586,14 @@ export const HomeView = (): ReactNode => {
   }, [followedAuthors, isFollowingFeed]);
 
   const feedEnabled = !isFollowingFeed || followedAuthors.length > 0;
-  const { items, loading, loadingMore, hasMore, loadMore, refresh } = useTimelineFeed(filter, [filter], feedEnabled);
+  // Buffer live arrivals behind a "new posts" pill on the high-traffic For you
+  // feed; the Following feed keeps its low-volume auto-prepend behavior.
+  const { items, pending, showPending, loading, loadingMore, hasMore, loadMore, refresh } = useTimelineFeed(
+    filter,
+    [filter],
+    feedEnabled,
+    { buffer: !isFollowingFeed },
+  );
 
   // Register this feed's refresh for the shell-level pull-to-refresh gesture.
   useEffect(() => {
@@ -618,6 +632,42 @@ export const HomeView = (): ReactNode => {
       ),
     [timelineItems, muted, state.muteSettings.display],
   );
+  // "X new posts" pill count: buffered arrivals that would actually surface in
+  // the feed — apply the same follow/reply/delete/repost/mute filtering used for
+  // rendered rows, drop anything already on screen, and dedupe by note.
+  const newPostsCount = useMemo(() => {
+    if (pending.length === 0) return 0;
+    const shownNoteIds = new Set(timelineItems.map((item) => item.note.id));
+    const counted = new Set<string>();
+    for (const item of pending) {
+      const actor = item.type === "repost" ? item.repostedBy : item.note.pubkey;
+      if (isFollowingFeed && !followedAuthorSet.has(actor)) continue;
+      if (deleted.has(item.note.id)) continue;
+      if (item.type === "repost" && suppressedRepostKeys.has(repostIdentityKey(item.repostedBy, item.note.id))) {
+        continue;
+      }
+      if (!(item.type === "repost" || item.note.replyTo === undefined)) continue;
+      const ruleHit =
+        item.type === "repost"
+          ? evaluateRepost(muted, { repostedBy: item.repostedBy, note: item.note })
+          : evaluateNote(muted, item.note);
+      if (ruleHit) continue;
+      if (shownNoteIds.has(item.note.id)) continue;
+      counted.add(item.note.id);
+    }
+    return counted.size;
+  }, [pending, timelineItems, isFollowingFeed, followedAuthorSet, deleted, suppressedRepostKeys, muted]);
+
+  // Release buffered posts to the top of the feed at once and snap back up.
+  const showNewPosts = useCallback((): void => {
+    haptic("light");
+    showPending();
+    setRenderCap(40);
+    if (typeof document !== "undefined") {
+      document.querySelector<HTMLElement>('[data-testid="main-scroll"]')?.scrollTo?.({ top: 0, behavior: "smooth" });
+    }
+  }, [showPending]);
+
   const visibleNoteIds = useMemo(() => [...new Set(timelineItems.map((item) => item.note.id))], [timelineItems]);
   const engagement = useEngagement(visibleNoteIds, optimistic);
   const emptyFeed = useMemo(() => {
@@ -847,6 +897,48 @@ export const HomeView = (): ReactNode => {
       <Composer pubkey={pubkey} meName={meName} picture={state.me?.picture} />
 
       <ArticlesStrip authors={isFollowingFeed ? followedAuthors : undefined} />
+
+      {newPostsCount > 0 && (
+        <div
+          style={{
+            position: "sticky",
+            top: 52,
+            zIndex: 8,
+            height: 0,
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <button
+            type="button"
+            data-testid="new-posts-pill"
+            aria-label={`Show ${newPostsCount} new ${newPostsCount === 1 ? "post" : "posts"}`}
+            onClick={showNewPosts}
+            style={{
+              pointerEvents: "auto",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "8px 15px",
+              borderRadius: 999,
+              border: "1px solid color-mix(in srgb, var(--on-accent) 24%, transparent)",
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              fontFamily: "inherit",
+              fontSize: 13.5,
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "var(--glass-shadow-lg)",
+              animation: "beamhop-pill-in .26s cubic-bezier(.2,.85,.3,1.2)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <ArrowUpGlyph />
+            {newPostsCount} new {newPostsCount === 1 ? "post" : "posts"}
+          </button>
+        </div>
+      )}
 
       {loading && timelineItems.length === 0 ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "56px 0" }}>

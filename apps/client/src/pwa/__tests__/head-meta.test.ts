@@ -15,7 +15,7 @@ describe("index.html PWA head tags", () => {
 
   it("sets a static theme-color (runtime updater swaps it per theme)", () => {
     expect(html).toContain('name="theme-color"');
-    expect(html).toContain('content="#f4f5f7"');
+    expect(html).toContain('content="#fafafa"');
   });
 });
 
