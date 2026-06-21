@@ -8,12 +8,12 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "bun --cwd apps/client run dev",
-    "build": "bun --cwd apps/client run build",
-    "start": "bun --cwd apps/client run start",
+    "dev": "bun run --filter='@beamhop/client' dev",
+    "build": "bun run --filter='@beamhop/client' build",
+    "start": "bun run --filter='@beamhop/client' start",
     "typecheck": "bun run --filter='*' typecheck",
     "test": "bun run --filter='*' test",
-    "test:e2e": "bun --cwd apps/client run test:e2e"
+    "test:e2e": "bun run --filter='@beamhop/client' test:e2e"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
