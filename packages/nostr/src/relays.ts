@@ -4,7 +4,8 @@ const STORAGE_KEY = "beamhop.relays.v1";
 
 /** Beamhop relay first; community relays included but disabled by default. */
 export const DEFAULT_RELAYS: readonly RelayInfo[] = [
-  { url: "wss://relay.beamhop.com", enabled: true, read: true, write: true, status: "disconnected" },
+  { url: "wss://relay2.beamhop.com", enabled: true, read: true, write: true, status: "disconnected" },
+  { url: "wss://relay.beamhop.com", enabled: false, read: true, write: true, status: "disconnected" },
   { url: "wss://relay.damus.io", enabled: false, read: true, write: true, status: "disconnected" },
   { url: "wss://nos.lol", enabled: false, read: true, write: true, status: "disconnected" },
   { url: "wss://relay.nostr.band", enabled: false, read: true, write: true, status: "disconnected" },
