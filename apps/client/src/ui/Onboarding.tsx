@@ -85,11 +85,11 @@ export const Onboarding = (): ReactNode => {
               <KeyIcon size={18} /> Create a new identity
             </PrimaryButton>
             <GhostButton onClick={() => setMode("import")} style={{ padding: "13px" }}>
-              Import an existing nsec
+              Import an existing key
             </GhostButton>
             {hasNip07() && (
               <GhostButton onClick={() => void connectSigner()} style={{ padding: "13px" }}>
-                <ShieldIcon size={17} /> Connect signer extension (NIP-07)
+                <ShieldIcon size={17} /> Connect signer extension
               </GhostButton>
             )}
             {error && <p style={{ color: "var(--danger)", fontSize: 13, margin: 0 }}>{error}</p>}
