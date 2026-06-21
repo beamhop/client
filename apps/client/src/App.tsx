@@ -9,7 +9,6 @@ import { Compose } from "./ui/Compose.tsx";
 import { Toasts } from "./ui/Toasts.tsx";
 import { RightRail } from "./ui/RightRail.tsx";
 import { CommandPalette } from "./ui/CommandPalette.tsx";
-import { PitchModal } from "./ui/PitchModal.tsx";
 import { Spinner } from "./ui/primitives.tsx";
 import { Logo, SunIcon, MoonIcon } from "./ui/icons.tsx";
 import { PALETTE_ORDER, paletteBanner, type PaletteId } from "@beamhop/lib";
@@ -151,7 +150,6 @@ export const App = (): ReactNode => {
     return (
       <div style={{ minHeight: "var(--app-h)", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg-base)" }}>
         <Spinner size={28} />
-        <PitchModal />
       </div>
     );
   }
@@ -160,7 +158,6 @@ export const App = (): ReactNode => {
     return (
       <div ref={rootRef}>
         <Onboarding />
-        <PitchModal />
         <Toasts />
       </div>
     );
@@ -249,7 +246,6 @@ export const App = (): ReactNode => {
       {isMobile && <MobileNav onCompose={() => setCompose(true)} onOpenPalette={() => setPaletteOpen(true)} />}
       {compose && <Compose onClose={() => setCompose(false)} />}
       {palette && <CommandPalette onClose={() => setPaletteOpen(false)} onCompose={() => setCompose(true)} />}
-      <PitchModal />
       <Toasts />
     </div>
   );
