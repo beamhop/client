@@ -13,6 +13,8 @@ const addHeadLink = (rel: string, href: string, attrs: Record<string, string> = 
   for (const [key, value] of Object.entries(attrs)) link.setAttribute(key, value);
   document.head.appendChild(link);
 };
+addHeadLink("icon", "/icons/favicon.svg", { type: "image/svg+xml" });
+addHeadLink("icon", "/icons/favicon-32.png", { type: "image/png", sizes: "32x32" });
 addHeadLink("manifest", "/manifest.webmanifest");
 addHeadLink("apple-touch-icon", "/icons/apple-touch-icon-180.png", { sizes: "180x180" });
 
