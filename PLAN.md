@@ -1,4 +1,4 @@
-# beamhop — Plan (rev 2)
+# beamhop — Plan (rev 3)
 
 beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI, OpenCode, pi, and any harness that speaks ACP) to messaging channels. Nostr is the first channel; Discord, Slack and Telegram follow. A harness can run on the user's laptop or on one of five cloud providers, and it always runs inside a sandbox the user configures. beamhop is controlled from an installable PWA or entirely from a CLI.
 
@@ -29,6 +29,10 @@ beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI
 | Cloud | Users can move an existing local agent to the cloud, or create an agent directly in the cloud |
 | Teams | Several npubs can be owner or admin of the same agent |
 | Updates | The signed catalog updates automatically; the app updates only after the user confirms |
+| Cloud harness auth | Chosen per agent: an API key through the broker, or the user's subscription login (with a terms-of-service warning) |
+| Approval timeout | Deny after 15 minutes by default (configurable). The agent is told the request was denied. |
+| Retention | Configurable. Defaults: transcripts 30 days, audit log 1 year. Everything is encrypted at rest and can be exported or purged. |
+| Media | Files and images in and out, plus rich formatting adapted to each channel. Voice is not in the launch. |
 | Plugins | Third-party plugins are allowed at launch, sandboxed in srt and pinned by integrity hash |
 | Behavior | Defined by each harness's own config. beamhop adds only channel context (§6A) |
 
@@ -122,6 +126,24 @@ interface Deployer { plan(spec); apply(spec); status(id); logs(id); destroy(id);
   - `channel.send`, `channel.history`, `channel.members`
   - `mesh.ask_agent`, `mesh.post_job`, `mesh.list_agents`
 - **Approvals:** when a harness asks for permission, policy for the sender's role decides one of three outcomes. It is auto-allowed, sent to the owner (PWA push or Nostr DM), or denied.
+  - **No answer:** the request is denied after `approval_timeout`, which defaults to 15 minutes. The agent gets a "denied: timed out" result, so it can try another approach or stop.
+  - **Logging:** every decision is recorded in the audit log, including who decided, or that the timeout did.
+
+### 3.3 Media and formatting
+- **Inbound files and images** are saved to `<session>/inbox/` inside the sandbox, and the agent is given their path and MIME type.
+  - Nostr fetches them from Blossom (BUD-01) or NIP-96 URLs.
+  - Telegram, Slack and Discord use their own file APIs.
+  - Size and type limits apply per role. Downloads go through the broker, never directly from the sandbox.
+- **Outbound files:** the MCP tool `channel.send_file` sends generated files, screenshots and diffs.
+  - On Nostr, beamhop uploads to the owner's Blossom servers.
+  - On other channels, it uses the native upload.
+- **Formatting:** the agent writes Markdown, and each channel plugin renders it in that channel's format:
+  - **Telegram:** MarkdownV2 or HTML
+  - **Slack:** mrkdwn and Block Kit
+  - **Discord:** Markdown and embeds
+  - **Nostr:** plain text, with code fences kept
+
+  Buttons (approve, deny, `/details`) use the channel's own components, and fall back to text commands where there are none.
 
 ## 4. Nostr channel (first channel)
 
@@ -291,7 +313,17 @@ Which commands a user can run depends on their role.
 - **Prerequisites:** on Linux, srt needs `bubblewrap`, `socat` and `ripgrep`. `beamhop doctor` checks for these, plus Ubuntu's AppArmor setting that restricts unprivileged user namespaces, and prints the fix for each problem.
 - **Cloud PaaS** (Render, Railway): containers there may not allow user namespaces, so bubblewrap may fail. `doctor` detects this. In that case the platform's container is the filesystem boundary, and srt's network proxy and the broker still apply. Verify this per provider. Fly machines are Firecracker VMs, where srt is expected to run normally.
 
+### Harness auth on cloud agents (per agent)
+- **API key** (default): the key stays on the owner's machine, or in the remote vault, and the broker injects it. The sandbox never holds it.
+- **Subscription login:** device-code or OAuth login for the harness, run on the server through the PWA. A warning is shown, with a link to that provider's terms, because some subscription plans don't allow use on servers or by other people. The tokens are kept in the remote vault, and the harness reads them from a mount the broker controls.
+
 ## 8. Secrets storage
+
+**Retention:**
+- **Defaults:** transcripts 30 days, audit log 1 year, both configurable per agent.
+- **Encryption at rest:** SQLite with a key held in the keychain.
+- **Commands:** `beamhop data export` and `beamhop data purge --agent <a> [--before <date>]`.
+- **Cloud daemons** apply the same retention policy.
 
 - **Laptops:** the OS keychain, through `@napi-rs/keyring`: macOS Keychain, Windows Credential Manager, or libsecret on Linux.
 - **Headless Linux:** an age-encrypted vault, unlocked by a passphrase or a systemd credential.
