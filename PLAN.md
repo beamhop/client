@@ -1,242 +1,289 @@
-# beamhop — Plan
+# beamhop — Plan (rev 2)
 
-beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI, OpenCode, pi, and any harness that speaks ACP) to messaging channels. Nostr is the first channel; Discord, Slack and Telegram follow. A harness can run on the user's laptop or on one of five cloud providers. Every harness runs inside a sandbox that the user configures. beamhop can be driven from a UI or entirely from a CLI.
+beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI, OpenCode, pi, and any harness that speaks ACP) to messaging channels. Nostr is the first channel; Discord, Slack and Telegram follow. A harness can run on the user's laptop or on one of five cloud providers, and it always runs inside a sandbox the user configures. beamhop is controlled from an installable PWA or entirely from a CLI.
 
-## 1. Decisions (from interview)
+## 1. Decisions
 
 | Topic | Decision |
 |---|---|
 | Use cases | Controlling your own agent remotely; agents talking to each other in a mesh; team or community bots |
-| Language | Go: one static binary for Windows, macOS and Linux |
-| UI | One web frontend, served two ways: inside a desktop app, and by the daemon on servers |
+| Runtime | **Node.js 24 LTS + TypeScript**, in a pnpm monorepo |
+| Sandbox | **Anthropic `@anthropic-ai/sandbox-runtime` (srt)** on every OS |
+| Harness discovery | Automatic, through a catalog plus probes (§3.1) |
+| UI | **PWA** (React + React Aria), mobile-first, touch and swipe, WCAG 2.2 AA (§9) |
 | Clouds | Hetzner, DigitalOcean, Fly.io, Render, Railway |
 | Harness integration | Headless/SDK modes, ACP, and an MCP server that beamhop provides |
-| Harnesses | Claude Code, Copilot CLI, Codex CLI, Gemini CLI, OpenCode, pi, and any other ACP harness |
 | Channel auth | Allowlist plus roles |
-| Nostr transport | NIP-17 DMs, NIP-29 groups, public notes (kind 1), NIP-90 DVM jobs |
+| Nostr | NIP-17 DMs, NIP-29 groups, public notes (kind 1), NIP-90 jobs (**no zaps or payments**) |
+| Agent identity | **Public**: NIP-05 handle plus a published kind 0 profile |
 | Secrets | OS keychain plus a broker; the agent never sees the real secret |
-| Remote control | Over Nostr itself (encrypted control events, no open ports) |
-| License | Open source (Apache-2.0 recommended, because it includes a patent grant) |
-| Release | One launch with the full scope. The internal build order is in §10. |
+| Remote control | Over Nostr: encrypted control events, no open ports |
+| Testing | **Public Nostr relays** with throwaway test keys |
+| License | Apache-2.0 |
+| Release | One launch with the full scope. The internal build order is in §11. |
 
 ## 2. Architecture
 
 ```
-            ┌──────────── UI (web frontend: Wails desktop / daemon-served) ────────────┐
-            │                                   CLI (beamhop ...)                       │
-            └──────────────┬─────────────────────────────────────────┬──────────────────┘
-                           │ local API (unix socket / named pipe)     │ remote control over Nostr
-                     ┌─────▼──────────────────── beamhopd ───────────▼─────────────┐
-                     │  Router / Session mgr ── Policy & Roles ── Audit log         │
-                     │      │            │                │                        │
-                     │  Channel adapters  Harness adapters  Sandbox backends        │
-                     │  (nostr, discord,  (acp, claude,     (seatbelt, bwrap+       │
-                     │   slack, telegram) codex, pi, ...)    landlock, mxc/appcont, │
-                     │                                       microvm, gvisor)       │
-                     │      Egress proxy + Secret broker  ── Keychain               │
-                     │      MCP server (channel tools exposed to the harness)       │
-                     │      Deployers (hetzner, do, fly, render, railway)           │
-                     └──────────────────────────────────────────────────────────────┘
+   PWA (phone / desktop browser, installable)            CLI (beamhop ...)
+        │  local: HTTPS+WS on localhost                       │ local socket
+        │  remote: encrypted Nostr control events             │
+   ┌────▼──────────────────────── beamhopd (Node) ─────────────▼───────────────┐
+   │  API (zod-typed JSON-RPC, same contract over WS, socket, Nostr)            │
+   │  Router / Sessions ── AuthZ (principals, roles, budgets) ── Audit (SQLite) │
+   │  Channel plugins: nostr │ telegram │ slack │ discord                       │
+   │  Harness plugins: acp (generic) │ claude │ codex │ pi │ ...  + Discovery   │
+   │  Sandbox: srt (fs + network allowlist)  ── Secret broker / LLM key proxy   │
+   │  MCP server (channel + mesh tools for the agent)                           │
+   │  Deployers: hetzner │ digitalocean │ fly │ render │ railway                │
+   └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Core rule:** every part that can vary is a Go interface defined in `pkg/` and registered in a registry. Adding a new channel, harness, sandbox or cloud provider means adding one package and leaves the core untouched. Later versions can also load out-of-process plugins over gRPC with `hashicorp/go-plugin`.
-
-### Core interfaces (sketch)
-
-```go
-type Channel interface {   // nostr, discord, slack, telegram
-    Connect(ctx, cfg) error
-    Subscribe(ctx, filter) (<-chan InboundMsg, error)
-    Send(ctx, OutboundMsg) error
-    Identity() Principal                 // how senders are identified (npub, discord user id...)
-}
-
-type Harness interface {   // acp, claude, codex, copilot, gemini, opencode, pi
-    Capabilities() HarnessCaps           // streaming, tool approval hooks, resume, MCP support
-    Start(ctx, SessionSpec, Sandbox) (Session, error)
-}
-type Session interface {
-    Prompt(ctx, Input) (<-chan Event, error)   // text, tool_call, permission_request, done
-    Approve(ctx, reqID, Decision) error
-    Cancel(ctx) error; Close() error
-}
-
-type Sandbox interface {   // seatbelt, bwrap, mxc, microvm, gvisor, none(cloud-vm)
-    Probe() Support                       // available on this host? strength?
-    Wrap(cmd *exec.Cmd, Policy) (*exec.Cmd, error)
-}
-
-type Deployer interface {  // hetzner, digitalocean, fly, render, railway
-    Plan(ctx, DeploySpec) (Diff, error); Apply(ctx, DeploySpec) (Deployment, error)
-    Status(ctx, id) (State, error); Destroy(ctx, id) error; Logs(ctx, id) (io.ReadCloser, error)
-}
-```
-
-### Repository layout
+### Monorepo (pnpm + turborepo)
 
 ```
-cmd/beamhop        CLI (cobra)             cmd/beamhopd   daemon
-pkg/channel/{nostr,discord,slack,telegram}
-pkg/harness/{acp,claude,codex,pi,...}      pkg/sandbox/{policy,seatbelt,bwrap,landlock,windows,microvm,gvisor}
-pkg/proxy          egress proxy + secret broker
-pkg/mcp            MCP server exposing channel tools
-pkg/authz          principals, roles, approvals
-pkg/deploy/{hetzner,digitalocean,fly,render,railway}
-pkg/api            local API (protobuf/Connect) shared by CLI, UI and remote-over-Nostr
-ui/                web frontend (Svelte or React + TS)
-desktop/           Wails shell
+apps/daemon        beamhopd (Fastify + ws)
+apps/cli           beamhop CLI (commander; every command takes --json)
+apps/pwa           React PWA (Vite + vite-plugin-pwa)
+packages/core      types, plugin SDK, zod API contract, event bus
+packages/sandbox   srt wrapper + policy profiles
+packages/broker    secret broker + LLM key-injecting proxy
+packages/mcp       MCP server exposing channel/mesh tools
+packages/authz     principals, roles, approvals, budgets
+packages/channel-{nostr,telegram,slack,discord}
+packages/harness-{acp,claude,codex,pi}  + packages/harness-catalog (data)
+packages/deploy-{hetzner,digitalocean,fly,render,railway}
 ```
 
-## 3. Harness adapters
+### Plugin model
+Each channel, harness and deployer is an npm package that exports a typed plugin object from `@beamhop/core`. Official plugins are bundled. Third-party plugins are installed with `beamhop plugin add <npm-pkg>`, pinned by integrity hash, and run in a child process sandboxed by srt that talks to the daemon over JSON-RPC.
 
-beamhop prefers **ACP (Agent Client Protocol)** as the common protocol, because it carries streaming, tool-permission requests, sessions and MCP server injection. A native adapter is used where a harness has no ACP support, or where its native protocol is richer.
+```ts
+interface ChannelPlugin {
+  id: 'telegram' | string;
+  setup: SetupWizard;                    // steps rendered by PWA and CLI (§5)
+  connect(cfg, secrets): Promise<ChannelConn>;
+}
+interface ChannelConn {
+  inbound: AsyncIterable<InboundMsg>;    // normalized: principal, thread, text, attachments
+  send(msg: OutboundMsg): Promise<void>;
+  resolvePrincipal(raw): Principal;
+}
+interface HarnessPlugin {
+  id: string; detect(): Promise<Detection | null>;   // §3.1
+  start(spec: SessionSpec, sandbox: SandboxHandle): Promise<HarnessSession>;
+}
+interface Deployer { plan(spec); apply(spec); status(id); logs(id); destroy(id); }
+```
 
-| Harness | Mode | Notes |
-|---|---|---|
-| Generic ACP | `acp` adapter | Covers any harness that speaks ACP over stdio. Gemini CLI, Copilot CLI, OpenCode and others use this path first. |
-| Claude Code | Agent SDK / `claude -p --output-format stream-json --input-format stream-json` | Uses the native permission-prompt tool, which is then routed to the channel for approval. The ACP adapter is a fallback. |
-| Codex CLI | `codex app-server` (JSON-RPC), fallback `codex exec --json` | |
-| Copilot CLI | ACP mode | |
-| Gemini CLI | ACP mode | |
-| OpenCode | ACP mode or its server API | |
-| pi | RPC/JSON mode | Verify the protocol before building the adapter. |
+### Distribution
+- `npm i -g beamhop` is the main install path.
+- **Standalone binaries** are built with Node SEA (single executable application) and esbuild, for people without Node installed. They are shipped through Homebrew, winget, Scoop and deb/rpm packages.
+- A container image `ghcr.io/beamhop/agent` is published for cloud use.
 
-- **MCP server from beamhop:** each session gets tools such as `channel.send`, `channel.read_history`, `channel.list_members`, `mesh.ask_agent` and `mesh.post_job` (NIP-90). These let the agent act inside the channel on its own initiative, not only reply.
-- **Approval routing:** when the harness asks for permission, beamhop decides where the request goes based on the sender's role. It is either auto-approved by policy, sent to the owner as a DM or push, or shown in the UI.
-- **Version pinning:** harness CLIs change often. Each adapter declares the version ranges it supports, and a contract test runs against every one.
+## 3. Harnesses
 
-## 4. Channels
+### 3.1 Discovery
+`beamhop harness scan` runs at daemon start and whenever the user refreshes it in the PWA.
 
-### Nostr (first), using `nbd-wtf/go-nostr`
-- **NIP-17** (gift-wrapped DMs, NIP-44 encryption) for one-to-one conversations with the owner or a user.
-- **NIP-29** relay groups for team channels and agent meshes. NIP-29 membership is mapped onto beamhop roles.
-- **Kind 1** public notes and replies, opt-in for each agent, with rate limits.
-- **NIP-90 DVM** for structured jobs between agents: request kinds 5xxx, results 6xxx, feedback 7000. Payment over zaps is optional and comes later.
-- **Identity:** each agent has its own keypair, which the owner's key links to its agent keys with a signed attestation event. Keys are stored in the OS keychain; NIP-46 bunker signing is optional.
-- **Relays:** relay lists per agent (NIP-65), reconnect with backoff, deduplication, and replay protection based on event id plus a timestamp window.
-- **Control plane:** custom encrypted event kinds carry the local API (protobuf inside NIP-44) between the owner's devices and their daemons. Only keys on the allowlist can call the control API.
+1. **Catalog:** `harness-catalog` is a versioned JSON list of known harnesses. Each entry records:
+   - binary names (`claude`, `codex`, `copilot`, `gemini`, `opencode`, `pi`, ...)
+   - npm, Homebrew and winget package names
+   - config directories (`~/.claude`, `~/.codex`, ...)
+   - how to launch it in headless or ACP mode
+   - supported version ranges
 
-### Later channels
-Discord (bot gateway), Slack (Socket Mode, so no public URL is needed), and Telegram (Bot API long-polling). Each one maps its user IDs to beamhop principals, and threads to sessions.
+   The catalog is updated separately from releases, and its signature is checked.
+2. **Probe:** beamhop looks in PATH, in npm/pnpm/bun global bins, and in common install locations on each OS. For each hit it runs `--version`, then tries an **ACP `initialize` handshake** inside the sandbox to read the harness's capabilities.
+3. **Auth check:** each harness is checked for being logged in or having an API key configured. The PWA shows it as ready, needs login, or unsupported version.
+4. **Unknown ACP agents:** the user can add any command as `beamhop harness add --acp "<cmd>"`. If the handshake succeeds, it is registered as a generic ACP harness.
+5. **Cloud:** remote daemons report their scan results over the control channel. A deploy can also preinstall the harnesses the user picks.
 
-## 5. Authorization model
+### 3.2 Adapters
 
-- **Principal** = (channel, id), for example `nostr:npub…`, `discord:1234`. Principals can be linked into a single person.
-- **Roles:** built in are `owner`, `admin`, `user`, `viewer` and `agent` (a peer agent in the mesh). Custom roles are allowed.
+| Harness | Mode |
+|---|---|
+| Any ACP agent | `harness-acp` (stdio JSON-RPC). Covers Gemini CLI, Copilot CLI, OpenCode and other ACP agents. |
+| Claude Code | `@anthropic-ai/claude-agent-sdk`, which is native TypeScript. Its permission callback is routed to beamhop approvals. |
+| Codex | `codex app-server` (JSON-RPC), with `codex exec --json` as fallback |
+| pi | RPC/JSON mode. Verify the protocol before building this adapter. |
+
+- **beamhop MCP server**, injected into each session. Tools:
+  - `channel.send`, `channel.history`, `channel.members`
+  - `mesh.ask_agent`, `mesh.post_job`, `mesh.list_agents`
+- **Approvals:** when a harness asks for permission, policy for the sender's role decides one of three outcomes. It is auto-allowed, sent to the owner (PWA push or Nostr DM), or denied.
+
+## 4. Nostr channel (first channel)
+
+- **Library:** `nostr-tools`.
+- **Message types:**
+  - **NIP-17** gift-wrapped DMs for one-to-one control and chat.
+  - **NIP-29** relay groups for team channels and agent meshes. Group roles are mapped onto beamhop roles.
+  - **Kind 1** public notes and replies, opt-in for each agent and rate-limited.
+  - **NIP-90** job requests and results between agents. Payments are disabled: the `amount` and `bid` tags are ignored.
+- **Public identity:**
+  - Each agent has its own keypair, stored in the OS keychain.
+  - It publishes a kind 0 profile and a NIP-05 handle. The handle points at the owner's own domain, or at an optional beamhop-hosted `name@beamhop.dev`; that hosting is to be decided.
+  - The owner signs an attestation event linking the agent to the owner's npub, so anyone can verify who runs the agent.
+- **Control plane:** a custom encrypted event kind carries the JSON-RPC API. Only npubs on the allowlist are accepted, with replay protection (event id plus a timestamp window).
+- **Relays:**
+  - Agents keep relay lists under NIP-65.
+  - Reconnect uses backoff, and events are deduplicated.
+  - Public agents get NIP-13 proof-of-work and rate limits to guard against spam.
+
+### Testing on public relays
+- Use throwaway keys generated per CI run, with a `["t","beamhop-test"]` tag.
+- Use short-lived events (NIP-40 expiration) and NIP-09 deletion after each run.
+- **DM, notes and jobs:** test on `wss://relay.damus.io`, `wss://nos.lol` and `wss://relay.primal.net`, each of which must also pass a NIP-11 check.
+- **NIP-29:** test on a public NIP-29 group relay (to be chosen and verified).
+- Tests tolerate a flaky relay: an event counts as delivered if any one relay in the set returns it.
+- A local relay is used only for fast unit tests, never as the integration oracle.
+
+## 5. Adding other channels (Telegram, Slack, Discord)
+
+### Common flow
+Channels can be added in two ways, and both run the plugin's `SetupWizard`:
+- **PWA:** Channels, then "+ Add", then pick a provider.
+- **CLI:** `beamhop channel add <provider>` runs interactively, or non-interactively with flags or environment variables in headless setups.
+
+Each wizard goes through the same steps:
+1. **Create the bot/app.** beamhop deep-links to the provider page and prefills settings wherever the provider allows it.
+2. **Paste the credentials.** They go straight into the OS keychain and are never written to config files.
+3. **Validate.** beamhop makes a live API call and shows the bot's name and avatar.
+4. **Connect.** beamhop uses connections that need no public URL (long-polling, Socket Mode, or the gateway), so it works behind NAT and on laptops.
+5. **Pair the owner.** beamhop shows a one-time code. The user sends `/pair <code>` to the bot, which links their account on that provider to their beamhop principal, with the owner role.
+6. **Join.** The user picks which agent joins which chats or channels and what role other members get, for example `beamhop join myagent telegram:group/-100123 --default-role viewer`.
+
+| Provider | What the user does | Credentials | Transport |
+|---|---|---|---|
+| **Telegram** | Opens @BotFather, sends `/newbot`, copies the token. For groups: adds the bot to the group, and turns privacy mode off if the agent should read every message. | Bot token | Bot API long-polling (`getUpdates`) |
+| **Slack** | Clicks a beamhop **"Create app from manifest"** link with the scopes, events and Socket Mode prefilled, installs the app to the workspace, then invites the bot to channels. | App token `xapp-` + bot token `xoxb-` | Socket Mode, through `@slack/bolt` |
+| **Discord** | Creates an application in the Developer Portal, adds a bot, enables the **Message Content** intent, and copies the token. beamhop generates the OAuth2 invite URL with minimal permissions, which the user opens to add the bot to a server. | Bot token | Gateway websocket, through `discord.js` |
+
+### Headless example
+```bash
+BEAMHOP_TELEGRAM_TOKEN=... beamhop channel add telegram --name mybot --token-env BEAMHOP_TELEGRAM_TOKEN
+beamhop channel pair mybot           # prints code; send /pair <code> to the bot
+beamhop join myagent mybot:dm --role owner
+```
+
+### Common mapping
+- Every provider's messages are normalized into one shape: `Principal = provider:userId`, thread maps to session, attachments go into the sandbox workspace inbox.
+- One person can link several accounts (an npub, a Telegram account and a Slack account) into a single identity, so a role granted once applies on every channel.
+
+## 6. Authorization
+
+- **Roles:** `owner`, `admin`, `user`, `viewer` and `agent` (a peer agent in the mesh), plus custom roles.
 - Each role sets:
   - the harness permission mode
-  - the sandbox policy profile
-  - which tools are allowed or denied
-  - which approvals are needed
+  - the srt policy profile
+  - which tools are allowed
+  - which actions need approval
   - rate limits and budgets (tokens, dollars, minutes)
-- Unknown senders are ignored by default, with an optional "request access" flow.
-- **Session mapping:** each (agent, channel thread or DM) gets its own conversation and working directory, which can be persistent or ephemeral.
-- **Prompt-injection posture:** all channel content is treated as untrusted. Even for the owner, the sandbox and the egress policy stay on. Roles can change the policy but cannot switch the sandbox off.
+- **Unknown senders** are ignored by default, with an optional "request access" flow that sends the request to the owner.
+- **Untrusted input:** all channel content is treated as untrusted. Roles can tighten or loosen the policy, but **no role can turn the sandbox off**.
 
-## 6. Sandboxing (research summary)
+## 7. Sandboxing with srt
 
-Industry practice in 2026 has settled on two layers. One is an **OS-native process sandbox**. The other is a **host-side egress proxy that also injects secrets**. A **per-session microVM** is the optional stronger mode. Claude Code (srt), Codex, Copilot, Gemini CLI, Docker Sandboxes and Microsoft MXC all use variants of this design.
+- Every harness process is wrapped in **srt**, used as a library (`SandboxManager`) by `packages/sandbox`, not only through its CLI. srt provides:
+  - **Filesystem** rules (allowed and denied reads and writes). This uses Seatbelt on macOS and bubblewrap on Linux.
+  - **Network**: deny by default, with host-side HTTP and SOCKS proxies that apply a domain allowlist and block loopback and metadata IPs.
+  - **Windows**: alpha. It runs the harness as a dedicated sandbox user, with a firewall (WFP) egress fence. **Fallback:** WSL2 plus srt on Linux.
+- **Policy profiles** are defined by beamhop and compiled to srt settings: `strict` (default for non-owners), `workspace` (default for the owner), and `custom`. The PWA editor shows them as toggles and lists.
+- **Learning mode:** beamhop runs in permissive mode and logs srt violations. The PWA then proposes "allow these 3 domains?" as swipeable cards.
+- **Secrets:**
+  - **LLM keys:** beamhop points the harness's base URL at a local broker, for example `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>` or `OPENAI_BASE_URL`. The broker adds the real key and forwards the request over TLS. No TLS interception is needed, and the sandbox only ever holds a placeholder.
+  - **Other tokens** (GitHub and similar) are short-lived, scoped tokens minted per session where the provider supports it. Otherwise they are passed through explicitly per role.
+  - **Never readable** inside the sandbox: `~/.ssh`, `~/.aws`, `~/.config/gh`, keychains, and browser profiles. Environment variables are passed only from an allowlist.
+- **Prerequisites:** on Linux, srt needs `bubblewrap`, `socat` and `ripgrep`. `beamhop doctor` checks for these, plus Ubuntu's AppArmor setting that restricts unprivileged user namespaces, and prints the fix for each problem.
+- **Cloud PaaS** (Render, Railway): containers there may not allow user namespaces, so bubblewrap may fail. `doctor` detects this. In that case the platform's container is the filesystem boundary, and srt's network proxy and the broker still apply. Verify this per provider. Fly machines are Firecracker VMs, where srt is expected to run normally.
 
-### One policy, compiled to each backend
+## 8. Secrets storage
 
-```yaml
-fs:      { read: [~/projects/foo], write: [~/projects/foo], deny: [~/.ssh, ~/.aws, ~/.config/gh, keychains, browser profiles] }
-net:     { mode: proxy, allow: [api.anthropic.com, github.com], deny_private_ips: true }
-secrets: [{ name: GITHUB_TOKEN, inject_to: api.github.com, header: Authorization }]
-env:     { passthrough: [PATH, LANG] }
-proc:    { max_procs: 256, cpu: 2, mem: 4GiB, timeout: 2h }
-```
+- **Laptops:** the OS keychain, through `@napi-rs/keyring`: macOS Keychain, Windows Credential Manager, or libsecret on Linux.
+- **Headless Linux:** an age-encrypted vault, unlocked by a passphrase or a systemd credential.
+- **Cloud:** secrets are sent over the encrypted Nostr control channel and stored in the remote host's vault. Provider API tokens never leave the user's machine.
 
-The schema is modelled on the srt and MXC schemas, so policies can be exchanged with them. There is a **learning mode**: beamhop runs permissively, records what the harness touches, and the UI proposes a tighter policy from that record.
+## 9. PWA and UX
 
-### Tiers
+### Stack
+- **React 19 + TypeScript + Vite.**
+- **React Aria Components** (Adobe) for accessible primitives: keyboard navigation, screen readers, focus management, and touch "press" handling that is consistent across pointer types.
+- **Tailwind v4** with design tokens. The theme has light and dark modes and a high-contrast option.
+- **Motion** for gestures, swipe and spring animations. It respects `prefers-reduced-motion`.
+- **TanStack Router + Query**, with an IndexedDB cache so the app opens offline.
+- **vite-plugin-pwa (Workbox):** the app is installable, works offline, gets background sync, and receives **Web Push** for approvals. Push needs iOS 16.4 or later, with the PWA installed.
 
-| Tier | macOS | Linux | Windows | Cloud |
-|---|---|---|---|---|
-| 0 (always on) | Egress proxy + secret broker + env scrub | same | same | same |
-| 1 (default) | Seatbelt (`sandbox-exec`) profile generated by beamhop | bubblewrap + seccomp, plus Landlock when the kernel supports it | MXC process container / AppContainer + WFP, falling back to WSL2 + bwrap | n/a |
-| 2 (strong, opt-in; recommended for public channels) | Apple `container` (macOS 26) or libkrun | libkrun / Firecracker | Docker Sandboxes / WSL2 VM | n/a |
-| 3 (cloud) | | | | VPS: gVisor (`runsc`) container per agent, or Firecracker/Kata when KVM is available. PaaS (Fly, Render, Railway): the platform VM or container is the boundary; beamhop adds Tier 0 and drops privileges. |
+### Hosting
+The PWA is static. It is served by the local daemon and also hosted publicly, at app.beamhop.dev or GitHub Pages.
+- The **hosted** copy reaches daemons over **Nostr**. The user signs in with a NIP-46 bunker, a NIP-07 browser extension, or a device key paired by QR code from `beamhop pair-device`. A phone can then control a laptop or cloud agents from anywhere, with no open ports.
+- The **local** copy uses the daemon's localhost WebSocket.
 
-- **The whole harness process is wrapped**, not only its shell tool. This gives one consistent policy for every harness. Each harness's own sandbox can stay on as an extra layer.
-- **Implementation:** the policy compiler is written natively in Go. It generates Seatbelt profiles, bwrap arguments, Landlock rulesets and Windows tokens/ACLs. Anthropic's Apache-2.0 `sandbox-runtime` is the reference design and test oracle, but it is not a runtime dependency, because it needs Node.
-- **Egress proxy:** HTTP CONNECT and SOCKS5. It allowlists by SNI and host, blocks loopback, link-local and metadata IPs after DNS resolution, and blocks raw TCP and UDP. The sandbox can reach only the proxy port.
-- **Secrets:** the sandbox receives placeholder values, and the proxy swaps in the real value for the matching host. The LLM API key is the hard case, because the harness needs it. Prefer routing LLM calls through the proxy with injection. Otherwise use short-lived or scoped keys.
-- **Doctor:** `beamhop doctor` checks which tiers this host supports and prints fixes. One example is Ubuntu's AppArmor setting that restricts unprivileged user namespaces.
+### Screens (mobile-first, bottom tab bar, one-handed reach)
+1. **Home:** agent cards showing status, channel, last activity and budget meters. Pull to refresh.
+2. **Inbox (approvals):** a card stack. Swipe right to approve, swipe left to deny, long-press for details. Large Approve and Deny buttons are always visible as the accessible alternative. Approved actions can be undone for a short time.
+3. **Session view:** a live stream of the agent's chat and tool calls, with collapsible tool output and a composer for steering the agent. Swipe between sessions.
+4. **Channels:** list of channels and the add-channel wizard (§5), showing step progress, a QR code or deep link, and live validation.
+5. **Harnesses:** discovery results with a ready, needs login, or install status, and an "Install" helper.
+6. **Policy:** profile toggles, domain chips, path pickers, and learning-mode suggestions.
+7. **Deploy:** pick a provider, pick a size, then confirm a diff before deploying. Shows live logs.
+8. **Audit:** a log that can be filtered and exported.
 
-**Still to verify before building:** whether MXC is fully released and under what license, whether Docker Sandboxes supports Linux, whether libkrun runs natively on Windows, and the details of Codex's sandbox internals.
+### Accessibility
+- Meets WCAG 2.2 AA.
+- Touch targets are at least 44 px.
+- Focus is always visible, and every gesture has a button alternative.
+- Updates are announced to screen readers through ARIA live regions.
+- Pages zoom to 200% without breaking.
+- The PWA is tested with axe and Playwright on desktop and mobile viewports, and manually with VoiceOver and TalkBack.
 
-## 7. Secrets and keys
+### Desktop
+Installing the PWA from the browser is the desktop app. A small tray helper (Node `systray`) is optional and does two things: it starts the daemon at login and opens the PWA.
 
-- Storage: macOS Keychain, Windows Credential Manager, libsecret/KWallet on Linux, through `zalando/go-keyring`. On headless Linux servers, fall back to an encrypted file using age with a passphrase or a systemd credential.
-- The broker hands each secret only to the proxy rule it is bound to. Every use is logged.
-- Nostr nsec: either in the keychain or through a NIP-46 bunker.
+## 10. Cloud deployment
 
-## 8. Cloud deployment
+| Provider | How |
+|---|---|
+| Hetzner, DigitalOcean | Create a VPS through the provider API, then cloud-init installs Node, beamhopd, srt and its prerequisites, and the selected harnesses. The firewall allows outbound traffic only. |
+| Fly.io, Render, Railway | Deploy the `ghcr.io/beamhop/agent` image as a worker with no inbound ports. |
 
-| Provider | Model | How |
-|---|---|---|
-| Hetzner, DigitalOcean | VPS | Provider API, then a cloud-init install of beamhopd, then gVisor containers per agent. Firewall: outbound only. |
-| Fly.io, Render, Railway | Container | Publish the `ghcr.io/beamhop/agent` image and deploy through each provider's API. Runs as a worker with no inbound ports. |
+- **Commands:** `beamhop deploy plan|apply|status|logs|destroy --provider <p> --agent <a>`.
+- **State** is kept locally and mirrored to an encrypted Nostr event, so a second device can manage the deployment.
+- **Control** of a remote daemon happens only over Nostr.
 
-- `beamhop deploy --provider hetzner --agent foo`: `plan` and `apply` are idempotent, and the state is stored locally and mirrored in an encrypted Nostr event.
-- Cloud daemons are controlled over Nostr (§4), so they need no public endpoints.
-- Provider API tokens are kept in the keychain and are never sent to the deployed host.
-- Agent secrets are delivered to the remote daemon over the encrypted control channel and stored in its local vault.
+## 11. Build order (internal; one public launch)
 
-## 9. UI and CLI
+1. **Monorepo and core:** plugin SDK, API contract, the daemon, the CLI, SQLite audit log, keychain storage.
+2. **Harness layer:** discovery and catalog, then the ACP, Claude, Codex and pi adapters, then the MCP server and approvals.
+3. **Sandbox:** srt integration, policy profiles, the broker, learning mode, `doctor`.
+4. **Nostr:** NIP-17, then NIP-29, then kind 1, then NIP-90, plus public identity and the control plane. Integration tests run on public relays.
+5. **Authorization:** principals, identity linking, roles, budgets.
+6. **PWA:** all screens, push notifications, device pairing, accessibility pass.
+7. **Channels:** Telegram, then Slack, then Discord, with setup wizards.
+8. **Cloud:** Hetzner and DigitalOcean, then Fly, Render and Railway.
+9. **Hardening:** external security review, fuzzing of the parsers, and prompt-injection red-team tests.
+10. **Launch:** binaries, signing and notarization, docs. Private dogfooding runs from step 4 onward.
 
-- **CLI first.** Every action is a CLI command over the local API, and the UI calls the same API. Every command accepts `--json`.
-  - `beamhop init` / `doctor`
-  - `beamhop agent add|ls|start|stop|logs`
-  - `beamhop channel add nostr --relay ...`
-  - `beamhop join <agent> <channel>`
-  - `beamhop role grant <principal> <role>`
-  - `beamhop policy edit|learn|apply`
-  - `beamhop secret set`
-  - `beamhop deploy ...`
-  - `beamhop approve <id>`
-- **UI** (web frontend, TypeScript): agents, channels and memberships, live session view, an approvals inbox, the policy editor with learning-mode suggestions, the audit log, secrets (names only), deployments, and budgets.
-- **Desktop:** a Wails v3 shell, which is native to Go and replaces Tauri now that the core is Go. It provides a tray icon, OS notifications for approvals, and launches the daemon at login.
-- **Server:** beamhopd serves the same UI on localhost. It can be reached through an SSH tunnel, or controlled from the desktop app over Nostr.
-
-## 10. Build order (internal; one public launch)
-
-1. **Core:** daemon, local API, CLI skeleton, config, audit log, keychain.
-2. **Harness layer:** generic ACP adapter, then Claude, Codex and pi native adapters; the MCP server; approval routing.
-3. **Nostr:** NIP-17, then NIP-29, then kind 1, then NIP-90, plus agent identity and the control plane.
-4. **Sandbox:** policy schema, egress proxy and secret broker, Tier 1 backends on all 3 OSes, learning mode, `doctor`.
-5. **Authorization:** principals, roles, budgets, rate limits.
-6. **UI:** the web frontend, the Wails desktop app, and the daemon-served UI.
-7. **Cloud:** Hetzner and DigitalOcean, then Fly, Render and Railway; Tier 3 sandboxing.
-8. **Tier 2 microVM** backends.
-9. **Channels:** Telegram, Slack, Discord.
-10. **Hardening:** external security review, fuzzing of channel parsers, and red-team prompt-injection tests.
-11. **Launch:** packaging and docs.
-
-## 11. Quality, packaging, ops
+## 12. Quality and ops
 
 - **Tests:**
-  - unit tests for each interface
-  - contract tests against each harness version
-  - sandbox escape tests for each OS: try to read `~/.ssh`, reach a blocked host, or reach the metadata IP
-  - a test Nostr relay (khatru) run in CI
-- **CI:** GitHub Actions on Linux, macOS and Windows.
-- **Releases:**
-  - goreleaser builds Homebrew, winget, Scoop, deb/rpm packages and a container image
-  - macOS builds are notarized and Windows builds are signed
-  - artifacts carry SLSA provenance and are signed with cosign
+  - Vitest unit tests.
+  - Contract tests against each harness version.
+  - Sandbox escape tests on each OS: read `~/.ssh`, reach a blocked host, reach the metadata IP.
+  - Playwright tests for the PWA.
+- **CI:** GitHub Actions runs on Linux, macOS and Windows.
+- **Releases:** npm packages are published with provenance. Binaries are signed and notarized, and the container image is signed with cosign.
 - **Telemetry:** off by default. Logs are local and in OpenTelemetry format.
 
-## 12. Risks and open questions
+## 13. Risks and open questions
 
-- **Single big launch** risks a long period with no user feedback. Mitigation: run private dogfooding from step 3 onward.
-- **Harness churn:** CLI flags and protocols change often. Mitigation: prefer ACP, pin versions, and run contract tests nightly.
-- **Windows sandboxing** is the least mature platform; it depends on MXC and srt's Windows approach settling.
-- **Prompt injection through channels:** the sandbox limits the damage but does not prevent the injection. Budgets, role-scoped tools and approvals are the remaining defences.
-- **Relay reliability and spam:** use several relays, and add proof of work (NIP-13) or paid relays for public agents.
+- **Windows:** srt on Windows is still alpha, so WSL2 is the fallback. Track srt releases.
+- **srt on PaaS:** whether user namespaces work on Render and Railway needs verifying.
+- **Harness churn:** CLI flags and protocols change often. Mitigations: prefer ACP, ship the catalog updates separately from releases, and run contract tests nightly.
+- **Prompt injection:** the sandbox limits the damage, and roles, budgets and approvals are the other defences.
+- **Public relays:** test runs are rate-limited and the tests are written to tolerate flaky relays.
 - **Open questions:**
-  - Should Nostr agent identities be published openly (NIP-05)?
-  - Should zaps or payments for DVM jobs be in the launch?
-  - Which UI framework: Svelte or React?
-  - Should there be a hosted relay or bunker for users who don't run their own?
+  - Should beamhop host NIP-05 handles under `beamhop.dev`?
+  - Should a hosted copy of the PWA be offered, in addition to the local one?
+  - Should third-party plugins be allowed at launch?
+  - What is the workspace model (a git repo per agent, or a shared folder)?
