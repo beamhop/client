@@ -36,6 +36,9 @@ beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI
 | Cross-channel posting | Only along routes the owner allows, for example `nostr:dm → slack:#deploys`. The default is to reply only where the message came from. |
 | Presets | Opinionated presets that users can edit: Personal assistant, Code reviewer (read-only), Team dev bot, Public Q&A bot |
 | i18n | English at launch. All text is in translation files from day one so other languages can be added. |
+| Strangers | Agents marked `public: true` answer unknown senders with the `viewer` role (strict sandbox, rate limits, DLP check). Private agents ignore them silently. |
+| AI disclosure | Every agent is always labeled as an AI agent: the profile says it is operated by its owner, and the platform's bot flag is set where one exists |
+| Approval gate | beamhop is the **only** gate. Each harness runs in a mode where every permission request is forwarded to beamhop's approval system (Claude's SDK permission callback, ACP's permission request, Codex app-server approvals). |
 | Plugins | Third-party plugins are allowed at launch, sandboxed in srt and pinned by integrity hash |
 | Behavior | Defined by each harness's own config. beamhop adds only channel context (§6A) |
 
