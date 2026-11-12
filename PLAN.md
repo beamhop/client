@@ -320,6 +320,39 @@ Which commands a user can run depends on their role.
 - **API key** (default): the key stays on the owner's machine, or in the remote vault, and the broker injects it. The sandbox never holds it.
 - **Subscription login:** device-code or OAuth login for the harness, run on the server through the PWA. A warning is shown, with a link to that provider's terms, because some subscription plans don't allow use on servers or by other people. The tokens are kept in the remote vault, and the harness reads them from a mount the broker controls.
 
+## 7A. Threat model
+
+**Assumption:** any agent may be **fully prompt-injected** through any channel. These four outcomes must still be prevented.
+
+| Threat | Controls |
+|---|---|
+| **Data exfiltration** | srt egress allowlist; the broker holds all secrets; deny-read paths; downloads only through the broker; **an outbound DLP check** (below); cross-channel posting only on owner-set routes |
+| **Host compromise** | srt on every harness and plugin; mounts read-only by default; no role can turn the sandbox off; optional microVM tier later |
+| **Impersonation** | Each agent has its own identity and never holds owner keys; agents cannot post as the owner; owner attestation is public; route allowlists |
+| **Spend abuse** | Budgets per agent, role, peer agent and session; the broker counts tokens itself; `max_sessions`; hop limits; caps on cloud deploys that need owner approval |
+
+### Outbound DLP check
+Before any message or file goes to a principal who is not an owner, beamhop scans it:
+- **Patterns:** gitleaks-style secret patterns, plus the exact values of every secret the broker holds.
+- **On a match:** the secret is redacted, or the message is blocked, depending on the role. The event is logged and owners are alerted.
+- **Messages to owners:** scanned too, but only warned about, not blocked.
+
+### Revocation: the simple model
+- **Revoking an agent's access to a channel** is done the platform-native way: the owner kicks or removes the agent from the Slack channel, Telegram group, Discord server or NIP-29 group, just like removing a human.
+  - beamhop treats that as "this membership is gone".
+  - It does not rejoin automatically; the owner has to re-add it explicitly.
+  - There is no key rotation.
+- **Lost phone:** the PWA's paired-device list has a plain **Remove** button, which deletes that device from the daemon's allowlist. This is not key rotation.
+
+### Emergency stop
+- **Global:** `beamhop panic` or the PWA's stop button:
+  - kills every session
+  - pauses all schedules
+  - disconnects all channels
+  - sends the same command to cloud daemons over Nostr
+- **Per agent:** `beamhop agent stop <a> --hard`.
+- **Recovery:** `beamhop resume` brings things back. beamhop never resumes on its own after a panic.
+
 ## 8. Secrets storage
 
 **Retention:**
