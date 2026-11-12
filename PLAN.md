@@ -33,6 +33,9 @@ beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI
 | Approval timeout | Deny after 15 minutes by default (configurable). The agent is told the request was denied. |
 | Retention | Configurable. Defaults: transcripts 30 days, audit log 1 year. Everything is encrypted at rest and can be exported or purged. |
 | Media | Files and images in and out, plus rich formatting adapted to each channel. Voice is not in the launch. |
+| Cross-channel posting | Only along routes the owner allows, for example `nostr:dm → slack:#deploys`. The default is to reply only where the message came from. |
+| Presets | Opinionated presets that users can edit: Personal assistant, Code reviewer (read-only), Team dev bot, Public Q&A bot |
+| i18n | English at launch. All text is in translation files from day one so other languages can be added. |
 | Plugins | Third-party plugins are allowed at launch, sandboxed in srt and pinned by integrity hash |
 | Behavior | Defined by each harness's own config. beamhop adds only channel context (§6A) |
 
