@@ -23,7 +23,12 @@ beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI
 | Release | One launch with the full scope. The internal build order is in §11. |
 | Mounts | The user mounts any directories they choose, each read-only or read-write |
 | Mesh | Agents from different owners can talk to each other, within the guardrails in §6A.6 |
-| Hosting | beamhop hosts a public copy of the PWA and NIP-05 handles under `beamhop.dev` |
+| Hosting | beamhop hosts a public copy of the PWA. **NIP-05 handles use the user's own domain only**: beamhop generates the `.well-known/nostr.json` file for the user to host. |
+| Parallel writes | Each session gets its own git worktree when the mount is a git repo; mounts that aren't git repos use a write lock |
+| Onboarding | A guided first-run wizard (§9A) |
+| Cloud | Users can move an existing local agent to the cloud, or create an agent directly in the cloud |
+| Teams | Several npubs can be owner or admin of the same agent |
+| Updates | The signed catalog updates automatically; the app updates only after the user confirms |
 | Plugins | Third-party plugins are allowed at launch, sandboxed in srt and pinned by integrity hash |
 | Behavior | Defined by each harness's own config. beamhop adds only channel context (§6A) |
 
@@ -128,7 +133,7 @@ interface Deployer { plan(spec); apply(spec); status(id); logs(id); destroy(id);
   - **NIP-90** job requests and results between agents. Payments are disabled: the `amount` and `bid` tags are ignored.
 - **Public identity:**
   - Each agent has its own keypair, stored in the OS keychain.
-  - It publishes a kind 0 profile and a NIP-05 handle. The handle points at the owner's own domain, or at an optional beamhop-hosted `name@beamhop.dev`; that hosting is to be decided.
+  - It publishes a kind 0 profile and an optional NIP-05 handle on the owner's own domain. `beamhop identity nip05 --domain example.com` writes the `nostr.json` file and the hosting snippets (static host, nginx, Cloudflare Pages), then checks that the handle resolves.
   - The owner signs an attestation event linking the agent to the owner's npub, so anyone can verify who runs the agent.
 - **Control plane:** a custom encrypted event kind carries the JSON-RPC API. Only npubs on the allowlist are accepted, with replay protection (event id plus a timestamp window).
 - **Relays:**
@@ -179,6 +184,10 @@ beamhop join myagent mybot:dm --role owner
 ## 6. Authorization
 
 - **Roles:** `owner`, `admin`, `user`, `viewer` and `agent` (a peer agent in the mesh), plus custom roles.
+- **Teams:** several npubs can hold `owner` or `admin` on the same agent, with no accounts server.
+  - **Approvals:** the first approval from any owner wins by default. A policy can require N of M owners instead.
+  - **Role changes** are signed Nostr events, so every daemon and device can check who granted what.
+  - **Owner list:** at least one owner must remain. Removing an owner means rotating the control-plane allowlist on every daemon.
 - Each role sets:
   - the harness permission mode
   - the srt policy profile
@@ -202,7 +211,7 @@ mounts:
   - { path: ~/code/app, mode: rw }
   - { path: ~/notes,    mode: ro }
 sandbox: workspace         # srt profile (§7)
-identity: { nostr: keychain:reviewer, nip05: reviewer@beamhop.dev }
+identity: { nostr: keychain:reviewer, nip05: reviewer@example.com }
 memberships:
   - { channel: nostr:dm,              default_role: viewer }
   - { channel: telegram:group/-100123, default_role: user, trigger: [mention, reply] }
@@ -324,7 +333,39 @@ The PWA is static. It is served by the local daemon and also hosted publicly, at
 ### Desktop
 Installing the PWA from the browser is the desktop app. A small tray helper (Node `systray`) is optional and does two things: it starts the daemon at login and opens the PWA.
 
+## 9A. Onboarding (first run)
+
+`npx beamhop` (or the installed binary) starts a wizard. It runs as a terminal UI, or in the PWA if the user opens it. Target: about 3 minutes.
+
+1. **Doctor:** checks srt and its prerequisites (bwrap, socat and ripgrep on Linux; WSL2 on Windows). It offers to fix what is missing, or explains what the user needs to do.
+2. **Harness discovery:** lists what was found, marked ready, needs login, or not installed. The user can log in or install a harness from this screen.
+3. **Identity:** creates the owner npub, or imports one through NIP-07 or a NIP-46 bunker, and stores it in the keychain.
+4. **Pair a phone:** scan a QR code to open the hosted PWA. It becomes a device key on the control allowlist and turns on push notifications.
+5. **First agent:** pick a harness, mount a folder (read-only by default), and pick a sandbox profile. beamhop creates the agent's identity.
+6. **First channel:** the agent joins a Nostr DM with the owner. beamhop sends a hello message, and the user replies from their phone. This round trip confirms the whole chain works.
+7. **Next steps:** add Telegram, Slack or Discord; set up a NIP-05 handle; move the agent to the cloud.
+
+## 9B. Monitoring and alerts
+
+- **Live session view:** streamed messages, tool calls and file diffs, in the PWA.
+- **Cost and usage charts:** broken down by agent, channel, peer agent and day. Data comes from the harness's usage events and from the LLM key broker, which counts tokens itself.
+- **Security events:**
+  - srt violations (blocked paths and hosts)
+  - blocked or rate-limited peer agents
+  - failed pairings
+  - unknown senders
+  - hop-limit trips
+- **Alerts:** Web Push or a Nostr DM to owners when a budget passes 80% or 100%, an agent crashes, a cloud agent goes offline (heartbeat over Nostr), or a security event spikes. Thresholds can be set per agent.
+
 ## 10. Cloud deployment
+
+There are two entry points:
+- **"Move to cloud"** on an existing agent. Its config and identity move with it; the local copy stops, or stays as a standby.
+  - **Git mounts** are cloned on the server.
+  - **Other mounts** are copied once with rsync over SSH (VPS) or a volume upload (PaaS). Ongoing sync with Mutagen is opt-in per mount.
+- **"New cloud agent":** the agent is created directly on the server. Its mounts are git repos or empty volumes.
+
+Both entry points show the estimated monthly cost and the plan before anything is applied.
 
 | Provider | How |
 |---|---|
@@ -358,6 +399,10 @@ Installing the PWA from the browser is the desktop app. A small tray helper (Nod
 - **CI:** GitHub Actions runs on Linux, macOS and Windows.
 - **Releases:** npm packages are published with provenance. Binaries are signed and notarized, and the container image is signed with cosign.
 - **Telemetry:** off by default. Logs are local and in OpenTelemetry format.
+- **Updates:**
+  - **Harness catalog:** signed, fetched every day, and applied automatically.
+  - **beamhop itself:** the CLI or PWA shows a prompt, and the update installs only after the user confirms.
+  - **Cloud daemons:** follow the owner's local version. They update only after the user confirms, and roll back automatically if the post-update health check fails.
 
 ## 13. Risks and open questions
 
