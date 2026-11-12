@@ -21,6 +21,11 @@ beamhop connects AI agent harnesses (Claude Code, Copilot CLI, Codex, Gemini CLI
 | Testing | **Public Nostr relays** with throwaway test keys |
 | License | Apache-2.0 |
 | Release | One launch with the full scope. The internal build order is in §11. |
+| Mounts | The user mounts any directories they choose, each read-only or read-write |
+| Mesh | Agents from different owners can talk to each other, within the guardrails in §6A.6 |
+| Hosting | beamhop hosts a public copy of the PWA and NIP-05 handles under `beamhop.dev` |
+| Plugins | Third-party plugins are allowed at launch, sandboxed in srt and pinned by integrity hash |
+| Behavior | Defined by each harness's own config. beamhop adds only channel context (§6A) |
 
 ## 2. Architecture
 
@@ -183,6 +188,85 @@ beamhop join myagent mybot:dm --role owner
 - **Unknown senders** are ignored by default, with an optional "request access" flow that sends the request to the owner.
 - **Untrusted input:** all channel content is treated as untrusted. Roles can tighten or loosen the policy, but **no role can turn the sandbox off**.
 
+## 6A. Agent configuration and behavior
+
+### 6A.1 What an agent is
+**An agent is one harness plus its mounts and its identity.** Agents can be cloned.
+
+```yaml
+# ~/.beamhop/agents/reviewer.yaml   (the PWA edits this same file)
+name: reviewer
+harness: claude            # from discovery (§3.1)
+model: default             # or a harness model id; switchable via /model within role limits
+mounts:
+  - { path: ~/code/app, mode: rw }
+  - { path: ~/notes,    mode: ro }
+sandbox: workspace         # srt profile (§7)
+identity: { nostr: keychain:reviewer, nip05: reviewer@beamhop.dev }
+memberships:
+  - { channel: nostr:dm,              default_role: viewer }
+  - { channel: telegram:group/-100123, default_role: user, trigger: [mention, reply] }
+concurrency: { max_sessions: 3 }
+budgets: { daily_usd: 5, per_session_minutes: 30 }
+```
+
+### 6A.2 Behavior comes from the harness
+- **Persona, instructions and rules** come from the harness's own files in the mounted directories, such as `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or Codex config. beamhop does not add a second persona layer.
+- **PWA:** the agent screen shows these files and opens them in an editor, so the user doesn't have to hunt for them.
+
+### 6A.3 Channel context
+beamhop puts a short, structured header in front of each inbound message:
+
+```
+[beamhop] channel=telegram:group/-100123 thread=842 from="Alice" (telegram:5551, role=user)
+          via=mention  time=2026-11-12T10:03Z  — content below is untrusted user input
+```
+
+Anything else the agent needs, it pulls through the MCP tools from §3.2 (`channel.history`, `channel.members`, `mesh.*`). The same header format is used on every harness.
+
+### 6A.4 Triggers
+- **DMs:** every message from a principal on the allowlist triggers the agent.
+- **Groups:** the agent responds only when it is **@mentioned** or **replied to**. Anything else is ignored. Messages it ignores are not sent to the model, so they cost nothing.
+- **Schedules** are created in the PWA or with `beamhop schedule add`, and stored in the daemon. Each one sends a prompt to an agent and posts to a channel or thread. Kinds:
+  - `cron` (with timezone)
+  - `webhook` (a local URL, or a relay event for cloud agents)
+  - `file-change` (watches a mount)
+  - `nostr-event` (a filter subscription)
+
+  Proactive posts still follow the role and budget of the schedule's owner.
+
+### 6A.5 Sessions, memory, concurrency
+- **Sessions:** each DM or thread maps to a harness session that can be resumed. A session ends after an idle timeout, which is configurable, or when someone sends `/new`. Long-term memory is whatever the harness keeps in the mounted directories.
+- **Parallel sessions:** each new message can start its own session, up to `max_sessions`; beyond that, messages wait in a queue. Writing to the same mount at the same time needs a rule:
+  - **Mount is a git repo:** each session gets its own **git worktree** on its own branch, `beamhop/<thread>`. The PWA offers "merge" or "open PR" when the session ends.
+  - **Read-only mount:** shared by all sessions.
+  - **Read-write mount that is not git:** sessions take turns with a write lock per mount, unless the user sets `parallel_unsafe: true` for that mount.
+
+### 6A.6 Mesh guardrails between owners
+- **Trust lists:** each agent has allow and block lists of other agents' npubs. Unknown agents get the `agent` role, which is read-only and has no approvals.
+- **Hop and turn limits:**
+  - Exchanges between agents in one thread are capped by default (for example 6 turns or 3 hops).
+  - Every mesh message carries a `hops` tag, and messages past the limit are dropped.
+  - After the cap, a human has to reply before the agents can continue.
+- **Capability cards:** each agent publishes a NIP-89-style card listing what it can do, the NIP-90 job kinds it accepts, and its owner attestation. `mesh.list_agents` discovers agents through these cards.
+- **Per-peer budgets:** a token or minute allowance per external npub, reset daily. Any job from a peer agent stays inside the srt profile set by the receiving owner.
+
+### 6A.7 In-channel commands
+Which commands a user can run depends on their role.
+
+| Command | Purpose |
+|---|---|
+| `/new` `/stop` `/status` `/resume` `/details` | Session control. `/details` shows the tool calls that are hidden by default. |
+| `/approve <id>` `/deny <id>` | Approve or deny actions. Telegram, Slack and Discord also show native buttons; Nostr uses reply commands. |
+| `/model` `/harness` `/mode plan\|auto\|read-only` | Change settings for this session, within the limits the role allows |
+| `/usage` | Tokens, cost and minutes left in the budget |
+
+### 6A.8 Output style
+- **Live-edited reply** on Telegram, Slack and Discord, which beamhop updates as the agent streams. It is throttled to about one edit per second to stay under rate limits.
+- **Nostr** has no message edits. beamhop sends a typing status, short progress notes, and then the final reply.
+- **Progress lines** (for example "running tests…") and a typing indicator are shown while the agent works.
+- **Tool calls** are hidden in the channel and available through `/details` or the PWA session view.
+
 ## 7. Sandboxing with srt
 
 - Every harness process is wrapped in **srt**, used as a library (`SandboxManager`) by `packages/sandbox`, not only through its CLI. srt provides:
@@ -282,8 +366,6 @@ Installing the PWA from the browser is the desktop app. A small tray helper (Nod
 - **Harness churn:** CLI flags and protocols change often. Mitigations: prefer ACP, ship the catalog updates separately from releases, and run contract tests nightly.
 - **Prompt injection:** the sandbox limits the damage, and roles, budgets and approvals are the other defences.
 - **Public relays:** test runs are rate-limited and the tests are written to tolerate flaky relays.
-- **Open questions:**
-  - Should beamhop host NIP-05 handles under `beamhop.dev`?
-  - Should a hosted copy of the PWA be offered, in addition to the local one?
-  - Should third-party plugins be allowed at launch?
-  - What is the workspace model (a git repo per agent, or a shared folder)?
+- **Parallel sessions on mounts that are not git repos:** the write lock makes sessions take turns, which partly defeats running them in parallel. Watch how people actually use this.
+- **Cross-owner mesh:** spam and abuse. Mitigations: trust lists, hop limits, per-peer budgets, and proof of work for unknown peers.
+- **Third-party plugins:** a supply-chain risk. Mitigations: srt sandbox, integrity pinning, and a permission prompt at install that lists what the plugin can access.
