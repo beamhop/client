@@ -102,7 +102,7 @@ export class ApiHandlers {
     return list;
   }
 
-  private async scan(): Promise<HarnessView[]> {
+  async scan(): Promise<HarnessView[]> {
     const d = this.d;
     const out: HarnessView[] = [];
     const add = (h: {
@@ -420,7 +420,10 @@ export class ApiHandlers {
 
       // ── harnesses ──
       'harness.scan': async () => ({ harnesses: await this.scan() }),
-      'harness.list': async () => ({ harnesses: this.harnessViews() }),
+      'harness.list': async () => {
+        if (!d.store.kv.get('harness', 'scan')) await this.scan();
+        return { harnesses: this.harnessViews() };
+      },
       'harness.add': async ({ id, command, args }, ctx) => {
         const hid = id.startsWith('acp:') ? id : `acp:${id}`;
         const factory = d.registry.acpFactory;

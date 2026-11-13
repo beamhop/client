@@ -201,7 +201,11 @@ export class Daemon {
                 },
               }
             : {}),
-          ...(this.deployEnv.sandboxFs === 'container' ? { backend: 'none' as const } : {}),
+          // BEAMHOP_SANDBOX_FS=container (PaaS without user namespaces, set by cloud deploys): the
+          // container is the filesystem boundary; env scrubbing and the broker still apply (§7).
+          ...(this.deployEnv.sandboxFs === 'container'
+            ? { backend: 'none' as const, sourceEnv: { ...process.env, BEAMHOP_UNSAFE_NO_SANDBOX: '1' } }
+            : {}),
         });
       });
   }
@@ -275,6 +279,9 @@ export class Daemon {
         await this.channels.startAll();
         this.scheduler.start();
       }
+      // §3.1: discovery runs at daemon start (in the background).
+      if (!this.opts.plugins || this.opts.loadBuiltins)
+        void this.apiHandlers.scan().catch((e) => this.log.warn('harness scan failed', { error: errMsg(e) }));
       const tickMs = this.opts.tickMs ?? 5000;
       if (tickMs > 0) {
         this.timer = setInterval(
