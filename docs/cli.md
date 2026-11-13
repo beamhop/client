@@ -20,7 +20,7 @@ Options:
 
 Commands:
   init [options]                   first-run setup: doctor, harnesses, owner key, phone, first
-                                   agent, hello (§9A)
+                                   agent, hello
   status                           daemon, agents and approvals at a glance
   doctor                           check sandbox prerequisites, harnesses and channels
   panic [options]                  EMERGENCY STOP: kill all sessions, pause schedules, disconnect
@@ -34,11 +34,11 @@ Commands:
   channel                          connect messaging channels
   join [options] <agent> <target>  make an agent join a channel target, e.g. `beamhop join myagent
                                    mybot:group/-100123 --role viewer`
-  leave <agent> <target>
+  leave <agent> <target>           remove an agent from a channel target it joined
   session                          agent sessions
   approvals [options]              list pending approvals
-  approve [options] <id>
-  deny <id>
+  approve [options] <id>           allow a pending approval (ids from `beamhop approvals`)
+  deny <id>                        deny a pending approval
   role                             roles and grants
   link <person> <principal>        link a channel account to a person, e.g. `beamhop link alice
                                    telegram:5551`
@@ -48,8 +48,8 @@ Commands:
   schedule                         scheduled and event-driven prompts
   deploy                           run agents in the cloud (Hetzner, DigitalOcean, Fly.io, Render,
                                    Railway)
-  audit [options]
-  usage [options]
+  audit [options]                  every decision, violation and config change, newest first
+  usage [options]                  tokens and spend per agent
   device                           paired devices (phones, browsers)
   identity                         Nostr identities and NIP-05
   data                             export or purge transcripts and audit data
@@ -144,7 +144,7 @@ Commands:
 ```text
 Usage: beamhop init [options]
 
-first-run setup: doctor, harnesses, owner key, phone, first agent, hello (§9A)
+first-run setup: doctor, harnesses, owner key, phone, first agent, hello
 
 Options:
   -y, --yes                  no questions: accept defaults (pairing and the hello test only with
@@ -163,9 +163,9 @@ Options:
   --harness <id>             harness for the first agent
   --preset <id>              agent preset (personal-assistant, code-reviewer, team-dev-bot,
                              public-qa)
-  --mount <path>             folder the first agent may use
+  --mount <path[:ro|rw]>     folder the first agent may use (same form as `agent add --mount`)
   --mount-mode <mode>        folder access (choices: "ro", "rw")
-  --sandbox <profile>        (choices: "strict", "workspace")
+  --sandbox <profile>        sandbox profile for the first agent (choices: "strict", "workspace")
   --device-name <name>       name for the paired phone
   --pair-timeout <seconds>   how long to wait for the phone
   --hello-timeout <seconds>  how long to wait for your reply
@@ -202,7 +202,7 @@ Usage: beamhop panic [options]
 EMERGENCY STOP: kill all sessions, pause schedules, disconnect channels (incl. cloud agents)
 
 Options:
-  --reason <text>
+  --reason <text>  why (recorded in the audit log)
   -h, --help       display help for command
 ```
 
@@ -251,14 +251,14 @@ Options:
   -h, --help                 display help for command
 
 Commands:
-  ls|list
-  show <name>
+  ls|list                    list agents with status, sessions and spend today
+  show <name>                show an agent's full config, status and npub (JSON)
   add [options] <name>       create an agent
-  rm <name>
-  start <name>
-  stop [options] <name>
-  clone <name> <newName>
-  presets
+  rm <name>                  delete an agent and its config
+  start <name>               start (or re-enable) an agent
+  stop [options] <name>      stop an agent; running sessions finish unless --hard
+  clone <name> <newName>     copy an agent under a new name (new Nostr key)
+  presets                    list the built-in presets for `agent add --preset`
   set <name> <key=value...>  patch agent config, e.g. `beamhop agent set bot model=gpt-5
                              budgets.dailyUsd=3`
   help [command]             display help for command
@@ -269,6 +269,8 @@ Commands:
 ```text
 Usage: beamhop agent ls|list [options]
 
+list agents with status, sessions and spend today
+
 Options:
   -h, --help  display help for command
 ```
@@ -277,6 +279,8 @@ Options:
 
 ```text
 Usage: beamhop agent show [options] <name>
+
+show an agent's full config, status and npub (JSON)
 
 Options:
   -h, --help  display help for command
@@ -294,7 +298,7 @@ Options:
   --preset <id>           personal-assistant | code-reviewer | team-dev-bot | public-qa
   --mount <path[:ro|rw]>  mount a directory (repeatable)
   --profile <profile>     sandbox profile: strict | workspace | custom
-  --model <model>
+  --model <model>         model id (default: the harness default)
   --public                answer unknown senders (viewer role)
   -h, --help              display help for command
 ```
@@ -303,6 +307,8 @@ Options:
 
 ```text
 Usage: beamhop agent rm [options] <name>
+
+delete an agent and its config
 
 Options:
   -h, --help  display help for command
@@ -313,6 +319,8 @@ Options:
 ```text
 Usage: beamhop agent start [options] <name>
 
+start (or re-enable) an agent
+
 Options:
   -h, --help  display help for command
 ```
@@ -321,6 +329,8 @@ Options:
 
 ```text
 Usage: beamhop agent stop [options] <name>
+
+stop an agent; running sessions finish unless --hard
 
 Options:
   --hard      kill running sessions immediately
@@ -332,6 +342,8 @@ Options:
 ```text
 Usage: beamhop agent clone [options] <name> <newName>
 
+copy an agent under a new name (new Nostr key)
+
 Options:
   -h, --help  display help for command
 ```
@@ -340,6 +352,8 @@ Options:
 
 ```text
 Usage: beamhop agent presets [options]
+
+list the built-in presets for `agent add --preset`
 
 Options:
   -h, --help  display help for command
@@ -368,7 +382,7 @@ Options:
 
 Commands:
   scan                look for installed harnesses
-  ls|list
+  ls|list             list known harnesses and their status (from the last scan)
   add [options] <id>  register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
                       "my-agent --acp"`
   help [command]      display help for command
@@ -389,6 +403,8 @@ Options:
 
 ```text
 Usage: beamhop harness ls|list [options]
+
+list known harnesses and their status (from the last scan)
 
 Options:
   -h, --help  display help for command
@@ -417,11 +433,11 @@ Options:
   -h, --help                display help for command
 
 Commands:
-  providers
-  ls|list
+  providers                 list channel providers you can add
+  ls|list                   list channels and their connection status
   add [options] <provider>  add a channel non-interactively, e.g. `beamhop channel add telegram
                             --name mybot --token-env TG_TOKEN`
-  rm <name>
+  rm <name>                 disconnect a channel and delete its secrets
   pair <name>               get a one-time code; send /pair <code> to the bot to become owner
   help [command]            display help for command
 ```
@@ -431,6 +447,8 @@ Commands:
 ```text
 Usage: beamhop channel providers [options]
 
+list channel providers you can add
+
 Options:
   -h, --help  display help for command
 ```
@@ -439,6 +457,8 @@ Options:
 
 ```text
 Usage: beamhop channel ls|list [options]
+
+list channels and their connection status
 
 Options:
   -h, --help  display help for command
@@ -464,6 +484,8 @@ Options:
 
 ```text
 Usage: beamhop channel rm [options] <name>
+
+disconnect a channel and delete its secrets
 
 Options:
   -h, --help  display help for command
@@ -498,6 +520,8 @@ Options:
 ```text
 Usage: beamhop leave [options] <agent> <target>
 
+remove an agent from a channel target it joined
+
 Options:
   -h, --help  display help for command
 ```
@@ -513,11 +537,11 @@ Options:
   -h, --help               display help for command
 
 Commands:
-  ls|list [options]
-  show <id>
+  ls|list [options]        list sessions
+  show <id>                print a session's transcript
   start <agent> <text...>  start a session from the CLI (as owner)
-  send <id> <text...>
-  stop <id>
+  send <id> <text...>      send another message to a running session
+  stop <id>                stop a session
   help [command]           display help for command
 ```
 
@@ -526,8 +550,10 @@ Commands:
 ```text
 Usage: beamhop session ls|list [options]
 
+list sessions
+
 Options:
-  --agent <name>
+  --agent <name>  only this agent
   -h, --help      display help for command
 ```
 
@@ -535,6 +561,8 @@ Options:
 
 ```text
 Usage: beamhop session show [options] <id>
+
+print a session's transcript
 
 Options:
   -h, --help  display help for command
@@ -556,6 +584,8 @@ Options:
 ```text
 Usage: beamhop session send [options] <id> <text...>
 
+send another message to a running session
+
 Options:
   -h, --help  display help for command
 ```
@@ -564,6 +594,8 @@ Options:
 
 ```text
 Usage: beamhop session stop [options] <id>
+
+stop a session
 
 Options:
   -h, --help  display help for command
@@ -586,6 +618,8 @@ Options:
 ```text
 Usage: beamhop approve [options] <id>
 
+allow a pending approval (ids from `beamhop approvals`)
+
 Options:
   --always             allow this tool for the rest of the session
   --forever [rule]     save a permanent rule (e.g. "bash:npm test", "*.npmjs.org", "~/code/app/");
@@ -598,6 +632,8 @@ Options:
 
 ```text
 Usage: beamhop deny [options] <id>
+
+deny a pending approval
 
 Options:
   -h, --help  display help for command
@@ -614,9 +650,10 @@ Options:
   -h, --help                          display help for command
 
 Commands:
-  ls
-  grant [options] <principal> <role>
-  revoke [options] <principal>
+  ls                                  list roles and who has been granted which
+  grant [options] <principal> <role>  grant a role to a principal, e.g. `beamhop role grant
+                                      telegram:5551 user`
+  revoke [options] <principal>        remove a principal's role grant
   help [command]                      display help for command
 ```
 
@@ -624,6 +661,8 @@ Commands:
 
 ```text
 Usage: beamhop role ls [options]
+
+list roles and who has been granted which
 
 Options:
   -h, --help  display help for command
@@ -633,6 +672,8 @@ Options:
 
 ```text
 Usage: beamhop role grant [options] <principal> <role>
+
+grant a role to a principal, e.g. `beamhop role grant telegram:5551 user`
 
 Options:
   --agent <name>  only for this agent
@@ -644,8 +685,10 @@ Options:
 ```text
 Usage: beamhop role revoke [options] <principal>
 
+remove a principal's role grant
+
 Options:
-  --agent <name>
+  --agent <name>  only for this agent
   -h, --help      display help for command
 ```
 
@@ -671,8 +714,8 @@ Options:
   -h, --help       display help for command
 
 Commands:
-  add <principal>
-  rm <principal>
+  add <principal>  add an owner (npub or provider:userId)
+  rm <principal>   remove an owner
   help [command]   display help for command
 ```
 
@@ -680,6 +723,8 @@ Commands:
 
 ```text
 Usage: beamhop owner add [options] <principal>
+
+add an owner (npub or provider:userId)
 
 Options:
   -h, --help  display help for command
@@ -689,6 +734,8 @@ Options:
 
 ```text
 Usage: beamhop owner rm [options] <principal>
+
+remove an owner
 
 Options:
   -h, --help  display help for command
@@ -705,11 +752,11 @@ Options:
   -h, --help             display help for command
 
 Commands:
-  show <agent>
-  set <agent> <profile>  strict | workspace | custom
-  suggestions [options]
-  accept <id>
-  reject <id>
+  show <agent>           show an agent's effective sandbox policy
+  set <agent> <profile>  set the sandbox profile: strict | workspace | custom
+  suggestions [options]  list policy changes learned from sandbox violations
+  accept <id>            apply a policy suggestion
+  reject <id>            dismiss a policy suggestion
   help [command]         display help for command
 ```
 
@@ -717,6 +764,8 @@ Commands:
 
 ```text
 Usage: beamhop policy show [options] <agent>
+
+show an agent's effective sandbox policy
 
 Options:
   -h, --help  display help for command
@@ -727,7 +776,7 @@ Options:
 ```text
 Usage: beamhop policy set [options] <agent> <profile>
 
-strict | workspace | custom
+set the sandbox profile: strict | workspace | custom
 
 Options:
   -h, --help  display help for command
@@ -738,8 +787,10 @@ Options:
 ```text
 Usage: beamhop policy suggestions [options]
 
+list policy changes learned from sandbox violations
+
 Options:
-  --agent <name>
+  --agent <name>  only this agent
   -h, --help      display help for command
 ```
 
@@ -747,6 +798,8 @@ Options:
 
 ```text
 Usage: beamhop policy accept [options] <id>
+
+apply a policy suggestion
 
 Options:
   -h, --help  display help for command
@@ -756,6 +809,8 @@ Options:
 
 ```text
 Usage: beamhop policy reject [options] <id>
+
+dismiss a policy suggestion
 
 Options:
   -h, --help  display help for command
@@ -772,9 +827,9 @@ Options:
   -h, --help            display help for command
 
 Commands:
-  ls
-  set [options] <name>  reads the value from stdin, or --from-env
-  rm <name>
+  ls                    list secret names (never values)
+  set [options] <name>  store a secret; reads the value from stdin, or --from-env
+  rm <name>             delete a secret
   help [command]        display help for command
 ```
 
@@ -782,6 +837,8 @@ Commands:
 
 ```text
 Usage: beamhop secret ls [options]
+
+list secret names (never values)
 
 Options:
   -h, --help  display help for command
@@ -792,10 +849,10 @@ Options:
 ```text
 Usage: beamhop secret set [options] <name>
 
-reads the value from stdin, or --from-env
+store a secret; reads the value from stdin, or --from-env
 
 Options:
-  --from-env <var>
+  --from-env <var>  read the value from this environment variable
   -h, --help        display help for command
 ```
 
@@ -803,6 +860,8 @@ Options:
 
 ```text
 Usage: beamhop secret rm [options] <name>
+
+delete a secret
 
 Options:
   -h, --help  display help for command
@@ -819,10 +878,10 @@ Options:
   -h, --help             display help for command
 
 Commands:
-  ls [options]
-  add [options] <agent>
-  rm <id>
-  run <id>
+  ls [options]           list schedules
+  add [options] <agent>  run a prompt on a cron, webhook, file change or Nostr event
+  rm <id>                delete a schedule
+  run <id>               run a schedule now
   help [command]         display help for command
 ```
 
@@ -831,8 +890,10 @@ Commands:
 ```text
 Usage: beamhop schedule ls [options]
 
+list schedules
+
 Options:
-  --agent <name>
+  --agent <name>  only this agent
   -h, --help      display help for command
 ```
 
@@ -841,11 +902,14 @@ Options:
 ```text
 Usage: beamhop schedule add [options] <agent>
 
+run a prompt on a cron, webhook, file change or Nostr event
+
 Options:
-  --kind <kind>        (choices: "cron", "webhook", "file-change", "nostr-event", default: "cron")
+  --kind <kind>        trigger kind (choices: "cron", "webhook", "file-change", "nostr-event",
+                       default: "cron")
   --spec <spec>        cron expression, webhook path, glob or nostr filter JSON
-  --prompt <text>
-  --post-to <target>
+  --prompt <text>      what to send the agent
+  --post-to <target>   channel target for the reply, e.g. mybot:group/-100123
   --tz <timezone>      IANA timezone (default: "UTC")
   --owner <principal>  whose role and budget applies
   -h, --help           display help for command
@@ -856,6 +920,8 @@ Options:
 ```text
 Usage: beamhop schedule rm [options] <id>
 
+delete a schedule
+
 Options:
   -h, --help  display help for command
 ```
@@ -864,6 +930,8 @@ Options:
 
 ```text
 Usage: beamhop schedule run [options] <id>
+
+run a schedule now
 
 Options:
   -h, --help  display help for command
@@ -880,11 +948,11 @@ Options:
   -h, --help       display help for command
 
 Commands:
-  providers
-  plan [options]
-  apply [options]
-  ls
-  destroy <id>
+  providers        list cloud providers and whether their API token is set
+  plan [options]   show what a deploy would create and cost (changes nothing)
+  apply [options]  create the cloud resources and move the agent
+  ls               list deployments
+  destroy <id>     tear down a deployment and its cloud resources
   help [command]   display help for command
 ```
 
@@ -892,6 +960,8 @@ Commands:
 
 ```text
 Usage: beamhop deploy providers [options]
+
+list cloud providers and whether their API token is set
 
 Options:
   -h, --help  display help for command
@@ -902,12 +972,14 @@ Options:
 ```text
 Usage: beamhop deploy plan [options]
 
+show what a deploy would create and cost (changes nothing)
+
 Options:
-  --provider <id>
-  --agent <name>
-  --region <id>
-  --size <id>
-  --mode <mode>    (choices: "move", "new", default: "move")
+  --provider <id>  hetzner | digitalocean | fly | render | railway (see `deploy providers`)
+  --agent <name>   agent to run in the cloud
+  --region <id>    provider region
+  --size <id>      provider machine size
+  --mode <mode>    move the agent, or run a new copy (choices: "move", "new", default: "move")
   -h, --help       display help for command
 ```
 
@@ -916,12 +988,14 @@ Options:
 ```text
 Usage: beamhop deploy apply [options]
 
+create the cloud resources and move the agent
+
 Options:
-  --provider <id>
-  --agent <name>
-  --region <id>
-  --size <id>
-  --mode <mode>    (choices: "move", "new", default: "move")
+  --provider <id>  hetzner | digitalocean | fly | render | railway (see `deploy providers`)
+  --agent <name>   agent to run in the cloud
+  --region <id>    provider region
+  --size <id>      provider machine size
+  --mode <mode>    move the agent, or run a new copy (choices: "move", "new", default: "move")
   -h, --help       display help for command
 ```
 
@@ -929,6 +1003,8 @@ Options:
 
 ```text
 Usage: beamhop deploy ls [options]
+
+list deployments
 
 Options:
   -h, --help  display help for command
@@ -939,6 +1015,8 @@ Options:
 ```text
 Usage: beamhop deploy destroy [options] <id>
 
+tear down a deployment and its cloud resources
+
 Options:
   -h, --help  display help for command
 ```
@@ -948,9 +1026,11 @@ Options:
 ```text
 Usage: beamhop audit [options]
 
+every decision, violation and config change, newest first
+
 Options:
-  --agent <name>
-  --severity <s>  (choices: "info", "warn", "security")
+  --agent <name>  only this agent
+  --severity <s>  only this severity (choices: "info", "warn", "security")
   --limit <n>     max events (default: 50)
   -h, --help      display help for command
 ```
@@ -960,9 +1040,11 @@ Options:
 ```text
 Usage: beamhop usage [options]
 
+tokens and spend per agent
+
 Options:
-  --days <n>      days (default: 7)
-  --agent <name>
+  --days <n>      how many days back (default: 7)
+  --agent <name>  only this agent
   -h, --help      display help for command
 ```
 
@@ -977,12 +1059,12 @@ Options:
   -h, --help                     display help for command
 
 Commands:
-  ls
+  ls                             list paired devices
   pair [options]                 pair a phone: QR code for the hosted app, then confirm the safety
                                  phrase here
   confirm [options] <pairingId>  show the safety phrase of a pending pairing; --accept if it matches
                                  the phone, else --reject
-  rm <id>
+  rm <id>                        unpair a device
   help [command]                 display help for command
 ```
 
@@ -990,6 +1072,8 @@ Commands:
 
 ```text
 Usage: beamhop device ls [options]
+
+list paired devices
 
 Options:
   -h, --help  display help for command
@@ -1027,6 +1111,8 @@ Options:
 ```text
 Usage: beamhop device rm [options] <id>
 
+unpair a device
+
 Options:
   -h, --help  display help for command
 ```
@@ -1042,8 +1128,8 @@ Options:
   -h, --help       display help for command
 
 Commands:
-  show
-  nip05 [options]
+  show             show the owner and agent Nostr identities (JSON)
+  nip05 [options]  print the nostr.json to host for NIP-05 handles on your domain
   help [command]   display help for command
 ```
 
@@ -1051,6 +1137,8 @@ Commands:
 
 ```text
 Usage: beamhop identity show [options]
+
+show the owner and agent Nostr identities (JSON)
 
 Options:
   -h, --help  display help for command
@@ -1061,8 +1149,10 @@ Options:
 ```text
 Usage: beamhop identity nip05 [options]
 
+print the nostr.json to host for NIP-05 handles on your domain
+
 Options:
-  --domain <domain>
+  --domain <domain>  domain you will host /.well-known/nostr.json on
   -h, --help         display help for command
 ```
 
@@ -1077,8 +1167,8 @@ Options:
   -h, --help        display help for command
 
 Commands:
-  export [options]
-  purge [options]
+  export [options]  export transcripts and audit data to a file
+  purge [options]   delete transcripts and audit data
   help [command]    display help for command
 ```
 
@@ -1087,8 +1177,10 @@ Commands:
 ```text
 Usage: beamhop data export [options]
 
+export transcripts and audit data to a file
+
 Options:
-  --agent <name>
+  --agent <name>  only this agent
   -h, --help      display help for command
 ```
 
@@ -1097,8 +1189,10 @@ Options:
 ```text
 Usage: beamhop data purge [options]
 
+delete transcripts and audit data
+
 Options:
-  --agent <name>
-  --before <isoDate>
+  --agent <name>      only this agent
+  --before <isoDate>  only records older than this date
   -h, --help          display help for command
 ```

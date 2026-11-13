@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import type { BeamhopClient } from '@beamhop/client';
 import { RpcError } from '@beamhop/client';
 import { Command, Option } from 'commander';
@@ -74,10 +76,18 @@ const parseKv = (pairs: string[] = []): Record<string, string> => {
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];
 
+/** `~/code/app:rw` → { mount: '~/code/app', mountMode: 'rw' } (the suffix is optional). */
+const splitMount = (m: string): { mount: string; mountMode?: 'ro' | 'rw' } => {
+  const match = /^(.*?):(ro|rw)$/.exec(m);
+  return match ? { mount: match[1]!, mountMode: match[2] as 'ro' | 'rw' } : { mount: m };
+};
+
+const expandHome = (p: string) => (p === '~' || p.startsWith('~/') ? homedir() + p.slice(1) : p);
+
 const STATUS_DOT: Record<string, string> = {
-  ok: pc.green('●'),
-  warn: pc.yellow('●'),
-  fail: pc.red('●'),
+  ok: pc.green('✓'),
+  warn: pc.yellow('!'),
+  fail: pc.red('✗'),
   skip: pc.dim('○'),
 };
 
@@ -124,7 +134,7 @@ export const buildProgram = (deps: CliDeps): Command => {
   // ── first run ─────────────────────────────────────────────
   program
     .command('init')
-    .description('first-run setup: doctor, harnesses, owner key, phone, first agent, hello (§9A)')
+    .description('first-run setup: doctor, harnesses, owner key, phone, first agent, hello')
     .option(
       '-y, --yes',
       'no questions: accept defaults (pairing and the hello test only with --pair / --hello)',
@@ -142,9 +152,16 @@ export const buildProgram = (deps: CliDeps): Command => {
     .option('--agent-name <name>', 'first agent name')
     .option('--harness <id>', 'harness for the first agent')
     .option('--preset <id>', 'agent preset (personal-assistant, code-reviewer, team-dev-bot, public-qa)')
-    .option('--mount <path>', 'folder the first agent may use')
+    .option('--mount <path[:ro|rw]>', 'folder the first agent may use (same form as `agent add --mount`)')
     .addOption(new Option('--mount-mode <mode>', 'folder access').choices(['ro', 'rw']))
-    .addOption(new Option('--sandbox <profile>').choices(['strict', 'workspace']))
+    .addOption(
+      new Option('--sandbox <profile>', 'sandbox profile for the first agent').choices([
+        'strict',
+        'workspace',
+      ]),
+    )
+    // `agent add` calls it --profile; accept that spelling here too.
+    .addOption(new Option('--profile <profile>').choices(['strict', 'workspace']).hideHelp())
     .option('--device-name <name>', 'name for the paired phone')
     .option('--pair-timeout <seconds>', 'how long to wait for the phone', Number)
     .option('--hello-timeout <seconds>', 'how long to wait for your reply', Number)
@@ -164,9 +181,11 @@ export const buildProgram = (deps: CliDeps): Command => {
         ...(raw.agentName ? { agentName: String(raw.agentName) } : {}),
         ...(raw.harness ? { harness: String(raw.harness) } : {}),
         ...(raw.preset ? { preset: String(raw.preset) } : {}),
-        ...(raw.mount ? { mount: String(raw.mount) } : {}),
+        ...(raw.mount ? splitMount(String(raw.mount)) : {}),
         ...(raw.mountMode ? { mountMode: raw.mountMode as 'ro' | 'rw' } : {}),
-        ...(raw.sandbox ? { sandbox: raw.sandbox as 'strict' | 'workspace' } : {}),
+        ...(raw.sandbox || raw.profile
+          ? { sandbox: (raw.sandbox ?? raw.profile) as 'strict' | 'workspace' }
+          : {}),
         ...(raw.deviceName ? { deviceName: String(raw.deviceName) } : {}),
         ...(raw.pairTimeout ? { pairTimeout: Number(raw.pairTimeout) } : {}),
         ...(raw.helloTimeout ? { helloTimeout: Number(raw.helloTimeout) } : {}),
@@ -240,7 +259,7 @@ export const buildProgram = (deps: CliDeps): Command => {
     .description(
       'EMERGENCY STOP: kill all sessions, pause schedules, disconnect channels (incl. cloud agents)',
     )
-    .option('--reason <text>')
+    .option('--reason <text>', 'why (recorded in the audit log)')
     .action(
       act(async (c, o: { reason?: string }) => ({
         data: await c.call('system.panic', { reason: o.reason }),
@@ -252,7 +271,17 @@ export const buildProgram = (deps: CliDeps): Command => {
   program
     .command('resume')
     .description('resume after panic')
-    .action(act(async (c) => ({ data: await c.call('system.resume'), human: () => pc.green('resumed.') })));
+    .action(
+      act(async (c) => {
+        const s = await c.call('system.status');
+        if (s?.panic === false)
+          return {
+            data: { ok: true, panic: false },
+            human: () => 'nothing to resume: beamhop is not in panic mode.',
+          };
+        return { data: await c.call('system.resume'), human: () => pc.green('resumed.') };
+      }),
+    );
 
   program
     .command('daemon')
@@ -264,7 +293,21 @@ export const buildProgram = (deps: CliDeps): Command => {
         io.exitCode = 1;
         return;
       }
-      await deps.runDaemon({ port: o.port });
+      try {
+        await deps.runDaemon({ port: o.port });
+      } catch (e) {
+        io.exitCode = 1;
+        const err = e as Error & { code?: string; port?: number };
+        if (err.code === 'EADDRINUSE')
+          io.err(
+            `${pc.red('error')} port ${err.port ?? o.port ?? ''} is already in use. Is another beamhop daemon running? Pick a free port with ${pc.bold('BEAMHOP_PORT=<port>')} or ${pc.bold('--port <port>')}.`,
+          );
+        else if (/another beamhop daemon is running/.test(err.message))
+          io.err(
+            `${pc.red('error')} ${err.message}. Use that one (${pc.bold('beamhop status')}), stop it first, or set ${pc.bold('BEAMHOP_HOME')} to run a separate daemon.`,
+          );
+        else io.err(`${pc.red('error')} ${err.message}`);
+      }
     });
 
   program
@@ -272,7 +315,12 @@ export const buildProgram = (deps: CliDeps): Command => {
     .description('print the URL of the local web UI (contains your access token — do not share)')
     .action(async () => {
       if (!deps.uiUrl) return;
-      io.out(await deps.uiUrl());
+      try {
+        io.out(await deps.uiUrl());
+      } catch (e) {
+        io.exitCode = 1;
+        io.err(`${pc.red('error')} ${(e as Error).message}`);
+      }
     });
 
   // ── agents ─────────────────────────────────────────────
@@ -280,6 +328,7 @@ export const buildProgram = (deps: CliDeps): Command => {
   agent
     .command('ls')
     .alias('list')
+    .description('list agents with status, sessions and spend today')
     .action(
       act(async (c) => {
         const { agents } = await c.call('agent.list');
@@ -302,6 +351,7 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   agent
     .command('show <name>')
+    .description("show an agent's full config, status and npub (JSON)")
     .action(act(async (c, name: string) => ({ data: await c.call('agent.get', { name }) })));
   agent
     .command('add <name>')
@@ -310,7 +360,7 @@ export const buildProgram = (deps: CliDeps): Command => {
     .option('--preset <id>', 'personal-assistant | code-reviewer | team-dev-bot | public-qa')
     .option('--mount <path[:ro|rw]>', 'mount a directory (repeatable)', collect)
     .option('--profile <profile>', 'sandbox profile: strict | workspace | custom')
-    .option('--model <model>')
+    .option('--model <model>', 'model id (default: the harness default)')
     .option('--public', 'answer unknown senders (viewer role)')
     .action(
       act(
@@ -335,28 +385,54 @@ export const buildProgram = (deps: CliDeps): Command => {
           if (o.model) config.model = o.model;
           if (o.public) config.public = true;
           const a = await c.call('agent.create', { config, preset: o.preset });
+          const warnings: string[] = [];
+          for (const m of mounts)
+            if (!existsSync(expandHome(m.path))) warnings.push(`mount ${m.path} does not exist (yet)`);
+          const h = await c
+            .call('harness.list')
+            .then((r) => r?.harnesses?.find((x) => x.id === o.harness))
+            .catch(() => null);
+          if (h === undefined)
+            warnings.push(`harness "${o.harness}" is not known; \`beamhop harness ls\` lists the ids`);
+          else if (h && h.status !== 'ready')
+            warnings.push(
+              `${h.displayName} is ${{ 'needs-login': 'not logged in', 'not-installed': 'not installed' }[h.status as string] ?? h.status}${h.message ? ` (${h.message})` : ''}; sessions will fail until it is ready`,
+            );
           return {
             data: a,
             human: () =>
-              `${pc.green('created')} ${a.config.name} (${a.config.harness}, sandbox ${a.config.sandbox.profile})`,
+              [
+                `${pc.green('created')} ${a.config.name} (${a.config.harness}, sandbox ${a.config.sandbox.profile})`,
+                ...warnings.map((w) => pc.yellow(`! ${w}`)),
+                pc.dim(
+                  `next: beamhop join ${a.config.name} <channel>:dm --role owner, or try it now: beamhop session start ${a.config.name} "hello"`,
+                ),
+              ].join('\n'),
           };
         },
       ),
     );
-  agent.command('rm <name>').action(
-    act(async (c, name: string) => ({
-      data: await c.call('agent.delete', { name }),
-      human: () => `removed ${name}`,
-    })),
-  );
-  agent.command('start <name>').action(
-    act(async (c, name: string) => ({
-      data: await c.call('agent.start', { name }),
-      human: () => `${pc.green('started')} ${name}`,
-    })),
-  );
+  agent
+    .command('rm <name>')
+    .description('delete an agent and its config')
+    .action(
+      act(async (c, name: string) => ({
+        data: await c.call('agent.delete', { name }),
+        human: () => `removed ${name}`,
+      })),
+    );
+  agent
+    .command('start <name>')
+    .description('start (or re-enable) an agent')
+    .action(
+      act(async (c, name: string) => ({
+        data: await c.call('agent.start', { name }),
+        human: () => `${pc.green('started')} ${name}`,
+      })),
+    );
   agent
     .command('stop <name>')
+    .description('stop an agent; running sessions finish unless --hard')
     .option('--hard', 'kill running sessions immediately')
     .action(
       act(async (c, name: string, o: { hard?: boolean }) => ({
@@ -364,18 +440,24 @@ export const buildProgram = (deps: CliDeps): Command => {
         human: () => `stopped ${name}`,
       })),
     );
-  agent.command('clone <name> <newName>').action(
-    act(async (c, name: string, newName: string) => ({
-      data: await c.call('agent.clone', { name, newName }),
-      human: () => `cloned ${name} → ${newName}`,
-    })),
-  );
-  agent.command('presets').action(
-    act(async (c) => {
-      const { presets } = await c.call('agent.presets');
-      return { data: presets, human: () => table(presets as Row[], ['id', 'title', 'description']) };
-    }),
-  );
+  agent
+    .command('clone <name> <newName>')
+    .description('copy an agent under a new name (new Nostr key)')
+    .action(
+      act(async (c, name: string, newName: string) => ({
+        data: await c.call('agent.clone', { name, newName }),
+        human: () => `cloned ${name} → ${newName}`,
+      })),
+    );
+  agent
+    .command('presets')
+    .description('list the built-in presets for `agent add --preset`')
+    .action(
+      act(async (c) => {
+        const { presets } = await c.call('agent.presets');
+        return { data: presets, human: () => table(presets as Row[], ['id', 'title', 'description']) };
+      }),
+    );
   agent
     .command('set <name> <key=value...>')
     .description('patch agent config, e.g. `beamhop agent set bot model=gpt-5 budgets.dailyUsd=3`')
@@ -431,6 +513,7 @@ export const buildProgram = (deps: CliDeps): Command => {
   harness
     .command('ls')
     .alias('list')
+    .description('list known harnesses and their status (from the last scan)')
     .action(
       act(async (c) => {
         const { harnesses } = await c.call('harness.list');
@@ -455,15 +538,19 @@ export const buildProgram = (deps: CliDeps): Command => {
 
   // ── channels ─────────────────────────────────────────────
   const channel = program.command('channel').description('connect messaging channels');
-  channel.command('providers').action(
-    act(async (c) => {
-      const { providers } = await c.call('channel.providers');
-      return { data: providers, human: () => table(providers as Row[], ['provider', 'displayName']) };
-    }),
-  );
+  channel
+    .command('providers')
+    .description('list channel providers you can add')
+    .action(
+      act(async (c) => {
+        const { providers } = await c.call('channel.providers');
+        return { data: providers, human: () => table(providers as Row[], ['provider', 'displayName']) };
+      }),
+    );
   channel
     .command('ls')
     .alias('list')
+    .description('list channels and their connection status')
     .action(
       act(async (c) => {
         const { channels } = await c.call('channel.list');
@@ -514,7 +601,14 @@ export const buildProgram = (deps: CliDeps): Command => {
           if (o.tokenEnv) secrets.token = fromEnv(o.tokenEnv);
           for (const [id, envVar] of Object.entries(parseKv(o.secret))) secrets[id] = fromEnv(envVar);
           const v = await c.call('channel.validate', { provider, values, secrets });
-          if (!v.ok) throw new Error(`validation failed: ${v.message}`);
+          if (!v.ok)
+            throw new Error(
+              `validation failed: ${v.message}${
+                Object.keys(secrets).length
+                  ? ''
+                  : `\n  no token given: put it in an environment variable and pass --token-env, e.g. MY_TOKEN=... beamhop channel add ${provider} --name ${o.name} --token-env MY_TOKEN`
+              }`,
+            );
           const ch = await c.call('channel.add', { name: o.name, provider, values, secrets });
           return {
             data: ch,
@@ -524,12 +618,15 @@ export const buildProgram = (deps: CliDeps): Command => {
         },
       ),
     );
-  channel.command('rm <name>').action(
-    act(async (c, name: string) => ({
-      data: await c.call('channel.remove', { name }),
-      human: () => `removed ${name}`,
-    })),
-  );
+  channel
+    .command('rm <name>')
+    .description('disconnect a channel and delete its secrets')
+    .action(
+      act(async (c, name: string) => ({
+        data: await c.call('channel.remove', { name }),
+        human: () => `removed ${name}`,
+      })),
+    );
   channel
     .command('pair <name>')
     .description('get a one-time code; send /pair <code> to the bot to become owner')
@@ -553,25 +650,46 @@ export const buildProgram = (deps: CliDeps): Command => {
     .action(
       act(async (c, agentName: string, target: string, o: { role: string; trigger?: string[] }) => {
         const membership = { target, defaultRole: o.role, ...(o.trigger ? { triggers: o.trigger } : {}) };
+        const data = await c.call('membership.join', { agent: agentName, membership: membership as never });
+        const channelName = target.split(':')[0] ?? '';
+        const known = await c
+          .call('channel.list')
+          .then((r) => r?.channels?.map((ch) => ch.config.name))
+          .catch(() => undefined);
+        const missing = known && !known.includes(channelName);
         return {
-          data: await c.call('membership.join', { agent: agentName, membership: membership as never }),
-          human: () => `${pc.green('joined')} ${agentName} → ${target} (default role ${o.role})`,
+          data,
+          human: () =>
+            [
+              `${pc.green('joined')} ${agentName} → ${target} (default role ${o.role})`,
+              ...(missing
+                ? [
+                    pc.yellow(
+                      `! no channel named "${channelName}" yet — the agent will not hear anything there until you add it (\`beamhop channel add <provider> --name ${channelName}\`; \`beamhop channel ls\` lists yours).`,
+                    ),
+                  ]
+                : []),
+            ].join('\n'),
         };
       }),
     );
-  program.command('leave <agent> <target>').action(
-    act(async (c, agentName: string, target: string) => ({
-      data: await c.call('membership.leave', { agent: agentName, target }),
-      human: () => `${agentName} left ${target}`,
-    })),
-  );
+  program
+    .command('leave <agent> <target>')
+    .description('remove an agent from a channel target it joined')
+    .action(
+      act(async (c, agentName: string, target: string) => ({
+        data: await c.call('membership.leave', { agent: agentName, target }),
+        human: () => `${agentName} left ${target}`,
+      })),
+    );
 
   // ── sessions ─────────────────────────────────────────────
   const session = program.command('session').description('agent sessions');
   session
     .command('ls')
     .alias('list')
-    .option('--agent <name>')
+    .description('list sessions')
+    .option('--agent <name>', 'only this agent')
     .action(
       act(async (c, o: { agent?: string }) => {
         const { sessions } = await c.call('session.list', { agent: o.agent });
@@ -591,25 +709,29 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  session.command('show <id>').action(
-    act(async (c, id: string) => {
-      const { events } = await c.call('session.events', { id, afterSeq: 0 });
-      return {
-        data: events,
-        human: () =>
-          events
-            .map((e) => {
-              if (e.kind === 'user')
-                return `${pc.cyan(`${e.from?.displayName ?? e.from?.principal ?? 'user'}:`)} ${e.text ?? ''}`;
-              if (e.kind === 'assistant') return `${pc.magenta('agent:')} ${e.text ?? ''}`;
-              if (e.kind === 'tool_call') return pc.dim(`  ↳ ${e.tool?.title ?? e.tool?.name}`);
-              if (e.kind === 'permission') return pc.yellow(`  ? approval ${e.approvalId}: ${e.text ?? ''}`);
-              return pc.dim(`  ${e.kind}: ${e.text ?? ''}`);
-            })
-            .join('\n'),
-      };
-    }),
-  );
+  session
+    .command('show <id>')
+    .description("print a session's transcript")
+    .action(
+      act(async (c, id: string) => {
+        const { events } = await c.call('session.events', { id, afterSeq: 0 });
+        return {
+          data: events,
+          human: () =>
+            events
+              .map((e) => {
+                if (e.kind === 'user')
+                  return `${pc.cyan(`${e.from?.displayName ?? e.from?.principal ?? 'user'}:`)} ${e.text ?? ''}`;
+                if (e.kind === 'assistant') return `${pc.magenta('agent:')} ${e.text ?? ''}`;
+                if (e.kind === 'tool_call') return pc.dim(`  ↳ ${e.tool?.title ?? e.tool?.name}`);
+                if (e.kind === 'permission')
+                  return pc.yellow(`  ? approval ${e.approvalId}: ${e.text ?? ''}`);
+                return pc.dim(`  ${e.kind}: ${e.text ?? ''}`);
+              })
+              .join('\n'),
+        };
+      }),
+    );
   session
     .command('start <agent> <text...>')
     .description('start a session from the CLI (as owner)')
@@ -622,18 +744,24 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  session.command('send <id> <text...>').action(
-    act(async (c, id: string, text: string[]) => ({
-      data: await c.call('session.send', { id, text: text.join(' ') }),
-      human: () => 'sent',
-    })),
-  );
-  session.command('stop <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('session.stop', { id }),
-      human: () => `stopped ${id}`,
-    })),
-  );
+  session
+    .command('send <id> <text...>')
+    .description('send another message to a running session')
+    .action(
+      act(async (c, id: string, text: string[]) => ({
+        data: await c.call('session.send', { id, text: text.join(' ') }),
+        human: () => 'sent',
+      })),
+    );
+  session
+    .command('stop <id>')
+    .description('stop a session')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('session.stop', { id }),
+        human: () => `stopped ${id}`,
+      })),
+    );
 
   // ── approvals ─────────────────────────────────────────────
   program
@@ -662,6 +790,7 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   program
     .command('approve <id>')
+    .description('allow a pending approval (ids from `beamhop approvals`)')
     .option('--always', 'allow this tool for the rest of the session')
     .option(
       '--forever [rule]',
@@ -681,39 +810,46 @@ export const buildProgram = (deps: CliDeps): Command => {
         human: () => pc.green(`approved ${id}`),
       })),
     );
-  program.command('deny <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('approval.decide', { id, allow: false }),
-      human: () => `denied ${id}`,
-    })),
-  );
+  program
+    .command('deny <id>')
+    .description('deny a pending approval')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('approval.decide', { id, allow: false }),
+        human: () => `denied ${id}`,
+      })),
+    );
 
   // ── roles / people / owners ─────────────────────────────────────────────
   const role = program.command('role').description('roles and grants');
-  role.command('ls').action(
-    act(async (c) => {
-      const r = await c.call('role.list');
-      return {
-        data: r,
-        human: () =>
-          `${table(
-            r.roles.map((x) => ({
-              name: x.name,
-              mode: x.permissionMode,
-              sandbox: x.sandboxProfile,
-              approve: x.canApprove,
-              description: x.description,
-            })),
-            ['name', 'mode', 'sandbox', 'approve', 'description'],
-          )}\n\n${table(
-            Object.entries(r.grants).map(([principal, rl]) => ({ principal, role: rl })),
-            ['principal', 'role'],
-          )}`,
-      };
-    }),
-  );
+  role
+    .command('ls')
+    .description('list roles and who has been granted which')
+    .action(
+      act(async (c) => {
+        const r = await c.call('role.list');
+        return {
+          data: r,
+          human: () =>
+            `${table(
+              r.roles.map((x) => ({
+                name: x.name,
+                mode: x.permissionMode,
+                sandbox: x.sandboxProfile,
+                approve: x.canApprove,
+                description: x.description,
+              })),
+              ['name', 'mode', 'sandbox', 'approve', 'description'],
+            )}\n\n${table(
+              Object.entries(r.grants).map(([principal, rl]) => ({ principal, role: rl })),
+              ['principal', 'role'],
+            )}`,
+        };
+      }),
+    );
   role
     .command('grant <principal> <role>')
+    .description('grant a role to a principal, e.g. `beamhop role grant telegram:5551 user`')
     .option('--agent <name>', 'only for this agent')
     .action(
       act(async (c, principal: string, rl: string, o: { agent?: string }) => ({
@@ -723,7 +859,8 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   role
     .command('revoke <principal>')
-    .option('--agent <name>')
+    .description("remove a principal's role grant")
+    .option('--agent <name>', 'only for this agent')
     .action(
       act(async (c, principal: string, o: { agent?: string }) => ({
         data: await c.call('role.revoke', { principal, agent: o.agent }),
@@ -740,27 +877,34 @@ export const buildProgram = (deps: CliDeps): Command => {
       })),
     );
   const owner = program.command('owner').description('manage owners (multiple owners supported)');
-  owner.command('add <principal>').action(
-    act(async (c, principal: string) => ({
-      data: await c.call('owner.add', { principal }),
-      human: () => `${principal} is now an owner`,
-    })),
-  );
-  owner.command('rm <principal>').action(
-    act(async (c, principal: string) => ({
-      data: await c.call('owner.remove', { principal }),
-      human: () => `${principal} is no longer an owner`,
-    })),
-  );
+  owner
+    .command('add <principal>')
+    .description('add an owner (npub or provider:userId)')
+    .action(
+      act(async (c, principal: string) => ({
+        data: await c.call('owner.add', { principal }),
+        human: () => `${principal} is now an owner`,
+      })),
+    );
+  owner
+    .command('rm <principal>')
+    .description('remove an owner')
+    .action(
+      act(async (c, principal: string) => ({
+        data: await c.call('owner.remove', { principal }),
+        human: () => `${principal} is no longer an owner`,
+      })),
+    );
 
   // ── policy ─────────────────────────────────────────────
   const policy = program.command('policy').description('sandbox policy');
   policy
     .command('show <agent>')
+    .description("show an agent's effective sandbox policy")
     .action(act(async (c, name: string) => ({ data: await c.call('policy.get', { name }) })));
   policy
     .command('set <agent> <profile>')
-    .description('strict | workspace | custom')
+    .description('set the sandbox profile: strict | workspace | custom')
     .action(
       act(async (c, name: string, profile: string) => ({
         data: await c.call('policy.set', { name, profile }),
@@ -769,7 +913,8 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   policy
     .command('suggestions')
-    .option('--agent <name>')
+    .description('list policy changes learned from sandbox violations')
+    .option('--agent <name>', 'only this agent')
     .action(
       act(async (c, o: { agent?: string }) => {
         const { suggestions } = await c.call('policy.suggestions', { name: o.agent });
@@ -779,37 +924,46 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  policy.command('accept <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('policy.applySuggestion', { id, accept: true }),
-      human: () => `accepted ${id}`,
-    })),
-  );
-  policy.command('reject <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('policy.applySuggestion', { id, accept: false }),
-      human: () => `rejected ${id}`,
-    })),
-  );
+  policy
+    .command('accept <id>')
+    .description('apply a policy suggestion')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('policy.applySuggestion', { id, accept: true }),
+        human: () => `accepted ${id}`,
+      })),
+    );
+  policy
+    .command('reject <id>')
+    .description('dismiss a policy suggestion')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('policy.applySuggestion', { id, accept: false }),
+        human: () => `rejected ${id}`,
+      })),
+    );
 
   // ── secrets ─────────────────────────────────────────────
   const secret = program
     .command('secret')
     .description('secrets (stored in the OS keychain; values are never shown)');
-  secret.command('ls').action(
-    act(async (c) => {
-      const r = await c.call('secret.list');
-      return {
-        data: r,
-        human: () =>
-          `${pc.dim(`backend: ${r.backend}`)}\n${table(r.secrets as Row[], ['name', 'updatedAt'])}`,
-      };
-    }),
-  );
+  secret
+    .command('ls')
+    .description('list secret names (never values)')
+    .action(
+      act(async (c) => {
+        const r = await c.call('secret.list');
+        return {
+          data: r,
+          human: () =>
+            `${pc.dim(`backend: ${r.backend}`)}\n${table(r.secrets as Row[], ['name', 'updatedAt'])}`,
+        };
+      }),
+    );
   secret
     .command('set <name>')
-    .description('reads the value from stdin, or --from-env')
-    .option('--from-env <var>')
+    .description('store a secret; reads the value from stdin, or --from-env')
+    .option('--from-env <var>', 'read the value from this environment variable')
     .action(
       act(async (c, name: string, o: { fromEnv?: string }) => {
         const value = o.fromEnv ? io.env[o.fromEnv] : (await io.readStdin()).replace(/\r?\n$/, '');
@@ -817,18 +971,22 @@ export const buildProgram = (deps: CliDeps): Command => {
         return { data: await c.call('secret.set', { name, value }), human: () => `stored ${name}` };
       }),
     );
-  secret.command('rm <name>').action(
-    act(async (c, name: string) => ({
-      data: await c.call('secret.delete', { name }),
-      human: () => `deleted ${name}`,
-    })),
-  );
+  secret
+    .command('rm <name>')
+    .description('delete a secret')
+    .action(
+      act(async (c, name: string) => ({
+        data: await c.call('secret.delete', { name }),
+        human: () => `deleted ${name}`,
+      })),
+    );
 
   // ── schedules ─────────────────────────────────────────────
   const schedule = program.command('schedule').description('scheduled and event-driven prompts');
   schedule
     .command('ls')
-    .option('--agent <name>')
+    .description('list schedules')
+    .option('--agent <name>', 'only this agent')
     .action(
       act(async (c, o: { agent?: string }) => {
         const { schedules } = await c.call('schedule.list', { agent: o.agent });
@@ -840,12 +998,15 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   schedule
     .command('add <agent>')
+    .description('run a prompt on a cron, webhook, file change or Nostr event')
     .addOption(
-      new Option('--kind <kind>').choices(['cron', 'webhook', 'file-change', 'nostr-event']).default('cron'),
+      new Option('--kind <kind>', 'trigger kind')
+        .choices(['cron', 'webhook', 'file-change', 'nostr-event'])
+        .default('cron'),
     )
     .requiredOption('--spec <spec>', 'cron expression, webhook path, glob or nostr filter JSON')
-    .requiredOption('--prompt <text>')
-    .option('--post-to <target>')
+    .requiredOption('--prompt <text>', 'what to send the agent')
+    .option('--post-to <target>', 'channel target for the reply, e.g. mybot:group/-100123')
     .option('--tz <timezone>', 'IANA timezone', 'UTC')
     .requiredOption('--owner <principal>', 'whose role and budget applies')
     .action(
@@ -868,40 +1029,58 @@ export const buildProgram = (deps: CliDeps): Command => {
         },
       ),
     );
-  schedule.command('rm <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('schedule.remove', { id }),
-      human: () => `removed ${id}`,
-    })),
-  );
-  schedule.command('run <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('schedule.run', { id }),
-      human: () => `triggered ${id}`,
-    })),
-  );
+  schedule
+    .command('rm <id>')
+    .description('delete a schedule')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('schedule.remove', { id }),
+        human: () => `removed ${id}`,
+      })),
+    );
+  schedule
+    .command('run <id>')
+    .description('run a schedule now')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('schedule.run', { id }),
+        human: () => `triggered ${id}`,
+      })),
+    );
 
   // ── deploy ─────────────────────────────────────────────
   const deploy = program
     .command('deploy')
     .description('run agents in the cloud (Hetzner, DigitalOcean, Fly.io, Render, Railway)');
-  deploy.command('providers').action(
-    act(async (c) => {
-      const { providers } = await c.call('deploy.providers');
-      return {
-        data: providers,
-        human: () => table(providers as Row[], ['id', 'displayName', 'kind', 'configured']),
-      };
-    }),
-  );
+  deploy
+    .command('providers')
+    .description('list cloud providers and whether their API token is set')
+    .action(
+      act(async (c) => {
+        const { providers } = await c.call('deploy.providers');
+        return {
+          data: providers,
+          human: () => table(providers as Row[], ['id', 'displayName', 'kind', 'configured']),
+        };
+      }),
+    );
   const deployOpts = (cmd: Command) =>
     cmd
-      .requiredOption('--provider <id>')
-      .requiredOption('--agent <name>')
-      .option('--region <id>')
-      .option('--size <id>')
-      .addOption(new Option('--mode <mode>').choices(['move', 'new']).default('move'));
-  deployOpts(deploy.command('plan')).action(
+      .requiredOption(
+        '--provider <id>',
+        'hetzner | digitalocean | fly | render | railway (see `deploy providers`)',
+      )
+      .requiredOption('--agent <name>', 'agent to run in the cloud')
+      .option('--region <id>', 'provider region')
+      .option('--size <id>', 'provider machine size')
+      .addOption(
+        new Option('--mode <mode>', 'move the agent, or run a new copy')
+          .choices(['move', 'new'])
+          .default('move'),
+      );
+  deployOpts(
+    deploy.command('plan').description('show what a deploy would create and cost (changes nothing)'),
+  ).action(
     act(
       async (
         c,
@@ -924,7 +1103,7 @@ export const buildProgram = (deps: CliDeps): Command => {
       },
     ),
   );
-  deployOpts(deploy.command('apply')).action(
+  deployOpts(deploy.command('apply').description('create the cloud resources and move the agent')).action(
     act(
       async (
         c,
@@ -938,27 +1117,34 @@ export const buildProgram = (deps: CliDeps): Command => {
       },
     ),
   );
-  deploy.command('ls').action(
-    act(async (c) => {
-      const { deployments } = await c.call('deploy.list');
-      return {
-        data: deployments,
-        human: () => table(deployments as Row[], ['id', 'agent', 'provider', 'status', 'region', 'size']),
-      };
-    }),
-  );
-  deploy.command('destroy <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('deploy.destroy', { id }),
-      human: () => `destroying ${id}`,
-    })),
-  );
+  deploy
+    .command('ls')
+    .description('list deployments')
+    .action(
+      act(async (c) => {
+        const { deployments } = await c.call('deploy.list');
+        return {
+          data: deployments,
+          human: () => table(deployments as Row[], ['id', 'agent', 'provider', 'status', 'region', 'size']),
+        };
+      }),
+    );
+  deploy
+    .command('destroy <id>')
+    .description('tear down a deployment and its cloud resources')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('deploy.destroy', { id }),
+        human: () => `destroying ${id}`,
+      })),
+    );
 
   // ── audit / usage ─────────────────────────────────────────────
   program
     .command('audit')
-    .option('--agent <name>')
-    .addOption(new Option('--severity <s>').choices(['info', 'warn', 'security']))
+    .description('every decision, violation and config change, newest first')
+    .option('--agent <name>', 'only this agent')
+    .addOption(new Option('--severity <s>', 'only this severity').choices(['info', 'warn', 'security']))
     .option('--limit <n>', 'max events', (v) => Number.parseInt(v, 10), 50)
     .action(
       act(async (c, o: { agent?: string; severity?: 'info' | 'warn' | 'security'; limit: number }) => {
@@ -985,8 +1171,9 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   program
     .command('usage')
-    .option('--days <n>', 'days', (v) => Number.parseInt(v, 10), 7)
-    .option('--agent <name>')
+    .description('tokens and spend per agent')
+    .option('--days <n>', 'how many days back', (v) => Number.parseInt(v, 10), 7)
+    .option('--agent <name>', 'only this agent')
     .action(
       act(async (c, o: { days: number; agent?: string }) => {
         const { rows } = await c.call('usage.query', { days: o.days, agent: o.agent });
@@ -1009,15 +1196,18 @@ export const buildProgram = (deps: CliDeps): Command => {
 
   // ── devices / identity / data ─────────────────────────────────────────────
   const device = program.command('device').description('paired devices (phones, browsers)');
-  device.command('ls').action(
-    act(async (c) => {
-      const { devices } = await c.call('device.list');
-      return {
-        data: devices,
-        human: () => table(devices as Row[], ['id', 'name', 'pairedAt', 'lastSeenAt', 'pushEnabled']),
-      };
-    }),
-  );
+  device
+    .command('ls')
+    .description('list paired devices')
+    .action(
+      act(async (c) => {
+        const { devices } = await c.call('device.list');
+        return {
+          data: devices,
+          human: () => table(devices as Row[], ['id', 'name', 'pairedAt', 'lastSeenAt', 'pushEnabled']),
+        };
+      }),
+    );
   device
     .command('pair')
     .description('pair a phone: QR code for the hosted app, then confirm the safety phrase here')
@@ -1076,18 +1266,25 @@ export const buildProgram = (deps: CliDeps): Command => {
         return { data: r, human: () => `pairing ${r.status}` };
       }),
     );
-  device.command('rm <id>').action(
-    act(async (c, id: string) => ({
-      data: await c.call('device.remove', { id }),
-      human: () => `removed device ${id}`,
-    })),
-  );
+  device
+    .command('rm <id>')
+    .description('unpair a device')
+    .action(
+      act(async (c, id: string) => ({
+        data: await c.call('device.remove', { id }),
+        human: () => `removed device ${id}`,
+      })),
+    );
 
   const identity = program.command('identity').description('Nostr identities and NIP-05');
-  identity.command('show').action(act(async (c) => ({ data: await c.call('identity.get') })));
+  identity
+    .command('show')
+    .description('show the owner and agent Nostr identities (JSON)')
+    .action(act(async (c) => ({ data: await c.call('identity.get') })));
   identity
     .command('nip05')
-    .requiredOption('--domain <domain>')
+    .description('print the nostr.json to host for NIP-05 handles on your domain')
+    .requiredOption('--domain <domain>', 'domain you will host /.well-known/nostr.json on')
     .action(
       act(async (c, o: { domain: string }) => {
         const r = await c.call('identity.nip05', { domain: o.domain });
@@ -1106,7 +1303,8 @@ export const buildProgram = (deps: CliDeps): Command => {
   const data = program.command('data').description('export or purge transcripts and audit data');
   data
     .command('export')
-    .option('--agent <name>')
+    .description('export transcripts and audit data to a file')
+    .option('--agent <name>', 'only this agent')
     .action(
       act(async (c, o: { agent?: string }) => {
         const r = await c.call('data.export', { agent: o.agent });
@@ -1115,8 +1313,9 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   data
     .command('purge')
-    .option('--agent <name>')
-    .option('--before <isoDate>')
+    .description('delete transcripts and audit data')
+    .option('--agent <name>', 'only this agent')
+    .option('--before <isoDate>', 'only records older than this date')
     .action(
       act(async (c, o: { agent?: string; before?: string }) => {
         const r = await c.call('data.purge', { agent: o.agent, before: o.before });

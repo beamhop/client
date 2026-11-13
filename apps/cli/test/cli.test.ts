@@ -190,4 +190,41 @@ describe('cli', () => {
     expect(t.calls[0]).toEqual(['system.panic', { reason: 'test' }]);
     expect(t.out.join('')).toContain('panic engaged');
   });
+
+  it('resume is a no-op outside panic', async () => {
+    const t = setup(async (m) => (m === 'system.status' ? { panic: false } : { ok: true }));
+    await t.run('resume');
+    expect(t.calls.map((c) => c[0])).toEqual(['system.status']);
+    expect(t.out.join('')).toContain('nothing to resume');
+  });
+
+  it('join warns when the channel does not exist', async () => {
+    const t = setup(async (m) => (m === 'channel.list' ? { channels: [] } : {}));
+    await t.run('join', 'bot', 'mybot:dm', '--role', 'owner');
+    expect(t.out.join('\n')).toContain('no channel named "mybot"');
+  });
+
+  it('agent add warns about a harness that is not ready and a missing mount', async () => {
+    const t = setup(async (m) =>
+      m === 'harness.list'
+        ? {
+            harnesses: [
+              {
+                id: 'claude',
+                displayName: 'Claude Code',
+                command: 'claude',
+                status: 'needs-login',
+                protocol: 'claude-sdk',
+                message: 'run `claude /login`',
+              },
+            ],
+          }
+        : { config: { name: 'bot', harness: 'claude', sandbox: { profile: 'workspace' } } },
+    );
+    await t.run('agent', 'add', 'bot', '--harness', 'claude', '--mount', '/does/not/exist-beamhop');
+    const out = t.out.join('\n');
+    expect(out).toContain('mount /does/not/exist-beamhop does not exist');
+    expect(out).toContain('Claude Code is not logged in (run `claude /login`)');
+    expect(out).toContain('beamhop session start bot');
+  });
 });

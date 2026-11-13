@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './quiet-warnings.ts';
 import { CommanderError } from 'commander';
 import { connectLocal, resolveLocal } from './connect.ts';
 import { buildProgram, type CliIO } from './program.ts';
@@ -36,6 +37,11 @@ try {
   await program.parseAsync(process.argv);
 } catch (e) {
   if (e instanceof CommanderError) process.exitCode = e.exitCode;
-  else throw e;
+  else {
+    // No stack traces for users; BEAMHOP_DEBUG=1 shows them.
+    if (process.env.BEAMHOP_DEBUG) throw e;
+    process.stderr.write(`error ${e instanceof Error ? e.message : String(e)}\n`);
+    process.exitCode = 1;
+  }
 }
 if (io.exitCode) process.exitCode = io.exitCode;

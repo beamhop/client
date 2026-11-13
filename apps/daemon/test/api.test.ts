@@ -2,9 +2,9 @@ import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClient, httpTransport, type RpcError, wsTransport } from '@beamhop/client';
-import { type Deployer, methods, paths } from '@beamhop/core';
+import { type Deployer, type HarnessView, methods, paths } from '@beamhop/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ALL_METHODS } from '../src/api.ts';
+import { ALL_METHODS, harnessCheck } from '../src/api.ts';
 import { makeEnv, ownerAlice, setupBot, type TestEnv, tmpHome, until } from './helpers.ts';
 
 let env: TestEnv | undefined;
@@ -152,6 +152,37 @@ describe('harnesses, channels, memberships', () => {
     expect(j.config.memberships[0]!.target).toBe('fk:group/1');
     const l = await env.client.call('membership.leave', { agent: 'a', target: 'fk:group/1' });
     expect(l.config.memberships).toHaveLength(0);
+    await expect(env.client.call('membership.leave', { agent: 'a', target: 'fk:group/1' })).rejects.toSatisfy(
+      (e) => code(e) === 'not_found',
+    );
+    await expect(
+      env.client.call('membership.join', {
+        agent: 'a',
+        membership: { target: 'fk:group/1', defaultRole: 'bogus' },
+      }),
+    ).rejects.toSatisfy(
+      (e) => code(e) === 'invalid_input' && /unknown role bogus/.test((e as Error).message),
+    );
+  });
+
+  it('doctor harness line: log in before installing', () => {
+    const h = (id: string, status: HarnessView['status'], message?: string): HarnessView => ({
+      id,
+      displayName: id,
+      command: id,
+      status,
+      protocol: 'acp',
+      ...(message ? { message } : {}),
+    });
+    const login = harnessCheck([
+      h('claude', 'needs-login', 'run `claude /login`'),
+      h('codex', 'not-installed'),
+    ]);
+    expect(login.status).toBe('warn');
+    expect(login.message).toBe('none ready · needs login: claude · 1 not installed');
+    expect(login.fix).toContain('Log in to claude (run `claude /login`)');
+    expect(harnessCheck([h('codex', 'not-installed')]).fix).toContain('Install a harness');
+    expect(harnessCheck([h('pi', 'ready')])).toMatchObject({ status: 'ok', message: 'ready: pi' });
   });
 });
 

@@ -31,7 +31,7 @@ read-only) → **hello** (the agent DMs you over Nostr; reply from your phone to
 
 ```bash
 beamhop status                                   # daemon, agents, approvals at a glance
-beamhop ui                                       # open the local web UI (URL carries your token)
+beamhop ui                                       # print the local web UI URL (it carries your token)
 BEAMHOP_TELEGRAM_TOKEN=... beamhop channel add telegram --name mybot --token-env BEAMHOP_TELEGRAM_TOKEN
 beamhop channel pair mybot                       # send /pair <code> to the bot → you are its owner
 beamhop join myagent mybot:dm --role owner
