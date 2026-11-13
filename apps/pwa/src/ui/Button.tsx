@@ -1,7 +1,7 @@
 /**
  * Buttons (DESIGN §9.1). One primary per view. Allow and Deny differ in shape (fill vs outline), not only hue.
  */
-import { Fragment, forwardRef, type ReactNode, useEffect, useRef } from 'react';
+import { forwardRef, type ReactNode, useEffect, useRef } from 'react';
 import {
   OverlayArrow,
   Button as RACButton,
@@ -62,23 +62,18 @@ export const withSeparators = (children: ReactNode): ReactNode => {
   const parts = children.split(SEP);
   // One inline wrapper: the button's inner span is a flex row, and flex would turn each piece into an
   // item (gap instead of the dot's own spacing, edge spaces trimmed).
-  return (
-    <span>
-      {parts.map((part, i) =>
-        i === 0 ? (
-          part
-        ) : (
-          <Fragment key={i}>
-            {' '}
-            <span data-sep="" className="mx-[0.28em]">
-              {'\u00B7'}
-            </span>{' '}
-            {part}
-          </Fragment>
-        ),
-      )}
-    </span>
-  );
+  const out: ReactNode[] = [parts[0]];
+  for (let n = 1; n < parts.length; n++) {
+    out.push(
+      ' ',
+      <span key={`sep-${n}`} data-sep="" className="mx-[0.28em]">
+        {'\u00B7'}
+      </span>,
+      ' ',
+      parts[n],
+    );
+  }
+  return <span>{out}</span>;
 };
 
 export const buttonClass = (variant: ButtonVariant = 'secondary', size: ButtonSize = 'md', extra?: string) =>

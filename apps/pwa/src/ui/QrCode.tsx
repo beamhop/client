@@ -38,7 +38,10 @@ export const QrCode = ({ value, label, size = 240, className }: QrCodeProps) => 
       height={size}
       viewBox={`0 0 ${n} ${n}`}
       shapeRendering="crispEdges"
-      className={cx('rounded-md bg-surface medium:border medium:border-line hc:border hc:border-line', className)}
+      className={cx(
+        'rounded-md bg-surface medium:border medium:border-line hc:border hc:border-line',
+        className,
+      )}
     >
       <rect width={n} height={n} fill="var(--bh-surface)" />
       <path d={path} className="fill-ink-2 hc:fill-ink" />
