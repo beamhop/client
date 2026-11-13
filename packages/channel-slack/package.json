@@ -1,0 +1,13 @@
+{
+  "name": "@beamhop/channel-slack",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/core": "workspace:*",
+    "@slack/socket-mode": "^2.0.0"
+  }
+}
