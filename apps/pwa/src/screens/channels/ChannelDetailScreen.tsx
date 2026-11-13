@@ -34,7 +34,7 @@ import { useToast } from '../../ui/Toast.tsx';
 import { agentsOn, channelLampWithPanic, channelTitle } from './ChannelsScreen.tsx';
 import { PairPanel } from './PairPanel.tsx';
 import { Facts, IdentityCard, WaitingLine } from './parts.tsx';
-import { channelPairings, providerMeta, transportOf } from './providers.ts';
+import { channelPairings, channelSecretRef, providerMeta, secretKeyOf, transportOf } from './providers.ts';
 
 const Section = ({
   id,
@@ -72,12 +72,13 @@ const ReplaceTokenSheet = ({
   const call = useCall();
   const toast = useToast();
   const refs = c.config.secretRefs;
-  const specs = meta.secrets.filter((s) => refs.some((r) => r.endsWith(`/${s.key}`)));
+  const keyOf = (r: string) => secretKeyOf(c.config.name, r);
+  const specs = meta.secrets.filter((s) => refs.some((r) => keyOf(r) === s.key));
   const fields = specs.length
     ? specs
     : refs.map((r) => ({
-        key: r.split('/').pop() ?? r,
-        label: r.split('/').pop() ?? r,
+        key: keyOf(r),
+        label: keyOf(r),
         format: /.+/,
         formatLabel: '',
         shape: '',
@@ -103,7 +104,7 @@ const ReplaceTokenSheet = ({
       }
       setState({ phase: 'saving' });
       for (const f of fields) {
-        const ref = refs.find((x) => x.endsWith(`/${f.key}`)) ?? `channel/${c.config.name}/${f.key}`;
+        const ref = refs.find((x) => keyOf(x) === f.key) ?? channelSecretRef(c.config.name, f.key);
         await call('secret.set', { name: ref, value: secrets[f.key]! });
       }
       haptic('confirm');

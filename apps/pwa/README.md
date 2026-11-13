@@ -12,6 +12,7 @@ pnpm --filter @beamhop/pwa build        # → apps/pwa/dist (served by beamhopd)
 pnpm --filter @beamhop/pwa typecheck
 pnpm --filter @beamhop/pwa test         # vitest (jsdom)
 pnpm --filter @beamhop/pwa test:e2e     # build first; Playwright: smoke + axe on every route, mobile + desktop
+pnpm --filter @beamhop/pwa test:e2e:real # Playwright against a REAL beamhopd (see below)
 pnpm --filter @beamhop/pwa screenshots  # every route → screenshots/{mobile,desktop}/*.png
 pnpm --filter @beamhop/pwa icons        # regenerate public/icons from scripts/gen-icons.mjs
 ```
@@ -60,6 +61,17 @@ public/boot.js        sets data-theme/contrast/motion before paint (external: da
   `daemon.ts` implements **every** method in `@beamhop/core` `methods` (params validated with the real zod schemas,
   real error codes, 5 s undo window), `sim.ts` streams sessions, adds approvals, expires them, flickers relays.
   Console: `__beamhop.mock.daemon.state`, `__beamhop.runtime.client.call('system.panic')`.
+
+## Real-backend e2e (`e2e-real/`, `pnpm run test:e2e:real`)
+
+The mock is not the contract — the daemon is. `e2e-real/` runs the production build served by a real
+beamhopd (`apps/daemon/test/test-daemon.ts`, started by `global-setup.ts` on ports 4600/4601, never
+reused) with a fake channel plugin (`fake`, token `good…`) and a scripted fake harness (`ASK <cmd>`,
+`STREAM <n>`, `HANG`, else echo). Each test gets a fresh daemon home seeded with channel `fk`, agent
+`bot` and owner `fake:alice`, opens `/<route>#token=<api token>` (real WebSocket transport) and
+drives the fakes through `bh.inject` / `bh.snapshot` / `bh.advance` / `bh.violate` (`fixtures.ts`).
+Verify on the daemon with `bh.rpc(method, params)` or the files in `bh.home`. Journeys that need API
+methods not on the daemon yet are `test.fixme` in `pending-api.spec.ts`.
 
 ## Hosted mode (`src/api/hosted.ts`)
 

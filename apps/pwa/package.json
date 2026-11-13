@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "vite build && playwright test",
+    "test:e2e:real": "vite build && playwright test -c e2e-real/playwright.config.ts",
     "screenshots": "vite build && playwright test e2e/screenshots.spec.ts",
     "icons": "node scripts/gen-icons.mjs"
   },

@@ -242,6 +242,44 @@ export class ChannelManager {
     }
   }
 
+  /**
+   * Record an owner pairing on the channel (`settings.pairings`, non-secret) and push
+   * `channel.updated`, so a PWA waiting on the pairing step sees it live.
+   */
+  recordPairing(channel: string, p: { principal: string; displayName?: string; handle?: string }): void {
+    const cfg = this.d.config.channels.get(channel);
+    if (!cfg) return;
+    const prev = Array.isArray(cfg.settings.pairings)
+      ? (cfg.settings.pairings as { principal?: unknown }[]).filter((x) => x?.principal !== p.principal)
+      : [];
+    const pairing = {
+      principal: p.principal,
+      displayName: p.displayName ?? p.principal,
+      ...(p.handle ? { handle: p.handle } : {}),
+      role: 'owner',
+      pairedAt: new Date(this.d.now()).toISOString(),
+    };
+    const next = this.d.config.channels.save({
+      ...cfg,
+      settings: { ...cfg.settings, pairings: [...prev, pairing].slice(-20) },
+    });
+    const e = this.entries.get(channel);
+    if (e) e.cfg = next;
+    this.d.emit({ type: 'channel.updated', channel: this.view(next) });
+  }
+
+  /** A channel secret (`channel.<name>.<field>`) was replaced: track the ref and reconnect. */
+  async onSecretSet(secretName: string): Promise<void> {
+    const cfg = this.d.config.channels
+      .list()
+      .find((c) => secretName.startsWith(`channel.${c.name}.`) && secretName.length > c.name.length + 9);
+    if (!cfg) return;
+    const next = cfg.secretRefs.includes(secretName)
+      ? cfg
+      : this.d.config.channels.save({ ...cfg, secretRefs: [...cfg.secretRefs, secretName] });
+    if (next.enabled && !this.d.isPanic()) await this.connect(next).catch(() => {});
+  }
+
   async disconnect(name: string): Promise<void> {
     const e = this.entries.get(name);
     if (!e) return;

@@ -39,17 +39,22 @@ interface Waiter {
 }
 
 const ACCESS_DENIED_COOLDOWN_MS = 24 * 3600_000;
+/** Default commit/undo window for approval decisions. */
+export const APPROVAL_UNDO_MS = 5_000;
 
 export class ApprovalManager {
   private readonly waiters = new Map<string, Waiter>();
   private readonly settleTimers = new Map<string, NodeJS.Timeout>();
   private readonly grants = new Map<string, string>();
+  /** Deny reasons given with the decision (passed to the agent when the decision settles). */
+  private readonly reasons = new Map<string, string>();
   private readonly settled = new Set<string>();
 
   constructor(private readonly d: Daemon) {}
 
+  /** The commit window before a decision reaches the agent (JOURNEYS §2.6: 5 s, the PWA's undo toast). */
   get undoMs(): number {
-    return this.d.opts.approvalUndoMs ?? 30_000;
+    return this.d.opts.approvalUndoMs ?? APPROVAL_UNDO_MS;
   }
 
   /** Who may decide approvals for an agent: owners (incl. linked identities), the local owner, and roles with canApprove. */
@@ -259,7 +264,7 @@ export class ApprovalManager {
     id: string,
     by: string,
     allow: boolean,
-    opts: { always?: boolean; grantRole?: string },
+    opts: { always?: boolean; session?: boolean; rule?: string; reason?: string; grantRole?: string },
   ): Promise<ApprovalView> {
     const d = this.d;
     const state = d.store.approvals.get(id);
@@ -294,8 +299,13 @@ export class ApprovalManager {
     }
     d.store.approvals.put(res.state);
     const w = this.waiters.get(id);
-    if (w && opts.always) w.always = true;
+    // `session` (PWA "Allow for this session") and `always` both allow the tool for the rest of
+    // the session; there is no persistent per-command rule in the config yet.
+    if (w && allow && (opts.always || opts.session)) w.always = true;
     if (opts.grantRole) this.grants.set(id, opts.grantRole);
+    const reason = opts.reason?.trim();
+    if (!allow && reason) this.reasons.set(id, reason.slice(0, 500));
+    else this.reasons.delete(id);
     d.emit({ type: 'approval.updated', approval: this.view(res.state) });
     d.audit({
       type: 'approval.vote',
@@ -303,7 +313,16 @@ export class ApprovalManager {
       summary: `${by} ${allow ? 'approved' : 'denied'} ${res.state.tool} for ${state.agent}${res.final ? '' : ' (waiting for quorum)'}`,
       actor: by,
       agent: state.agent,
-      data: { approval: id, allow, final: res.final, status: res.state.status },
+      data: {
+        approval: id,
+        allow,
+        final: res.final,
+        status: res.state.status,
+        ...(opts.always ? { always: true } : {}),
+        ...(opts.session ? { session: true } : {}),
+        ...(opts.rule ? { rule: opts.rule } : {}),
+        ...(!allow && reason ? { reason: reason.slice(0, 500) } : {}),
+      },
     });
     if (res.final) this.scheduleSettle(res.state);
     return this.view(res.state);
@@ -315,11 +334,15 @@ export class ApprovalManager {
    * check: the sender's role for the approval's agent must be allowed the command and have
    * `canApprove`, and the policy must count the sender as an approver.
    */
-  async decideFromChannel(id: string, by: string, allow: boolean): Promise<ApprovalView> {
+  async decideFromChannel(rawId: string, by: string, allow: boolean): Promise<ApprovalView> {
     const d = this.d;
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new BeamhopError('invalid_input', 'invalid approval id');
-    const state = d.store.approvals.get(id);
-    if (!state) throw new BeamhopError('not_found', `approval ${id} not found`);
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(rawId)) throw new BeamhopError('invalid_input', 'invalid approval id');
+    // The PWA shows ids without the `apr_` prefix (`/approve 0mwed…`); accept both spellings.
+    const state =
+      d.store.approvals.get(rawId) ??
+      (rawId.startsWith('apr_') ? undefined : d.store.approvals.get(`apr_${rawId}`));
+    if (!state) throw new BeamhopError('not_found', `approval ${rawId} not found`);
+    const id = state.id;
     const agent = this.agentOf(state.agent);
     const roleName = agent
       ? resolveRole({ principal: by, agent, global: d.authzGlobal() })
@@ -388,6 +411,8 @@ export class ApprovalManager {
       return;
     }
     const w = this.waiters.get(state.id);
+    const reason = this.reasons.get(state.id);
+    this.reasons.delete(state.id);
     if (allow && w?.always) {
       const live = this.d.sessions.live(state.sessionId);
       for (const v of toolNameVariants(state.tool)) live?.alwaysAllow.add(v);
@@ -396,7 +421,10 @@ export class ApprovalManager {
       state,
       allow
         ? { allow: true, ...(w?.always ? { always: true } : {}) }
-        : { allow: false, reason: `denied by ${state.decidedBy ?? 'owner'}` },
+        : {
+            allow: false,
+            reason: `denied by ${state.decidedBy ?? 'owner'}${reason ? `: ${reason}` : ''}`,
+          },
     );
   }
 
@@ -434,6 +462,9 @@ export class ApprovalManager {
     const t = this.settleTimers.get(id);
     if (t) clearTimeout(t);
     this.settleTimers.delete(id);
+    this.reasons.delete(id);
+    const w = this.waiters.get(id);
+    if (w) w.always = false;
     d.store.approvals.put(res.state);
     d.emit({ type: 'approval.updated', approval: this.view(res.state) });
     d.audit({

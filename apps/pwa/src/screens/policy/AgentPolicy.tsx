@@ -393,7 +393,7 @@ const Editor = ({
             policy={draft.policy}
             available={(secrets.data?.secrets ?? [])
               .map((s) => s.name)
-              .filter((n) => !n.startsWith('channel/'))}
+              .filter((n) => !n.startsWith('channel.') && !n.startsWith('channel/'))}
             backend={secrets.data?.backend}
             onChange={(s) => update((p) => ({ ...p, secrets: s }))}
           />

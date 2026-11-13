@@ -682,8 +682,14 @@ export class ApiHandlers {
 
       // ── approvals ──
       'approval.list': async ({ status }) => ({ approvals: d.store.approvals.list({ status }) }),
-      'approval.decide': async ({ id, allow, always, grantRole }, ctx) =>
-        d.approvals.decide(id, this.principal(ctx), allow, { always, ...(grantRole ? { grantRole } : {}) }),
+      'approval.decide': async ({ id, allow, always, session, rule, reason, grantRole }, ctx) =>
+        d.approvals.decide(id, this.principal(ctx), allow, {
+          always,
+          ...(session ? { session } : {}),
+          ...(rule ? { rule } : {}),
+          ...(reason ? { reason } : {}),
+          ...(grantRole ? { grantRole } : {}),
+        }),
       'approval.undo': async ({ id }, ctx) => d.approvals.undo(id, this.principal(ctx)),
 
       // ── roles & owners ──
@@ -855,6 +861,7 @@ export class ApiHandlers {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
         await d.secrets.set(name, value);
         d.invalidateSecretCache();
+        await d.channels.onSecretSet(name);
         d.audit({
           type: 'secret.set',
           severity: 'security',

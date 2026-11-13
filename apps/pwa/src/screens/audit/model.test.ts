@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   actionsFor,
   aggregateUsage,
+  blockedHost,
+  blockedPath,
   buckets,
   categoryOf,
   lastDays,
@@ -80,6 +82,23 @@ describe('security', () => {
     expect(categoryOf(ev({ type: 'mesh.peer_blocked' }))).toBe('peer');
     expect(categoryOf(ev({ type: 'dlp.redacted' }))).toBe('dlp');
     expect(categoryOf(ev({ type: 'approval.decided' }))).toBeUndefined();
+  });
+  // Regression (real daemon): beamhopd's own audit types and data shapes.
+  it('maps beamhopd event types (sandbox.violation, mesh.limit, sender.blocked, pairing.locked)', () => {
+    const net = ev({ type: 'sandbox.violation', agent: 'r', data: { kind: 'net.allow', value: 'pypi.org' } });
+    const fs = ev({ type: 'sandbox.violation', agent: 'r', data: { kind: 'fs.read', value: '~/.ssh/id' } });
+    expect(categoryOf(net)).toBe('host');
+    expect(categoryOf(fs)).toBe('path');
+    expect(blockedHost(net)).toBe('pypi.org');
+    expect(blockedPath(fs)).toBe('~/.ssh/id');
+    expect(blockedHost(fs)).toBeUndefined();
+    expect(actionsFor(net)).toEqual(['allow-host']);
+    expect(actionsFor(fs)).toEqual(['by-design']);
+    expect(categoryOf(ev({ type: 'mesh.limit', data: { reason: 'hop_cap' } }))).toBe('hop');
+    expect(categoryOf(ev({ type: 'mesh.limit', data: { reason: 'turn_cap' } }))).toBe('peer');
+    expect(categoryOf(ev({ type: 'sender.blocked' }))).toBe('sender');
+    expect(categoryOf(ev({ type: 'pairing.locked' }))).toBe('pairing');
+    expect(categoryOf(ev({ type: 'dlp.hit' }))).toBe('dlp');
   });
   it('never offers Allow for always-blocked targets', () => {
     expect(
