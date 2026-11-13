@@ -1,0 +1,328 @@
+{
+  "schema": 1,
+  "revision": "2026.11.13",
+  "harnesses": [
+    {
+      "id": "claude",
+      "displayName": "Claude Code",
+      "homepage": "https://code.claude.com/docs",
+      "protocol": "claude-sdk",
+      "binaries": ["claude"],
+      "install": {
+        "npm": "@anthropic-ai/claude-code",
+        "brew": "claude-code",
+        "winget": "Anthropic.ClaudeCode",
+        "url": "https://code.claude.com/docs/en/setup"
+      },
+      "installDirs": ["~/.claude/local", "~/.local/bin"],
+      "configDirs": ["~/.claude"],
+      "auth": {
+        "env": [
+          "ANTHROPIC_API_KEY",
+          "ANTHROPIC_AUTH_TOKEN",
+          "CLAUDE_CODE_OAUTH_TOKEN",
+          "CLAUDE_CODE_USE_BEDROCK",
+          "CLAUDE_CODE_USE_VERTEX"
+        ],
+        "files": ["~/.claude/.credentials.json"],
+        "keychain": ["darwin"],
+        "login": "claude /login",
+        "note": "On macOS the OAuth login lives in the Keychain and cannot be verified from a file."
+      },
+      "versionRange": ">=2.0.0",
+      "modes": {
+        "sdk": {
+          "npm": "@anthropic-ai/claude-agent-sdk",
+          "note": "Driven in-process with query(); the CLI subprocess is spawned through spawnClaudeCodeProcess."
+        },
+        "headless": {
+          "args": [
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--input-format",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages"
+          ]
+        },
+        "acp": {
+          "command": "claude-agent-acp",
+          "npm": "@agentclientprotocol/claude-agent-acp",
+          "note": "Official ACP adapter (formerly @zed-industries/claude-code-acp)."
+        }
+      },
+      "sources": [
+        "https://code.claude.com/docs/en/headless",
+        "https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk",
+        "https://github.com/agentclientprotocol/claude-agent-acp"
+      ]
+    },
+    {
+      "id": "codex",
+      "displayName": "Codex CLI",
+      "homepage": "https://developers.openai.com/codex/cli",
+      "protocol": "codex-app-server",
+      "binaries": ["codex"],
+      "install": {
+        "npm": "@openai/codex",
+        "brew": "codex",
+        "url": "https://developers.openai.com/codex/cli"
+      },
+      "configDirs": ["~/.codex"],
+      "auth": {
+        "env": ["OPENAI_API_KEY", "CODEX_API_KEY"],
+        "files": ["~/.codex/auth.json"],
+        "login": "codex login"
+      },
+      "versionRange": ">=0.120.0",
+      "modes": {
+        "appServer": {
+          "args": ["app-server"],
+          "note": "JSON-RPC 2.0 over stdio, newline-delimited, without the jsonrpc field. v2 thread/turn API."
+        },
+        "headless": { "args": ["exec", "--json"] },
+        "acp": { "command": "codex-acp", "npm": "@agentclientprotocol/codex-acp" }
+      },
+      "sources": [
+        "https://developers.openai.com/codex/app-server",
+        "https://github.com/openai/codex/tree/main/codex-rs/app-server",
+        "https://github.com/agentclientprotocol/codex-acp"
+      ]
+    },
+    {
+      "id": "copilot",
+      "displayName": "GitHub Copilot CLI",
+      "homepage": "https://github.com/features/copilot/cli",
+      "protocol": "acp",
+      "binaries": ["copilot"],
+      "install": {
+        "npm": "@github/copilot",
+        "brew": "copilot-cli",
+        "winget": "GitHub.Copilot",
+        "url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli"
+      },
+      "configDirs": ["~/.copilot"],
+      "auth": {
+        "env": ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
+        "files": ["~/.copilot/config.json"],
+        "keychain": ["darwin", "linux", "win32"],
+        "login": "copilot login",
+        "note": "OAuth token is kept in the system keychain when available; plaintext ~/.copilot/config.json otherwise."
+      },
+      "versionRange": ">=1.0.0",
+      "modes": {
+        "acp": { "args": ["--acp"], "note": "Public preview; stdio by default, TCP with --port." },
+        "headless": { "args": ["-p"] }
+      },
+      "sources": [
+        "https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server",
+        "https://github.blog/changelog/2026-01-28-acp-support-in-copilot-cli-is-now-in-public-preview/",
+        "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli"
+      ]
+    },
+    {
+      "id": "gemini",
+      "displayName": "Gemini CLI",
+      "homepage": "https://github.com/google-gemini/gemini-cli",
+      "protocol": "acp",
+      "binaries": ["gemini"],
+      "install": { "npm": "@google/gemini-cli", "brew": "gemini-cli" },
+      "configDirs": ["~/.gemini"],
+      "auth": {
+        "env": [
+          "GEMINI_API_KEY",
+          "GOOGLE_API_KEY",
+          "GOOGLE_GENAI_USE_VERTEXAI",
+          "GOOGLE_APPLICATION_CREDENTIALS"
+        ],
+        "files": ["~/.gemini/oauth_creds.json"],
+        "login": "gemini"
+      },
+      "versionRange": ">=0.30.0",
+      "modes": {
+        "acp": { "args": ["--acp"], "note": "Older releases used --experimental-acp." },
+        "headless": { "args": ["-p", "--output-format", "stream-json"] }
+      },
+      "sources": [
+        "https://geminicli.com/docs/cli/acp-mode/",
+        "https://agentclientprotocol.com/overview/agents"
+      ]
+    },
+    {
+      "id": "opencode",
+      "displayName": "OpenCode",
+      "homepage": "https://opencode.ai",
+      "protocol": "acp",
+      "binaries": ["opencode"],
+      "install": { "npm": "opencode-ai", "brew": "sst/tap/opencode", "url": "https://opencode.ai/docs" },
+      "installDirs": ["~/.opencode/bin"],
+      "configDirs": ["$XDG_CONFIG_HOME/opencode", "$XDG_DATA_HOME/opencode"],
+      "auth": {
+        "env": [
+          "OPENROUTER_API_KEY",
+          "ANTHROPIC_API_KEY",
+          "OPENAI_API_KEY",
+          "GEMINI_API_KEY",
+          "GOOGLE_GENERATIVE_AI_API_KEY",
+          "GROQ_API_KEY",
+          "XAI_API_KEY"
+        ],
+        "files": ["$XDG_DATA_HOME/opencode/auth.json"],
+        "login": "opencode auth login"
+      },
+      "versionRange": ">=1.0.0",
+      "modes": {
+        "acp": { "args": ["acp"] },
+        "headless": { "args": ["run", "--format", "json"] }
+      },
+      "sources": [
+        "https://opencode.ai/docs/acp/",
+        "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+      ]
+    },
+    {
+      "id": "pi",
+      "displayName": "pi coding agent",
+      "homepage": "https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent",
+      "protocol": "pi-rpc",
+      "binaries": ["pi"],
+      "install": { "npm": "@mariozechner/pi-coding-agent" },
+      "configDirs": ["~/.pi/agent"],
+      "auth": {
+        "env": [
+          "OPENROUTER_API_KEY",
+          "ANTHROPIC_API_KEY",
+          "OPENAI_API_KEY",
+          "GEMINI_API_KEY",
+          "GROQ_API_KEY",
+          "XAI_API_KEY",
+          "MISTRAL_API_KEY"
+        ],
+        "files": ["~/.pi/agent/auth.json"],
+        "login": "pi (then /login)"
+      },
+      "versionRange": ">=0.60.0",
+      "modes": {
+        "rpc": {
+          "args": ["--mode", "rpc"],
+          "note": "JSONL over stdio; split on LF only. No built-in permission prompts."
+        },
+        "headless": { "args": ["--mode", "json", "-p"] },
+        "acp": { "command": "pi-acp", "npm": "pi-acp" }
+      },
+      "sources": [
+        "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/rpc.md",
+        "https://github.com/svkozak/pi-acp"
+      ]
+    },
+    {
+      "id": "cursor-agent",
+      "displayName": "Cursor CLI",
+      "homepage": "https://cursor.com/cli",
+      "protocol": "acp",
+      "binaries": ["cursor-agent", "agent"],
+      "install": { "url": "https://cursor.com/docs/cli/installation" },
+      "installDirs": ["~/.local/bin"],
+      "configDirs": ["~/.cursor"],
+      "auth": {
+        "env": ["CURSOR_API_KEY"],
+        "files": [],
+        "keychain": ["darwin", "linux", "win32"],
+        "login": "cursor-agent login"
+      },
+      "modes": {
+        "acp": { "args": ["acp"], "note": "Hidden command; auth method cursor_login." },
+        "headless": { "args": ["-p", "--output-format", "stream-json"] }
+      },
+      "sources": ["https://cursor.com/docs/cli/acp", "https://cursor.com/docs/cli/reference/parameters"]
+    },
+    {
+      "id": "goose",
+      "displayName": "goose",
+      "homepage": "https://goose-docs.ai",
+      "protocol": "acp",
+      "binaries": ["goose"],
+      "install": {
+        "brew": "block-goose-cli",
+        "url": "https://goose-docs.ai/docs/getting-started/installation"
+      },
+      "installDirs": ["~/.local/bin"],
+      "configDirs": ["$XDG_CONFIG_HOME/goose", "%APPDATA%/Block/goose/config"],
+      "auth": {
+        "env": ["GOOSE_PROVIDER"],
+        "files": ["$XDG_CONFIG_HOME/goose/config.yaml", "%APPDATA%/Block/goose/config/config.yaml"],
+        "login": "goose configure"
+      },
+      "versionRange": ">=1.8.0",
+      "modes": { "acp": { "args": ["acp"] }, "headless": { "args": ["run", "-t"] } },
+      "sources": [
+        "https://block.github.io/goose/docs/guides/acp-clients",
+        "https://www.mankier.com/1/goose-acp"
+      ]
+    },
+    {
+      "id": "qwen-code",
+      "displayName": "Qwen Code",
+      "homepage": "https://github.com/QwenLM/qwen-code",
+      "protocol": "acp",
+      "binaries": ["qwen"],
+      "install": { "npm": "@qwen-code/qwen-code", "brew": "qwen-code" },
+      "configDirs": ["~/.qwen"],
+      "auth": {
+        "env": ["OPENAI_API_KEY", "DASHSCOPE_API_KEY"],
+        "files": ["~/.qwen/oauth_creds.json"],
+        "login": "qwen"
+      },
+      "modes": { "acp": { "args": ["--acp"] }, "headless": { "args": ["-p"] } },
+      "sources": [
+        "https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed",
+        "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
+      ]
+    },
+    {
+      "id": "auggie",
+      "displayName": "Auggie (Augment Code)",
+      "homepage": "https://docs.augmentcode.com/cli/overview",
+      "protocol": "acp",
+      "binaries": ["auggie"],
+      "install": { "npm": "@augmentcode/auggie" },
+      "configDirs": ["~/.augment"],
+      "auth": {
+        "env": ["AUGMENT_SESSION_AUTH"],
+        "files": ["~/.augment/session.json"],
+        "login": "auggie login"
+      },
+      "versionRange": ">=0.8.0",
+      "modes": { "acp": { "args": ["--acp"], "env": { "AUGMENT_DISABLE_AUTO_UPDATE": "1" } } },
+      "sources": [
+        "https://docs.augmentcode.com/cli/acp",
+        "https://www.augmentcode.com/changelog/auggie-cli-0-8-0-release-notes"
+      ]
+    },
+    {
+      "id": "kimi-code",
+      "displayName": "Kimi Code",
+      "homepage": "https://github.com/MoonshotAI/kimi-cli",
+      "protocol": "acp",
+      "binaries": ["kimi"],
+      "install": { "npm": "@moonshot-ai/kimi-code" },
+      "configDirs": ["~/.kimi"],
+      "auth": { "env": ["KIMI_API_KEY", "MOONSHOT_API_KEY"], "files": [], "login": "kimi login" },
+      "modes": { "acp": { "args": ["acp"] } },
+      "sources": ["https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"]
+    },
+    {
+      "id": "cline",
+      "displayName": "Cline CLI",
+      "homepage": "https://cline.bot",
+      "protocol": "acp",
+      "binaries": ["cline"],
+      "install": { "npm": "cline" },
+      "configDirs": ["~/.cline"],
+      "auth": { "env": [], "files": [], "login": "cline auth" },
+      "modes": { "acp": { "args": ["--acp"] } },
+      "sources": ["https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"]
+    }
+  ]
+}
