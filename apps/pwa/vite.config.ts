@@ -1,13 +1,47 @@
 import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 const shim = fileURLToPath(new URL('./src/shims/node-empty.ts', import.meta.url));
 
+/**
+ * Content-Security-Policy for the built app (review wave C PWA-1). The hosted copy (static hosting,
+ * no response headers) holds the device key in IndexedDB, so it carries its own policy as a meta
+ * tag; the daemon's header policy still applies on top for the local copy. Build only: the dev
+ * server injects inline scripts. `frame-ancestors` cannot be set from a meta tag; static hosts
+ * should send it as a header.
+ */
+export const PWA_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' ws: wss: https:",
+  "font-src 'self' data:",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+
+const cspMeta = (): Plugin => ({
+  name: 'beamhop-csp-meta',
+  apply: 'build',
+  transformIndexHtml: () => [
+    {
+      tag: 'meta',
+      attrs: { 'http-equiv': 'Content-Security-Policy', content: PWA_CSP },
+      injectTo: 'head-prepend',
+    },
+  ],
+});
+
 export default defineConfig({
   plugins: [
+    cspMeta(),
     react(),
     tailwindcss(),
     VitePWA({
