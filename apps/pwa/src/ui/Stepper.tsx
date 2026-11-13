@@ -61,7 +61,7 @@ export const Stepper = ({
         type="button"
         onClick={() => onStepPress(i)}
         aria-label={`Go back to step ${i + 1}: ${steps[i]}`}
-        className="grid size-11 place-items-center rounded-full"
+        className="-m-2.5 grid size-11 place-items-center rounded-full"
       >
         {inner}
       </button>
