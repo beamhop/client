@@ -59,3 +59,54 @@ export const limitsOf = (r: RoleDef): string[] => {
   if (r.budget.dailyTokens) out.push(`${Math.round(r.budget.dailyTokens / 1000)}k tok/day`);
   return out.length ? out : ['no extra limits'];
 };
+
+// ─────────── Editing (role.define / role.delete) ───────────
+
+/** The owner and agent roles are fixed by beamhop; every other role can be edited. */
+export const LOCKED_ROLES: readonly string[] = ['owner', 'agent'];
+export const isLockedRole = (name: string) => LOCKED_ROLES.includes(name);
+
+export const MODE_WORD: Record<RoleDef['permissionMode'], string> = {
+  'read-only': 'Read only',
+  plan: 'Plans, never acts',
+  ask: 'Asks before acting',
+  auto: 'Acts without asking',
+};
+
+const yesNo = (b: boolean) => (b ? 'yes' : 'no');
+const money = (v?: number) => (v === undefined ? 'no limit' : `$${v}/day`);
+const perMin = (v?: number) => (v === undefined ? 'no limit' : `${v} msg/min`);
+
+/**
+ * Plain-language list of what changes between two role definitions, in the order people read the
+ * role table. Empty when nothing changes.
+ */
+export const roleDiff = (before: RoleDef, after: RoleDef): string[] => {
+  const out: string[] = [];
+  const line = (what: string, a: string, b: string) => {
+    if (a !== b) out.push(`${what}: ${a} → ${b}`);
+  };
+  line('Can talk to the agent', yesNo(before.canPrompt), yesNo(after.canPrompt));
+  line('Tool use', MODE_WORD[before.permissionMode], MODE_WORD[after.permissionMode]);
+  line('Sandbox profile', before.sandboxProfile, after.sandboxProfile);
+  line('Can approve other people’s requests', yesNo(before.canApprove), yesNo(after.canApprove));
+  line('Can switch model or harness', yesNo(before.canReconfigure), yesNo(after.canReconfigure));
+  line('Secrets in replies', DLP_WORD[before.dlp], DLP_WORD[after.dlp]);
+  line('Daily spend', money(before.budget.dailyUsd), money(after.budget.dailyUsd));
+  line('Message rate', perMin(before.budget.messagesPerMinute), perMin(after.budget.messagesPerMinute));
+  if (before.description.trim() !== after.description.trim()) out.push('Description changes');
+  return out;
+};
+
+/** The `role.define` payload for a definition: every editable field (the daemon validates). */
+export const definePayload = (r: RoleDef): Record<string, unknown> => ({
+  name: r.name,
+  description: r.description.trim(),
+  canPrompt: r.canPrompt,
+  permissionMode: r.permissionMode,
+  sandboxProfile: r.sandboxProfile,
+  canApprove: r.canApprove,
+  canReconfigure: r.canReconfigure,
+  dlp: r.dlp,
+  budget: r.budget,
+});

@@ -3,32 +3,25 @@
  * pre-prompt, permission only inside the tap, test notification, denied/iOS explanations), which alerts
  * are sent, thresholds, quiet hours and the Nostr DM fallback.
  *
- * TODO(core): alert rules are daemon config without an API yet; they are kept on this device
- * (useLocalPref) and the CLI equivalent is shown.
+ * Which categories reach this device: `device.pushPrefs`. Thresholds, crash alerts, quiet hours and
+ * the Nostr DM fallback are daemon-wide alert rules (`alerts.get` / `alerts.set`, the same rules as
+ * Audit → Alert rules).
  */
+import type { AlertRulesPatch, PushCategory } from '@beamhop/core';
 import { Bell, BellSlash } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { useApi, useCall } from '../../api/index.ts';
+import { useApi, useCall, useMutationApi } from '../../api/index.ts';
+import { enablePush } from '../../api/push.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Switch } from '../../ui/Choice.tsx';
-import { CliStrip } from '../../ui/CliStrip.tsx';
 import { NumberField } from '../../ui/Field.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
+import { useToast } from '../../ui/Toast.tsx';
+import { useAlertRules } from '../audit/alerts.ts';
 import { requestPush, usePushEnv } from '../pair/push.tsx';
 import { useThisDevice } from './DevicesSection.tsx';
-import { Group, useLocalPref } from './kit.tsx';
-
-export const ALERT_DEFAULTS = {
-  approvals: true,
-  budget: true,
-  budgetPct: 80,
-  crash: true,
-  security: true,
-  securityPerHour: 5,
-  quiet: false,
-  dmFallback: true,
-};
+import { Group } from './kit.tsx';
 
 export const NotificationsSection = () => {
   const [env, refresh] = usePushEnv();
@@ -37,17 +30,32 @@ export const NotificationsSection = () => {
   const call = useCall();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
-  const [a, set] = useLocalPref('bh.settings.alerts', ALERT_DEFAULTS);
+  const toast = useToast();
+  const alerts = useAlertRules();
+  const a = alerts.rules;
+  const set = (patch: AlertRulesPatch) =>
+    void alerts.save(patch).catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+  // Categories for THIS device ("browser" is the PWA served by the local daemon). Unset = on.
+  const deviceId = me?.id ?? 'browser';
+  const prefsQ = useApi('device.pushPrefs', { id: deviceId });
+  const prefsM = useMutationApi('device.pushPrefs', { invalidate: ['device.pushPrefs'] });
+  const cat = (c: PushCategory) => prefsQ.data?.prefs[c] ?? true;
+  const setCat = (c: PushCategory, v: boolean) =>
+    prefsM
+      .mutateAsync({ id: deviceId, prefs: { [c]: v } })
+      .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
 
   const on = env.permission === 'granted';
   const turnOn = async () => {
     setBusy(true);
     try {
-      const r = await requestPush();
+      // Subscribe with the daemon's VAPID key (`device.pushKey`) and register it for this device.
+      const r = await enablePush({ call }, deviceId);
+      if (r === 'unsupported') await requestPush();
       refresh();
-      if (r.permission === 'granted' && me)
-        await call('device.pushSubscribe', { id: me.id, subscription: r.subscription });
-      if (r.permission === 'granted') haptic('confirm');
+      if (r === 'subscribed') haptic('confirm');
+    } catch (e) {
+      toast.show({ message: (e as Error).message, tone: 'error' });
     } finally {
       setBusy(false);
     }
@@ -119,80 +127,107 @@ export const NotificationsSection = () => {
         </div>
       </Group>
 
-      <Group title="Send me" id="ntf-rules" note="These apply to every device with notifications on.">
+      <Group title="Send me" id="ntf-rules" note="Which alerts reach this device.">
         <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
           <Switch
-            isSelected={a.approvals}
-            onChange={(v) => set({ approvals: v })}
+            isSelected={cat('approvals')}
+            onChange={(v) => void setCat('approvals', v)}
             description="Always on the lock screen, with Allow / Deny where the platform supports it."
           >
             Approvals waiting
           </Switch>
-          <div className="flex flex-col gap-2 py-1">
-            <Switch
-              isSelected={a.budget}
-              onChange={(v) => set({ budget: v })}
-              description="Once per agent per day."
-            >
-              Budget threshold
-            </Switch>
-            {a.budget && (
-              <NumberField
-                label="Alert at"
-                unit="% of the daily budget"
-                minValue={10}
-                maxValue={100}
-                step={5}
-                value={a.budgetPct}
-                onChange={(v) => Number.isFinite(v) && set({ budgetPct: v })}
-                className="pb-3"
-              />
-            )}
-          </div>
           <Switch
-            isSelected={a.crash}
-            onChange={(v) => set({ crash: v })}
+            isSelected={cat('budget')}
+            onChange={(v) => void setCat('budget', v)}
+            description="Once per agent per day."
+          >
+            Budget threshold
+          </Switch>
+          <Switch
+            isSelected={cat('crash')}
+            onChange={(v) => void setCat('crash', v)}
             description="Exit codes and the last log line."
           >
             Agent stopped unexpectedly
           </Switch>
-          <div className="flex flex-col gap-2 py-1">
-            <Switch
-              isSelected={a.security}
-              onChange={(v) => set({ security: v })}
-              description="Blocked hosts, DLP blocks, unknown senders."
-            >
-              Security spike
-            </Switch>
-            {a.security && (
-              <NumberField
-                label="When more than"
-                unit="events per hour"
-                minValue={1}
-                maxValue={100}
-                value={a.securityPerHour}
-                onChange={(v) => Number.isFinite(v) && set({ securityPerHour: v })}
-                className="pb-3"
-              />
-            )}
+          <Switch
+            isSelected={cat('security')}
+            onChange={(v) => void setCat('security', v)}
+            description="Blocked hosts, DLP blocks, unknown senders."
+          >
+            Security spike
+          </Switch>
+          <Switch
+            isSelected={cat('offline')}
+            onChange={(v) => void setCat('offline', v)}
+            description="A cloud agent stops sending heartbeats."
+          >
+            Cloud agent offline
+          </Switch>
+        </div>
+      </Group>
+
+      <Group
+        title="Alert rules"
+        id="ntf-thresholds"
+        note="Kept by your computer and used for every device and owner."
+      >
+        <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
+          <NumberField
+            label="Budget alert at"
+            unit="% of the daily budget"
+            minValue={1}
+            maxValue={a.budgetAlert}
+            step={5}
+            value={a.budgetWarn}
+            onChange={(v) => Number.isFinite(v) && v !== a.budgetWarn && set({ budgetWarn: Math.round(v) })}
+            className="py-3"
+          />
+          <div className="grid grid-cols-2 gap-3 py-3">
+            <NumberField
+              label="Security spike: more than"
+              unit="events"
+              minValue={1}
+              maxValue={10_000}
+              value={a.spikeEvents}
+              onChange={(v) =>
+                Number.isFinite(v) && v !== a.spikeEvents && set({ spikeEvents: Math.round(v) })
+              }
+            />
+            <NumberField
+              label="Within"
+              unit="min"
+              minValue={1}
+              maxValue={1440}
+              value={a.spikeMinutes}
+              onChange={(v) =>
+                Number.isFinite(v) && v !== a.spikeMinutes && set({ spikeMinutes: Math.round(v) })
+              }
+            />
           </div>
           <Switch
-            isSelected={a.quiet}
-            onChange={(v) => set({ quiet: v })}
-            description="22:00–07:00 local time. Approvals still come through, silently."
+            isSelected={a.crash}
+            onChange={(v) => set({ crash: v })}
+            description="Sent when an agent exits on its own."
+          >
+            Crash alerts
+          </Switch>
+          <Switch
+            isSelected={a.quietHours}
+            onChange={(v) => set({ quietHours: v })}
+            description={`${a.quietStart}–${a.quietEnd} on your computer's clock. Security alerts still come through.`}
           >
             Quiet hours
           </Switch>
           <Switch
-            isSelected={a.dmFallback}
-            onChange={(v) => set({ dmFallback: v })}
-            description="When push isn't available, the daemon DMs your owner npub over Nostr."
+            isSelected={a.nostrDm}
+            onChange={(v) => set({ nostrDm: v })}
+            description="The daemon also DMs owners over Nostr, so alerts arrive even where push isn't available."
           >
             Nostr DM fallback
           </Switch>
         </div>
       </Group>
-      <CliStrip command={`beamhop config set alerts.budgetPct ${a.budgetPct}`} />
     </div>
   );
 };

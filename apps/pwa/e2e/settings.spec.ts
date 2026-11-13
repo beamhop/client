@@ -12,6 +12,49 @@ test('section list carries live status', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Approval quorum' })).toBeVisible();
 });
 
+test('owners: you from whoami, quorum and linked identities come from the daemon', async ({ page }) => {
+  await open(page, '/settings/owners');
+  await expectAccessible(page);
+  await expect(
+    page
+      .getByRole('heading', { name: 'You' })
+      .or(page.getByText('You', { exact: true }))
+      .first(),
+  ).toBeVisible();
+  // Quorum: N of the approver pool (owners + roles that can approve).
+  const quorum = page.getByRole('radiogroup', { name: 'Approvals needed' });
+  await quorum.getByRole('radio', { name: /^2 of / }).click({ force: true });
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText(/Quorum · 2 of \d/),
+  ).toBeVisible();
+  await expect(quorum.getByRole('radio', { name: /^2 of / })).toBeChecked();
+  // Linked identities: link, then unlink.
+  await page.getByRole('textbox', { name: 'Person' }).fill('bob');
+  await page.getByRole('textbox', { name: 'Account' }).fill('telegram:4242');
+  await page.getByRole('button', { name: 'Link' }).click();
+  await expect(page.getByText('telegram:4242').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Actions for telegram:4242' }).click();
+  await page.getByRole('menuitem', { name: 'Unlink from bob' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Unlinked · telegram:4242'),
+  ).toBeVisible();
+});
+
+test('updates and notification rules are daemon settings', async ({ page }) => {
+  await open(page, '/settings/updates');
+  const cat = page.getByRole('switch', { name: 'Update the catalog automatically' });
+  await expect(cat).toBeChecked();
+  await page.getByText('Update the catalog automatically', { exact: true }).click();
+  await expect(cat).not.toBeChecked();
+  await open(page, '/settings/notifications');
+  const quiet = page.getByRole('switch', { name: /Quiet hours/ });
+  await expect(quiet).not.toBeChecked();
+  await page.getByText('Quiet hours', { exact: true }).click();
+  await expect(quiet).toBeChecked();
+  await expect(page.getByText(/22:00–07:00 on your computer's clock/)).toBeVisible();
+  await expect(page.getByText(/browser only|this device only|Saved on this device/i)).toHaveCount(0);
+});
+
 test('pair a device: QR, phone answers, compare words here, confirm', async ({ page }) => {
   await open(page, '/settings/devices');
   await page.getByRole('button', { name: 'Pair a device' }).first().click();

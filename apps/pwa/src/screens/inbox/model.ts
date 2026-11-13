@@ -3,7 +3,7 @@
  * quorum state, policy-rule previews, filters, spoken labels). No React here — unit-tested in
  * model.test.ts.
  */
-import type { ApprovalView, PolicySuggestion } from '@beamhop/core';
+import type { ApprovalView, PolicySuggestion, WhoamiView } from '@beamhop/core';
 import { approvalTarget, RISK_LABEL } from '../../api/derive.ts';
 
 export type ApprovalInput = {
@@ -74,6 +74,19 @@ export const swipeMode = (g: SlipGroup): 'commit' | 'intent' => {
 };
 
 // ─────────── N-of-M ───────────
+/**
+ * The names "you" go by on this daemon (`system.whoami`): principal, display name and linked person.
+ * Votes and `decidedBy` carry the approver's display name or principal, so matching any of them works.
+ */
+export const meNames = (w?: WhoamiView): ReadonlySet<string> =>
+  new Set([w?.principal, w?.displayName, w?.person].filter((x): x is string => !!x));
+
+export const isMe = (me: ReadonlySet<string>, by?: string): boolean => !!by && me.has(by);
+
+/** "you" for your own decisions, else who decided (or `fallback` when the daemon didn't say). */
+export const whoDecided = (me: ReadonlySet<string>, by: string | undefined, fallback: string): string =>
+  isMe(me, by) ? 'you' : (by ?? fallback);
+
 export interface QuorumState {
   needed: number;
   yes: number;
@@ -83,16 +96,19 @@ export interface QuorumState {
   remaining: number;
 }
 
-export const quorumOf = (a: ApprovalView, mine: ReadonlySet<string>, me = 'you'): QuorumState | null => {
+/** Quorum progress from the server's `quorum` / `votes`; `me` comes from `meNames(whoami)`. */
+export const quorumOf = (a: ApprovalView, me: ReadonlySet<string>, you = 'you'): QuorumState | null => {
   if (!a.quorum || a.quorum.needed <= 1) return null;
   const yesVotes = (a.votes ?? []).filter((v) => v.allow);
-  const youVoted = mine.has(a.id) && a.status === 'pending' && yesVotes.length > 0;
-  const named = yesVotes.map((v) => ({ name: v.by, done: true }));
+  const youVoted = yesVotes.some((v) => isMe(me, v.by));
+  const named = yesVotes.map((v) =>
+    isMe(me, v.by) ? { name: you, done: true, you: true } : { name: v.by, done: true },
+  );
   const empties = Math.max(0, a.quorum.needed - named.length);
   const seats = [
     ...named,
     ...Array.from({ length: empties }, (_, i) => ({
-      name: i === 0 && !youVoted ? me : 'another owner',
+      name: i === 0 && !youVoted ? you : 'another owner',
       done: false,
       you: i === 0 && !youVoted,
     })),
@@ -107,8 +123,8 @@ export const quorumOf = (a: ApprovalView, mine: ReadonlySet<string>, me = 'you')
 };
 
 /** After you approved, an N-of-M slip moves to "Waiting on others". */
-export const waitingOnOthers = (a: ApprovalView, mine: ReadonlySet<string>): boolean =>
-  a.status === 'pending' && !!quorumOf(a, mine)?.youVoted;
+export const waitingOnOthers = (a: ApprovalView, me: ReadonlySet<string>): boolean =>
+  a.status === 'pending' && !!quorumOf(a, me)?.youVoted;
 
 // ─────────── Policy rule preview (scope sheet "Always allow") ───────────
 /** `registry.npmjs.org` → `*.npmjs.org`; two-label hosts have no wider scope. */
@@ -124,6 +140,13 @@ const dirOf = (path: string): string => {
 };
 
 const commandPrefix = (cmd: string): string => cmd.trim().split(/\s+/).slice(0, 2).join(' ');
+/** The daemon refuses prefix rules for interpreters / shell metacharacters (they run anything). */
+const INTERPRETER =
+  /^(.*\/)?(sh|bash|zsh|fish|dash|env|sudo|doas|su|xargs|eval|exec|python3?|node|perl|ruby|deno|bun)$/;
+const prefixable = (cmd: string): boolean =>
+  !/[;&|`$<>\n\r\\]/.test(cmd) && !INTERPRETER.test(cmd.trim().split(/\s+/)[0] ?? '');
+/** Path rules must be absolute or under ~ (the daemon reads anything else as a host name). */
+const absolute = (p: string): boolean => p.startsWith('~/') || p.startsWith('/');
 
 export interface RuleChoice {
   id: 'exact' | 'wide';
@@ -136,7 +159,7 @@ export const ruleChoices = (a: ApprovalView): RuleChoice[] => {
   const i = inputOf(a);
   switch (reachOf(a)) {
     case 'network': {
-      const host = i.host ?? (i.url ? new URL(i.url).host : approvalTarget(a));
+      const host = i.host ?? (i.url ? new URL(i.url).hostname : approvalTarget(a));
       const wide = wildcardFor(host);
       return [
         { id: 'exact', label: host, value: host },
@@ -149,7 +172,9 @@ export const ruleChoices = (a: ApprovalView): RuleChoice[] => {
       const d = dirOf(p);
       return [
         { id: 'exact', label: 'this file', value: p },
-        ...(d !== p ? [{ id: 'wide' as const, label: `${d}/`, value: `${d}/` }] : []),
+        ...(d !== p && absolute(p) && d !== '~'
+          ? [{ id: 'wide' as const, label: `${d}/`, value: `${d}/` }]
+          : []),
       ];
     }
     case 'command': {
@@ -157,7 +182,9 @@ export const ruleChoices = (a: ApprovalView): RuleChoice[] => {
       const pre = commandPrefix(cmd);
       return [
         { id: 'exact', label: 'this command', value: `bash:${cmd}` },
-        ...(pre !== cmd ? [{ id: 'wide' as const, label: `${pre} …`, value: `bash:${pre}` }] : []),
+        ...(pre !== cmd.trim() && prefixable(cmd)
+          ? [{ id: 'wide' as const, label: `${pre} …`, value: `bash:${pre}` }]
+          : []),
       ];
     }
     default:

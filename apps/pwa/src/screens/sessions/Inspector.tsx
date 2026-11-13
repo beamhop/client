@@ -7,10 +7,10 @@ import type { AgentView, ApprovalView, HarnessView, SessionView } from '@beamhop
 import { Eye, GitBranch, GitMerge, GitPullRequest, PencilSimple } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { approvalTarget, harnessSlug, useMutationApi } from '../../api/index.ts';
+import { approvalTarget, harnessSlug, useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { clock, tokens, usd, when } from '../../lib/format.ts';
-import { Button } from '../../ui/Button.tsx';
+import { Button, TextLink } from '../../ui/Button.tsx';
 import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
 import { DiffView, parseDiff } from '../../ui/CodeBlock.tsx';
 import { Select, TextField } from '../../ui/index.ts';
@@ -21,34 +21,58 @@ import { useToast } from '../../ui/Toast.tsx';
 
 // ─────────── Worktree actions (merge / open PR) ───────────
 
+type PushApproval = Pick<ApprovalView, 'id' | 'status' | 'input' | 'decidedBy'>;
+const compareUrlOf = (a?: PushApproval) => {
+  const u = (a?.input as { compareUrl?: unknown } | undefined)?.compareUrl;
+  return typeof u === 'string' && /^https:\/\//.test(u) ? u : undefined;
+};
+
 /**
- * beamhop has no merge/PR RPC yet, so both actions are sent to the agent as a steering message (the agent
- * does the git work inside its sandbox, and `git push` still goes through approval). The CLI strip shows
- * the exact git commands for doing it by hand.
+ * `session.merge` merges the worktree branch on the daemon (owner only, session not running).
+ * `session.openPr` asks for an approval to push the branch; the push runs once it is allowed and the
+ * compare URL opens the pull request. The latest push approval of this session is read back from
+ * `approval.list` so every copy of these actions (end card, inspector, diff sheet) agrees.
  */
 export const useWorktreeActions = (session: SessionView) => {
-  const send = useMutationApi('session.send');
+  const merge = useMutationApi('session.merge');
+  const openPr = useMutationApi('session.openPr');
   const toast = useToast();
-  const branch = session.worktree?.branch ?? '';
-  const [kind, setKind] = useState<'pr' | 'merge' | null>(null);
-  const run = (k: 'pr' | 'merge') => {
-    setKind(k);
-    return send
-      .mutateAsync({
-        id: session.id,
-        text: k === 'pr' ? t('session.wt.prMessage', { branch }) : t('session.wt.mergeMessage', { branch }),
-      })
-      .then(() =>
-        toast.show({
-          message:
-            k === 'pr'
-              ? t('session.wt.prSent', { agent: session.agent })
-              : t('session.wt.mergeSent', { agent: session.agent }),
-        }),
-      )
-      .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+  const all = useApi('approval.list', { status: 'all' });
+  const [merged, setMerged] = useState<{ base: string; commit: string } | null>(null);
+  const [opened, setOpened] = useState<{ compareUrl?: string; approval: PushApproval } | null>(null);
+  const fromServer = (all.data?.approvals ?? [])
+    .filter((a) => a.sessionId === session.id && a.tool === 'git.push')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const push = fromServer ?? opened?.approval;
+  const run = (k: 'pr' | 'merge') =>
+    k === 'pr'
+      ? openPr
+          .mutateAsync({ id: session.id, remote: 'origin' })
+          .then((r) => {
+            setOpened({ ...(r.compareUrl ? { compareUrl: r.compareUrl } : {}), approval: r.approval });
+            toast.show({ message: t('session.wt.prPending', { branch: r.branch }) });
+          })
+          .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }))
+      : merge
+          .mutateAsync({ id: session.id })
+          .then((r) => {
+            setMerged({ base: r.base, commit: r.commit });
+            toast.show({
+              message: t('session.wt.merged', {
+                branch: r.branch,
+                base: r.base,
+                commit: r.commit.slice(0, 7),
+              }),
+            });
+          })
+          .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+  return {
+    run,
+    pending: openPr.isPending ? ('pr' as const) : merge.isPending ? ('merge' as const) : null,
+    merged,
+    push,
+    compareUrl: compareUrlOf(push) ?? opened?.compareUrl,
   };
-  return { run, pending: send.isPending ? kind : null };
 };
 
 export const WorktreeActions = ({
@@ -60,10 +84,12 @@ export const WorktreeActions = ({
   compact?: boolean;
   disabled?: boolean;
 }) => {
-  const { run, pending } = useWorktreeActions(session);
+  const { run, pending, merged, push, compareUrl } = useWorktreeActions(session);
   const [confirm, setConfirm] = useState(false);
   if (!session.worktree) return null;
   const wt = session.worktree;
+  const waiting = push?.status === 'pending';
+  const pushed = push?.status === 'approved';
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
@@ -72,7 +98,7 @@ export const WorktreeActions = ({
           size={compact ? 'sm' : 'md'}
           icon={<GitPullRequest size={18} aria-hidden="true" />}
           isPending={pending === 'pr'}
-          isDisabled={disabled}
+          isDisabled={disabled || waiting}
           onPress={() => void run('pr')}
         >
           {t('session.wt.openPr')}
@@ -88,6 +114,36 @@ export const WorktreeActions = ({
           {t('session.wt.merge')}
         </Button>
       </div>
+      {(waiting || pushed || push?.status === 'denied' || push?.status === 'expired') && (
+        <p className="type-body-sm text-ink-2" role="status">
+          {waiting ? (
+            <>
+              {t('session.wt.pushWaiting', { branch: wt.branch })}{' '}
+              <TextLink href={`/inbox/${push.id}`}>{t('session.wt.pushReview')}</TextLink>
+            </>
+          ) : pushed ? (
+            <>
+              {t('session.wt.pushed', { branch: wt.branch })}{' '}
+              {compareUrl && (
+                <TextLink href={compareUrl} external>
+                  {t('session.wt.compare')}
+                </TextLink>
+              )}
+            </>
+          ) : (
+            t(push.status === 'denied' ? 'session.wt.push.denied' : 'session.wt.push.expired')
+          )}
+        </p>
+      )}
+      {merged && (
+        <p className="type-body-sm text-ink-2" role="status">
+          {t('session.wt.merged', {
+            branch: wt.branch,
+            base: merged.base,
+            commit: merged.commit.slice(0, 7),
+          })}
+        </p>
+      )}
       <CliStrip
         command={`git -C ${wt.path} push -u origin ${wt.branch}\ngh pr create --head ${wt.branch} --fill`}
       />
@@ -102,7 +158,7 @@ export const WorktreeActions = ({
           void run('merge');
         }}
       >
-        {t('session.wt.mergeBody', { agent: session.agent, branch: wt.branch })}
+        {t('session.wt.mergeBody', { branch: wt.branch })}
       </ConfirmDialog>
     </div>
   );

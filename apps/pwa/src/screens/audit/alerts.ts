@@ -1,69 +1,25 @@
 /**
- * Alert rules (JOURNEYS §6 Alerts). The contract has no alerts RPC yet, so rules are kept on this device
- * (and drive the in-app thresholds: budget meter warnings, security spike marks). The CLI strip in the
- * sheet shows the daemon-side equivalent.
+ * Alert rules (JOURNEYS §6 Alerts): daemon config read with `alerts.get` and merged with `alerts.set`.
+ * They drive the daemon's alerts and the in-app thresholds (budget meter warnings, security spike
+ * marks). Until the first read lands the defaults are shown.
  */
-import { useCallback, useSyncExternalStore } from 'react';
+import { type AlertRules, type AlertRulesPatch, DEFAULT_ALERT_RULES } from '@beamhop/core';
+import { useApi, useMutationApi } from '../../api/index.ts';
 
-export interface AlertRules {
-  budgetWarn: number;
-  budgetAlert: number;
-  spikeEvents: number;
-  spikeMinutes: number;
-  heartbeatMinutes: number;
-  crash: boolean;
-  push: boolean;
-  nostrDm: boolean;
-  quietHours: boolean;
-}
+export type { AlertRules };
+export const DEFAULT_RULES: AlertRules = DEFAULT_ALERT_RULES;
 
-export const DEFAULT_RULES: AlertRules = {
-  budgetWarn: 80,
-  budgetAlert: 100,
-  spikeEvents: 10,
-  spikeMinutes: 10,
-  heartbeatMinutes: 3,
-  crash: true,
-  push: true,
-  nostrDm: false,
-  quietHours: false,
-};
-
-const KEY = 'bh.alerts';
-const listeners = new Set<() => void>();
-let cache: AlertRules | undefined;
-
-const read = (): AlertRules => {
-  if (cache) return cache;
-  try {
-    const raw = localStorage.getItem(KEY);
-    cache = raw ? { ...DEFAULT_RULES, ...(JSON.parse(raw) as Partial<AlertRules>) } : DEFAULT_RULES;
-  } catch {
-    cache = DEFAULT_RULES;
-  }
-  return cache;
-};
-
-export const saveRules = (r: AlertRules) => {
-  cache = r;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(r));
-  } catch {
-    /* storage blocked: keep in memory */
-  }
-  for (const l of listeners) l();
-};
-
-export const useAlertRules = (): [AlertRules, (r: AlertRules) => void] => {
-  const rules = useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    read,
-    () => DEFAULT_RULES,
-  );
-  return [rules, useCallback(saveRules, [])];
+export const useAlertRules = () => {
+  const q = useApi('alerts.get');
+  const set = useMutationApi('alerts.set');
+  return {
+    rules: q.data ?? DEFAULT_RULES,
+    loaded: !!q.data,
+    error: q.error,
+    /** Merge a patch on the daemon; resolves with the effective rules. */
+    save: (patch: AlertRulesPatch) => set.mutateAsync(patch),
+    saving: set.isPending,
+  };
 };
 
 export const rulesCli = (r: AlertRules) =>

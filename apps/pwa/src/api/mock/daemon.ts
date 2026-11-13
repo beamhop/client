@@ -360,6 +360,7 @@ export class MockDaemon {
 
   /** deploy.plan/apply: mount sync choices must name the agent's own mounts, once each. */
   private checkDeployMounts(agent: string, mounts?: { path: string }[]) {
+    if (!mounts?.length) return; // a new cloud agent has no mounts yet
     const known = new Set(this.agent(agent).config.mounts.map((m) => m.path));
     const seen = new Set<string>();
     for (const m of mounts ?? []) {

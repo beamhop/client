@@ -2,7 +2,8 @@
  * New cloud agent / Move to cloud — SCREENS §8, JOURNEYS §7.
  * Steps: 01 Agent (move an existing local agent, or a new one) · 02 Provider (5 rows: VPS/PaaS
  * trade-off, sandbox note, inline API token → keychain) · 03 Size & region (monthly cost right-aligned)
- * · 04 Plan (terraform-style + ~ → - diff with words, warnings needing an explicit "I understand",
+ * · 04 Files & login (per-mount sync: git clone / rsync / Mutagen / leave here; harness auth: API key
+ * brokered from this computer or a subscription login on the server) · 05 Plan (terraform-style + ~ → - diff with words, warnings needing an explicit "I understand",
  * estimated cost) → `Deploy · $4.90/mo` → deployment detail (apply timeline; leaving is safe).
  * Desktop: left steps form (640) + sticky live Plan preview with the cost readout.
  * Deep link: `/deploy/new?agent=reviewer` (Agent detail → Move to cloud) starts in move mode.
@@ -11,7 +12,16 @@
  * Fly per-second billing and storage while stopped
  * (https://www.costbench.com/software/developer-tools/flyio/hidden-costs/).
  */
-import { ArrowLeft, ArrowRight, CloudArrowUp, LockSimple, Warning } from '@phosphor-icons/react';
+import type { Mount } from '@beamhop/core';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CloudArrowUp,
+  FolderSimple,
+  GitBranch,
+  LockSimple,
+  Warning,
+} from '@phosphor-icons/react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
@@ -20,18 +30,22 @@ import { haptic } from '../../lib/haptics.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { Screen } from '../../shell/Screen.tsx';
 import { Button, TextLink } from '../../ui/Button.tsx';
-import { Checkbox, Radio, RadioGroup } from '../../ui/Choice.tsx';
+import { Checkbox, Radio, RadioGroup, Select } from '../../ui/Choice.tsx';
 import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
 import { SecretField, TextField } from '../../ui/Field.tsx';
 import { Badge, Eyebrow, LetterTile, Readout } from '../../ui/Meta.tsx';
+import { useIsGitRepo } from '../../ui/PathPicker.tsx';
 import { ErrorState, Skeleton } from '../../ui/States.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { AGENT_NAME_RE, PROVIDER_INFO, providerTokenSecret, usd } from './model.ts';
 import { PlanDiff, TickRuler } from './PlanDiff.tsx';
 
-const STEPS = ['Agent', 'Provider', 'Size', 'Plan'];
+const STEPS = ['Agent', 'Provider', 'Size', 'Files', 'Plan'];
+const PLAN = STEPS.length - 1;
 type Mode = 'move' | 'new';
+type Sync = 'git-clone' | 'rsync' | 'mutagen' | 'skip';
+type HarnessAuth = 'api-key' | 'subscription';
 
 interface Draft {
   mode: Mode;
@@ -39,7 +53,30 @@ interface Draft {
   provider: string;
   size?: string;
   region?: string;
+  /** Per-mount sync choice (move mode); unset mounts use the default for their kind. */
+  sync: Record<string, Sync>;
+  harnessAuth: HarnessAuth;
 }
+
+/** `deploy.plan` / `deploy.apply` params for a draft (mount choices only when moving an agent). */
+const specOf = (d: Draft, mounts: Mount[]) => ({
+  agent: d.agent,
+  provider: d.provider,
+  size: d.size,
+  region: d.region,
+  mode: d.mode,
+  harnessAuth: d.harnessAuth,
+  ...(d.mode === 'move' && mounts.length
+    ? { mounts: mounts.map((m) => ({ path: m.path, sync: d.sync[m.path] ?? ('rsync' as Sync) })) }
+    : {}),
+});
+
+const useAgentMounts = (d: Draft): Mount[] => {
+  const agents = useApi('agent.list');
+  return d.mode === 'move'
+    ? (agents.data?.agents.find((a) => a.config.name === d.agent)?.config.mounts ?? [])
+    : [];
+};
 
 // ─────────── 01 Agent ───────────
 const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) => {
@@ -278,13 +315,118 @@ const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =>
   );
 };
 
-// ─────────── 04 Plan ───────────
-const usePlan = (d: Draft, enabled: boolean) =>
-  useApi(
-    'deploy.plan',
-    { agent: d.agent, provider: d.provider, size: d.size, region: d.region, mode: d.mode },
-    { enabled: enabled && !!d.agent && !!d.provider, staleTime: 10_000 },
+// ─────────── 04 Files & login ───────────
+const SYNC_LABEL: Record<Sync, { label: string; description: string }> = {
+  'git-clone': { label: 'Clone from git', description: 'The server clones the repository from its remote.' },
+  rsync: {
+    label: 'Copy once',
+    description: 'Copied over at deploy time (rsync). Later edits stay where they are.',
+  },
+  mutagen: {
+    label: 'Keep in sync',
+    description: 'Two-way sync with this computer (Mutagen) while both are online.',
+  },
+  skip: { label: 'Leave it here', description: 'Not copied. The cloud agent works without this folder.' },
+};
+
+const MountChoice = ({
+  m,
+  value,
+  onChange,
+}: {
+  m: Mount;
+  value: Sync | undefined;
+  onChange: (s: Sync) => void;
+}) => {
+  const git = useIsGitRepo(m.path);
+  // Default: clone git repos, copy everything else (set once the git check lands).
+  useEffect(() => {
+    if (value === undefined && git !== undefined) onChange(git ? 'git-clone' : 'rsync');
+  }, [git, value, onChange]);
+  const choices: Sync[] = git ? ['git-clone', 'rsync', 'mutagen', 'skip'] : ['rsync', 'mutagen', 'skip'];
+  return (
+    <li className="flex flex-col gap-2 px-4 py-3">
+      <span className="flex items-center gap-2">
+        {git ? (
+          <GitBranch size={18} aria-label="git repository" className="shrink-0 text-ink-2" />
+        ) : (
+          <FolderSimple size={18} aria-hidden="true" className="shrink-0 text-ink-2" />
+        )}
+        <span className="min-w-0 flex-1 truncate font-mono text-[14px] text-ink">{m.path}</span>
+        <Badge>{m.mode === 'rw' ? 'read-write' : 'read-only'}</Badge>
+      </span>
+      <Select
+        label={`How ${m.path} gets to the server`}
+        hideLabel
+        options={choices.map((c) => ({ id: c, ...SYNC_LABEL[c] }))}
+        selectedKey={value ?? null}
+        onSelectionChange={(k) => onChange(String(k) as Sync)}
+      />
+    </li>
   );
+};
+
+const FilesStep = ({
+  d,
+  set,
+  setSync,
+}: {
+  d: Draft;
+  set: (p: Partial<Draft>) => void;
+  setSync: (path: string, s: Sync) => void;
+}) => {
+  const mounts = useAgentMounts(d);
+  const agents = useApi('agent.list');
+  const harness = agents.data?.agents.find((a) => a.config.name === d.agent)?.config.harness;
+  return (
+    <div className="flex flex-col gap-6">
+      {d.mode === 'move' && (
+        <section aria-labelledby="dep-files" className="flex flex-col gap-2">
+          <Eyebrow id="dep-files" level={3}>
+            Folders · {mounts.length}
+          </Eyebrow>
+          {mounts.length === 0 ? (
+            <p className="type-body-sm text-ink-2">{d.agent} has no mounted folders. Nothing to copy.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
+              {mounts.map((m) => (
+                <MountChoice key={m.path} m={m} value={d.sync[m.path]} onChange={(s) => setSync(m.path, s)} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      <RadioGroup
+        label={`How ${harness ?? 'the harness'} logs in on the server`}
+        variant="cards"
+        value={d.harnessAuth}
+        onChange={(v) => set({ harnessAuth: v as HarnessAuth })}
+      >
+        <Radio
+          value="api-key"
+          description="The key stays in this computer's keychain; the server asks for each request through the broker."
+        >
+          API key from this computer
+        </Radio>
+        <Radio
+          value="subscription"
+          description="You sign in to your plan on the server once, after it's up. Nothing leaves this computer."
+        >
+          Subscription login on the server
+        </Radio>
+      </RadioGroup>
+    </div>
+  );
+};
+
+// ─────────── 05 Plan ───────────
+const usePlan = (d: Draft, enabled: boolean) => {
+  const mounts = useAgentMounts(d);
+  return useApi('deploy.plan', specOf(d, mounts), {
+    enabled: enabled && !!d.agent && !!d.provider,
+    staleTime: 10_000,
+  });
+};
 
 const cliFor = (d: Draft) =>
   `beamhop deploy plan ${d.agent || '<agent>'} --provider ${d.provider || '<provider>'}${d.size ? ` --size ${d.size}` : ''}${d.region ? ` --region ${d.region}` : ''}${d.mode === 'new' ? ' --new' : ''} --json`;
@@ -366,11 +508,18 @@ export const NewDeployScreen = () => {
     mode: search.mode === 'new' ? 'new' : 'move',
     agent: search.agent ?? '',
     provider: '',
+    sync: {},
+    harnessAuth: 'api-key',
   });
   const set = useMemo(() => (p: Partial<Draft>) => setD((x) => ({ ...x, ...p })), []);
+  const setSync = useMemo(
+    () => (path: string, s: Sync) => setD((x) => ({ ...x, sync: { ...x.sync, [path]: s } })),
+    [],
+  );
   const agents = useApi('agent.list');
   const providers = useApi('deploy.providers');
-  const plan = usePlan(d, step === 3);
+  const plan = usePlan(d, step === PLAN);
+  const mounts = useAgentMounts(d);
   const apply = useMutationApi('deploy.apply', { invalidate: ['deploy.list', 'agent.list'] });
 
   // Default the agent once agents load (move mode).
@@ -387,6 +536,7 @@ export const NewDeployScreen = () => {
     d.mode === 'move' ? !!d.agent : AGENT_NAME_RE.test(d.agent) && !taken,
     !!prov && prov.configured,
     !!d.size && !!d.region,
+    mounts.every((m) => !!d.sync[m.path]),
     !!plan.data && (plan.data.warnings.length === 0 || ack),
   ][step];
   const sizeCost = useApi(
@@ -398,7 +548,7 @@ export const NewDeployScreen = () => {
 
   const deploy = async () => {
     try {
-      const dep = await apply.mutateAsync({ ...d });
+      const dep = await apply.mutateAsync(specOf(d, mounts));
       haptic('confirm');
       toast.show({
         message: `Deploying · ${d.agent} to ${prov?.displayName ?? d.provider}`,
@@ -417,6 +567,7 @@ export const NewDeployScreen = () => {
     <AgentStep key="a" d={d} set={set} />,
     <ProviderStep key="p" d={d} set={set} />,
     <SizeStep key="s" d={d} set={set} />,
+    <FilesStep key="f" d={d} set={set} setSync={setSync} />,
     <div key="plan" className="flex flex-col gap-4">
       <p className="type-body-sm text-ink-2">
         Nothing is created until you press Deploy. Tap a row for its details.
@@ -441,7 +592,7 @@ export const NewDeployScreen = () => {
         </Button>
       )}
       <span className="flex-1" />
-      {step < 3 ? (
+      {step < PLAN ? (
         <Button
           variant="primary"
           isDisabled={!canNext}
@@ -482,12 +633,20 @@ export const NewDeployScreen = () => {
         <div className="flex min-w-0 flex-col gap-6">
           <Stepper steps={STEPS} current={step} onStepPress={(i) => setStep(i)} showLabels={expanded} />
           <h2 className="type-title-2 text-ink">
-            {['Which agent?', 'Where should it run?', 'How big, and where?', 'Review the plan'][step]}
+            {
+              [
+                'Which agent?',
+                'Where should it run?',
+                'How big, and where?',
+                'Files and harness login',
+                'Review the plan',
+              ][step]
+            }
           </h2>
           {body}
           <CliStrip command={cliFor(d)} />
         </div>
-        {expanded && step < 3 && (
+        {expanded && step < PLAN && (
           <aside
             aria-label="Plan preview"
             className="sticky top-[88px] flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"

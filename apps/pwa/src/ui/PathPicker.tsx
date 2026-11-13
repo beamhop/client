@@ -2,11 +2,12 @@
  * PathPicker (DESIGN §9.3): ComboBox with directory completion, recent paths and a "Browse" sheet
  * (breadcrumb + folder list). Git repos get a GitBranch badge.
  *
- * The contract has no `fs.list` RPC yet, so directory listing is a prop (`listDir`); the default is a
- * small demo tree. Wire it to the daemon when the method exists (only under $HOME).
+ * Directories come from the daemon's `fs.list` (owner only, under the allowed roots, hidden and
+ * always-denied paths are never returned); `listDir` overrides it (tests). Outside a provider the
+ * picker still works as a plain text field.
  */
 import { CaretRight, FolderSimple, GitBranch } from '@phosphor-icons/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ButtonContext,
   ComboBox,
@@ -18,6 +19,7 @@ import {
   Button as RACButton,
   Text,
 } from 'react-aria-components';
+import { useMaybeBeamhop } from '../api/provider.tsx';
 import { cx } from '../lib/cx.ts';
 import { Button } from './Button.tsx';
 import { descriptionClass, inputShell, labelClass } from './Field.tsx';
@@ -28,18 +30,75 @@ export interface DirEntry {
   git?: boolean;
 }
 
-const DEMO_TREE: Record<string, DirEntry[]> = {
-  '~': [{ path: '~/code' }, { path: '~/docs' }, { path: '~/notes' }, { path: '~/Downloads' }],
-  '~/code': [
-    { path: '~/code/app', git: true },
-    { path: '~/code/site', git: true },
-    { path: '~/code/scratch' },
-  ],
-  '~/docs': [{ path: '~/docs/public' }, { path: '~/docs/private' }],
-  '~/notes': [{ path: '~/notes/meetings' }],
+/** A listing of one directory (`fs.list`): its entries, parent and the roots it may browse. */
+export interface DirListing {
+  path: string;
+  parent?: string;
+  entries: DirEntry[];
+}
+
+type FsClient = { call(method: string, params?: unknown): Promise<unknown> };
+type FsResult = { path: string; parent?: string; entries: { path: string; git: boolean }[] };
+/** Listings are cached briefly per client so several pickers / mount rows share one `fs.list`. */
+const fsCache = new WeakMap<FsClient, Map<string, { at: number; p: Promise<DirListing> }>>();
+const FS_TTL_MS = 30_000;
+
+const listVia = (client: FsClient, path: string): Promise<DirListing> => {
+  let m = fsCache.get(client);
+  if (!m) {
+    m = new Map();
+    fsCache.set(client, m);
+  }
+  const cache = m;
+  const hit = cache.get(path);
+  if (hit && Date.now() - hit.at < FS_TTL_MS) return hit.p;
+  const p = (client.call('fs.list', { path }) as Promise<FsResult>).then((r) => ({
+    path: r.path,
+    ...(r.parent ? { parent: r.parent } : {}),
+    entries: r.entries.map((e) => ({ path: e.path, git: e.git })),
+  }));
+  cache.set(path, { at: Date.now(), p });
+  p.catch(() => cache.delete(path));
+  return p;
 };
 
-export const demoListDir = async (path: string): Promise<DirEntry[]> => DEMO_TREE[path] ?? [];
+/**
+ * `listDir` backed by `fs.list`. Rejects when the daemon refuses (denied / outside the roots / not
+ * found); resolves to an empty listing outside a <BeamhopProvider>.
+ */
+export const useFsListDir = (): ((path: string) => Promise<DirListing>) => {
+  const client = useMaybeBeamhop()?.client as FsClient | undefined;
+  return useCallback(
+    (path: string) => (client ? listVia(client, path) : Promise.resolve({ path, entries: [] })),
+    [client],
+  );
+};
+
+/**
+ * Whether `path` is the top of a git work tree, from its parent's `fs.list`: undefined until known,
+ * false when it isn't (or can't be listed).
+ */
+export const useIsGitRepo = (path: string): boolean | undefined => {
+  const listDir = useFsListDir();
+  const [git, setGit] = useState<boolean | undefined>(undefined);
+  const p = path.trim().replace(/\/+$/, '');
+  useEffect(() => {
+    let live = true;
+    setGit(undefined);
+    if (!p.includes('/')) {
+      setGit(false);
+      return;
+    }
+    listDir(parentOf(p)).then(
+      (l) => live && setGit(l.entries.some((e) => e.path === p && e.git)),
+      () => live && setGit(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, [p, listDir]);
+  return git;
+};
 
 export interface PathPickerProps {
   label: string;
@@ -47,7 +106,8 @@ export interface PathPickerProps {
   onChange: (path: string) => void;
   description?: string;
   recent?: string[];
-  listDir?: (path: string) => Promise<DirEntry[]>;
+  /** Override the directory source (default: the daemon's `fs.list`). */
+  listDir?: (path: string) => Promise<DirListing>;
   className?: string;
 }
 
@@ -58,19 +118,26 @@ export const PathPicker = ({
   value,
   onChange,
   description,
-  recent = ['~/code/app', '~/notes'],
-  listDir = demoListDir,
+  recent = [],
+  listDir: listDirProp,
   className,
 }: PathPickerProps) => {
+  const fsListDir = useFsListDir();
+  const listDir = listDirProp ?? fsListDir;
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [browse, setBrowse] = useState(false);
   const [cwd, setCwd] = useState('~');
   const [cwdEntries, setCwdEntries] = useState<DirEntry[]>([]);
+  const [cwdError, setCwdError] = useState(false);
 
   const dir = value.endsWith('/') ? value.slice(0, -1) : parentOf(value);
   useEffect(() => {
     let live = true;
-    void listDir(dir || '~').then((e) => live && setEntries(e));
+    // Completion is best-effort: a denied or missing directory just offers nothing.
+    listDir(dir || '~').then(
+      (l) => live && setEntries(l.entries),
+      () => live && setEntries([]),
+    );
     return () => {
       live = false;
     };
@@ -78,7 +145,19 @@ export const PathPicker = ({
   useEffect(() => {
     if (!browse) return;
     let live = true;
-    void listDir(cwd).then((e) => live && setCwdEntries(e));
+    setCwdError(false);
+    listDir(cwd).then(
+      (l) => {
+        if (!live) return;
+        setCwdEntries(l.entries);
+        if (l.path !== cwd) setCwd(l.path);
+      },
+      () => {
+        if (!live) return;
+        setCwdEntries([]);
+        setCwdError(true);
+      },
+    );
     return () => {
       live = false;
     };
@@ -96,9 +175,7 @@ export const PathPicker = ({
       return x.path.startsWith(value) || !value;
     });
   }, [recent, entries, value]);
-  const gitPaths = new Set(
-    [...Object.values(DEMO_TREE).flat(), ...entries].filter((e) => e.git).map((e) => e.path),
-  );
+  const gitPaths = new Set([...entries, ...cwdEntries].filter((e) => e.git).map((e) => e.path));
   const crumbs = cwd.split('/').map((_, i, arr) => arr.slice(0, i + 1).join('/'));
 
   return (
@@ -136,7 +213,7 @@ export const PathPicker = ({
             <Button
               variant="secondary"
               onPress={() => {
-                setCwd(value && DEMO_TREE[dir] ? dir : '~');
+                setCwd(value.startsWith('~') || value.startsWith('/') ? dir || '~' : '~');
                 setBrowse(true);
               }}
             >
@@ -199,7 +276,12 @@ export const PathPicker = ({
           ))}
         </nav>
         <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
-          {cwdEntries.length === 0 && <li className="px-4 py-3 type-body-sm text-ink-2">No folders here.</li>}
+          {cwdError && (
+            <li className="px-4 py-3 type-body-sm text-ink-2">This folder can’t be opened from here.</li>
+          )}
+          {!cwdError && cwdEntries.length === 0 && (
+            <li className="px-4 py-3 type-body-sm text-ink-2">No folders here.</li>
+          )}
           {cwdEntries.map((e) => (
             <li key={e.path}>
               <RACButton

@@ -15,7 +15,6 @@ import { useToast } from '../../ui/Toast.tsx';
 import type { SlipGroup } from './model.ts';
 import {
   holdSuggestion,
-  markMine,
   openSheet,
   queueStore,
   releaseHold,
@@ -62,7 +61,6 @@ export const useDecisions = () => {
       returningStore.set((r) => ({ ...r, ...Object.fromEntries(ids.map((id) => [id, dir])) }));
       try {
         await Promise.all(ids.map((id) => call('approval.undo', { id })));
-        markMine(ids, false);
         haptic('tick');
       } catch (e) {
         toast.show({ message: (e as Error).message, tone: 'error' });
@@ -92,7 +90,6 @@ export const useDecisions = () => {
         });
         return true;
       }
-      markMine(ids);
       setHidden(ids, true);
       const results = await Promise.allSettled(
         ids.map((id) => call('approval.decide', { id, allow, ...opts })),
@@ -103,7 +100,6 @@ export const useDecisions = () => {
       const done = ids.filter((_, i) => results[i]?.status === 'fulfilled');
       const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (done.length === 0) {
-        markMine(ids, false);
         haptic('error');
         toast.show({ message: (failed?.reason as Error)?.message ?? t('inbox.toast.failed'), tone: 'error' });
         void refresh();
@@ -188,7 +184,6 @@ export const useDecisions = () => {
       let sent = 0;
       const dropped: string[] = [];
       for (const d of queue) {
-        markMine(d.ids);
         const rs = await Promise.allSettled(d.ids.map((id) => call('approval.decide', { id, ...d.params })));
         if (rs.some((r) => r.status === 'fulfilled')) sent++;
         else dropped.push(d.target);

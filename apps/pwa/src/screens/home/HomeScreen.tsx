@@ -49,9 +49,10 @@ import { Badge, Eyebrow, LetterTile, MetaLine, RiskTag } from '../../ui/Meta.tsx
 import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { RouteLine, SegmentedMeter, StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { useMe } from '../inbox/me.ts';
 import { groupApprovals, type SlipGroup, swipeMode, waitingOnOthers } from '../inbox/model.ts';
 import { DecisionLayer } from '../inbox/Sheets.tsx';
-import { hiddenStore, mineStore, openSheet, useStore } from '../inbox/store.ts';
+import { hiddenStore, openSheet, useStore } from '../inbox/store.ts';
 import { useDecisions } from '../inbox/useDecisions.tsx';
 
 const LAST_VISIT_KEY = 'bh.home.lastVisit';
@@ -180,10 +181,10 @@ const NeedsYou = ({
 }) => {
   const expanded = useExpanded();
   const medium = useMediaQuery('(min-width: 37.5rem)');
-  const mine = useStore(mineStore);
+  const me = useMe();
   const hidden = useStore(hiddenStore);
-  const waiting = pending.filter((a) => waitingOnOthers(a, mine));
-  const groups = groupApprovals(pending.filter((a) => !hidden.has(a.id) && !waitingOnOthers(a, mine)));
+  const waiting = pending.filter((a) => waitingOnOthers(a, me));
+  const groups = groupApprovals(pending.filter((a) => !hidden.has(a.id) && !waitingOnOthers(a, me)));
   const shown = groups.slice(0, expanded || medium ? 3 : 1);
   const more = groups.length - shown.length;
   const extras = [

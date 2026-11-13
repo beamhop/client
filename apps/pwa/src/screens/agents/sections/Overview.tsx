@@ -1,6 +1,7 @@
 /**
  * Overview: what it's doing now (live sessions), the last 5 sessions, harness instruction files found
- * in its mounts (agent.instructions, viewer sheet), memberships at a glance, setup slug, CLI.
+ * in its mounts (agent.instructions; editable in rw mounts, InstructionSheet), memberships at a glance,
+ * setup slug, CLI.
  */
 import type { AgentView, SessionView } from '@beamhop/core';
 import { CaretRight, FileText } from '@phosphor-icons/react';
@@ -10,12 +11,11 @@ import { harnessSlug, sessionLamp, targetLabel, useApi } from '../../../api/inde
 import { t } from '../../../i18n/index.ts';
 import { since, usd } from '../../../lib/format.ts';
 import { LinkButton } from '../../../ui/Button.tsx';
-import { CodeBlock } from '../../../ui/CodeBlock.tsx';
 import { MetaLine } from '../../../ui/Meta.tsx';
-import { Sheet } from '../../../ui/Sheet.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../../ui/States.tsx';
 import { RouteLine, StatusDot } from '../../../ui/Status.tsx';
 import { Block, Rows } from '../parts.tsx';
+import { InstructionSheet } from './InstructionSheet.tsx';
 
 const SessionRow = ({ s }: { s: SessionView }) => (
   <li>
@@ -178,20 +178,7 @@ export const OverviewSection = ({ agent }: { agent: AgentView }) => {
         />
       </Block>
 
-      <Sheet
-        isOpen={!!file}
-        onOpenChange={(o) => !o && setOpen(null)}
-        title={file?.path ?? ''}
-        subtitle={file && t('agents.ov.fileSheet', { harness: file.harness })}
-        full
-      >
-        {file && (
-          <>
-            <p className="mb-3 type-body-sm text-ink-2">{t('agents.ov.fileNote')}</p>
-            <CodeBlock code={file.content} label={file.path} lineNumbers wrap />
-          </>
-        )}
-      </Sheet>
+      <InstructionSheet agent={agent} file={file} onClose={() => setOpen(null)} />
     </div>
   );
 };

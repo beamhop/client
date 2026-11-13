@@ -1,6 +1,6 @@
 /**
  * Channel detail — SCREENS §5 "Channel detail". Route: /channels/$id (`?replace=1` opens Replace token).
- * Status + transport, the bot's identity, owner pairings (pair another account in a sheet: same deep
+ * Status + transport, Connected on/off (`channel.connect` / `channel.disconnect`), the bot's identity, owner pairings (pair another account in a sheet: same deep
  * link / QR / code panel as the wizard), memberships (which agents answer where; Leave with Undo),
  * Nostr relay list with per-relay latency + NIP-11 status, Replace token (re-validates, keeps
  * everything else, JOURNEYS §4 edge cases), Remove channel (destructive confirm naming consequences).
@@ -24,6 +24,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen } from '../../shell/Screen.tsx';
 import { Button, LinkButton } from '../../ui/Button.tsx';
+import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
 import { SecretField } from '../../ui/Field.tsx';
 import { Badge, Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
@@ -184,6 +185,8 @@ export const ChannelDetailScreen = () => {
   const [removeOpen, setRemoveOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
   const removeChannel = useMutationApi('channel.remove');
+  const connect = useMutationApi('channel.connect');
+  const disconnect = useMutationApi('channel.disconnect');
   const c = q.data?.channels.find((x) => x.config.name === id);
   const replaceOpen = !!search.replace;
   const setReplace = (open: boolean) =>
@@ -251,6 +254,29 @@ export const ChannelDetailScreen = () => {
           await call('membership.join', { agent, membership: m });
         },
       });
+    } catch (e) {
+      toast.show({ message: (e as Error).message, tone: 'error' });
+    }
+  };
+
+  const enabled = c.config.enabled && c.status !== 'disabled';
+  const toggling = connect.isPending || disconnect.isPending;
+  const setEnabled = async (on: boolean) => {
+    const name = c.config.name;
+    try {
+      if (on) {
+        await connect.mutateAsync({ name });
+        toast.show({ message: t('channels.detail.connectedToast', { name: title }), tone: 'success' });
+      } else {
+        await disconnect.mutateAsync({ name });
+        haptic('reject');
+        toast.show({
+          message: t('channels.detail.disconnectedToast', { name: title }),
+          onUndo: async () => {
+            await connect.mutateAsync({ name });
+          },
+        });
+      }
     } catch (e) {
       toast.show({ message: (e as Error).message, tone: 'error' });
     }
@@ -361,6 +387,23 @@ export const ChannelDetailScreen = () => {
             )}
           </div>
         )}
+
+        <div className="rounded-lg border border-line bg-surface px-4">
+          <Switch
+            isSelected={enabled}
+            isDisabled={offline || toggling || (panic && !enabled)}
+            onChange={(v) => void setEnabled(v)}
+            description={
+              panic && !enabled
+                ? t('channels.detail.enabledPanic')
+                : enabled
+                  ? t('channels.detail.enabledOn')
+                  : t('channels.detail.enabledOff')
+            }
+          >
+            {t('channels.detail.enabled')}
+          </Switch>
+        </div>
 
         {/* Identity */}
         {c.self && (

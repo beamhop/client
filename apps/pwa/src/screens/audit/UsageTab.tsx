@@ -23,7 +23,7 @@ export const UsageTab = ({ alertButton }: { alertButton: ReactNode }) => {
   const usage = useApi('usage.query', { days: Math.min(365, n * 2) });
   const month = useApi('usage.query', { days: 31 });
   const agents = useApi('agent.list');
-  const [rules] = useAlertRules();
+  const { rules } = useAlertRules();
   const showSkeleton = useDelayedLoading(usage.isPending);
   const rows = usage.data?.rows ?? [];
   const view = useMemo(() => aggregateUsage(rows, n, breakdown, metric), [rows, n, breakdown, metric]);
