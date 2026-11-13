@@ -3,7 +3,7 @@
  * session runner, approvals, schedules, panic and the API.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { createConnection, createServer as createNetServer, type Server as NetServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -118,6 +118,16 @@ export interface AuditInput {
 const DLP_RANK: Record<DlpMode, number> = { warn: 0, redact: 1, block: 2 };
 export const stricterDlp = (a: DlpMode, b: DlpMode): DlpMode => (DLP_RANK[a] >= DLP_RANK[b] ? a : b);
 
+/** srt hands the sandbox TMPDIR=/tmp/claude and expects it to exist on the host (else temp writes fail). */
+export const ensureSrtTmp = (): void => {
+  if (process.platform === 'win32') return;
+  try {
+    mkdirSync('/tmp/claude', { recursive: true, mode: 0o700 });
+  } catch {
+    /* best effort */
+  }
+};
+
 export const defaultStaticDir = (): string =>
   join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pwa', 'dist');
 
@@ -176,14 +186,24 @@ export class Daemon {
     this.mesh = opts.mesh;
     this.sandboxFactory =
       opts.sandbox ??
-      ((policy, o) =>
-        createSandbox(policy, {
+      ((policy, o) => {
+        ensureSrtTmp();
+        return createSandbox(policy, {
           env: o.env,
           ...(o.brokerPort ? { brokerPort: o.brokerPort } : {}),
           localAllow: o.localAllow,
           log: o.log,
+          ...(process.env.HTTPS_PROXY
+            ? {
+                parentProxy: {
+                  https: process.env.HTTPS_PROXY,
+                  ...(process.env.NO_PROXY ? { noProxy: process.env.NO_PROXY } : {}),
+                },
+              }
+            : {}),
           ...(this.deployEnv.sandboxFs === 'container' ? { backend: 'none' as const } : {}),
-        }));
+        });
+      });
   }
 
   // ───────────────────────────── lifecycle ─────────────────────────────
