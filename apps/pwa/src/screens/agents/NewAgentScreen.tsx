@@ -33,6 +33,7 @@ import { StatusDot } from '../../ui/Status.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { HarnessJobControls } from '../harnesses/HarnessJob.tsx';
+import { DEFAULT_MODEL, ModelField } from './ModelField.tsx';
 import { createCli, PRESET_META, reachOf, suggestName, validateName } from './model.ts';
 import { ReachSummary } from './parts.tsx';
 import { AddMount, loginCommand, MountRow } from './sections/Setup.tsx';
@@ -309,6 +310,12 @@ export const NewAgentScreen = () => {
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [harness, setHarness] = useState('');
+  // A model id belongs to one harness: picking another harness goes back to its default.
+  const [model, setModel] = useState(DEFAULT_MODEL);
+  const pickHarness = (id: string) => {
+    if (id !== harness) setModel(DEFAULT_MODEL);
+    setHarness(id);
+  };
   const [mounts, setMounts] = useState<Mount[]>([]);
   const [tried, setTried] = useState(false);
   const top = useRef<HTMLDivElement>(null);
@@ -353,7 +360,7 @@ export const NewAgentScreen = () => {
     [harness, mounts, profile],
   );
   const reach = reachOf(cfg);
-  const cli = createCli({ name, preset: presetId, harness, mounts });
+  const cli = createCli({ name, preset: presetId, harness, model, mounts });
   const harnessName = harnesses.find((h) => h.id === harness)?.displayName ?? harness;
 
   const go = (i: number) => {
@@ -372,7 +379,7 @@ export const NewAgentScreen = () => {
   };
   const submit = () =>
     create
-      .mutateAsync({ preset: presetId, config: { name, harness, mounts, sandbox: { profile } } })
+      .mutateAsync({ preset: presetId, config: { name, harness, model, mounts, sandbox: { profile } } })
       .then((a) => {
         haptic('confirm');
         toast.show({ tone: 'success', message: t('agents.new.created', { name: a.config.name }) });
@@ -397,13 +404,16 @@ export const NewAgentScreen = () => {
         nameErr={tried || nameTouched ? nameErr : undefined}
       />
     ) : current === 'harness' ? (
-      <HarnessStep
-        list={harnesses}
-        value={harness}
-        onChange={setHarness}
-        scanning={scan.isPending}
-        onRescan={() => scan.mutate({})}
-      />
+      <div className="flex flex-col gap-6">
+        <HarnessStep
+          list={harnesses}
+          value={harness}
+          onChange={pickHarness}
+          scanning={scan.isPending}
+          onRescan={() => scan.mutate({})}
+        />
+        <ModelField harness={harnesses.find((h) => h.id === harness)} value={model} onChange={setModel} />
+      </div>
     ) : current === 'folders' ? (
       <div className="flex flex-col gap-4">
         {lockRo && (

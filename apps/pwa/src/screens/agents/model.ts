@@ -654,11 +654,18 @@ export const PRESET_META: Record<string, PresetMeta> = {
 };
 
 /** CLI equivalent for creating an agent. */
-export const createCli = (o: { name: string; preset?: string; harness?: string; mounts: Mount[] }): string =>
+export const createCli = (o: {
+  name: string;
+  preset?: string;
+  harness?: string;
+  model?: string;
+  mounts: Mount[];
+}): string =>
   [
     `beamhop agent add ${o.name || '<name>'}`,
     o.preset && `--preset ${o.preset}`,
     `--harness ${o.harness || '<harness>'}`,
+    o.model && o.model !== 'default' && `--model ${o.model}`,
     ...o.mounts.map((m) => `--mount ${m.path}:${m.mode}`),
   ]
     .filter(Boolean)

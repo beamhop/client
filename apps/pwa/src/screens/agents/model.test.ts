@@ -174,6 +174,14 @@ describe('validators', () => {
       }),
     ).toBe('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
   });
+  it('adds --model only for a model other than the harness default', () => {
+    expect(createCli({ name: 'a', harness: 'codex', model: 'gpt-6-luna', mounts: [] })).toBe(
+      'beamhop agent add a --harness codex --model gpt-6-luna',
+    );
+    expect(createCli({ name: 'a', harness: 'codex', model: 'default', mounts: [] })).toBe(
+      'beamhop agent add a --harness codex',
+    );
+  });
 });
 
 describe('instruction files', () => {
