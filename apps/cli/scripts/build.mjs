@@ -135,10 +135,13 @@ const declaredRange = (dep) => {
 };
 const listPackages = () => readdirSync(join(REPO, 'packages')).map((n) => `packages/${n}`);
 
+// Always rebuilt (unless --skip-pwa): an existing apps/pwa/dist may be from older sources, and shipping it
+// silently pairs a new daemon with an old web UI.
 const ensurePwa = (skip) => {
-  if (existsSync(join(REPO, PWA_DIST, 'index.html'))) return;
   if (skip) {
-    console.warn('warning: apps/pwa/dist missing; the bundle will ship without the web UI');
+    if (!existsSync(join(REPO, PWA_DIST, 'index.html')))
+      console.warn('warning: apps/pwa/dist missing; the bundle will ship without the web UI');
+    else console.warn('warning: --skip-pwa: shipping the existing apps/pwa/dist as it is');
     return;
   }
   console.log('building PWA…');
