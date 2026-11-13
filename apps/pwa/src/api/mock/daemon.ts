@@ -42,6 +42,25 @@ export const fail = (code: keyof typeof ERR, message: string): never => {
 
 const OK = { ok: true as const };
 const UNDO_WINDOW_MS = 5000;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+/** Binaries the mock pretends are on PATH for `harness.add` probes. */
+const MOCK_PATH_BINARIES = new Set([
+  'my-agent',
+  'goose',
+  'kiro-cli',
+  'npx',
+  'node',
+  'uvx',
+  'bunx',
+  'docker',
+  'auggie',
+]);
+/** Who answers a pairing code per provider in the demo. */
+const MOCK_PAIRERS: Record<string, { principal: string; displayName: string; handle?: string }> = {
+  telegram: { principal: 'telegram:5551', displayName: 'Alice', handle: '@alice' },
+  slack: { principal: 'slack:T01ACME/U01ALICE', displayName: 'Alice', handle: 'alice · acme.slack.com' },
+  discord: { principal: 'discord:220719', displayName: 'alice', handle: '@alice' },
+};
 
 export class MockDaemon {
   state: MockState;
@@ -147,6 +166,121 @@ export class MockDaemon {
   }
 
   // ─────────── dispatch ───────────
+  /**
+   * Pairing (JOURNEYS §4 step 5): ~5 s after a code is issued, the owner "sends /start" from the
+   * provider. Recorded on the channel as `settings.pairings` (non-secret) and as an owner grant.
+   */
+  private pairTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  simulatePairing(name: string, delayMs = 5000) {
+    clearTimeout(this.pairTimers.get(name));
+    this.pairTimers.set(
+      name,
+      setTimeout(() => {
+        const c = this.state.channels.get(name);
+        const who = c ? MOCK_PAIRERS[c.config.provider] : undefined;
+        if (!c || !who) return;
+        const prev = (c.config.settings.pairings as Array<{ principal: string }> | undefined) ?? [];
+        const pairing = { ...who, role: 'owner', pairedAt: new Date().toISOString() };
+        this.putChannel({
+          ...c,
+          config: {
+            ...c.config,
+            settings: {
+              ...c.config.settings,
+              pairings: [...prev.filter((x) => x.principal !== who.principal), pairing],
+            },
+          },
+        });
+        if (!this.state.owners.includes(who.principal)) this.state.owners.push(who.principal);
+        this.state.grants[who.principal] = 'owner';
+        this.audit({
+          actor: who.principal,
+          type: 'channel.paired',
+          severity: 'security',
+          summary: `${who.handle ?? who.displayName} paired with ${name} as owner`,
+          data: { channel: name, principal: who.principal },
+        });
+      }, delayMs),
+    );
+  }
+
+  /** Last identity `channel.validate` reported per provider, reused by `channel.add` as the channel's `self`. */
+  private lastIdentity: Record<string, { name: string; handle?: string }> = {};
+  private async validateChannel(p: ParsedParams<'channel.validate'>): Promise<Result<'channel.validate'>> {
+    await sleep(450);
+    const token = String(Object.values(p.secrets)[0] ?? '');
+    if (p.provider === 'telegram') {
+      if (!/^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(token))
+        return {
+          ok: false,
+          message: "Telegram didn't accept this token. In @BotFather, send /token to get a new one.",
+        };
+      return {
+        ok: true,
+        message: 'Valid',
+        identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' },
+      };
+    }
+    if (p.provider === 'slack' && ('app-token' in p.secrets || 'bot-token' in p.secrets)) {
+      const app = p.secrets['app-token'] ?? '';
+      const bot = p.secrets['bot-token'] ?? '';
+      if (!bot.startsWith('xoxb-'))
+        return {
+          ok: false,
+          message: 'Slack rejected the bot token (invalid_auth). Copy it again from Install App.',
+        };
+      if (!app.startsWith('xapp-'))
+        return {
+          ok: false,
+          message:
+            'Slack refused the app-level token (apps.connections.open). It needs the connections:write scope.',
+        };
+      return {
+        ok: true,
+        message: 'Valid · acme workspace',
+        identity: { name: 'beamhop', handle: '@beamhop' },
+      };
+    }
+    if (p.provider === 'discord' && 'bot-token' in p.secrets) {
+      if (token.split('.').length !== 3)
+        return {
+          ok: false,
+          message: 'Discord returned 401 Unauthorized for this token. Reset it in the Bot tab.',
+        };
+      return {
+        ok: true,
+        message: p.values.intentChecked
+          ? 'Valid'
+          : 'Message Content intent is off. The agent will only see slash commands and mentions without text.',
+        identity: { name: 'beamhop-helper', handle: 'beamhop-helper#0' },
+      };
+    }
+    if (p.provider === 'nostr') {
+      const relay = String(p.values.relay ?? '');
+      const host = relay.replace('wss://', '');
+      if (!/^wss:\/\/[^\s/]+/.test(relay))
+        return { ok: false, message: 'That relay address should start with wss://.' };
+      if (relay.includes('offline'))
+        return { ok: false, message: `Couldn't reach ${host} (timeout after 5 s).` };
+      if (p.values.group === undefined)
+        return {
+          ok: true,
+          message: 'NIP-11 ✓ · supports NIP-29 groups',
+          identity: { name: host, handle: 'NIP-29' },
+        };
+      const group = String(p.values.group ?? '');
+      if (!/^[a-z0-9_-]{2,}$/.test(group))
+        return { ok: false, message: 'Group ids use lowercase letters, digits, - and _.' };
+      return {
+        ok: true,
+        message: 'Valid',
+        identity: { name: String(p.values.title || group), handle: `${host}'${group}` },
+      };
+    }
+    if (!token) return { ok: false, message: 'The token is empty.' };
+    return { ok: true, message: 'Valid', identity: { name: 'beamhop', handle: '@beamhop' } };
+  }
+
   async handle(method: string, params: unknown): Promise<unknown> {
     if (!isMethod(method)) throw new RpcError(-32601, `Unknown method ${method}`);
     const schema = methods[method].params;
@@ -347,18 +481,31 @@ export class MockDaemon {
     },
 
     // ── harnesses
-    'harness.scan': () => ({ harnesses: this.state.harnesses }),
+    // Scans take a moment on a real daemon (it runs `--version` on every catalog entry).
+    'harness.scan': async () => {
+      await sleep(900);
+      return { harnesses: this.state.harnesses };
+    },
     'harness.list': () => ({ harnesses: this.state.harnesses }),
-    'harness.add': (p) => {
+    // Probes the command with an ACP `initialize` handshake. Unknown binaries fail like a real spawn would.
+    'harness.add': async (p) => {
+      await sleep(700);
+      const bin = p.command.trim().split(/\s+/)[0] ?? '';
+      const base = bin.split('/').pop() ?? bin;
+      const onPath = MOCK_PATH_BINARIES.has(base) || /^(\/|\.\/|~\/)/.test(bin);
       const h = {
         id: `acp:${p.id}`,
         displayName: p.id,
         command: [p.command, ...p.args].join(' '),
-        status: 'ready' as const,
+        status: onPath ? ('ready' as const) : ('error' as const),
         protocol: 'acp',
-        message: 'ACP handshake ok',
+        path: onPath ? (bin.includes('/') ? bin : `/usr/local/bin/${bin}`) : undefined,
+        version: onPath ? '0.3.1' : undefined,
+        message: onPath
+          ? 'ACP handshake ok · protocol v1 · 118 ms'
+          : `spawn ${bin}: command not found on PATH`,
       };
-      this.state.harnesses.push(h);
+      if (onPath) this.state.harnesses = [...this.state.harnesses.filter((x) => x.id !== h.id), h];
       return h;
     },
 
@@ -384,22 +531,10 @@ export class MockDaemon {
       ],
     }),
     'channel.list': () => ({ channels: [...this.state.channels.values()] }),
-    'channel.validate': (p) => {
-      const token = String(Object.values(p.secrets)[0] ?? '');
-      if (p.provider === 'telegram') {
-        if (!/^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(token))
-          return {
-            ok: false,
-            message: "Telegram didn't accept this token. In @BotFather, send /token to get a new one.",
-          };
-        return {
-          ok: true,
-          message: 'Valid',
-          identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' },
-        };
-      }
-      if (!token) return { ok: false, message: 'The token is empty.' };
-      return { ok: true, message: 'Valid', identity: { name: 'beamhop', handle: '@beamhop' } };
+    'channel.validate': async (p) => {
+      const r = await this.validateChannel(p);
+      if (r.ok && r.identity) this.lastIdentity[p.provider] = r.identity;
+      return r;
     },
     'channel.add': (p) => {
       if (this.state.channels.has(p.name)) return fail('conflict', `A channel named ${p.name} exists`);
@@ -412,6 +547,16 @@ export class MockDaemon {
           createdAt: new Date().toISOString(),
         }),
         status: 'connecting',
+        // The bot identity the provider reported during validation (getMe / auth.test / users/@me).
+        ...(this.lastIdentity[p.provider]
+          ? {
+              self: {
+                principal: `${p.provider}:${p.name}`,
+                displayName: this.lastIdentity[p.provider]!.name,
+                handle: this.lastIdentity[p.provider]!.handle,
+              },
+            }
+          : {}),
       };
       this.putChannel(c);
       setTimeout(() => this.putChannel({ ...c, status: 'connected' }), 900);
@@ -435,6 +580,7 @@ export class MockDaemon {
     },
     'channel.pair': (p) => {
       if (!this.state.channels.has(p.name)) return fail('not_found', `No channel ${p.name}`);
+      this.simulatePairing(p.name);
       return {
         code: '7KQ2-9XHD',
         expiresAt: ahead(Date.now(), 10),
@@ -653,6 +799,14 @@ export class MockDaemon {
         ...this.state.secrets.filter((s) => s.name !== p.name),
         { name: p.name, updatedAt: now },
       ];
+      // Replacing a channel's token reconnects it (JOURNEYS §4 "Replace token").
+      const ch = /^channel\/([^/]+)\//.exec(p.name)?.[1];
+      const c = ch ? this.state.channels.get(ch) : undefined;
+      if (c && c.status === 'error') {
+        const next = { ...c, status: 'connecting' as const, error: undefined };
+        this.putChannel(next);
+        setTimeout(() => this.putChannel({ ...next, status: 'connected' }), 900);
+      }
       return OK;
     },
     'secret.delete': (p) => {

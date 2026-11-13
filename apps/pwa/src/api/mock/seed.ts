@@ -277,7 +277,21 @@ export const seed = (now = Date.now()): MockState => {
     config: ChannelConfig.parse({
       name: 'nostr',
       provider: 'nostr',
-      settings: { relays: RELAYS, relaysUp: RELAYS.slice(0, 3), dms: 'NIP-17', groups: 2 },
+      settings: {
+        relays: RELAYS,
+        relaysUp: RELAYS.slice(0, 3),
+        dms: 'NIP-17',
+        groups: 2,
+        // Per-relay round-trip and NIP-11 check (channel detail relay list).
+        latencyMs: { 'wss://relay.damus.io': 84, 'wss://nos.lol': 131, 'wss://relay.primal.net': 62 },
+        nip11: {
+          'wss://relay.damus.io': 'ok',
+          'wss://nos.lol': 'ok',
+          'wss://relay.primal.net': 'ok',
+          'wss://relay.nostr.band': 'timeout',
+        },
+        blossom: ['https://blossom.primal.net'],
+      },
       createdAt: ago(now, 60 * 24 * 12),
     }),
     status: 'connected',
@@ -287,7 +301,24 @@ export const seed = (now = Date.now()): MockState => {
     config: ChannelConfig.parse({
       name: 'tg',
       provider: 'telegram',
-      settings: { mode: 'long-poll', dms: 1, groups: 2 },
+      settings: {
+        mode: 'long-poll',
+        dms: 1,
+        groups: 2,
+        chats: [
+          { target: 'group/-100123', title: 'app-dev' },
+          { target: 'group/-100456', title: 'alice & bob' },
+        ],
+        pairings: [
+          {
+            principal: 'telegram:5551',
+            displayName: 'Alice',
+            handle: '@alice',
+            role: 'owner',
+            pairedAt: ago(now, 60 * 24 * 9),
+          },
+        ],
+      },
       secretRefs: ['channel/tg/bot-token'],
       createdAt: ago(now, 60 * 24 * 9),
     }),
