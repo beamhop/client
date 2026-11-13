@@ -905,8 +905,56 @@ export class MockDaemon {
       );
       return { deleted: n - this.state.audit.length };
     },
+
+    // ── identity / pairing / onboarding (minimal mock; screen builders may enrich)
+    'device.pairStatus': (p) => ({
+      pairingId: p.pairingId,
+      status: 'awaiting-confirm' as const,
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      safetyPhrase: ['amber', 'relay', 'harbor', 'violet'],
+    }),
+    'device.pairConfirm': (p) => ({
+      pairingId: p.pairingId,
+      status: p.accept ? ('paired' as const) : ('rejected' as const),
+      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      safetyPhrase: ['amber', 'relay', 'harbor', 'violet'],
+    }),
+    'identity.ownerCreate': () => ({ npub: MOCK_OWNER_NPUB }),
+    'identity.ownerImport': (p) => ({ npub: p.npub }),
+    'identity.ownerExport': () => ({ nsec: 'nsec1…(mock: never shown in demo)' }),
+    'identity.attestationTemplate': (p) => ({
+      template: {
+        kind: 30078,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['d', `beamhop-agent:${p.name}`]],
+        content: '',
+      },
+      ownerNpub: MOCK_OWNER_NPUB,
+      agentNpub: `npub1${p.name}…`,
+    }),
+    'identity.attest': () => ({ ok: true as const }),
+    'identity.publish': (p) => ({
+      npub: `npub1${p.name}…`,
+      published: [{ kind: 0, id: 'mock', relays: ['wss://relay.damus.io'] }],
+      attestation: 'published' as const,
+    }),
+    'onboarding.hello': (p) => ({
+      to: MOCK_OWNER_NPUB,
+      from: `npub1${p.agent}…`,
+      id: 'mock',
+      sentAt: new Date().toISOString(),
+    }),
+    'onboarding.helloStatus': () => ({
+      sent: true,
+      replied: true,
+      sentAt: new Date().toISOString(),
+      repliedAt: new Date().toISOString(),
+      from: MOCK_OWNER_NPUB,
+    }),
   };
 }
+
+const MOCK_OWNER_NPUB = 'npub1owner…';
 
 export const describeApproval = (a: ApprovalView): string => {
   const i = (a.input ?? {}) as Record<string, unknown>;
