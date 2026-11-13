@@ -9,6 +9,7 @@
  * (or Cmd+Q) stops the daemon the app started.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { createClient, httpTransport } from '@beamhop/client';
 import { paths } from '@beamhop/core';
@@ -25,6 +26,7 @@ import {
   Tray,
 } from 'electron';
 import { fileAutostart, HIDDEN_FLAG, isFileAutostartEnabled, setFileAutostart } from './autostart.ts';
+import { type CliInstallContext, cliStatus, installCli, uninstallCli } from './cli-install.ts';
 import { isAllowedPermission, isAppUrl, isSafeExternalUrl } from './links.ts';
 import { mergeShellEnv, resolveShellEnv } from './shell-env.ts';
 import { type DaemonState, DaemonSupervisor } from './supervisor.ts';
@@ -67,14 +69,15 @@ async function run(): Promise<void> {
 
   // ── small persisted UI state (userData/state.json) ──
   const stateFile = join(app.getPath('userData'), 'state.json');
-  const uiState = (): { closeNoticeShown?: boolean } => {
+  type UiState = { closeNoticeShown?: boolean; cliOptOut?: boolean };
+  const uiState = (): UiState => {
     try {
       return JSON.parse(readFileSync(stateFile, 'utf8'));
     } catch {
       return {};
     }
   };
-  const saveUiState = (s: { closeNoticeShown?: boolean }) => {
+  const saveUiState = (s: UiState) => {
     mkdirSync(app.getPath('userData'), { recursive: true });
     writeFileSync(stateFile, JSON.stringify(s));
   };
@@ -89,6 +92,73 @@ async function run(): Promise<void> {
   const setAutostart = (on: boolean) => {
     if (fileAuto) setFileAutostart(fileAuto, exe, on);
     else app.setLoginItemSettings({ openAtLogin: on, args: [HIDDEN_FLAG] });
+  };
+
+  // ── `beamhop` command line (macOS/Linux; see cli-install.ts) ──
+  const cliCtx: CliInstallContext = {
+    platform: process.platform,
+    home: homedir(),
+    binDir: join(home.home, 'bin'),
+    exe: process.execPath,
+    entry: join(daemonDir, 'bin', 'beamhop.js'),
+    shell: shellEnv?.SHELL ?? process.env.SHELL ?? safeShell(),
+    shellPath: shellEnv?.PATH ?? process.env.PATH,
+    appImage: process.env.APPIMAGE,
+  };
+  const notify = (title: string, body: string) => {
+    if (Notification.isSupported()) new Notification({ title, body }).show();
+  };
+  const setupCli = (explicit: boolean) => {
+    if (!existsSync(cliCtx.entry)) return;
+    try {
+      const r = installCli(cliCtx);
+      if (r.profile || (explicit && r.status.state === 'installed'))
+        notify(
+          'beamhop command line ready',
+          r.status.state === 'installed' && r.status.onPath
+            ? 'Run `beamhop` in a terminal.'
+            : 'Open a new terminal window, then run `beamhop`.',
+        );
+      else if (explicit && r.status.state === 'other')
+        notify('beamhop command line', `Already installed at ${r.status.path}; leaving it in place.`);
+    } catch (e) {
+      console.warn(`beamhop desktop: could not install the command line tool: ${String(e)}`);
+      if (explicit)
+        void dialog.showMessageBox({
+          type: 'error',
+          message: 'Could not install the command line tool',
+          detail: String(e),
+        });
+    }
+  };
+  const cliMenuItem = (): MenuItemConstructorOptions | undefined => {
+    const st = cliStatus(cliCtx);
+    if (st.state === 'unsupported') return undefined;
+    if (st.state === 'other') return { label: `Command line: using ${st.path}`, enabled: false };
+    return {
+      label:
+        st.state === 'installed' && !st.onPath
+          ? 'Command line tool (open a new terminal)'
+          : 'Command line tool',
+      type: 'checkbox',
+      checked: st.state === 'installed',
+      click: (i) => {
+        saveUiState({ ...uiState(), cliOptOut: !i.checked });
+        if (i.checked) setupCli(true);
+        else {
+          try {
+            uninstallCli(cliCtx);
+          } catch (e) {
+            void dialog.showMessageBox({
+              type: 'error',
+              message: 'Could not remove the command line tool',
+              detail: String(e),
+            });
+          }
+        }
+        refreshTray();
+      },
+    };
   };
 
   // ── window ──
@@ -231,6 +301,7 @@ async function run(): Promise<void> {
     if (!tray) return;
     const s = supervisor.state;
     const up = s === 'running' || s === 'external';
+    const cliMenu = cliMenuItem();
     const template: MenuItemConstructorOptions[] = [
       { label: `beamhop — ${statusLabel(s)}`, enabled: false },
       { type: 'separator' },
@@ -244,6 +315,7 @@ async function run(): Promise<void> {
             click: () => void supervisor.restart().catch(() => void startDaemon()),
           }
         : { label: 'Start daemon', click: () => void startDaemon() },
+      ...(cliMenu ? [cliMenu] : []),
       {
         label: 'Open at login',
         type: 'checkbox',
@@ -319,7 +391,16 @@ async function run(): Promise<void> {
   if (!existsSync(join(daemonDir, 'bin', 'beamhopd.js')))
     console.warn(`beamhop desktop: no bundled daemon at ${daemonDir}; can only attach to a running one`);
 
+  if (!uiState().cliOptOut) setupCli(false);
   createTray();
   if (!(await startDaemon())) return;
   if (!startHidden) await showWindow();
+}
+
+function safeShell(): string | undefined {
+  try {
+    return userInfo().shell ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
