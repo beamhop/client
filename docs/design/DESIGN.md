@@ -237,7 +237,7 @@ Activated by `@media (prefers-contrast: more)` **or** the in-app setting (`data-
 | ink / ink-2 / ink-3 | `#000000` 21 / `#25211d` 16.0 / `#37322e` 12.7 | `#ffffff` 21 / `#dbd7d0` 14.6 / `#c7c3bd` 12.0 |
 | flare (fill) + on-flare | `#942d03` + `#ffffff` (7.96) | `#fda670` + `#000000` (10.86) |
 | flare-text | `#892504` (9.04) | `#feb07a` (11.69) |
-| go / go-text | `#005126` (9.56) / `#074a24` (10.43) | `#70e093` (12.72) / `#7ee59d` (13.54) |
+| go / go-text | `#005126` (9.56) / `#074a24` (10.43) | `#66ba7f` (8.90 w/ black; 8.72 on surface) / `#7ee59d` (13.54) |
 | stop / stop-text | `#8a0314` (10.0) / `#800613` (10.79) | `#fd968f` (9.98) / `#fda19a` (10.76) |
 | caution / caution-text | `#663c08` (9.42 w/ white) / `#613700` (10.24) | `#fed25f` (14.57 w/ black) / same |
 | focus | `#000000` | `#ffffff` |

@@ -429,8 +429,8 @@
   --bh-flare-text: oklch(0.82 0.115 55); /* #feb07a 11.69:1 */
   --bh-flare-wash: oklch(0.22 0.05 45); /* #2d1205 */
 
-  --bh-go: oklch(0.82 0.15 152); /* #70e093 */
-  --bh-on-go: oklch(0 0 0); /* 12.72:1 */
+  --bh-go: oklch(0.72 0.12 152); /* #66ba7f — calmer fill; below stop/flare so Allow never outshines the slip */
+  --bh-on-go: oklch(0 0 0); /* 8.90:1 (fill 8.72:1 on surface) */
   --bh-go-text: oklch(0.84 0.14 152); /* #7ee59d 13.54:1 */
   --bh-go-wash: oklch(0.22 0.05 152); /* #05210e */
 
