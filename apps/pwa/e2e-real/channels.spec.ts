@@ -55,7 +55,7 @@ test('add a plugin channel via the wizard, pair an owner, join an agent', async 
     from: { principal: 'fake:carol', displayName: 'Carol' },
     conversation: { kind: 'dm', id: 'carol' },
   });
-  await expect(page.getByText('Paired with Carol')).toBeVisible();
+  await expect(page.getByText('Paired with Carol', { exact: true })).toBeVisible();
   await page
     .getByRole('button', { name: /This is me|Continue/ })
     .first()
