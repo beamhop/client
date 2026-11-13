@@ -17,7 +17,15 @@ export const expectAccessible = async (page: Page) => {
     .exclude('div[role="log"][aria-live] > div[role="img"]')
     .analyze();
   const bad = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
-  expect(bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(' | ')}`)).toEqual([]);
+  expect(
+    bad.map(
+      (v) =>
+        `${v.id}: ${v.nodes
+          .map((n) => n.target.join(' '))
+          .slice(0, 3)
+          .join(' | ')}`,
+    ),
+  ).toEqual([]);
 };
 
 /** Call the in-browser mock daemon directly (setup for a test, never the thing under test). */

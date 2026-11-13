@@ -27,7 +27,9 @@ test('pair a device: QR, phone answers, compare words here, confirm', async ({ p
   await sheet.getByRole('button', { name: 'Yes, pair iPhone · Safari' }).click();
   await expect(sheet.getByText('Paired · iPhone · Safari')).toBeVisible();
   await sheet.getByRole('button', { name: 'Close' }).click();
-  await expect(page.getByRole('heading', { name: 'iPhone · Safari' }).or(page.getByText('iPhone · Safari')).first()).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'iPhone · Safari' }).or(page.getByText('iPhone · Safari')).first(),
+  ).toBeVisible();
 });
 
 test('a phrase mismatch cancels the pairing', async ({ page }) => {
@@ -46,7 +48,9 @@ test('remove an inactive device from its row menu', async ({ page }) => {
   const dialog = page.getByRole('alertdialog', { name: 'Remove Pixel · Chrome?' });
   await expect(dialog.getByText(/won't be able to control your agents/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Remove Pixel · Chrome' }).click();
-  await expect(page.getByRole('region', { name: 'Notifications' }).getByText('Removed · Pixel · Chrome')).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Removed · Pixel · Chrome'),
+  ).toBeVisible();
   await expect(page.getByText('INACTIVE 94 D', { exact: false })).toHaveCount(0);
 });
 
@@ -65,7 +69,10 @@ test('secrets: names only; add, then delete', async ({ page }) => {
   await expect(page.getByText('SENTRY_DSN', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions for SENTRY_DSN' }).click();
   await page.getByRole('menuitem', { name: 'Delete…' }).click();
-  await page.getByRole('alertdialog', { name: 'Delete SENTRY_DSN?' }).getByRole('button', { name: 'Delete SENTRY_DSN' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete SENTRY_DSN?' })
+    .getByRole('button', { name: 'Delete SENTRY_DSN' })
+    .click();
   await expect(page.getByText('SENTRY_DSN', { exact: true })).toHaveCount(0);
 });
 
@@ -74,7 +81,9 @@ test('identity: NIP-05 generator produces nostr.json and hosting snippets', asyn
   await expect(page.getByRole('heading', { name: 'Owner key' })).toBeVisible();
   await page.getByLabel('Domain').fill('https://Example.com/');
   await page.getByRole('button', { name: 'Generate nostr.json' }).click();
-  await expect(page.getByRole('region', { name: 'https://example.com/.well-known/nostr.json' })).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'https://example.com/.well-known/nostr.json' }),
+  ).toBeVisible();
   await expect(page.getByRole('tab', { name: 'nginx' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Check reviewer@example.com/ })).toBeVisible();
 });
@@ -87,7 +96,9 @@ test('retention: purge requires typing the target', async ({ page }) => {
   await expect(go).toBeDisabled();
   await sheet.getByLabel('Type everything to confirm').fill('everything');
   await go.click();
-  await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Purged · \d+ records deleted/)).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText(/Purged · \d+ records deleted/),
+  ).toBeVisible();
 });
 
 test('kill switch section opens the one-confirm panic sheet', async ({ page }) => {

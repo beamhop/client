@@ -75,6 +75,8 @@ test('destroy needs the agent name typed exactly', async ({ page }) => {
   await sheet.getByLabel('Type ci-bot to confirm').fill('ci-bot');
   await go.click();
   await expect(sheet).toBeHidden();
-  await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Destroyed · ci-bot/)).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText(/Destroyed · ci-bot/),
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Destroyed', exact: true })).toBeVisible();
 });

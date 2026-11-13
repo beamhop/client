@@ -2,7 +2,9 @@
 import { expect, test } from '@playwright/test';
 import { expectAccessible, open, rpc } from './helpers.ts';
 
-test('code entry validates, then compare → send → confirm on the computer → install + notifications', async ({ page }) => {
+test('code entry validates, then compare → send → confirm on the computer → install + notifications', async ({
+  page,
+}) => {
   await open(page, '/pair');
   await expect(page.getByRole('heading', { name: 'Pair this device' })).toBeVisible();
   await page.getByLabel('Pairing code').fill('abc');
@@ -21,13 +23,18 @@ test('code entry validates, then compare → send → confirm on the computer �
   await expect(page.getByRole('heading', { name: 'Confirm on your computer' })).toBeVisible();
   await page.getByRole('button', { name: 'Confirmed · Continue' }).click();
   await expect(page.getByRole('heading', { name: 'Paired · Test phone' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: /Get approvals on this phone\?|Notifications on/ })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: /Get approvals on this phone\?|Notifications on/ }),
+  ).toBeVisible();
   await expectAccessible(page);
 });
 
 test('a QR link names the computer; the token leaves the address bar', async ({ page }) => {
   await open(page, '/settings');
-  const start = await rpc<{ uri: string }>(page, 'device.pairStart', { name: 'New device', requireConfirm: true });
+  const start = await rpc<{ uri: string }>(page, 'device.pairStart', {
+    name: 'New device',
+    requireConfirm: true,
+  });
   const payload = start.uri.slice(start.uri.indexOf('#') + 1);
   await open(page, `/pair#${payload}`);
   await expect(page.getByRole('heading', { name: "Pair with alice's MacBook" })).toBeVisible();

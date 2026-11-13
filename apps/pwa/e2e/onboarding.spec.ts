@@ -40,7 +40,9 @@ test('the whole journey, with a skipped phone, ends in a verified round trip', a
   await expect(page).toHaveURL(/\/(\?.*)?$/);
 });
 
-test('resumes where you stopped; unknown steps redirect there; skipped steps are offered at the end', async ({ page }) => {
+test('resumes where you stopped; unknown steps redirect there; skipped steps are offered at the end', async ({
+  page,
+}) => {
   await open(page, '/setup/doctor');
   await page.getByRole('button', { name: 'Continue · Harnesses' }).click();
   await expect(page).toHaveURL(/\/setup\/harnesses/);
