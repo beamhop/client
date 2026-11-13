@@ -33,3 +33,4 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 - 02:10 — Daemon merged: 802 tests green. Real CLI↔daemon smoke OK (status/doctor/harness/agent/join/policy/panic/audit). Found gaps → onboarding+identity builder, connectivity+live E2E builder launched.
 - 02:30 — Core loop proven live end-to-end on public Nostr relays inside srt. Review wave B merged. 875 tests green.
 - 02:45 — PWA foundation merged (screenshots in apps/pwa/screenshots). 6 screen builders launched in parallel.
+- 03:00 — 1000 tests green. Onboarding/identity + hardening merged. Wave D (push/cloud, hosted PWA, packaging/docs) launched alongside 6 screen builders.
