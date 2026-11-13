@@ -9,7 +9,14 @@ import { ConfigStore } from '@beamhop/store';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { FakeRelay } from '../../../packages/channel-nostr/test/helpers/fake-relay.ts';
-import { CONTROLLER_KEY_REF, HELLO_METHOD, PROVISION_METHOD, provisionKeyRef } from '../src/remote.ts';
+import {
+  CONTROLLER_KEY_REF,
+  HELLO_METHOD,
+  PROVISION_METHOD,
+  provisionKeyRef,
+  provisionProof,
+  provisionTokenRef,
+} from '../src/remote.ts';
 import { FakeChannelPlugin, FakeHarnessPlugin, makeEnv, type TestEnv, tmpHome, until } from './helpers.ts';
 
 let R: FakeRelay;
@@ -102,9 +109,10 @@ const local = async () => {
   return { L, owner, llmKey };
 };
 
-const cloud = (owner: string, provisioningPubkey: string) =>
+const cloud = (owner: string, provisioningPubkey: string, token?: string) =>
   daemon({
     env: {
+      ...(token ? { BEAMHOP_PROVISIONING_TOKEN: token } : {}),
       BEAMHOP_AWAIT_PROVISIONING: '1',
       BEAMHOP_OWNER_NPUB: owner,
       BEAMHOP_PROVISIONING_PUBKEY: provisioningPubkey,
@@ -116,6 +124,8 @@ const cloud = (owner: string, provisioningPubkey: string) =>
 
 const deployAndProvision = async () => {
   const { L, owner, llmKey } = await local();
+  // What a real deployer puts into the host's environment (the fake deployer skips provisioningInfo).
+  const token = await L.d.remotes.provisioningToken('bot');
   const dep = await L.client.call('deploy.apply', { agent: 'bot', provider: 'fakecloud', mode: 'new' });
   const rec = L.d.store.deployments.get(dep.id)!;
   const P = (rec.data as { provisioningPubkey: string }).provisioningPubkey;
@@ -123,7 +133,7 @@ const deployAndProvision = async () => {
   expect((await L.client.call('system.status')).remotes).toMatchObject([
     { deployment: dep.id, provisioning: 'pending', online: false },
   ]);
-  const C = await cloud(owner, P);
+  const C = await cloud(owner, P, token);
   expect(C.d.cloud.awaiting()).toBe(true);
   expect(C.d.controlAllowlist()).toContain(P);
   // The host announces itself on its tick; the owner's daemon answers with the provisioning call.
@@ -282,4 +292,70 @@ describe('heartbeats and panic fan-out', () => {
     expect(v.command).toMatchObject({ kind: 'panic', state: 'failed' });
     expect(v.command?.error).toMatch(/timed out/);
   }, 15_000);
+});
+
+describe('review wave C', () => {
+  it('PROV-1: an impostor that knows the provisioning pubkey and agent name gets nothing', async () => {
+    const { L, owner } = await local();
+    const token = await L.d.remotes.provisioningToken('bot');
+    const dep = await L.client.call('deploy.apply', { agent: 'bot', provider: 'fakecloud', mode: 'new' });
+    const P = (L.d.store.deployments.get(dep.id)!.data as { provisioningPubkey: string }).provisioningPubkey;
+    const stranger = generateAgentKey();
+    const impostor = createControlClient({
+      key: stranger.nsec,
+      daemonPubkey: P,
+      relays: [R.url],
+      WebSocket,
+      timeoutMs: 2000,
+    });
+    closers.push(impostor);
+    await impostor.ready();
+    await expect(impostor.call(HELLO_METHOD, { agent: 'bot', npub: stranger.npub })).rejects.toThrow(/proof/);
+    // A proof made with a guessed token, or replayed from another key, is refused too.
+    const guessed = provisionProof('0'.repeat(64), 'bot', stranger.pubkey);
+    await expect(
+      impostor.call(HELLO_METHOD, { agent: 'bot', npub: stranger.npub, proof: guessed }),
+    ).rejects.toThrow(/proof/);
+    const otherKey = generateAgentKey();
+    await expect(
+      impostor.call(HELLO_METHOD, {
+        agent: 'bot',
+        npub: stranger.npub,
+        proof: provisionProof(token, 'bot', otherKey.pubkey),
+      }),
+    ).rejects.toThrow(/proof/);
+    await L.d.remotes.settled();
+    expect(L.d.store.audit.query({ type: 'deploy.provisioned' })).toHaveLength(0);
+    expect(L.d.store.audit.query({ type: 'deploy.hello_refused' }).length).toBeGreaterThanOrEqual(3);
+    // The real host (token from its environment) is still provisioned afterwards.
+    const C = await cloud(owner, P, token);
+    await C.d.tick();
+    await until(() => C.d.cloud.provisioned(), 5000, 'provisioned');
+    await L.d.remotes.settled();
+    expect(L.d.store.deployments.get(dep.id)!.data).toMatchObject({ daemonNpub: C.d.control!.npub });
+    expect(await L.secrets.get(provisionTokenRef('bot'))).toBeUndefined();
+  });
+
+  it('CTRL-1: the controller key may only panic, resume and read status on the cloud host', async () => {
+    const { L, C } = await deployAndProvision();
+    const ctl = await L.d.remotes.controllerKey();
+    const asController = createControlClient({
+      key: ctl.nsec,
+      daemonPubkey: C.d.control!.npub,
+      relays: [R.url],
+      WebSocket,
+      timeoutMs: 2000,
+    });
+    closers.push(asController);
+    await asController.ready();
+    expect(await asController.call<{ version: string }>('system.status')).toMatchObject({
+      version: expect.any(String),
+    });
+    await expect(asController.call('secret.set', { name: 'X', value: 'y' })).rejects.toThrow(/may only call/);
+    await expect(asController.call('identity.ownerImport', { npub: ctl.npub })).rejects.toThrow(
+      /may only call/,
+    );
+    await expect(asController.call('agent.list')).rejects.toThrow(/may only call/);
+    expect(await C.secrets.get('X')).toBeUndefined();
+  });
 });

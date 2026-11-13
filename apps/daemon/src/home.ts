@@ -99,6 +99,8 @@ export interface DeployEnv {
   awaitProvisioning: boolean;
   ownerNpub?: string;
   provisioningPubkey?: string;
+  /** One-time binding token proving this host came from the owner's deploy (wave C PROV-1). */
+  provisioningToken?: string;
   daemonNsecRef?: string;
   sandboxFs: 'srt' | 'container';
   harnesses: string[];
@@ -117,6 +119,7 @@ export const readDeployEnv = (env: NodeJS.ProcessEnv = process.env): DeployEnv =
   };
   if (env.BEAMHOP_OWNER_NPUB) out.ownerNpub = env.BEAMHOP_OWNER_NPUB;
   if (env.BEAMHOP_PROVISIONING_PUBKEY) out.provisioningPubkey = env.BEAMHOP_PROVISIONING_PUBKEY;
+  if (env.BEAMHOP_PROVISIONING_TOKEN) out.provisioningToken = env.BEAMHOP_PROVISIONING_TOKEN;
   if (env.BEAMHOP_DAEMON_NSEC_REF) out.daemonNsecRef = env.BEAMHOP_DAEMON_NSEC_REF;
   if (env.BEAMHOP_AGENT) out.agent = env.BEAMHOP_AGENT;
   if (env.BEAMHOP_DEPLOY_PROVIDER) out.provider = env.BEAMHOP_DEPLOY_PROVIDER;

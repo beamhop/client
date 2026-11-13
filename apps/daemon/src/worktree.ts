@@ -3,12 +3,16 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { HARDENED_GIT_ARGS, verifyWorktree } from './git-ops.ts';
 import { slugify } from './util.ts';
 
 const exec = promisify(execFile);
 
 const git = async (cwd: string, args: string[]): Promise<string> => {
-  const { stdout } = await exec('git', ['-C', cwd, ...args], { windowsHide: true, timeout: 60_000 });
+  const { stdout } = await exec('git', [...HARDENED_GIT_ARGS, '-C', cwd, ...args], {
+    windowsHide: true,
+    timeout: 60_000,
+  });
   return stdout.trim();
 };
 
@@ -53,6 +57,8 @@ export const addWorktree = async (opts: {
 }): Promise<Worktree> => {
   const sub = relative(opts.repo, resolve(opts.mount));
   if (existsSync(join(opts.dir, '.git'))) {
+    // An earlier session may have rewritten the pointer: check it before running git there.
+    await verifyWorktree(opts.dir, { repos: [opts.repo] });
     const branch = await git(opts.dir, ['rev-parse', '--abbrev-ref', 'HEAD']);
     return { repo: opts.repo, path: opts.dir, branch, mountPath: join(opts.dir, sub) };
   }

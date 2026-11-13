@@ -19,8 +19,12 @@ const bad = (msg: string): never => {
   throw new BeamhopError('invalid_input', msg);
 };
 
-/** Shell control characters: a prefix rule never matches a command containing any of them. */
-const SHELL_META = /[;&|`$<>\n\r\\]|\$\(/;
+/**
+ * Shell control and quoting characters: a prefix rule never matches a command containing any of
+ * them. Quotes, braces, parens and `!` let one argument smuggle a second program to commands that
+ * execute their arguments (review wave C RULE-1); such requests need the exact command.
+ */
+const SHELL_META = /[;&|`$<>\n\r\\'"(){}!]/;
 /** First words that would turn a prefix into "run anything". */
 const INTERPRETERS = new Set([
   'sh',
@@ -56,7 +60,83 @@ const INTERPRETERS = new Set([
   'php',
   'lua',
   'osascript',
+  // Review wave C RULE-1: more commands that run arbitrary code from their arguments.
+  'npx',
+  'pnpx',
+  'bunx',
+  'uvx',
+  'pipx',
+  'tsx',
+  'ts-node',
+  'awk',
+  'gawk',
+  'mawk',
+  'nawk',
+  'sed',
+  'find',
+  'stdbuf',
+  'setsid',
+  'chroot',
+  'unshare',
+  'script',
+  'watch',
+  'flock',
+  'strace',
+  'ltrace',
+  'gdb',
+  'busybox',
+  'toybox',
+  'parallel',
+  'expect',
+  'tclsh',
+  'rscript',
+  'r',
+  'julia',
+  'java',
+  'jshell',
+  'ionice',
+  'chrt',
+  'taskset',
+  'caffeinate',
+  'wsl',
+  'start',
+  'systemd-run',
+  'run-parts',
+  'ssh',
 ]);
+
+/**
+ * Tools whose first argument picks a sub-program (and whose global options can run code, e.g.
+ * `git -c alias.x=!sh`): a prefix rule must name the subcommand, never just the tool.
+ */
+const SUBCOMMAND_TOOLS = new Set([
+  'git',
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'cargo',
+  'go',
+  'docker',
+  'podman',
+  'kubectl',
+  'make',
+  'gh',
+  'uv',
+  'pip',
+  'poetry',
+  'dotnet',
+  'mvn',
+  'gradle',
+]);
+
+/** `/usr/bin/Python3.12.exe` → `python` (path, Windows extension and version suffix dropped). */
+const programName = (word: string): string =>
+  word
+    .replace(/^.*[/\\]/, '')
+    .toLowerCase()
+    .replace(/\.(exe|cmd|bat|com|ps1)$/, '')
+    .replace(/^(.*?[a-z])[\d.-]+$/, '$1');
 
 const HOST_RE = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 
@@ -160,8 +240,14 @@ const commandRule = (value: string, request: string | undefined, exact: boolean)
   const rw = words(req);
   if (vw.length > rw.length || vw.some((w, i) => w !== rw[i]))
     bad('the command prefix must be a prefix of the requested command');
-  const first = (vw[0] ?? '').replace(/^.*[/\\]/, '');
+  const word0 = vw[0] ?? '';
+  // `FOO=1 bash -c …`, `"bash"`, `b\ash`: the first word must be a plain program name.
+  if (!/^[A-Za-z0-9._/+@:-]+$/.test(word0) || word0.includes('='))
+    bad('a command prefix must start with a plain program name');
+  const first = programName(word0);
   if (INTERPRETERS.has(first)) bad(`"${first}" runs arbitrary code; allow the exact command instead`);
+  if (SUBCOMMAND_TOOLS.has(first) && (vw.length < 2 || vw[1]!.startsWith('-')))
+    bad(`a "${first}" rule must name its subcommand, e.g. "${first} status"`);
   return v;
 };
 

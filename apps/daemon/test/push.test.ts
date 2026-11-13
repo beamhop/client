@@ -5,7 +5,13 @@ import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import webpush from 'web-push';
-import { BROWSER_TARGET, type PushSender, VAPID_SECRET } from '../src/push.ts';
+import {
+  BROWSER_TARGET,
+  isPushServiceEndpoint,
+  type PushSender,
+  PushSubscriptionInput,
+  VAPID_SECRET,
+} from '../src/push.ts';
 import { makeEnv, ownerAlice, setupBot, type TestEnv, until } from './helpers.ts';
 
 // ───────────────────────────── fake push service ─────────────────────────────
@@ -67,7 +73,7 @@ const browserSub = (path: string) => {
   const auth = randomBytes(16);
   return {
     sub: {
-      endpoint: `https://push.invalid${path}`,
+      endpoint: `https://fcm.googleapis.com${path}`,
       keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: auth.toString('base64url') },
     },
     decrypt(body: Buffer): Record<string, unknown> {
@@ -281,7 +287,7 @@ describe('web push', () => {
     await expect(
       e.client.call('device.pushSubscribe', {
         id: a.id,
-        subscription: { ...sub, endpoint: 'http://push.invalid/x' },
+        subscription: { ...sub, endpoint: 'http://fcm.googleapis.com/x' },
       }),
     ).rejects.toThrow(/https/);
     await expect(
@@ -306,5 +312,37 @@ describe('web push', () => {
     await e.client.call('device.pushPrefs', { id: a.id, prefs: { crash: false } });
     await e.client.call('device.remove', { id: a.id });
     expect(e.d.store.kv.get('push.prefs', a.id)).toBeUndefined();
+  });
+});
+
+describe('review wave C PUSH-1: subscription endpoints', () => {
+  it('only browser push services are accepted (no SSRF to private or arbitrary hosts)', () => {
+    for (const ok of [
+      'https://fcm.googleapis.com/fcm/send/abc',
+      'https://updates.push.services.mozilla.com/wpush/v2/x',
+      'https://web.push.apple.com/QH8',
+      'https://wns2-par02p.notify.windows.com/w/?token=x',
+    ])
+      expect(isPushServiceEndpoint(ok)).toBe(true);
+    for (const bad of [
+      'https://127.0.0.1/x',
+      'https://localhost/x',
+      'https://169.254.169.254/latest/meta-data',
+      'https://10.0.0.5/admin',
+      'https://evil.example/x',
+      'https://fcm.googleapis.com.evil.example/x',
+      'https://evilfcm.googleapis.com.example/x',
+      'https://fcm.googleapis.com:8443/x',
+      'https://user:pw@fcm.googleapis.com/x',
+      'http://fcm.googleapis.com/x',
+      'https://[::1]/x',
+    ])
+      expect(isPushServiceEndpoint(bad)).toBe(false);
+    expect(
+      PushSubscriptionInput.safeParse({
+        endpoint: 'https://127.0.0.1:2222/rpc',
+        keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) },
+      }).success,
+    ).toBe(false);
   });
 });

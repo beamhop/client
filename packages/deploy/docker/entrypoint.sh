@@ -20,7 +20,7 @@ healthcheck() {
 scrub_env() {
   for name in $(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'); do
     case "$name" in
-      BEAMHOP_DAEMON_NSEC_REF|BEAMHOP_PROVISIONING_PUBKEY) ;;
+      BEAMHOP_DAEMON_NSEC_REF|BEAMHOP_PROVISIONING_PUBKEY|BEAMHOP_PROVISIONING_TOKEN) ;;
       *TOKEN*|*SECRET*|*PASSWORD*|*NSEC*|*API_KEY*|*APIKEY*|*PRIVATE*)
         log "ignoring secret-looking env var $name (secrets are provisioned over Nostr)"
         unset "$name"

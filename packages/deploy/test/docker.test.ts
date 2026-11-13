@@ -117,10 +117,13 @@ describe('docker/entrypoint.sh', () => {
         BEAMHOP_HOME: join(home, '.beamhop'),
         GITHUB_TOKEN: 'ghp_shouldnotsurvive',
         BEAMHOP_PROVISIONING_PUBKEY: 'abc',
+        BEAMHOP_PROVISIONING_TOKEN: 'one-time',
       },
     });
     expect(stdout).not.toContain('ghp_shouldnotsurvive');
     expect(stdout).toContain('BEAMHOP_PROVISIONING_PUBKEY=abc');
+    // The one-time provisioning binding token must reach the daemon (wave C PROV-1).
+    expect(stdout).toContain('BEAMHOP_PROVISIONING_TOKEN=one-time');
     expect(stdout).toMatch(/BEAMHOP_SANDBOX_FS=(srt|container)/);
     expect(stderr).toContain('ignoring secret-looking env var GITHUB_TOKEN');
     expect(stderr).not.toContain('ghp_shouldnotsurvive');

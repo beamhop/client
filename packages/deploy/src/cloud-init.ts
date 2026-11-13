@@ -5,6 +5,7 @@ import {
   assertAgentSlug,
   assertNoSecrets,
   assertNpub,
+  assertProvisioningToken,
   assertPubkey,
   assertSecretRef,
   assertSshPubkey,
@@ -31,6 +32,8 @@ export interface CloudInitOptions {
   daemonNsecRef: string;
   /** One-time provisioning public key (hex or npub). The matching secret stays on the owner's machine. */
   provisioningPubkey?: string;
+  /** One-time binding token for the provisioning hello (review wave C PROV-1). */
+  provisioningToken?: string;
   /** Opt-in SSH: OpenSSH public keys for the `beamhop` user. Without it, sshd is disabled and port 22 closed. */
   sshAuthorizedKeys?: string[];
   /** Override harness → npm package mapping (e.g. from the signed catalog). */
@@ -109,6 +112,7 @@ WantedBy=multi-user.target
 const envFile = (
   o: Required<Pick<CloudInitOptions, 'agent' | 'ownerNpub' | 'daemonNsecRef'>> & {
     provisioningPubkey?: string;
+    provisioningToken?: string;
     harnesses: string[];
     provider?: string;
     beamhopVersion: string;
@@ -133,6 +137,7 @@ const envFile = (
     BEAMHOP_SANDBOX_FS: 'srt',
   };
   if (o.provisioningPubkey) lines.BEAMHOP_PROVISIONING_PUBKEY = o.provisioningPubkey;
+  if (o.provisioningToken) lines.BEAMHOP_PROVISIONING_TOKEN = o.provisioningToken;
   if (o.provider) lines.BEAMHOP_DEPLOY_PROVIDER = o.provider;
   return `${Object.entries(lines)
     .map(([k, v]) => `${k}=${v}`)
@@ -142,8 +147,9 @@ const envFile = (
 /**
  * Render the cloud-init user_data for a VPS (Hetzner, DigitalOcean).
  *
- * Guarantees: no secrets are embedded (only the owner npub, a provisioning *public* key and a
- * secret *reference*); no inbound ports unless SSH is explicitly opted into; the daemon runs as an
+ * Guarantees: no long-lived secrets are embedded (only the owner npub, a provisioning *public* key,
+ * a secret *reference* and a one-time provisioning binding token that is worthless once the host
+ * was provisioned; review wave C PROV-1); no inbound ports unless SSH is explicitly opted into; the daemon runs as an
  * unprivileged `beamhop` user under a hardened systemd unit.
  */
 export const renderCloudInit = (opts: CloudInitOptions): string => {
@@ -152,6 +158,9 @@ export const renderCloudInit = (opts: CloudInitOptions): string => {
   const ownerNpub = assertNpub(opts.ownerNpub);
   const nsecRef = assertSecretRef(opts.daemonNsecRef);
   const provisioningPubkey = opts.provisioningPubkey ? assertPubkey(opts.provisioningPubkey) : undefined;
+  const provisioningToken = opts.provisioningToken
+    ? assertProvisioningToken(opts.provisioningToken)
+    : undefined;
   const sshKeys = (opts.sshAuthorizedKeys ?? []).map(assertSshPubkey);
   const ssh = sshKeys.length > 0;
   const harnessPkgs = resolveHarnessPackages(opts.harnesses, opts.harnessPackages);
@@ -217,12 +226,14 @@ export const renderCloudInit = (opts: CloudInitOptions): string => {
       { path: '/etc/apparmor.d/beamhop-bwrap', permissions: '0644', content: BWRAP_APPARMOR },
       {
         path: '/etc/beamhop/beamhopd.env',
-        permissions: '0644',
+        // Root-only: systemd reads it; it carries the one-time provisioning token (PROV-1).
+        permissions: '0600',
         content: envFile({
           agent,
           ownerNpub,
           daemonNsecRef: nsecRef,
           provisioningPubkey,
+          provisioningToken,
           harnesses: opts.harnesses,
           provider: opts.provider,
           beamhopVersion: version,

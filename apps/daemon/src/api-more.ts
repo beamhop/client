@@ -29,7 +29,7 @@ import {
 } from './git-ops.ts';
 import type { CallContext, Handler } from './rpc-server.ts';
 import { absPath, isDenied, within } from './rules.ts';
-import { removeWorktree } from './worktree.ts';
+import { gitTopLevel, removeWorktree } from './worktree.ts';
 
 const OK = { ok: true as const };
 
@@ -121,6 +121,15 @@ export const moreHandlers = (d: Daemon, deps: MoreDeps) => {
     return { rec, wt: rec.worktree.path, branch: rec.worktree.branch };
   };
 
+  /** Repositories of the agent's rw git mounts, resolved outside any worktree (wave C GIT-1). */
+  const agentRepos = async (agent: string): Promise<string[]> => {
+    const a = d.config.agents.get(agent);
+    const tops = await Promise.all(
+      (a?.mounts ?? []).filter((m) => m.mode === 'rw').map((m) => gitTopLevel(absPath(expandHome(m.path)))),
+    );
+    return tops.filter((t): t is string => !!t);
+  };
+
   const quorumView = () => {
     const policy = d.approvals.policy();
     return {
@@ -185,7 +194,7 @@ export const moreHandlers = (d: Daemon, deps: MoreDeps) => {
         throw new BeamhopError('conflict', 'the session is running; wait or stop it first');
       if (deleteBranch && d.sessions.live(id))
         throw new BeamhopError('conflict', 'stop the session before deleting its branch');
-      const repo = await repoOfWorktree(wt);
+      const repo = await repoOfWorktree(wt, { repos: await agentRepos(rec.agent), branch });
       await checkBranch(repo, branch);
       if (base) await checkBranch(repo, base);
       await commitPending(wt, `beamhop: ${rec.title}`.slice(0, 200));
@@ -221,7 +230,7 @@ export const moreHandlers = (d: Daemon, deps: MoreDeps) => {
       const { rec, wt, branch } = sessionWorktree(id);
       if (rec.status === 'running')
         throw new BeamhopError('conflict', 'the session is running; wait or stop it first');
-      const repo = await repoOfWorktree(wt);
+      const repo = await repoOfWorktree(wt, { repos: await agentRepos(rec.agent), branch });
       await checkBranch(repo, branch);
       const url = await remoteUrl(repo, remote);
       const b = base ? await checkBranch(repo, base) : ((await defaultBase(repo, remote)) ?? 'main');

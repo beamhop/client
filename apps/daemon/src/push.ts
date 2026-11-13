@@ -28,18 +28,37 @@ const BROWSER_NS = 'push.browser';
 const PREFS_NS = 'push.prefs';
 const MAX_BROWSER_SUBS = 20;
 
+/**
+ * Browser push services (review wave C PUSH-1). The daemon POSTs to the endpoint from outside the
+ * sandbox, so an endpoint is an outbound request target chosen by whoever registers it: only the
+ * public push services of the browsers we support are accepted, on the default https port.
+ */
+export const PUSH_SERVICE_HOSTS: readonly string[] = [
+  'fcm.googleapis.com', // Chrome, Edge (Chromium), Opera, Brave, Samsung Internet
+  'android.googleapis.com', // legacy GCM endpoints
+  'updates.push.services.mozilla.com', // Firefox
+  'push.services.mozilla.com',
+  'web.push.apple.com', // Safari, iOS 16.4+
+  'notify.windows.com', // Edge (WNS: *.notify.windows.com)
+];
+
+export const isPushServiceEndpoint = (u: string): boolean => {
+  let url: URL;
+  try {
+    url = new URL(u);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+  const h = url.hostname.toLowerCase();
+  return PUSH_SERVICE_HOSTS.some((s) => h === s || h.endsWith(`.${s}`));
+};
+
 export const PushSubscriptionInput = z.object({
   endpoint: z
     .string()
     .max(2048)
-    .refine((u) => {
-      try {
-        const url = new URL(u);
-        return url.protocol === 'https:' && !url.username && !url.password;
-      } catch {
-        return false;
-      }
-    }, 'endpoint must be an https URL'),
+    .refine(isPushServiceEndpoint, 'endpoint must be an https URL of a browser push service'),
   expirationTime: z.number().nullable().optional(),
   keys: z.object({ p256dh: z.string().min(16).max(256), auth: z.string().min(8).max(64) }),
 });

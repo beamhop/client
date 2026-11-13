@@ -26,6 +26,12 @@ const SAMPLES: Record<string, string> = {
   'aws-access-key-id': ['AKIA', 'ABCDEFGHIJKLMNOP'].join(''),
   'nostr-nsec': ['nsec1', a(58, 'q')].join(''),
   'telegram-bot-token': ['123456789', `AA${a(33, 'h')}`].join(':'),
+  // Review wave C SCAN-1.
+  'private-key-pem': ['-----BEGIN', 'OPENSSH', 'PRIVATE', 'KEY-----'].join(' '),
+  'npm-token': ['npm', a(36, 'Z')].join('_'),
+  'google-api-key': ['AIza', a(35, 'k')].join(''),
+  'gitlab-pat': ['glpat', a(20, 'g')].join('-'),
+  'stripe-secret-key': ['sk', 'live', a(24, 's')].join('_'),
 };
 
 describe('scripts/check-no-secrets.mjs', () => {
@@ -50,6 +56,23 @@ describe('scripts/check-no-secrets.mjs', () => {
     );
     expect(r.out).toContain('clean');
     expect(r.status).toBe(0);
+  });
+
+  it('SCAN-1: a secret on a very long line (minified bundle) is still found', () => {
+    const r = scan('bundle.js', `${'x'.repeat(30_000)};var t='${SAMPLES['npm-token']}';\n`);
+    expect(r.status).toBe(1);
+    expect(r.out).toContain('npm-token');
+  });
+
+  it('SCAN-1: UTF-16 text is decoded instead of skipped as binary', () => {
+    const f = join(dir, 'utf16.txt');
+    writeFileSync(
+      f,
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`k=${SAMPLES['github-token']}\n`, 'utf16le')]),
+    );
+    const r = spawnSync(process.execPath, [SCRIPT, f], { encoding: 'utf8' });
+    expect(r.status).toBe(1);
+    expect(`${r.stdout}${r.stderr}`).toContain('github-token');
   });
 
   it('honours the per-line allow marker', () => {

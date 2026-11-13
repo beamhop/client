@@ -4,15 +4,31 @@
  * (no shell); names are validated with `git check-ref-format` and never start with `-`.
  */
 import { execFile } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
+import { devNull } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { BeamhopError } from '@beamhop/core';
 import { errMsg } from './util.ts';
 
 const exec = promisify(execFile);
 
+/**
+ * Every daemon-side git call runs without hooks and without an fsmonitor (review wave C GIT-1):
+ * these commands run outside the sandbox, in work trees an agent has written to.
+ */
+export const HARDENED_GIT_ARGS: readonly string[] = [
+  '-c',
+  `core.hooksPath=${devNull}`,
+  '-c',
+  'core.fsmonitor=false',
+  '-c',
+  'protocol.ext.allow=never',
+];
+
 const git = async (cwd: string, args: string[], timeout = 60_000): Promise<string> => {
-  const { stdout } = await exec('git', ['-C', cwd, ...args], {
+  const { stdout } = await exec('git', [...HARDENED_GIT_ARGS, '-C', cwd, ...args], {
     windowsHide: true,
     timeout,
     maxBuffer: 4 * 1024 * 1024,
@@ -39,11 +55,81 @@ export const checkBranch = async (cwd: string, name: string): Promise<string> =>
   return name;
 };
 
-/** The repository (main work tree) a linked worktree belongs to. */
-export const repoOfWorktree = async (worktree: string): Promise<string> => {
-  const common = await tryGit(worktree, ['rev-parse', '--git-common-dir']);
-  if (!common) throw new BeamhopError('not_found', 'the session worktree is gone');
-  return dirname(resolve(worktree, common));
+const readSmall = async (p: string): Promise<string | undefined> => {
+  const st = await lstat(p).catch(() => undefined);
+  if (!st?.isFile() || st.size > 4096) return undefined;
+  return (await readFile(p, 'utf8')).trim();
+};
+
+const tampered = (why: string): never => {
+  throw new BeamhopError('sandbox_violation', `the session worktree was tampered with (${why})`);
+};
+
+/**
+ * The repository a session worktree belongs to, checked against the agent's own repositories
+ * (review wave C GIT-1). The worktree and its admin dir are writable from inside the sandbox, so
+ * nothing in them is trusted: `.git` must be a plain pointer to `<repo>/.git/worktrees/<name>` of
+ * one of `repos` (top-levels of the agent's git mounts, resolved outside the worktree), the admin
+ * dir must point back at this worktree and at that repository's common dir, carry no per-worktree
+ * config, and (with `branch`) have exactly `refs/heads/<branch>` checked out.
+ */
+export const verifyWorktree = async (
+  worktree: string,
+  opts: { repos: readonly string[]; branch?: string },
+): Promise<{ repo: string; common: string; admin: string }> => {
+  const dotGit = join(worktree, '.git');
+  const pointer = await readSmall(dotGit);
+  if (pointer === undefined) {
+    if (!existsSync(worktree)) throw new BeamhopError('not_found', 'the session worktree is gone');
+    return tampered('.git is not a worktree pointer file');
+  }
+  const m = /^gitdir: (.+)$/.exec(pointer);
+  if (!m) return tampered('.git is not a worktree pointer file');
+  const admin = await realpath(resolve(worktree, m[1]!)).catch(() => tampered('missing admin dir'));
+  for (const repo of opts.repos) {
+    const commonRaw = await tryGit(repo, ['rev-parse', '--git-common-dir']);
+    if (!commonRaw) continue;
+    const common = await realpath(resolve(repo, commonRaw)).catch(() => undefined);
+    if (!common || dirname(admin) !== join(common, 'worktrees')) continue;
+    const commondir = await readSmall(join(admin, 'commondir'));
+    if (commondir === undefined) return tampered('missing commondir');
+    const commonOfAdmin = await realpath(resolve(admin, commondir)).catch(() => undefined);
+    if (commonOfAdmin !== common) return tampered('commondir points elsewhere');
+    if (existsSync(join(admin, 'config.worktree'))) return tampered('per-worktree config');
+    const back = await readSmall(join(admin, 'gitdir'));
+    const realDotGit = await realpath(dotGit);
+    if (!back || (await realpath(resolve(admin, back)).catch(() => undefined)) !== realDotGit)
+      return tampered('admin dir belongs to another worktree');
+    if (
+      opts.branch !== undefined &&
+      (await readSmall(join(admin, 'HEAD'))) !== `ref: refs/heads/${opts.branch}`
+    )
+      return tampered(`HEAD is not ${opts.branch}`);
+    return { repo: dirname(common), common, admin };
+  }
+  return tampered("not a worktree of the agent's repositories");
+};
+
+export const repoOfWorktree = async (
+  worktree: string,
+  opts: { repos: readonly string[]; branch?: string },
+): Promise<string> => (await verifyWorktree(worktree, opts)).repo;
+
+/**
+ * What a sandboxed session may write in the repository behind its worktree (review wave C GIT-1):
+ * objects, its own `beamhop/*` branches (and their reflogs) and its own admin dir. Never the
+ * repository's config, hooks, info/, other branches or other worktrees' admin dirs.
+ */
+export const sandboxGitWritePaths = async (worktree: string, repo: string): Promise<string[]> => {
+  const { common, admin } = await verifyWorktree(worktree, { repos: [repo] });
+  const out = [
+    join(common, 'objects'),
+    join(common, 'refs', 'heads', 'beamhop'),
+    join(common, 'logs', 'refs', 'heads', 'beamhop'),
+    admin,
+  ];
+  for (const p of out) await mkdir(p, { recursive: true });
+  return out;
 };
 
 export const currentBranch = (cwd: string): Promise<string | undefined> =>
