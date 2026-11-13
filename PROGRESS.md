@@ -35,3 +35,4 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 - 02:45 — PWA foundation merged (screenshots in apps/pwa/screenshots). 6 screen builders launched in parallel.
 - 03:00 — 1000 tests green. Onboarding/identity + hardening merged. Wave D (push/cloud, hosted PWA, packaging/docs) launched alongside 6 screen builders.
 - 03:40 — All screens, push/cloud, hosted mode, packaging & docs merged. 1026 backend + 191 PWA unit tests green. Wave E (API completeness, real-daemon PWA E2E, UX polish) launched.
+- 04:40 — API completeness + security wave C merged (36 confirmed security issues fixed across 3 waves). 1076 backend + 196 PWA unit tests green, secret scan clean.
