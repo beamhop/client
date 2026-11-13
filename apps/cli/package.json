@@ -1,0 +1,20 @@
+{
+  "name": "beamhop",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed.",
+  "bin": {
+    "beamhop": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/client": "workspace:*",
+    "@beamhop/core": "workspace:*",
+    "commander": "^14.0.0",
+    "picocolors": "^1.1.1",
+    "yaml": "^2.8.0"
+  }
+}
