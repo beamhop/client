@@ -1,0 +1,14 @@
+{
+  "name": "@beamhop/store",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/core": "workspace:*",
+    "yaml": "^2.8.0",
+    "zod": "^4.1.0"
+  }
+}
