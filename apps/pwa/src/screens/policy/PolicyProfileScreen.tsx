@@ -1,43 +1,18 @@
 /**
- * TODO(policy builder): Policy profile editor — SCREENS §7 (Network sub-screen, Roles, Review sheet).
- * Route: /policy/$profile.
+ * /policy/$profile — one route, three kinds of detail (route kept as in SCREENS §0.1):
+ *   strict | workspace | custom → profile explainer;  roles → roles matrix;  anything else → agent editor.
+ * Profile names and `roles` are reserved; agents are slugs so collisions are unlikely and the agent
+ * editor stays reachable from Agents → Sandbox & roles.
  */
 import { useParams } from '@tanstack/react-router';
-import { Screen } from '../../shell/Screen.tsx';
-import { ScreenStub } from '../../shell/ScreenStub.tsx';
-import { ChipGroup } from '../../ui/Chip.tsx';
+import { AgentPolicyScreen } from './AgentPolicy.tsx';
+import { isProfile } from './model.ts';
+import { ProfileScreen } from './ProfileInfo.tsx';
+import { RolesScreen } from './Roles.tsx';
 
 export const PolicyProfileScreen = () => {
   const { profile } = useParams({ strict: false }) as { profile: string };
-  return (
-    <Screen
-      title={profile}
-      back={{ href: '/policy', label: 'Policy' }}
-      pane="detail"
-      crumbs={[{ label: 'Policy', href: '/policy' }, { label: profile }]}
-    >
-      <div className="flex flex-col gap-6">
-        <ChipGroup
-          label="Never (locked)"
-          items={['~/.ssh', '~/.aws', '~/.config/gh', 'keychains', 'browser profiles'].map((p) => ({
-            id: p,
-            label: p,
-            variant: 'locked' as const,
-          }))}
-        />
-        <ScreenStub
-          spec="SCREENS §7"
-          owner="src/screens/policy/"
-          outline={[
-            'Files: mounts with RO|RW, deny list',
-            'Network: allowed chips, suggested (learning), always blocked',
-            'Env allowlist · Roles matrix (Auto | Ask | Deny)',
-            'Review & save → plain-language + YAML diff',
-          ]}
-          calls={[{ method: 'policy.get', params: { name: 'reviewer' } }]}
-          cli={`beamhop policy show --profile ${profile}`}
-        />
-      </div>
-    </Screen>
-  );
+  if (profile === 'roles') return <RolesScreen />;
+  if (isProfile(profile)) return <ProfileScreen profile={profile} />;
+  return <AgentPolicyScreen name={profile} />;
 };
