@@ -34,6 +34,10 @@ export const assertNpub = (npub: string): string =>
 export const assertPubkey = (pk: string): string =>
   HEX64.test(pk) || NPUB.test(pk) ? pk : bad('provisioningPubkey must be a 64-char hex pubkey or an npub');
 
+/** One-time provisioning binding token: 32+ random bytes, base64url (review wave C PROV-1). */
+export const assertProvisioningToken = (t: string): string =>
+  /^[A-Za-z0-9_-]{43,128}$/.test(t) ? t : bad('provisioningToken must be 43-128 base64url characters');
+
 export const assertVersion = (v: string): string =>
   SEMVER.test(v) ? v : bad(`beamhopVersion must be an exact semver version, got "${v}"`);
 

@@ -15,6 +15,7 @@
  * Afterwards a control client (keyed with a dedicated controller key that the host trusts as a
  * paired device) receives the host's heartbeats and carries panic/resume to it.
  */
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   BeamhopError,
   type ChannelConfig,
@@ -38,6 +39,22 @@ export const PROVISION_METHOD = 'beamhop.provision';
 export const HELLO_METHOD = 'beamhop.provision.hello';
 export const CONTROLLER_KEY_REF = 'beamhop.controller.nsec';
 export const provisionKeyRef = (agent: string): string => `beamhop.provision.${agent}.nsec`;
+/** One-time binding token for an agent's provisioning (review wave C PROV-1). */
+export const provisionTokenRef = (agent: string): string => `beamhop.provision.${agent}.token`;
+
+/**
+ * Proof in the host's hello that it was started from *this* deploy: an HMAC of the agent name and
+ * the host's control pubkey under the one-time token from its environment. Without it anyone who
+ * learns the provisioning pubkey (it is public, and visible as a `p` tag on relays once the real
+ * host says hello) could answer first and receive the agent's secrets.
+ */
+export const provisionProof = (token: string, agent: string, pubkeyHex: string): string =>
+  createHmac('sha256', token).update(`beamhop-provision-v1\n${agent}\n${pubkeyHex}`).digest('hex');
+
+const proofMatches = (expected: string, got: unknown): boolean => {
+  if (typeof got !== 'string' || got.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(got));
+};
 /** Wire version of the provisioning payload. */
 export const PROVISION_VERSION = 1;
 
@@ -176,6 +193,19 @@ export class RemoteManager {
     return m.pubkeyOf(m.decodeSecretKey(nsec));
   }
 
+  /** The one-time binding token for an agent's next provisioning (created on first use). */
+  async provisioningToken(agent: string): Promise<string> {
+    const ref = provisionTokenRef(agent);
+    let token = await this.d.secrets.get(ref);
+    if (!token) {
+      // Hex: can never look like a provider token to the deploy secret scanner.
+      token = randomBytes(32).toString('hex');
+      await this.d.secrets.set(ref, token);
+      this.d.invalidateSecretCache();
+    }
+    return token;
+  }
+
   /** The controller key the cloud daemons trust as a paired device. */
   async controllerKey(): Promise<{ nsec: string; npub: string }> {
     const m = await this.nostr();
@@ -242,7 +272,10 @@ export class RemoteManager {
     }
     this.d.store.kv.delete(NS, id);
     this.followedAt.delete(id);
-    if (rec) await this.d.secrets.delete(provisionKeyRef(rec.agent)).catch(() => {});
+    if (rec) {
+      await this.d.secrets.delete(provisionKeyRef(rec.agent)).catch(() => {});
+      await this.d.secrets.delete(provisionTokenRef(rec.agent)).catch(() => {});
+    }
   }
 
   private async listen(rec: DeploymentRecord): Promise<void> {
@@ -277,9 +310,23 @@ export class RemoteManager {
     });
     if (req.method !== HELLO_METHOD) return fail('unknown method');
     const rec = this.d.store.deployments.get(id);
-    const p = (req.params ?? {}) as { agent?: unknown };
+    const p = (req.params ?? {}) as { agent?: unknown; proof?: unknown };
     if (!rec || this.data(rec).provisioning !== 'pending') return fail('nothing to provision');
     if (p.agent !== rec.agent) return fail('agent mismatch');
+    // Hosts deployed with a binding token must prove they hold it (deployments made before the
+    // token existed fall back to first-hello-wins).
+    const token = await this.d.secrets.get(provisionTokenRef(rec.agent));
+    if (token && !proofMatches(provisionProof(token, rec.agent, sender), p.proof)) {
+      this.d.audit({
+        type: 'deploy.hello_refused',
+        severity: 'security',
+        summary: `Refused a provisioning hello for ${rec.agent} without a valid deploy proof`,
+        actor: `nostr:${sender}`,
+        agent: rec.agent,
+        data: { deployment: id },
+      });
+      return fail('invalid provisioning proof');
+    }
     // First hello wins; a failed attempt can be retried by the next hello.
     if (!this.inflight.has(id)) {
       this.inflight.add(id);
@@ -355,6 +402,7 @@ export class RemoteManager {
       this.listeners.get(id)?.close();
       this.listeners.delete(id);
       await d.secrets.delete(provisionKeyRef(rec.agent));
+      await d.secrets.delete(provisionTokenRef(rec.agent)).catch(() => {});
       d.invalidateSecretCache();
       d.audit({
         type: 'deploy.provisioned',

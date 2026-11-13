@@ -16,6 +16,7 @@ import {
   assertAgentSlug,
   assertNoSecrets,
   assertNpub,
+  assertProvisioningToken,
   assertPubkey,
   assertSecretRef,
   assertVersion,
@@ -26,6 +27,11 @@ export interface ProvisioningInfo {
   ownerNpub: string;
   /** One-time provisioning public key; its secret half never leaves the owner's machine. */
   provisioningPubkey: string;
+  /**
+   * One-time binding token the host proves in its provisioning hello (review wave C PROV-1). It
+   * only authorizes *receiving* the first provisioning and is deleted once that happened.
+   */
+  provisioningToken?: string;
   /** Exact beamhop version to install (follows the owner's local version, §12). */
   beamhopVersion: string;
   /** Vault reference for the daemon's nsec; default `agent.<agent>.nsec`. */
@@ -34,8 +40,11 @@ export interface ProvisioningInfo {
   sshAuthorizedKeys?: string[];
 }
 
-export type ResolvedProvisioning = Required<Omit<ProvisioningInfo, 'sshAuthorizedKeys'>> & {
+export type ResolvedProvisioning = Required<
+  Omit<ProvisioningInfo, 'sshAuthorizedKeys' | 'provisioningToken'>
+> & {
   sshAuthorizedKeys: string[];
+  provisioningToken?: string;
 };
 
 export interface DeployerOptions {
@@ -225,6 +234,7 @@ export abstract class BaseDeployer implements Deployer {
     const prov = {
       ownerNpub: assertNpub(raw.ownerNpub),
       provisioningPubkey: assertPubkey(raw.provisioningPubkey),
+      ...(raw.provisioningToken ? { provisioningToken: assertProvisioningToken(raw.provisioningToken) } : {}),
       beamhopVersion: assertVersion(raw.beamhopVersion),
       daemonNsecRef: assertSecretRef(raw.daemonNsecRef ?? `agent.${s.agent}.nsec`),
       sshAuthorizedKeys: raw.sshAuthorizedKeys ?? [],
@@ -270,7 +280,13 @@ export abstract class BaseDeployer implements Deployer {
   /** Environment for PaaS containers: non-secret only, checked for secret-looking values. */
   protected async paasEnv(
     spec: PlanContext['spec'],
-    prov: { ownerNpub: string; provisioningPubkey: string; beamhopVersion: string; daemonNsecRef: string },
+    prov: {
+      ownerNpub: string;
+      provisioningPubkey: string;
+      provisioningToken?: string;
+      beamhopVersion: string;
+      daemonNsecRef: string;
+    },
     harnessPackages: string[],
   ): Promise<Record<string, string>> {
     const env: Record<string, string> = {
@@ -279,6 +295,7 @@ export abstract class BaseDeployer implements Deployer {
       BEAMHOP_VERSION: prov.beamhopVersion,
       BEAMHOP_OWNER_NPUB: prov.ownerNpub,
       BEAMHOP_PROVISIONING_PUBKEY: prov.provisioningPubkey,
+      ...(prov.provisioningToken ? { BEAMHOP_PROVISIONING_TOKEN: prov.provisioningToken } : {}),
       BEAMHOP_DAEMON_NSEC_REF: prov.daemonNsecRef,
       BEAMHOP_AWAIT_PROVISIONING: '1',
       BEAMHOP_HARNESSES: spec.harnesses.join(','),

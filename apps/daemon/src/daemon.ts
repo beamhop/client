@@ -485,6 +485,19 @@ export class Daemon {
             id: req.id,
             error: { code: -32001, message: 'this device is not paired', data: { code: 'unauthorized' } },
           };
+        // Per-key method allowlist (wave C CTRL-1): the owner daemon's controller key may only
+        // panic / resume / read status, the provisioning key only provision.
+        const only = this.cloud.methodsFor(ctx.sender);
+        if (only && !only.includes(req.method))
+          return {
+            jsonrpc: '2.0',
+            id: req.id,
+            error: {
+              code: -32000,
+              message: `this key may only call ${only.join(', ')}`,
+              data: { code: 'forbidden' },
+            },
+          };
         return this.dispatch(req, { caller: `nostr:${ctx.senderNpub}`, transport: 'nostr' });
       },
     });
@@ -528,6 +541,8 @@ export class Daemon {
     return {
       ownerNpub: g.nostr.ownerNpub ?? this.deployEnv.ownerNpub ?? '',
       provisioningPubkey: spec?.agent ? await this.remotes.provisioningKey(spec.agent) : '',
+      // One-time binding token for the host's hello (wave C PROV-1); single use, never a credential.
+      ...(spec?.agent ? { provisioningToken: await this.remotes.provisioningToken(spec.agent) } : {}),
       beamhopVersion: VERSION,
     };
   }

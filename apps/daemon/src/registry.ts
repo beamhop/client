@@ -75,6 +75,7 @@ export interface BuiltinContext {
   provisioning: (spec?: { agent: string }) => Promise<{
     ownerNpub: string;
     provisioningPubkey: string;
+    provisioningToken?: string;
     beamhopVersion: string;
   }>;
 }

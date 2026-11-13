@@ -257,6 +257,7 @@ export class HetznerDeployer extends BaseDeployer {
       ownerNpub: prov.ownerNpub,
       daemonNsecRef: prov.daemonNsecRef,
       provisioningPubkey: prov.provisioningPubkey,
+      ...(prov.provisioningToken ? { provisioningToken: prov.provisioningToken } : {}),
       sshAuthorizedKeys: prov.sshAuthorizedKeys,
       harnessPackages: this.opts.harnessPackages,
       provider: this.id,
