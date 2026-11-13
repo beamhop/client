@@ -175,14 +175,20 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
 
   /** Does a beamhop daemon answer on the URL? */
   async healthy(timeoutMs = 1500): Promise<boolean> {
+    return (await this.health(timeoutMs)) !== undefined;
+  }
+
+  /** The answering daemon (`pid` when it reports one; older daemons do not), or undefined if none answers. */
+  private async health(timeoutMs = 1500): Promise<{ pid?: number } | undefined> {
     const f = this.o.fetch ?? fetch;
     try {
       const res = await f(`${this.o.url}/healthz`, { signal: AbortSignal.timeout(timeoutMs) });
-      if (!res.ok) return false;
-      const body = (await res.json()) as { ok?: unknown };
-      return body.ok === true;
+      if (!res.ok) return undefined;
+      const body = (await res.json()) as { ok?: unknown; pid?: unknown };
+      if (body.ok !== true) return undefined;
+      return typeof body.pid === 'number' ? { pid: body.pid } : {};
     } catch {
-      return false;
+      return undefined;
     }
   }
 
@@ -197,8 +203,20 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     return `${this.o.url}/#token=${this.token()}`;
   }
 
-  /** Attach to a running daemon or start the bundled one. Resolves once the API answers. */
-  async ensure(): Promise<'external' | 'owned'> {
+  private ensuring: Promise<'external' | 'owned'> | undefined;
+
+  /**
+   * Attach to a running daemon or start the bundled one. Resolves once the API answers. Calls that overlap
+   * share one attempt, so two callers never start two daemons.
+   */
+  ensure(): Promise<'external' | 'owned'> {
+    this.ensuring ??= this.ensureOnce().finally(() => {
+      this.ensuring = undefined;
+    });
+    return this.ensuring;
+  }
+
+  private async ensureOnce(): Promise<'external' | 'owned'> {
     this.wantRunning = true;
     this.lastError = undefined;
     if (this.child) {
@@ -223,11 +241,10 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
         return 'external';
       }
     }
-    await this.spawnDaemon();
-    return 'owned';
+    return this.spawnDaemon();
   }
 
-  private async spawnDaemon(): Promise<void> {
+  private async spawnDaemon(): Promise<'external' | 'owned'> {
     this.set('starting');
     mkdirSync(dirname(this.o.logFile), { recursive: true });
     const fd = openSync(this.o.logFile, 'a', 0o600);
@@ -255,12 +272,21 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
 
     const deadline = Date.now() + this.o.startTimeoutMs;
     while (Date.now() < deadline) {
-      if (exited) break;
-      if (await this.healthy(1000)) {
+      const h = await this.health(1000);
+      if (exited) {
+        if (!h) break;
+        // Ours could not listen because another daemon (the CLI's, another app copy's) took the port
+        // meanwhile. Never record that one as ours: attach to it as an external daemon.
+        this.set('external');
+        this.startPolling();
+        return 'external';
+      }
+      // Ours is up, unless the answer comes from another daemon (ours is then about to exit).
+      if (h && (h.pid === undefined || h.pid === child.pid)) {
         this.writeMarker(child.pid);
         this.set('running');
         this.startPolling();
-        return;
+        return 'owned';
       }
       await sleep(250);
     }

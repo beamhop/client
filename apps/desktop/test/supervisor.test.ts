@@ -12,8 +12,10 @@ const FAKE_DAEMON = `
 const http = require('node:http');
 const [port, mode] = process.argv.slice(2);
 if (mode === 'crash') { console.error('listen EADDRINUSE: address already in use 127.0.0.1:' + port); process.exit(1); }
+// Loses the port to another daemon: it never listens and exits a moment later, like beamhopd on its lock.
+if (mode === 'late') { setTimeout(() => { console.error('another daemon holds the lock'); process.exit(1); }, 600); return; }
 const srv = http.createServer((req, res) => {
-  if (req.url === '/healthz') { res.writeHead(200, {'content-type':'application/json'}); res.end('{"ok":true}'); }
+  if (req.url === '/healthz') { res.writeHead(200, {'content-type':'application/json'}); res.end(JSON.stringify({ ok: true, pid: process.pid })); }
   else { res.writeHead(404); res.end(); }
 }).listen(Number(port), '127.0.0.1', () => console.log('fake daemon up'));
 process.on('SIGTERM', () => { console.log('fake daemon stopping'); srv.close(() => process.exit(0)); });
@@ -235,5 +237,59 @@ describe('explainStartFailure', () => {
         process.kill(pid, 'SIGTERM');
       }
     });
+  });
+});
+
+describe('DaemonSupervisor: never records a daemon it did not start', () => {
+  const sup = (port: number, mode: string, spawnCount?: { n: number }) =>
+    new DaemonSupervisor({
+      url: `http://127.0.0.1:${port}`,
+      command: process.execPath,
+      args: [script, String(port), mode],
+      env: process.env,
+      tokenFile,
+      logFile: join(dir, 'logs', 'daemon.log'),
+      markerFile: join(dir, 'desktop-daemon.json'),
+      buildId: 'build-1',
+      startTimeoutMs: 10_000,
+      stopTimeoutMs: 5_000,
+      pollMs: 100,
+      ...(spawnCount
+        ? {
+            spawn: ((...a: Parameters<typeof spawn>) => {
+              spawnCount.n++;
+              return spawn(...a);
+            }) as typeof spawn,
+          }
+        : {}),
+    });
+
+  it('starts one daemon when ensure() calls overlap', async () => {
+    const port = await freePort();
+    const count = { n: 0 };
+    const s = sup(port, 'ok', count);
+    const [a, b] = await Promise.all([s.ensure(), s.ensure()]);
+    expect([a, b]).toEqual(['owned', 'owned']);
+    expect(count.n).toBe(1);
+    await s.stop();
+  });
+
+  it('attaches as external when another daemon takes the port while its own exits', async () => {
+    const port = await freePort();
+    const s = sup(port, 'late');
+    const pending = s.ensure();
+    // Another daemon (the CLI's) starts listening before ours gives up.
+    await new Promise((r) => setTimeout(r, 150));
+    const other = spawn(process.execPath, [script, String(port), 'ok'], { stdio: 'ignore' });
+    try {
+      expect(await pending).toBe('external');
+      expect(s.owned).toBe(false);
+      // No record of a dead pid: the next launch must not mistake the CLI's daemon for its own.
+      expect(existsSync(join(dir, 'desktop-daemon.json'))).toBe(false);
+      await s.stop();
+      expect(await s.healthy()).toBe(true);
+    } finally {
+      other.kill('SIGTERM');
+    }
   });
 });

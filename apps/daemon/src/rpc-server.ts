@@ -251,7 +251,10 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
     const url = new URL(req.url ?? '/', 'http://localhost');
     try {
       if (url.pathname === '/healthz') {
-        res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}');
+        // The pid lets the desktop app tell the daemon it started from another one on the same port.
+        res
+          .writeHead(200, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ ok: true, pid: process.pid }));
         return;
       }
       const refused = originPolicy.check(req, url.pathname === '/rpc');
