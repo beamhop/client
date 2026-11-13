@@ -3,7 +3,7 @@
  */
 import { CaretDown, Check } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
-import type { Key, ReactNode } from 'react';
+import { type Key, type ReactNode, useContext } from 'react';
 import {
   Dialog,
   Label,
@@ -27,6 +27,7 @@ import {
   TabPanel as RACTabPanel,
   Tabs as RACTabs,
   type TabsProps as RACTabsProps,
+  SelectStateContext,
   SelectValue,
   Text,
   ToggleButton,
@@ -311,10 +312,9 @@ export const Select = ({ label, hideLabel, description, options, className, ...r
         <SelectValue<SelectOption> className="flex min-w-0 flex-1 items-center gap-2 truncate type-body data-[placeholder]:text-ink-3">
           {({ selectedItem, defaultChildren }) =>
             selectedItem ? (
-              <>
-                {selectedItem.leading}
-                <span className="truncate">{selectedItem.label}</span>
-              </>
+              // The leading mark stays in the list only: visible text on the trigger must match its
+              // accessible name (WCAG 2.5.3), and monogram tiles are aria-hidden.
+              <span className="truncate">{selectedItem.label}</span>
             ) : (
               defaultChildren
             )
@@ -333,17 +333,41 @@ export const Select = ({ label, hideLabel, description, options, className, ...r
           <Options options={options} />
         </Popover>
       ) : (
-        <ModalOverlay isDismissable className="fixed inset-0 z-[60] flex items-end bg-scrim">
-          <Modal className="w-full rounded-t-[20px] bg-surface pb-[var(--bh-safe-bottom)] shadow-sheet outline-none">
-            <Dialog aria-label={label} className="outline-none">
-              <div className="mx-auto mt-2 mb-1 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
-              <p className="px-4 pt-2 pb-1 type-title-3 text-ink">{label}</p>
-              <Options options={options} />
-            </Dialog>
-          </Modal>
-        </ModalOverlay>
+        <>
+          {/* Never opens: lets RAC build the collection while the sheet is closed (Modal renders nothing in
+              RAC's hidden collection pass), so the trigger shows the selected value on compact. */}
+          <Popover isOpen={false} className="hidden">
+            <Options options={options} />
+          </Popover>
+          <SelectSheet label={label} options={options} />
+        </>
       )}
     </RACSelect>
+  );
+};
+
+/**
+ * Compact Select list as a bottom sheet. Open state comes from the Select explicitly: without it a
+ * ModalOverlay nested inside another modal (a Select in a Sheet) picks up the outer overlay's state
+ * and renders open.
+ */
+const SelectSheet = ({ label, options }: { label: string; options: SelectOption[] }) => {
+  const state = useContext(SelectStateContext);
+  return (
+    <ModalOverlay
+      isDismissable
+      isOpen={!!state?.isOpen}
+      onOpenChange={(open) => !open && state?.close()}
+      className="fixed inset-0 z-[60] flex items-end bg-scrim"
+    >
+      <Modal className="w-full rounded-t-[20px] bg-surface pb-[var(--bh-safe-bottom)] shadow-sheet outline-none">
+        <Dialog aria-label={label} className="outline-none">
+          <div className="mx-auto mt-2 mb-1 h-1 w-9 rounded-full bg-line-strong" aria-hidden="true" />
+          <p className="px-4 pt-2 pb-1 type-title-3 text-ink">{label}</p>
+          <Options options={options} />
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
   );
 };
 

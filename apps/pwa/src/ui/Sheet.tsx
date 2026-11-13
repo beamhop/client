@@ -196,8 +196,15 @@ export const ConfirmDialog = ({
     role="alertdialog"
     focusTitle
     footer={
-      <div className="flex flex-col gap-2 expanded:flex-row-reverse">
-        <Button variant={variant} size="lg" fullWidth isPending={isPending} onPress={() => void onConfirm()}>
+      <div className="grid gap-2 expanded:grid-cols-2">
+        <Button
+          variant={variant}
+          size="lg"
+          fullWidth
+          isPending={isPending}
+          onPress={() => void onConfirm()}
+          className="expanded:order-2"
+        >
           {confirmLabel}
         </Button>
         <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
