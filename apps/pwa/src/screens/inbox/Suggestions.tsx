@@ -68,7 +68,7 @@ export const SuggestionCard = ({ s }: { s: PolicySuggestion }) => {
     >
       <p className="type-body text-ink">
         {t('inbox.learning.tried', { agent: s.agent, verb })}{' '}
-        <span className="font-mono text-[0.9em] break-all">{s.value}</span>{' '}
+        <span className="font-mono text-[0.9em] [overflow-wrap:anywhere]">{s.value}</span>{' '}
         {t('inbox.learning.times', { count: s.count })}
       </p>
       <MetaLine className="mt-1" items={[s.kind, t('inbox.learning.last', { when: ago(s.lastSeenAt) })]} />
@@ -76,7 +76,7 @@ export const SuggestionCard = ({ s }: { s: PolicySuggestion }) => {
       {!locked && choices.length > 1 && (
         <SegmentedControl
           size="sm"
-          className="mt-3 max-w-full"
+          className="mt-3 w-full"
           label={t('inbox.scope.ruleScope')}
           value={scope}
           onChange={setScope}

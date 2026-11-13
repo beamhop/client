@@ -17,7 +17,7 @@ import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { Kbd, MetaLine } from '../../ui/Meta.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
-import { inputOf, quorumOf, ruleChoices, ruleLine, type SlipGroup, scopeOptions } from './model.ts';
+import { inputOf, quorumOf, reachOf, ruleChoices, ruleLine, type SlipGroup, scopeOptions } from './model.ts';
 import { QuorumRow } from './Slip.tsx';
 import { mineStore, openSheet, sheetStore, useStore } from './store.ts';
 import { useDecisions } from './useDecisions.tsx';
@@ -158,7 +158,17 @@ const ScopeSheet = ({
                 {ruleLine(a, chosen.value)}
               </code>
             </div>
-            {rule === 'wide' && <p className="type-body-sm text-caution-text">{t('inbox.scope.wideWarn')}</p>}
+            {rule === 'wide' && (
+              <p className="type-body-sm text-caution-text">
+                {t(
+                  reachOf(a) === 'network'
+                    ? 'inbox.scope.wideWarn'
+                    : reachOf(a) === 'command'
+                      ? 'inbox.scope.wideWarnCommand'
+                      : 'inbox.scope.wideWarnPath',
+                )}
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -14,6 +14,11 @@ const open = async (page: Page, path = '/inbox') => {
 };
 
 const axe = async (page: Page) => {
+  // No horizontal page scroll (SCREENS §0.4).
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, 'horizontal page overflow (px)').toBeLessThanOrEqual(0);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
@@ -261,7 +266,7 @@ test('screenshots: inbox light + dark, detail', async ({ page }, info) => {
   await shot(page, 'inbox-quorum', info.project.name);
   if (info.project.name === 'mobile') {
     await open(page);
-    await page.getByRole('heading', { name: /Learning mode/ }).scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 620));
     await shot(page, 'inbox-learning', info.project.name);
   }
 });

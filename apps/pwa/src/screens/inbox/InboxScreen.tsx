@@ -37,7 +37,7 @@ import { Link, ToggleButton, ToggleButtonGroup } from 'react-aria-components';
 import { approvalTarget, RISK_LABEL, useApi, useMutationApi, useServerEvent } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
-import { clock, countdown, pad2, when } from '../../lib/format.ts';
+import { clock, countdown, middleTruncate, pad2, when } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useExpanded } from '../../lib/media.ts';
@@ -643,7 +643,10 @@ const AllClear = ({ last, compact }: { last?: ApprovalView; compact?: boolean })
   return (
     <section
       aria-labelledby="inbox-clear"
-      className={cx('flex flex-col items-start gap-4', compact ? 'py-4' : 'py-8 expanded:max-w-[520px]')}
+      className={cx(
+        'flex w-full min-w-0 flex-col items-start gap-4',
+        compact ? 'py-4' : 'py-8 expanded:max-w-[520px]',
+      )}
     >
       <div className="w-full max-w-[360px] rounded-lg border border-line bg-surface p-4">
         <RouteLine
@@ -654,7 +657,7 @@ const AllClear = ({ last, compact }: { last?: ApprovalView; compact?: boolean })
           ]}
           aria-label={t('inbox.clear.route', { count: n })}
         />
-        <p className="mt-3 flex items-center gap-2 type-meta text-ink-2">
+        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 type-meta whitespace-nowrap text-ink-2">
           <StatusDot state="ready" label={t('inbox.clear.quiet')} />
           <span aria-hidden="true">·</span>
           <span>{live > 0 ? t('inbox.clear.live', { count: live }) : t('inbox.clear.idle')}</span>
@@ -672,10 +675,10 @@ const AllClear = ({ last, compact }: { last?: ApprovalView; compact?: boolean })
         </h2>
         <p className="mt-1 type-body text-ink-2">{t('inbox.clear.body')}</p>
         {last && (
-          <p className="mt-2 type-meta text-ink-2">
+          <p className="mt-2 type-meta break-words text-ink-2">
             {t('inbox.clear.last', {
               verb: STATUS_WORD[last.status],
-              target: approvalTarget(last),
+              target: middleTruncate(approvalTarget(last), 36),
               time: last.decidedAt ? when(last.decidedAt) : '',
             })}
           </p>
