@@ -231,9 +231,9 @@ export const LogTab = () => {
         <div className="flex flex-col">
           {groups.map((g) => (
             <section key={g.day} aria-label={g.day}>
-              <h3 className="sticky top-[52px] z-10 border-b border-line bg-bg py-1.5 type-micro text-ink-2 expanded:top-[72px]">
+              <h2 className="sticky top-[52px] z-10 border-b border-line bg-bg py-1.5 type-micro text-ink-2 expanded:top-[72px]">
                 {g.day}
-              </h3>
+              </h2>
               <ul className="tick-rail ml-1 pl-3">
                 {g.events.map((e) => (
                   <li key={e.id}>

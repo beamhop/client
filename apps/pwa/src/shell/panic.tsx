@@ -251,7 +251,7 @@ export const PanicBand = ({ className, showReadout }: { className?: string; show
         </h2>
         <Link
           href="/panic"
-          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 type-label text-ink outline-none data-[hovered]:bg-sunken border border-line-strong"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-md bg-surface px-3 type-label text-ink outline-none bh-focus-inset data-[hovered]:bg-sunken border border-line-strong"
         >
           {t('panic.review')}
           <ArrowRight size={14} aria-hidden="true" />

@@ -144,7 +144,7 @@ const RoleAccordion = ({ roles, onEdit }: { roles: RoleDef[]; onEdit: (r: RoleDe
   <div className="flex flex-col rounded-lg border border-line bg-surface">
     {roles.map((r) => (
       <Disclosure key={r.name} className="group border-b border-line last:border-b-0">
-        <Heading level={3} className="m-0">
+        <Heading level={2} className="m-0">
           <RACButton
             slot="trigger"
             className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left outline-none data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus"

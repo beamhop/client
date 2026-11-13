@@ -163,7 +163,10 @@ export const SwipeAction = ({
         onDragStart={() => setDragging(true)}
         onDrag={onDrag}
         onDragEnd={onDragEnd}
-        className={cx('relative rounded-lg outline-none data-[focus-visible]:outline-2', dragging && 'z-10')}
+        className={cx(
+          'relative rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
+          dragging && 'z-10',
+        )}
         data-dragging={dragging || undefined}
       >
         {children({ commit, dragging })}

@@ -56,7 +56,18 @@ const svgs = {
 };
 
 for (const [name, svg] of Object.entries(svgs)) writeFileSync(join(out, name), svg);
-writeFileSync(join(root, 'favicon.svg'), svgs['icon.svg']);
+// Favicon: at 16px the full mark's hop bars merge into a block, so the tab gets its own glyph drawn on a
+// 16-unit pixel grid — slip, three 1px hop bars with 1px gaps and the carrier square; no beam, no
+// perforation. Every edge lands on a whole pixel at 16 and 32px (crispEdges).
+const FAVICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" shape-rendering="crispEdges">
+  <rect width="16" height="16" rx="3" fill="${FLARE}" shape-rendering="geometricPrecision"/>
+  <rect x="4" y="2" width="9" height="12" fill="${INK}"/>
+  <rect x="6" y="6" width="1" height="2" fill="${FLARE}"/>
+  <rect x="8" y="5" width="1" height="3" fill="${FLARE}"/>
+  <rect x="10" y="4" width="1" height="4" fill="${FLARE}"/>
+  <rect x="6" y="10" width="2" height="2" fill="${FLARE}"/>
+</svg>`;
+writeFileSync(join(root, 'favicon.svg'), FAVICON);
 
 const rasters = [
   ['icon.svg', 'icon-192.png', 192],

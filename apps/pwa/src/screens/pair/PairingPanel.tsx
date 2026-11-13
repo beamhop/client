@@ -337,9 +337,9 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
           ))}
         </ol>
         <section aria-labelledby="pair-phrase" className="flex flex-col gap-2.5">
-          <h3 id="pair-phrase" className="type-micro text-ink-2">
+          <h2 id="pair-phrase" className="type-micro text-ink-2">
             {t('pair.phrase.eyebrow')}
-          </h3>
+          </h2>
           <SafetyPhrase />
           <p className="type-body-sm text-ink-2">{t('pair.pairingPanel.the4WordsAppear')}</p>
         </section>

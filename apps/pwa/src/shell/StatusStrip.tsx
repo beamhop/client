@@ -31,7 +31,8 @@ export const StatusStrip = () => {
           : t('conn.link.not-paired');
   const healthy = link === 'reachable';
   return (
-    <div
+    <section
+      aria-label={t('strip.region')}
       className="flex h-8 shrink-0 items-center gap-4 border-b border-line px-8 type-micro text-ink-3"
       data-status-strip=""
     >
@@ -71,6 +72,6 @@ export const StatusStrip = () => {
           <Kbd>?</Kbd>
         </RACButton>
       </span>
-    </div>
+    </section>
   );
 };

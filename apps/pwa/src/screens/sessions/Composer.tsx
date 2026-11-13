@@ -227,7 +227,7 @@ export const Composer = ({
       )}
       <div
         className={cx(
-          'flex items-end gap-1 rounded-[24px] border border-line-strong bg-surface p-1 transition-colors focus-within:border-ink',
+          'flex items-end gap-1 rounded-[24px] border border-line-strong bg-surface p-1 transition-colors focus-within:border-ink has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-focus',
           disabled && 'opacity-60',
         )}
       >

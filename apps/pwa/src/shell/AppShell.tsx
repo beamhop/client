@@ -25,6 +25,8 @@ declare module '@tanstack/react-router' {
   interface StaticDataRouteOption {
     /** `bare`: no sidebar / tab bar (onboarding, pairing). */
     chrome?: 'app' | 'bare';
+    /** The screen renders its own `<main>` (onboarding's StepFrame), so the bare shell must not nest one. */
+    ownMain?: boolean;
     /** Hide the compact tab bar (session view: back returns to the previous tab). */
     hideTabBar?: boolean;
     /** Hide the wide Inbox rail (the Inbox itself). */
@@ -92,7 +94,7 @@ export const AppShell = () => {
   const wide = useWide();
   const matches = useMatches();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const flags: { chrome?: string; hideTabBar?: boolean; hideInboxRail?: boolean } = {};
+  const flags: { chrome?: string; ownMain?: boolean; hideTabBar?: boolean; hideInboxRail?: boolean } = {};
   for (const m of matches) Object.assign(flags, m.staticData ?? {});
   const [collapsed, setCollapsed] = useState(() => readBool('bh.sidebar.collapsed'));
   const [railHidden, setRailHidden] = useState(() => readBool('bh.inboxRail.hidden'));
@@ -121,9 +123,15 @@ export const AppShell = () => {
     return (
       <>
         <SkipLink />
-        <main className="min-h-dvh">
-          <Outlet />
-        </main>
+        {flags.ownMain ? (
+          <div className="min-h-dvh">
+            <Outlet />
+          </div>
+        ) : (
+          <main className="min-h-dvh">
+            <Outlet />
+          </main>
+        )}
         <UpdatePrompt />
         <ShellExtras />
       </>

@@ -101,7 +101,7 @@ export const Screen = ({
               <Link
                 href={back.href}
                 aria-label={back.label ? t('a11y.backTo', { label: back.label }) : t('a11y.back')}
-                className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-ink outline-none data-[hovered]:bg-sunken data-[pressed]:bg-sunken"
+                className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-ink outline-none bh-focus-inset data-[hovered]:bg-sunken data-[pressed]:bg-sunken"
               >
                 <CaretLeft size={22} aria-hidden="true" />
               </Link>
@@ -170,7 +170,7 @@ export const Screen = ({
                     {c.href ? (
                       <Link
                         href={c.href}
-                        className="text-ink-2 underline-offset-[3px] outline-none data-[hovered]:text-ink data-[hovered]:underline"
+                        className="text-ink-2 underline-offset-[3px] outline-none bh-focus-inset data-[hovered]:text-ink data-[hovered]:underline"
                       >
                         {c.label}
                       </Link>

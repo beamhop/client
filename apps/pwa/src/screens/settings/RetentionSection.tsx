@@ -269,19 +269,34 @@ export const RetentionSection = () => {
         {exp.isError && <p className="mt-2 type-body-sm text-stop-text">{exp.error.message}</p>}
       </Group>
 
-      <Group title={tr('settings.retention.purge')} id="ret-purge">
-        <p className="type-body-sm text-ink-2">{tr('settings.retention.deleteTranscriptsAndAudit')}</p>
-        <Button
-          variant="destructive-outline"
-          className="mt-2 self-start"
-          icon={<Trash size={16} aria-hidden="true" />}
-          onPress={() => setPurging(true)}
-        >
-          {tr('settings.retention.purge2')}
-        </Button>
-      </Group>
+      <CliStrip command="beamhop data export" />
 
-      <CliStrip command="beamhop data export && beamhop data purge --agent reviewer --before 30d" />
+      {/* Danger zone: irreversible actions live apart from Export, in their own hatched card. */}
+      <section
+        aria-labelledby="ret-purge"
+        className="relative mt-4 overflow-hidden rounded-lg border border-stop-text bg-surface p-4"
+      >
+        <span
+          aria-hidden="true"
+          className="hatch pointer-events-none absolute inset-y-0 left-0 w-3 border-r border-line text-stop-text"
+        />
+        <div className="relative flex flex-col gap-2 pl-4">
+          <h2 id="ret-purge" className="type-micro text-stop-text">
+            {tr('settings.retention.dangerZone')}
+          </h2>
+          <p className="type-body-sm text-ink-2">{tr('settings.retention.deleteTranscriptsAndAudit')}</p>
+          <Button
+            variant="destructive-outline"
+            className="mt-1 self-start"
+            icon={<Trash size={16} aria-hidden="true" />}
+            onPress={() => setPurging(true)}
+          >
+            {tr('settings.retention.purge2')}
+          </Button>
+          <CliStrip command="beamhop data purge --agent reviewer --before 30d" />
+        </div>
+      </section>
+
       {editing && <EditRetention agent={editing} onClose={() => setEditing(undefined)} />}
       <PurgeSheet open={purging} onOpenChange={setPurging} agents={agents} />
     </div>

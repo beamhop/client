@@ -37,7 +37,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         className={cx('flex h-16 items-center', collapsed ? 'justify-center' : 'justify-between pr-2 pl-5')}
       >
         {!collapsed && (
-          <Link to="/" aria-label="beamhop home" className="rounded-sm outline-none">
+          <Link to="/" aria-label="beamhop home" className="bh-focus-inset rounded-sm outline-none">
             <Wordmark />
           </Link>
         )}
@@ -86,7 +86,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       aria-label={collapsed ? item.label : undefined}
                       title={collapsed ? item.label : undefined}
                       className={cx(
-                        'relative flex h-10 items-center gap-3 rounded-md outline-none',
+                        'relative flex h-10 items-center gap-3 rounded-md outline-none bh-focus-inset',
                         collapsed ? 'justify-center' : 'px-2',
                         active ? 'bg-sunken text-ink' : 'text-ink-2 hover:bg-sunken hover:text-ink',
                       )}

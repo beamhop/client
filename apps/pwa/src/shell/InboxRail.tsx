@@ -44,7 +44,7 @@ export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
           <li key={a.id}>
             <Link
               href={`/inbox/${a.id}`}
-              className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-3 outline-none data-[hovered]:border-line-strong"
+              className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-3 outline-none bh-focus-inset data-[hovered]:border-line-strong"
             >
               <span className="flex items-center gap-2">
                 <StatusDot state="needs-you" hideLabel />

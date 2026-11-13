@@ -23,6 +23,7 @@ export const UsageTab = ({ alertButton }: { alertButton: ReactNode }) => {
   const usage = useApi('usage.query', { days: Math.min(365, n * 2) });
   const month = useApi('usage.query', { days: 31 });
   const agents = useApi('agent.list');
+  const system = useApi('system.status');
   const { rules } = useAlertRules();
   const showSkeleton = useDelayedLoading(usage.isPending);
   const rows = usage.data?.rows ?? [];
@@ -48,6 +49,7 @@ export const UsageTab = ({ alertButton }: { alertButton: ReactNode }) => {
         : breakdown === 'peer' && id === 'people'
           ? t('audit.usage.people')
           : id;
+  const panicked = !!system.data?.panic;
   const list = agents.data?.agents ?? [];
   const budgeted = list.filter((a) => a.config.budgets.dailyUsd);
   const spentToday = list.reduce((a, x) => a + x.usageToday.usd, 0);
@@ -59,7 +61,13 @@ export const UsageTab = ({ alertButton }: { alertButton: ReactNode }) => {
         <h2 id="usage-total" className="type-micro text-ink-2">
           {t('audit.usage.totalTitle', { count: n })}
         </h2>
-        <Readout>{usd(view.total.usd)}</Readout>
+        {/* One dot-matrix readout per screen (DESIGN §3.7). While everything is stopped the panic band is
+            the screen's alarm, so the spend total steps down to plain tabular figures instead of competing. */}
+        {panicked ? (
+          <p className="type-title-1 tabular-nums text-ink">{usd(view.total.usd)}</p>
+        ) : (
+          <Readout>{usd(view.total.usd)}</Readout>
+        )}
         <p className="flex flex-wrap items-center gap-x-4 gap-y-1 type-meta text-ink-2">
           {delta !== null && (
             <span
