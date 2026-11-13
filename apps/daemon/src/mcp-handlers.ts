@@ -84,7 +84,7 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
           throw new BeamhopError('forbidden', `membership in ${input.target} was revoked`);
         defaultRole = m?.membership.defaultRole ?? 'viewer';
       }
-      const conn = d.channels.get(channel);
+      const conn = d.channels.forAgent(channel, agent.name);
       if (!conn) throw new BeamhopError('unavailable', `channel ${channel} is not connected`);
       const recipientRole = route2recipientRole(
         kind,

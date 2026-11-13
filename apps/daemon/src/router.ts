@@ -104,8 +104,13 @@ export class Router {
     if (!d.store.dedupe.firstSeen(msg.channel || conn.name, msg.id)) return;
     if (normalizePrincipal(msg.from.principal) === normalizePrincipal(conn.self.principal)) return;
     const channel = conn.name;
+    // Agent-bound connection (`nostr@reviewer`): only that agent is reachable through it, and its
+    // memberships are written against the shared channel name (`nostr:dm`).
+    const bound = d.channels.binding(conn.name);
+    const memberChannel = bound?.channel ?? channel;
     const isDm = msg.conversation.kind === 'dm';
     if (isDm) d.rememberDm(msg.from.principal, channel, msg.conversation.id);
+    d.identity.noteInbound(conn, msg);
 
     // Replies to an outstanding mesh_ask_agent are consumed by the mesh provider.
     if (d.mesh?.onInbound?.(conn, msg)) return;
@@ -132,7 +137,8 @@ export class Router {
     const g = d.authzGlobal();
     let recorded = false;
     for (const agent of d.config.agents.list()) {
-      const match = matchMembership(agent, channel, msg.conversation.kind, msg.conversation.id);
+      if (bound && agent.name !== bound.agent) continue;
+      const match = matchMembership(agent, memberChannel, msg.conversation.kind, msg.conversation.id);
       if (!match) continue;
       const { membership } = match;
       if (membership.revokedAt) continue;
@@ -354,7 +360,8 @@ export class Router {
       return;
     }
     const res = d.store.pairingCodes.consume(code, 'channel-pair');
-    const okChannel = res.ok && res.record.data.channel === conn.name;
+    const okChannel =
+      res.ok && res.record.data.channel === (d.channels.binding(conn.name)?.channel ?? conn.name);
     if (!res.ok || !okChannel) {
       fails.push(now);
       this.pairFails.set(who, fails);
@@ -452,11 +459,14 @@ export class Router {
   handleRemoved(conn: ChannelConn, conversationId: string): void {
     const d = this.d;
     const at = new Date(d.now()).toISOString();
+    const bound = d.channels.binding(conn.name);
+    const base = bound?.channel ?? conn.name;
     for (const agent of d.config.agents.list()) {
+      if (bound && agent.name !== bound.agent) continue;
       let changed = false;
       const memberships = agent.memberships.map((m) => {
         const t = normTarget(m.target);
-        const prefix = normTarget(`${conn.name}:`);
+        const prefix = normTarget(`${base}:`);
         if (!t.startsWith(prefix) || m.revokedAt) return m;
         const slash = m.target.indexOf('/');
         if (slash >= 0 && m.target.slice(slash + 1) === conversationId) {
@@ -468,15 +478,12 @@ export class Router {
       // A wildcard group/channel membership: add an explicit revoked entry for this conversation.
       for (const kind of ['group', 'channel'] as const) {
         const wild = agent.memberships.find(
-          (m) => !m.revokedAt && normTarget(m.target) === normTarget(`${conn.name}:${kind}`),
+          (m) => !m.revokedAt && normTarget(m.target) === normTarget(`${base}:${kind}`),
         );
-        if (
-          wild &&
-          !memberships.some((m) => m.target === conversationTarget(conn.name, kind, conversationId))
-        ) {
+        if (wild && !memberships.some((m) => m.target === conversationTarget(base, kind, conversationId))) {
           memberships.push({
             ...wild,
-            target: conversationTarget(conn.name, kind, conversationId),
+            target: conversationTarget(base, kind, conversationId),
             revokedAt: at,
           });
           changed = true;

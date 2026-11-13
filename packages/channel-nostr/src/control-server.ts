@@ -17,6 +17,7 @@ import {
   ReplayGuard,
 } from './control-protocol.ts';
 import { decodePubkey, decodeSecretKey, npubEncode } from './keys.ts';
+import { LruMap, RateLimiter } from './lru.ts';
 import { RelayPool, type WebSocketCtor } from './pool.ts';
 import { tagValue } from './tags.ts';
 
@@ -25,6 +26,8 @@ export interface ControlRequestContext {
   sender: string;
   senderNpub: string;
   eventId: string;
+  /** False for a not-yet-paired sender calling one of `publicMethods` (e.g. device.pairComplete). */
+  allowlisted: boolean;
 }
 
 export interface ControlServerOptions {
@@ -37,6 +40,15 @@ export interface ControlServerOptions {
   WebSocket?: WebSocketCtor;
   log?: Logger;
   pool?: RelayPool;
+  /**
+   * Methods a sender NOT on the allowlist may call (pairing). Everything else from such senders is
+   * dropped. Unknown senders are rate-limited per sender and globally before any decryption work.
+   */
+  publicMethods?: string[];
+  /** Limits for unknown senders (defaults: 5 per sender and 30 overall per minute). */
+  publicRateLimit?: { perSender: number; global: number; windowMs: number };
+  /** ms clock (tests). */
+  now?: () => number;
 }
 
 export interface ControlServer {
@@ -66,6 +78,21 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
   const decoder = new ControlDecoder(sk);
   let closed = false;
   let rejectedLogged = 0;
+  const publicMethods = new Set(opts.publicMethods ?? []);
+  const rl = opts.publicRateLimit ?? { perSender: 5, global: 30, windowMs: 60_000 };
+  const clock = opts.now ?? Date.now;
+  const globalLimiter = new RateLimiter(rl.global, rl.windowMs, clock);
+  const senderLimiters = new LruMap<string, RateLimiter>(1024);
+  /** Unknown senders may only reach `publicMethods`, within the rate limits. */
+  const admitUnknown = (sender: string): boolean => {
+    if (!publicMethods.size) return false;
+    let l = senderLimiters.get(sender);
+    if (!l) {
+      l = new RateLimiter(rl.perSender, rl.windowMs, clock);
+      senderLimiters.set(sender, l);
+    }
+    return l.take() && globalLimiter.take();
+  };
 
   let readyResolve!: () => void;
   const readyP = new Promise<void>((r) => {
@@ -83,8 +110,9 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
   const onevent = async (ev: Event) => {
     if (closed || ev.kind !== CONTROL_KIND) return;
     if (tagValue(ev.tags, 'p') !== pubkey) return;
-    // Allowlist before any decryption work.
-    if (!allow.has(ev.pubkey)) {
+    // Allowlist (or the public-method rate limit) before any decryption work.
+    const allowlisted = allow.has(ev.pubkey);
+    if (!allowlisted && !admitUnknown(ev.pubkey)) {
       if (rejectedLogged++ < 20)
         log?.warn('control: sender not on allowlist', { sender: npubEncode(ev.pubkey) });
       return;
@@ -130,12 +158,25 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
       );
       return;
     }
+    if (!allowlisted && !publicMethods.has(req.data.method)) {
+      await send(
+        ev.pubkey,
+        {
+          jsonrpc: '2.0',
+          id: req.data.id,
+          error: { code: ERR.app, message: 'this device is not paired', data: { code: 'unauthorized' } },
+        },
+        replyTo,
+      );
+      return;
+    }
     let res: RpcResponse;
     try {
       res = await opts.handle(req.data, {
         sender: ev.pubkey,
         senderNpub: npubEncode(ev.pubkey),
         eventId: ev.id,
+        allowlisted,
       });
     } catch (err) {
       res = {
@@ -148,7 +189,8 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
       if (!isBeamhopError(err))
         log?.error('control: handler threw', { method: req.data.method, error: String(err) });
     }
-    if (allow.has(ev.pubkey)) await send(ev.pubkey, res, replyTo);
+    // A sender removed while its call ran gets no reply; a public call always gets its answer.
+    if (allow.has(ev.pubkey) || !allowlisted) await send(ev.pubkey, res, replyTo);
   };
 
   // Map chunk msgId → first chunk event id so replies reference events[0].id.
@@ -173,7 +215,7 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
     [{ kinds: [CONTROL_KIND], '#p': [pubkey], since: Math.floor(Date.now() / 1000) - REPLAY_WINDOW_S }],
     {
       onevent: (ev) => {
-        if (allow.has(ev.pubkey)) trackChunk(ev);
+        if (allow.has(ev.pubkey) || publicMethods.size) trackChunk(ev);
         onevent(ev).catch((err) => log?.error('control: request failed', { error: String(err) }));
       },
       oneose: () => readyResolve(),
