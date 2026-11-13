@@ -1,10 +1,24 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { BeamhopClient } from '@beamhop/client';
 import { RpcError } from '@beamhop/client';
 import { type DoctorCheck, type HarnessJob, type HarnessView, installCommand } from '@beamhop/core';
-import { Command, Option } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import pc from 'picocolors';
+// Imported (not read from disk) so esbuild inlines it and the bundled CLI reports the same version.
+import pkg from '../package.json' with { type: 'json' };
+import {
+  agentKeyError,
+  commandExists,
+  parseCount,
+  parseMinutes,
+  parseMount,
+  parseMounts,
+  parsePort,
+  tildify,
+  validateHarnessId,
+} from './args.ts';
 import { isRemoteDaemon, runDoctorFix } from './doctor-fix.ts';
 import {
   clackPrompter,
@@ -126,13 +140,19 @@ const parseKv = (pairs: string[] = []): Record<string, string> => {
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];
 
+/** `budgets={"dailyUsd":3}` → ['budgets.dailyUsd'], so keys inside a JSON value are checked too. */
+const dottedKeys = (key: string, val: unknown): string[] =>
+  val && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length
+    ? Object.entries(val).flatMap(([k, v]) => dottedKeys(`${key}.${k}`, v))
+    : [key];
+
 /** Provider keys the LLM broker injects (see packages/broker DEFAULT_ROUTES). */
 const LLM_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
 
 /** `~/code/app:rw` → { mount: '~/code/app', mountMode: 'rw' } (the suffix is optional). */
 const splitMount = (m: string): { mount: string; mountMode?: 'ro' | 'rw' } => {
-  const match = /^(.*?):(ro|rw)$/.exec(m);
-  return match ? { mount: match[1]!, mountMode: match[2] as 'ro' | 'rw' } : { mount: m };
+  const { path, mode } = parseMount(m);
+  return mode ? { mount: path, mountMode: mode } : { mount: path };
 };
 
 const expandHome = (p: string) => (p === '~' || p.startsWith('~/') ? homedir() + p.slice(1) : p);
@@ -148,7 +168,7 @@ export const buildProgram = (deps: CliDeps): Command => {
   const { io } = deps;
   const program = new Command('beamhop')
     .description('Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed.')
-    .version('0.1.0')
+    .version(pkg.version)
     .option('--json', 'machine-readable JSON output')
     .showHelpAfterError()
     .configureOutput({ writeOut: (s) => io.out(s.trimEnd()), writeErr: (s) => io.err(s.trimEnd()) })
@@ -329,17 +349,28 @@ export const buildProgram = (deps: CliDeps): Command => {
 
   program
     .command('doctor [checkIds...]')
-    .description('check sandbox prerequisites, harnesses and channels; --fix repairs what it can')
+    .description(
+      'check sandbox prerequisites, harnesses and channels (exit 1 if a check fails); --fix repairs what it can',
+    )
     .option('--fix', 'apply the fixes beamhop knows: every failing check, or only the given check ids')
     .option('-y, --yes', 'with --fix: run fixes that need administrator rights (sudo) without asking')
     .option('--verbose', 'with --fix: show the output of every fix')
     .action(
       run(async (c, ids: string[], o: { fix?: boolean; yes?: boolean; verbose?: boolean }) => {
         if (!o.fix) {
-          if (ids.length)
-            throw new Error(`to fix ${ids.join(', ')}, run: beamhop doctor --fix ${ids.join(' ')}`);
           const r = await c.call('system.doctor');
-          io.out(json() ? JSON.stringify(r, null, 2) : doctorHuman(r.checks));
+          let checks = r.checks;
+          if (ids.length) {
+            const unknown = ids.filter((id) => !checks.some((k) => k.id === id || k.action?.id === id));
+            if (unknown.length)
+              throw new Error(
+                `unknown doctor check ${unknown.join(', ')}. Check ids: ${checks.map((k) => k.id).join(', ') || 'none'}`,
+              );
+            checks = checks.filter((k) => ids.includes(k.id) || (k.action && ids.includes(k.action.id)));
+          }
+          io.out(json() ? JSON.stringify({ ...r, checks }, null, 2) : doctorHuman(checks));
+          // Failing checks make the exit code non-zero (scripts and CI can gate on it); warnings do not.
+          if (checks.some((k) => k.status === 'fail')) io.exitCode = 1;
           return;
         }
         const r = await runDoctorFix(
@@ -391,7 +422,13 @@ export const buildProgram = (deps: CliDeps): Command => {
   program
     .command('daemon')
     .description('run the beamhop daemon in the foreground')
-    .option('-p, --port <port>', 'API port', (v) => Number.parseInt(v, 10))
+    .option('-p, --port <port>', 'API port', (v) => {
+      try {
+        return parsePort(v);
+      } catch (e) {
+        throw new InvalidArgumentError((e as Error).message);
+      }
+    })
     .action(async (o: { port?: number }) => {
       if (!deps.runDaemon) {
         io.err('daemon is not available in this build');
@@ -458,6 +495,12 @@ export const buildProgram = (deps: CliDeps): Command => {
     .command('show <name>')
     .description("show an agent's full config, status and npub (JSON)")
     .action(act(async (c, name: string) => ({ data: await c.call('agent.get', { name }) })));
+  /** The harness view for an id, undefined when unknown, null when the list could not be read. */
+  const harnessFor = (c: BeamhopClient, id: string) =>
+    c
+      .call('harness.list')
+      .then((r) => r?.harnesses?.find((x) => x.id === id))
+      .catch(() => null);
   agent
     .command('add <name>')
     .description('create an agent')
@@ -481,10 +524,7 @@ export const buildProgram = (deps: CliDeps): Command => {
             public?: boolean;
           },
         ) => {
-          const mounts = (o.mount ?? []).map((m) => {
-            const match = /^(.*?)(?::(ro|rw))?$/.exec(m);
-            return { path: match?.[1] ?? m, mode: (match?.[2] as 'ro' | 'rw' | undefined) ?? 'ro' };
-          });
+          const mounts = parseMounts(o.mount ?? []);
           const config: Record<string, unknown> = { name, harness: o.harness, mounts };
           if (o.profile) config.sandbox = { profile: o.profile };
           if (o.model) config.model = o.model;
@@ -493,10 +533,7 @@ export const buildProgram = (deps: CliDeps): Command => {
           const warnings: string[] = [];
           for (const m of mounts)
             if (!existsSync(expandHome(m.path))) warnings.push(`mount ${m.path} does not exist (yet)`);
-          const h = await c
-            .call('harness.list')
-            .then((r) => r?.harnesses?.find((x) => x.id === o.harness))
-            .catch(() => null);
+          const h = await harnessFor(c, o.harness);
           if (h === undefined)
             warnings.push(`harness "${o.harness}" is not known; \`beamhop harness ls\` lists the ids`);
           else if (h?.status === 'needs-login')
@@ -584,6 +621,11 @@ export const buildProgram = (deps: CliDeps): Command => {
           const keys = k.split('.');
           if (keys.some((x) => !x || x === '__proto__' || x === 'constructor' || x === 'prototype'))
             throw new Error(`invalid key "${k}"`);
+          // The daemon drops keys its schema does not know, so a typo would "update" nothing.
+          for (const full of dottedKeys(k, val)) {
+            const bad = agentKeyError(full);
+            if (bad) throw new Error(bad);
+          }
           let node = patch;
           for (const key of keys.slice(0, -1)) {
             if (!node[key] || typeof node[key] !== 'object') node[key] = {};
@@ -591,7 +633,13 @@ export const buildProgram = (deps: CliDeps): Command => {
           }
           node[keys[keys.length - 1]!] = val;
         }
-        return { data: await c.call('agent.update', { name, patch }), human: () => `updated ${name}` };
+        const warnings: string[] = [];
+        if (typeof patch.harness === 'string' && (await harnessFor(c, patch.harness)) === undefined)
+          warnings.push(`harness "${patch.harness}" is not known; \`beamhop harness ls\` lists the ids`);
+        return {
+          data: await c.call('agent.update', { name, patch }),
+          human: () => [`updated ${name}`, ...warnings.map((w) => pc.yellow(`! ${w}`))].join('\n'),
+        };
       }),
     );
 
@@ -829,6 +877,18 @@ export const buildProgram = (deps: CliDeps): Command => {
     });
   });
   const vaultLogin = act(async (c, id: string, o: LoginOpts) => {
+    // Check the id and method first: otherwise a typo surfaces as "empty value" after reading stdin.
+    const view = await findHarness(c, id);
+    if (!view) throw new Error(`no harness ${id} (\`beamhop harness ls\` lists them)`);
+    const methods = view.login && view.login.status !== 'unmanaged' ? view.login.methods : [];
+    if (!methods.length)
+      throw new Error(
+        `${view.displayName} cannot be logged in from beamhop; it uses its own configuration (run its own login in a terminal).`,
+      );
+    if (o.method && !methods.some((m) => m.id === o.method))
+      throw new Error(
+        `${view.displayName} has no login method ${o.method}; one of: ${methods.map((m) => m.id).join(', ')}`,
+      );
     let value: string | undefined;
     if (o.from) {
       if (o.from !== 'gh') throw new Error('--from supports: gh');
@@ -841,8 +901,7 @@ export const buildProgram = (deps: CliDeps): Command => {
       value = r.stdout.trim();
     } else if (o.fromEnv) value = io.env[o.fromEnv];
     else {
-      const view = ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
-      const m = view?.login?.methods.find((x) => (o.method ? x.id === o.method : true));
+      const m = methods.find((x) => (o.method ? x.id === o.method : true));
       if (io.interactive && m) io.err(pc.dim(`${m.label}${m.hint ? ` — ${m.hint}` : ''}`));
       value = (await io.readStdin()).trim();
     }
@@ -906,7 +965,9 @@ export const buildProgram = (deps: CliDeps): Command => {
           o: { method?: 'native' | 'brew' | 'npm' | 'winget'; follow?: boolean; verbose?: boolean },
         ) => {
           const h = await findHarness(c, id);
-          if (h && h.status !== 'not-installed') {
+          if (!h)
+            throw new Error(`no harness ${id} (\`beamhop harness ls\` lists the ones beamhop can install)`);
+          if (h.status !== 'not-installed') {
             io.out(
               json()
                 ? JSON.stringify({ alreadyInstalled: true, harness: h }, null, 2)
@@ -914,10 +975,10 @@ export const buildProgram = (deps: CliDeps): Command => {
             );
             return;
           }
-          const name = h?.displayName ?? id;
-          const plan = h?.installPlan;
+          const name = h.displayName;
+          const plan = h.installPlan;
           if (!o.method && plan?.method === 'none') {
-            const url = h?.install?.url;
+            const url = h.install?.url;
             throw new Error(
               `beamhop cannot install ${name} on this computer: none of its installers apply here (no Homebrew, npm or winget it can use).${url ? ` Install it by hand: ${url}` : ''}`,
             );
@@ -1030,13 +1091,41 @@ export const buildProgram = (deps: CliDeps): Command => {
       }),
     );
   harness
+    .command('rm <id>')
+    .description('remove a custom harness added with `beamhop harness add`')
+    .action(
+      act(async (c, id: string) => {
+        await c.call('harness.remove', { id });
+        return { data: { removed: id }, human: () => `removed ${id.startsWith('acp:') ? id : `acp:${id}`}` };
+      }),
+    );
+  harness
     .command('add <id>')
     .description('register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp "my-agent --acp"`')
     .requiredOption('--acp <command>', 'command line that starts the agent in ACP mode')
     .action(
       act(async (c, id: string, o: { acp: string }) => {
+        const bad = validateHarnessId(id);
+        if (bad) throw new Error(bad);
         const [command = '', ...args] = o.acp.split(/\s+/).filter(Boolean);
+        if (!command) throw new Error('--acp needs the command that starts the agent');
+        // Catch the common failure (a command that does not exist) before anything is registered.
+        // Only for a daemon on this computer: a remote one resolves commands on its own PATH.
+        if (!isRemoteDaemon(io.env) && !commandExists(command, io.env))
+          throw new Error(
+            `${command}: command not found${command.includes('/') ? '' : ' on PATH'}; nothing was registered`,
+          );
         const h = await c.call('harness.add', { id, command, args });
+        const broken = h.status === 'error' || h.status === 'not-installed';
+        if (broken) {
+          // The daemon keeps whatever it probed; a harness that cannot start is only clutter.
+          await c.call('harness.remove', { id: h.id }).catch(() => undefined);
+          io.exitCode = 1;
+          if (json()) return { data: h };
+          throw new Error(
+            `${h.id} did not answer the ACP handshake${h.message ? ` (${h.message})` : ''}; nothing was registered. Fix the command and run \`beamhop harness add ${id} --acp "<command>"\` again.`,
+          );
+        }
         return {
           data: h,
           human: () =>
@@ -1269,12 +1358,23 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   session
     .command('send <id> <text...>')
-    .description('send another message to a running session')
+    .description('send another message to a session (an ended session is resumed)')
     .action(
-      act(async (c, id: string, text: string[]) => ({
-        data: await c.call('session.send', { id, text: text.join(' ') }),
-        human: () => 'sent',
-      })),
+      act(async (c, id: string, text: string[]) => {
+        // The daemon resumes an ended session on send (by design); say so instead of a bare "sent".
+        const before = await c
+          .call('session.list', {})
+          .then((r) => r.sessions.find((x) => x.id === id))
+          .catch(() => undefined);
+        const data = await c.call('session.send', { id, text: text.join(' ') });
+        return {
+          data,
+          human: () =>
+            before?.status === 'ended'
+              ? `${id} had ended; resumed it and sent your message. Follow with ${pc.bold(`beamhop session show ${id}`)}`
+              : 'sent',
+        };
+      }),
     );
   session
     .command('stop <id>')
@@ -1385,10 +1485,23 @@ export const buildProgram = (deps: CliDeps): Command => {
     .description("remove a principal's role grant")
     .option('--agent <name>', 'only for this agent')
     .action(
-      act(async (c, principal: string, o: { agent?: string }) => ({
-        data: await c.call('role.revoke', { principal, agent: o.agent }),
-        human: () => `revoked ${principal}`,
-      })),
+      act(async (c, principal: string, o: { agent?: string }) => {
+        // role.revoke answers ok even when nothing matched. The daemon normalizes principals (npub vs hex,
+        // case), so compare the grant count before and after rather than guessing the match here.
+        const grants = async () =>
+          Object.keys(
+            o.agent
+              ? (await c.call('agent.get', { name: o.agent })).config.grants
+              : (await c.call('role.list')).grants,
+          ).length;
+        const before = await grants();
+        const data = await c.call('role.revoke', { principal, agent: o.agent });
+        if ((await grants()) === before)
+          throw new Error(
+            `${principal} has no role grant${o.agent ? ` on ${o.agent}` : ''} (\`beamhop role ls\` lists them)`,
+          );
+        return { data, human: () => `revoked ${principal}${o.agent ? ` on ${o.agent}` : ''}` };
+      }),
     );
   program
     .command('link <person> <principal>')
@@ -1470,12 +1583,14 @@ export const buildProgram = (deps: CliDeps): Command => {
   const secret = program
     .command('secret')
     .description('secrets (in an encrypted vault file; values are never shown)');
+  /** Where the vault key file lives for the home this CLI resolves (BEAMHOP_HOME or ~/.beamhop). */
+  const vaultKeyPath = () => tildify(join(io.env.BEAMHOP_HOME || join(homedir(), '.beamhop'), 'vault.key'));
   const keyWhere = (k?: string) =>
     k === 'keychain'
       ? 'vault key in the system keychain'
       : k === 'passphrase'
         ? 'vault locked with BEAMHOP_VAULT_PASSPHRASE'
-        : 'vault key in ~/.beamhop/vault.key';
+        : `vault key in ${vaultKeyPath()}`;
   secret
     .command('ls')
     .description('list secret names (never values)')
@@ -1492,7 +1607,7 @@ export const buildProgram = (deps: CliDeps): Command => {
   secret
     .command('keychain [on|off]')
     .description(
-      'keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key (off, the default); without an argument, show where it is',
+      'keep the vault key in the system keychain (on) or in vault.key in the beamhop home, $BEAMHOP_HOME or ~/.beamhop (off, the default); without an argument, show where it is',
     )
     .action(
       act(async (c, state?: string) => {
@@ -1536,10 +1651,13 @@ export const buildProgram = (deps: CliDeps): Command => {
     .command('rm <name>')
     .description('delete a secret')
     .action(
-      act(async (c, name: string) => ({
-        data: await c.call('secret.delete', { name }),
-        human: () => `deleted ${name}`,
-      })),
+      act(async (c, name: string) => {
+        // Older daemons answer ok for a name that does not exist; newer ones fail with not_found.
+        const { secrets } = await c.call('secret.list');
+        if (!secrets.some((x) => x.name === name))
+          throw new Error(`no secret named ${name} (\`beamhop secret ls\` lists them)`);
+        return { data: await c.call('secret.delete', { name }), human: () => `deleted ${name}` };
+      }),
     );
 
   // ── schedules ─────────────────────────────────────────────
@@ -1724,8 +1842,14 @@ export const buildProgram = (deps: CliDeps): Command => {
       'change alert rules, e.g. `beamhop alerts set --budget 80,100 --spike 5/10m --heartbeat 15m`',
     )
     .option('--budget <warn,alert>', 'warn and alert at these % of the daily budget')
-    .option('--spike <events/minutes>', 'security spike: this many events within N minutes, e.g. 5/10m')
-    .option('--heartbeat <minutes>', 'a cloud agent is offline after this long without a heartbeat, e.g. 15m')
+    .option(
+      '--spike <events/duration>',
+      'security spike: this many events within a time window, e.g. 5/10m (s, m, h, d; default minutes)',
+    )
+    .option(
+      '--heartbeat <duration>',
+      'a cloud agent is offline after this long without a heartbeat, e.g. 15m or 2h (default minutes)',
+    )
     .option('--nostr-dm', 'also DM owners on their channels')
     .option('--no-nostr-dm', 'alerts only as push / in the app')
     .action(
@@ -1735,23 +1859,21 @@ export const buildProgram = (deps: CliDeps): Command => {
           o: { budget?: string; spike?: string; heartbeat?: string; nostrDm?: boolean },
           cmd: Command,
         ) => {
-          const num = (v: string | undefined, what: string) => {
-            const n = Number.parseInt(String(v ?? '').replace(/m$/, ''), 10);
-            if (!Number.isFinite(n)) throw new Error(`${what}: expected a number, got "${v ?? ''}"`);
-            return n;
-          };
           const patch: Record<string, unknown> = {};
           if (o.budget !== undefined) {
-            const [warn, alert] = o.budget.split(',');
-            patch.budgetWarn = num(warn, '--budget');
-            if (alert !== undefined) patch.budgetAlert = num(alert, '--budget');
+            const [warn, alert, ...rest] = o.budget.split(',');
+            if (rest.length) throw new Error(`--budget: expected warn,alert percentages, got "${o.budget}"`);
+            patch.budgetWarn = parseCount(warn, '--budget');
+            if (alert !== undefined) patch.budgetAlert = parseCount(alert, '--budget');
           }
           if (o.spike !== undefined) {
-            const [events, minutes] = o.spike.split('/');
-            patch.spikeEvents = num(events, '--spike');
-            if (minutes !== undefined) patch.spikeMinutes = num(minutes, '--spike');
+            const [events, window, ...rest] = o.spike.split('/');
+            if (rest.length)
+              throw new Error(`--spike: expected events/duration like 5/10m, got "${o.spike}"`);
+            patch.spikeEvents = parseCount(events, '--spike');
+            if (window !== undefined) patch.spikeMinutes = parseMinutes(window, '--spike');
           }
-          if (o.heartbeat !== undefined) patch.heartbeatMinutes = num(o.heartbeat, '--heartbeat');
+          if (o.heartbeat !== undefined) patch.heartbeatMinutes = parseMinutes(o.heartbeat, '--heartbeat');
           if (cmd.getOptionValueSource('nostrDm') === 'cli') patch.nostrDm = o.nostrDm;
           if (!Object.keys(patch).length)
             throw new Error('nothing to change: pass --budget, --spike, --heartbeat or --[no-]nostr-dm');

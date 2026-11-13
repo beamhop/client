@@ -259,7 +259,8 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   if (await want(o.identity, 'Set up your owner identity?')) {
     ui.step('03 Identity');
     if (o.ownerNpub) {
-      owner = (await c.call('identity.ownerImport', { npub: o.ownerNpub })).npub;
+      // --owner-npub is an explicit choice: it replaces an owner key this daemon already has.
+      owner = (await c.call('identity.ownerImport', { npub: o.ownerNpub, replace: true })).npub;
       ui.success(`Owner ${owner} (your key stays on your device; it signs attestations there).`);
     } else {
       let mode: 'keep' | 'create' | 'import' = owner ? 'keep' : 'create';
@@ -283,7 +284,8 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
         );
       if (mode === 'import') {
         const npub = await ui.text('Your npub', '');
-        owner = (await c.call('identity.ownerImport', { npub: npub.trim() })).npub;
+        // Picked over "Keep": replacing the current owner is the point (as with create below).
+        owner = (await c.call('identity.ownerImport', { npub: npub.trim(), replace: !!owner })).npub;
         ui.success(`Owner ${owner}`);
       } else if (mode === 'create') {
         owner = (await c.call('identity.ownerCreate', { replace: !!owner })).npub;

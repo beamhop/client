@@ -22,8 +22,8 @@ Commands:
   init [options]                   first-run setup: doctor, harnesses, owner key, phone, first
                                    agent, hello
   status                           daemon, agents and approvals at a glance
-  doctor [options] [checkIds...]   check sandbox prerequisites, harnesses and channels; --fix
-                                   repairs what it can
+  doctor [options] [checkIds...]   check sandbox prerequisites, harnesses and channels (exit 1 if a
+                                   check fails); --fix repairs what it can
   panic [options]                  EMERGENCY STOP: kill all sessions, pause schedules, disconnect
                                    channels (incl. cloud agents)
   resume                           resume after panic
@@ -88,6 +88,7 @@ Commands:
   - [`beamhop harness jobs`](#beamhop-harness-jobs)
   - [`beamhop harness job`](#beamhop-harness-job)
   - [`beamhop harness logout`](#beamhop-harness-logout)
+  - [`beamhop harness rm`](#beamhop-harness-rm)
   - [`beamhop harness add`](#beamhop-harness-add)
 - [`beamhop channel`](#beamhop-channel)
   - [`beamhop channel providers`](#beamhop-channel-providers)
@@ -202,7 +203,8 @@ Options:
 ```text
 Usage: beamhop doctor [options] [checkIds...]
 
-check sandbox prerequisites, harnesses and channels; --fix repairs what it can
+check sandbox prerequisites, harnesses and channels (exit 1 if a check fails); --fix repairs what it
+can
 
 Options:
   --fix       apply the fixes beamhop knows: every failing check, or only the given check ids
@@ -413,6 +415,7 @@ Commands:
   job [options] <jobId>   follow an install, update or login (also one started in the app); --cancel
                           stops it
   logout [options] <id>   remove a harness login (other harnesses using the same key lose it too)
+  rm <id>                 remove a custom harness added with `beamhop harness add`
   add [options] <id>      register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
                           "my-agent --acp"`
   help [command]          display help for command
@@ -548,6 +551,17 @@ Options:
   -h, --help         display help for command
 ```
 
+### beamhop harness rm
+
+```text
+Usage: beamhop harness rm [options] <id>
+
+remove a custom harness added with `beamhop harness add`
+
+Options:
+  -h, --help  display help for command
+```
+
 ### beamhop harness add
 
 ```text
@@ -678,7 +692,7 @@ Commands:
   ls|list [options]        list sessions
   show <id>                print a session's transcript
   start <agent> <text...>  start a session from the CLI (as owner)
-  send <id> <text...>      send another message to a running session
+  send <id> <text...>      send another message to a session (an ended session is resumed)
   stop <id>                stop a session
   help [command]           display help for command
 ```
@@ -722,7 +736,7 @@ Options:
 ```text
 Usage: beamhop session send [options] <id> <text...>
 
-send another message to a running session
+send another message to a session (an ended session is resumed)
 
 Options:
   -h, --help  display help for command
@@ -966,8 +980,9 @@ Options:
 
 Commands:
   ls                    list secret names (never values)
-  keychain [on|off]     keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key
-                        (off, the default); without an argument, show where it is
+  keychain [on|off]     keep the vault key in the system keychain (on) or in vault.key in the
+                        beamhop home, $BEAMHOP_HOME or ~/.beamhop (off, the default); without an
+                        argument, show where it is
   set [options] <name>  store a secret; reads the value from stdin, or --from-env
   rm <name>             delete a secret
   help [command]        display help for command
@@ -989,8 +1004,8 @@ Options:
 ```text
 Usage: beamhop secret keychain [options] [on|off]
 
-keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key (off, the default);
-without an argument, show where it is
+keep the vault key in the system keychain (on) or in vault.key in the beamhop home, $BEAMHOP_HOME or
+~/.beamhop (off, the default); without an argument, show where it is
 
 Options:
   -h, --help  display help for command
@@ -1209,12 +1224,14 @@ Usage: beamhop alerts set [options]
 change alert rules, e.g. `beamhop alerts set --budget 80,100 --spike 5/10m --heartbeat 15m`
 
 Options:
-  --budget <warn,alert>     warn and alert at these % of the daily budget
-  --spike <events/minutes>  security spike: this many events within N minutes, e.g. 5/10m
-  --heartbeat <minutes>     a cloud agent is offline after this long without a heartbeat, e.g. 15m
-  --nostr-dm                also DM owners on their channels
-  --no-nostr-dm             alerts only as push / in the app
-  -h, --help                display help for command
+  --budget <warn,alert>      warn and alert at these % of the daily budget
+  --spike <events/duration>  security spike: this many events within a time window, e.g. 5/10m (s,
+                             m, h, d; default minutes)
+  --heartbeat <duration>     a cloud agent is offline after this long without a heartbeat, e.g. 15m
+                             or 2h (default minutes)
+  --nostr-dm                 also DM owners on their channels
+  --no-nostr-dm              alerts only as push / in the app
+  -h, --help                 display help for command
 ```
 
 ## beamhop audit

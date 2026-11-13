@@ -217,7 +217,8 @@ describe('beamhop init (headless)', () => {
     const m = d.methods();
     expect(m).not.toContain('system.doctor');
     expect(m).not.toContain('identity.ownerCreate');
-    expect(d.calls.find((c) => c[0] === 'identity.ownerImport')![1]).toEqual({ npub: OWNER });
+    // --owner-npub is an explicit choice, so it may replace a key the daemon holds.
+    expect(d.calls.find((c) => c[0] === 'identity.ownerImport')![1]).toEqual({ npub: OWNER, replace: true });
     expect(d.calls.find((c) => c[0] === 'device.pairStart')![1]).toEqual({
       name: 'iPhone',
       requireConfirm: true,
