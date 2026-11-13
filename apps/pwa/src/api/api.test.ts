@@ -57,6 +57,7 @@ const SAMPLE: Partial<Record<MethodName, unknown>> = {
   'device.pairComplete': { code: 'X', pubkey: 'npub1y', name: 'Pixel' },
   'device.remove': { id: 'dev_pixel' },
   'device.pushSubscribe': { id: 'dev_mac', subscription: {} },
+  'device.pushPrefs': { id: 'dev_mac' },
   'identity.nip05': { domain: 'example.com' },
 };
 

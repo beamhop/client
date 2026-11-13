@@ -13,7 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['boot.js', 'favicon.svg', 'icons/*.png', 'icons/*.svg'],
+      includeAssets: ['boot.js', 'push-sw.js', 'favicon.svg', 'icons/*.png', 'icons/*.svg'],
       manifest: {
         id: '/',
         name: 'beamhop',
@@ -57,6 +57,8 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/rpc/, /^\/ws/, /^\/healthz/],
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Web Push `push` / `notificationclick` handlers (public/push-sw.js, see src/api/push.ts).
+        importScripts: ['push-sw.js'],
       },
       devOptions: { enabled: false },
     }),

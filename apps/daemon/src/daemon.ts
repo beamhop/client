@@ -47,9 +47,11 @@ import {
 import { createMcpBridge, type McpBridge } from '@beamhop/mcp';
 import { createSandbox } from '@beamhop/sandbox';
 import { ConfigStore, openStore, type Store } from '@beamhop/store';
+import { type AlertOptions, Alerts } from './alerts.ts';
 import { ApiHandlers } from './api.ts';
 import { ApprovalManager } from './approvals.ts';
 import { ChannelManager } from './channels.ts';
+import { CloudSide } from './cloud.ts';
 import {
   acquireLock,
   type DeployEnv,
@@ -63,7 +65,9 @@ import { CONTROL_KEY_REF, IdentityManager, loadNostr } from './identity.ts';
 import { createMcpHandlers, type McpCtx } from './mcp-handlers.ts';
 import { loadNostrMesh, type MeshProvider } from './mesh.ts';
 import { DevicePairing } from './pairing.ts';
+import { PushManager, type PushOptions } from './push.ts';
 import { loadBuiltinPlugins, PluginRegistry, type PluginRegistryInit } from './registry.ts';
+import { PROVISION_METHOD, RemoteManager, type RemoteOptions } from './remote.ts';
 import { Router } from './router.ts';
 import { type ApiServer, startApiServer } from './rpc-server.ts';
 import { Scheduler } from './schedules.ts';
@@ -124,6 +128,12 @@ export interface DaemonOptions {
   env?: NodeJS.ProcessEnv;
   /** Options for the SSRF-safe host-side fetch (attachment downloads/uploads). Tests stub DNS here. */
   fetch?: SafeFetchOptions;
+  /** Web Push delivery (tests inject a fake push service). */
+  push?: PushOptions;
+  /** Alert thresholds (security spikes, crash throttling). */
+  alerts?: AlertOptions;
+  /** Cloud daemons: heartbeat interval, missed-beat limit, provisioning hello interval. */
+  remote?: RemoteOptions;
 }
 
 export interface AuditInput {
@@ -171,6 +181,12 @@ export class Daemon {
   readonly apiHandlers: ApiHandlers;
   readonly identity: IdentityManager;
   readonly pairing: DevicePairing;
+  readonly push: PushManager;
+  readonly alerts: Alerts;
+  /** Cloud daemons controlled from here (provisioning, heartbeats, panic fan-out). */
+  readonly remotes: RemoteManager;
+  /** This daemon's own cloud-deploy side (await provisioning, heartbeats). */
+  readonly cloud: CloudSide;
   api: ApiServer | undefined;
   llmProxy: LlmProxy | undefined;
   mcpBridge!: McpBridge<McpCtx>;
@@ -218,6 +234,10 @@ export class Daemon {
     this.apiHandlers = new ApiHandlers(this);
     this.identity = new IdentityManager(this);
     this.pairing = new DevicePairing(this);
+    this.push = new PushManager(this, opts.push);
+    this.alerts = new Alerts(this, opts.alerts);
+    this.remotes = new RemoteManager(this, opts.remote);
+    this.cloud = new CloudSide(this, opts.remote);
     this.mesh = opts.mesh;
     this.fetcher = createSafeFetch(opts.fetch);
     this.sandboxFactory =
@@ -264,6 +284,7 @@ export class Daemon {
       const key = this.opts.dataKey ?? (await ensureDataKey(this.home, this.secrets, this.log));
       this.store = openStore({ key, home: this.home, logger: this.log, now: () => new Date(this.now()) });
       this.apiToken = ensureApiToken(this.home);
+      await this.cloud.init();
 
       if (!this.opts.plugins || this.opts.loadBuiltins) {
         const loaded = await loadBuiltinPlugins({
@@ -271,7 +292,7 @@ export class Daemon {
           secrets: this.secrets,
           log: this.log,
           fetchAttachment: (url) => this.fetcher.fetch(url),
-          provisioning: async () => this.provisioningInfo(),
+          provisioning: (spec) => this.provisioningInfo(spec),
         });
         this.log.info('plugins loaded', { loaded });
       }
@@ -305,10 +326,18 @@ export class Daemon {
         this.listeners.add((e) => this.api?.broadcast(e));
         if (this.opts.socket !== false) await this.startSocket();
       }
-      if (this.opts.controlPlane)
+      if (this.opts.controlPlane) {
         await this.startControlPlane().catch((e) =>
           this.log.warn('control plane failed', { error: errMsg(e) }),
         );
+        await this.remotes
+          .start()
+          .catch((e) => this.log.warn('cloud daemon tracking failed', { error: errMsg(e) }));
+        if (this.cloud.awaiting())
+          this.log.info('waiting for provisioning over the Nostr control plane', {
+            npub: this.control?.npub,
+          });
+      }
 
       const panic = this.global().panic;
       if (panic.active) {
@@ -346,6 +375,8 @@ export class Daemon {
     this.stopping = (async () => {
       if (this.timer) clearInterval(this.timer);
       this.scheduler.stop();
+      this.remotes.close();
+      this.cloud.close();
       await this.sessions.closeAll({ hard: false }).catch(() => {});
       await this.channels.stopAll().catch(() => {});
       this.approvals.dispose();
@@ -373,6 +404,8 @@ export class Daemon {
     await this.approvals.tick();
     await this.sessions.tick();
     await this.scheduler.tick();
+    this.remotes.tick();
+    await this.cloud.tick();
     if (this.now() - this.lastRetention >= 3_600_000) {
       this.lastRetention = this.now();
       this.applyRetention();
@@ -414,7 +447,9 @@ export class Daemon {
   async controlKey(): Promise<{ nsec: string; npub: string; pubkey: string }> {
     const m = await loadNostr();
     if (!m) throw new BeamhopError('unavailable', 'the Nostr control plane needs @beamhop/channel-nostr');
-    const ref = this.deployEnv.daemonNsecRef ?? CONTROL_KEY_REF;
+    // Always its own key: on cloud hosts BEAMHOP_DAEMON_NSEC_REF names where the *agent's* provisioned
+    // nsec lives, which must not replace the key the owner's daemon already knows.
+    const ref = CONTROL_KEY_REF;
     let nsec = await this.secrets.get(ref);
     if (!nsec) {
       nsec = m.generateAgentKey().nsec;
@@ -440,6 +475,8 @@ export class Daemon {
       // Unpaired devices may only complete a pairing (rate-limited before decryption).
       publicMethods: [...PUBLIC_CONTROL_METHODS],
       handle: (req, ctx) => {
+        if (req.method === PROVISION_METHOD && ctx.allowlisted)
+          return this.cloud.handleProvision(req, ctx.sender);
         if (!ctx.allowlisted && !PUBLIC_CONTROL_METHODS.includes(req.method))
           return {
             jsonrpc: '2.0',
@@ -458,7 +495,7 @@ export class Daemon {
     const owners = g.owners.filter((p) => p.startsWith('nostr:')).map((p) => p.slice(6));
     if (g.nostr.ownerNpub) owners.push(g.nostr.ownerNpub);
     const devices = this.pairing.activeDevices().map((d) => d.pubkey);
-    return [...new Set([...owners, ...devices])];
+    return [...new Set([...owners, ...devices, ...this.cloud.allowlistExtra()])];
   }
 
   refreshControlAllowlist(): void {
@@ -483,11 +520,12 @@ export class Daemon {
     return res.result;
   }
 
-  private provisioningInfo() {
+  /** Non-secret provisioning info for deployers; creates the agent's one-time provisioning key. */
+  private async provisioningInfo(spec?: { agent: string }) {
     const g = this.global();
     return {
       ownerNpub: g.nostr.ownerNpub ?? this.deployEnv.ownerNpub ?? '',
-      provisioningPubkey: this.deployEnv.provisioningPubkey ?? '',
+      provisioningPubkey: spec?.agent ? await this.remotes.provisioningKey(spec.agent) : '',
       beamhopVersion: VERSION,
     };
   }
@@ -576,6 +614,7 @@ export class Daemon {
       data: input.data ?? {},
     });
     this.emit({ type: 'audit', event: ev });
+    this.alerts.onAudit(ev);
     return ev;
   }
 
@@ -771,10 +810,15 @@ export class Daemon {
     });
     this.emit({ type: 'panic', active: true });
     for (const a of this.config.agents.list()) this.emitAgent(a.name);
+    // §7A: the same command goes to every cloud daemon over Nostr (outcome per remote in system.status).
+    await this.remotes.command('panic', reason);
   }
 
   async resume(actor: string): Promise<void> {
-    if (!this.isPanic()) return;
+    if (!this.isPanic()) {
+      await this.remotes.command('resume');
+      return;
+    }
     this.updateGlobal((c) => ({ ...c, panic: { active: false } }));
     this.budgets.reset();
     this.seedBudgets();
@@ -783,6 +827,7 @@ export class Daemon {
     this.audit({ type: 'panic.resume', severity: 'security', summary: 'Resumed after panic', actor });
     this.emit({ type: 'panic', active: false });
     for (const a of this.config.agents.list()) this.emitAgent(a.name);
+    await this.remotes.command('resume');
   }
 }
 

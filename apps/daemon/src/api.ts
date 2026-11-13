@@ -76,6 +76,28 @@ export class ApiHandlers {
     return ctx.caller;
   }
 
+  /**
+   * A paired device may only manage its own push settings; local clients and owners may manage any
+   * device. `browser` (the locally served PWA) is local-only.
+   */
+  private assertOwnDevice(id: string, ctx: CallContext): void {
+    if (
+      ctx.caller === 'local' ||
+      ctx.transport === 'direct' ||
+      ctx.transport === 'http' ||
+      ctx.transport === 'ws'
+    )
+      return;
+    if (ctx.caller.startsWith('nostr:')) {
+      const npub = ctx.caller.slice(6);
+      const dev = this.d.pairing.activeDevices().find((x) => x.pubkey === npub);
+      if (dev && dev.id === id) return;
+      if (!dev && this.d.ownerPrincipals().includes(normalizePrincipal(ctx.caller)) && id !== 'browser')
+        return;
+    }
+    throw new BeamhopError('forbidden', 'a device can only change its own push settings');
+  }
+
   private agentView(name: string): AgentView {
     return this.d.agentView(this.d.agent(name));
   }
@@ -208,6 +230,7 @@ export class ApiHandlers {
           pendingApprovals: d.store.approvals.countPending(),
           owner: g.nostr.ownerNpub ? { npub: g.nostr.ownerNpub } : {},
           home: d.home,
+          remotes: d.remotes.views(),
         };
       },
       'system.doctor': async () => {
@@ -941,6 +964,9 @@ export class ApiHandlers {
         d.assertNotPanic();
         const dep = this.requireDeployer(p.provider);
         const a = d.agent(p.agent);
+        // The one-time provisioning key must exist before the host is created (its pubkey goes into
+        // the host's environment); without the nostr package the deployer reports the gap itself.
+        await d.remotes.provisioningKey(a.name).catch(() => undefined);
         const res = await dep.apply({ ...p, harnesses: [a.harness] });
         const plan = await dep.plan({ ...p, harnesses: [a.harness] }).catch(() => undefined);
         const rec = d.store.deployments.upsert({
@@ -962,6 +988,10 @@ export class ApiHandlers {
           agent: p.agent,
           data: { id: res.id },
         });
+        // Wait for the host's hello, then send its config and secrets over the control plane.
+        await d.remotes
+          .afterApply(rec)
+          .catch((e) => d.log.warn('provisioning could not start', { id: rec.id, error: errMsg(e) }));
         const { address: _a, data: _d, ...view } = rec;
         return view;
       },
@@ -988,6 +1018,7 @@ export class ApiHandlers {
         if (!r) throw new BeamhopError('not_found', `deployment ${id} not found`);
         await this.requireDeployer(r.provider).destroy(id);
         d.store.deployments.setStatus(id, 'destroyed');
+        await d.remotes.forget(id);
         d.audit({
           type: 'deploy.destroy',
           severity: 'security',
@@ -1021,6 +1052,7 @@ export class ApiHandlers {
         d.pairing.confirm(pairingId, accept, this.principal(ctx)),
       'device.remove': async ({ id }, ctx) => {
         if (!d.pairing.remove(id)) throw new BeamhopError('not_found', `device ${id} not found`);
+        d.push.forgetDevice(id);
         d.audit({
           type: 'device.removed',
           severity: 'security',
@@ -1030,9 +1062,15 @@ export class ApiHandlers {
         });
         return OK;
       },
-      'device.pushSubscribe': async ({ id, subscription }) => {
-        d.store.devices.setPush(id, subscription ?? null);
+      'device.pushSubscribe': async ({ id, subscription }, ctx) => {
+        this.assertOwnDevice(id, ctx);
+        d.push.subscribe(id, subscription ?? null);
         return OK;
+      },
+      'device.pushKey': async () => ({ publicKey: await d.push.publicKey() }),
+      'device.pushPrefs': async ({ id, prefs }, ctx) => {
+        this.assertOwnDevice(id, ctx);
+        return { id, prefs: prefs ? d.push.setPrefs(id, prefs) : d.push.prefs(id) };
       },
 
       // ── identity ──

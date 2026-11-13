@@ -17,6 +17,7 @@ import {
   methods,
   type ParsedParams,
   PRESETS,
+  type PushCategory,
   type Result,
   SandboxPolicy,
   ScheduleConfig,
@@ -48,6 +49,7 @@ export class MockDaemon {
   private listeners = new Set<(e: ServerEvent) => void>();
   /** Decisions inside their 5 s commit window (JOURNEYS §2.6). */
   private commitTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private pushPrefs = new Map<string, Record<PushCategory, boolean>>();
   /** Hook for the simulator: called when an approval's decision is released to the agent. */
   onDecisionReleased?: (a: ApprovalView) => void;
   /** Hook for the simulator: called after a user message so the agent can answer. */
@@ -867,8 +869,17 @@ export class MockDaemon {
       return OK;
     },
     'device.pushSubscribe': (p) => {
-      this.state.devices = this.state.devices.map((d) => (d.id === p.id ? { ...d, pushEnabled: true } : d));
+      const on = p.subscription != null;
+      this.state.devices = this.state.devices.map((d) => (d.id === p.id ? { ...d, pushEnabled: on } : d));
       return OK;
+    },
+    // A well-formed (uncompressed P-256 point, base64url) but meaningless demo key.
+    'device.pushKey': () => ({ publicKey: `B${'A'.repeat(86)}` }),
+    'device.pushPrefs': (p) => {
+      const cur = { approvals: true, budget: true, crash: true, offline: true, security: true };
+      const next = { ...cur, ...(this.pushPrefs.get(p.id) ?? {}), ...(p.prefs ?? {}) };
+      this.pushPrefs.set(p.id, next);
+      return { id: p.id, prefs: next };
     },
 
     // ── identity
