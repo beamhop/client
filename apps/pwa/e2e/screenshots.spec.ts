@@ -45,6 +45,33 @@ test('screenshot ended session (merge / open PR)', async ({ page }, info) => {
   await page.screenshot({ path: `screenshots/${info.project.name}/sessions_ses_836.png` });
 });
 
+test('screenshot dark deploy, settings, setup, pair', async ({ page }, info) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  for (const [path, name] of [
+    ['/deploy/new?agent=reviewer', 'deploy_new-dark'],
+    ['/deploy/dep_fly_ams1', 'deploy_detail-dark'],
+    ['/settings/devices', 'settings_devices-dark'],
+    ['/settings/identity', 'settings_identity-dark'],
+    ['/setup/doctor', 'setup_doctor-dark'],
+    ['/setup/phone', 'setup_phone-dark'],
+    ['/pair', 'pair-dark'],
+  ] as const) {
+    const sep = path.includes('?') ? '&' : '?';
+    await page.goto(`${path}${sep}mock=1&still=1`);
+    await expect(page.locator('#bh-main-content').first()).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: `screenshots/${info.project.name}/${name}.png` });
+  }
+});
+
+test('screenshot pairing safety check (trusted side)', async ({ page }, info) => {
+  await page.goto('/setup/phone?mock=1&still=1');
+  await expect(page.getByText(/Does iPhone · Safari show these words\?/)).toBeVisible({ timeout: 12_000 });
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({ path: `screenshots/${info.project.name}/setup_phone-confirm.png` });
+});
+
 test('screenshot panic band', async ({ page }, info) => {
   await page.goto('/?mock=1&still=1');
   await page.evaluate(async () => {
