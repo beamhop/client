@@ -1,0 +1,16 @@
+{
+  "name": "@beamhop/harness-acp",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/core": "workspace:*",
+    "@beamhop/harness-catalog": "workspace:*",
+    "@beamhop/harness-discovery": "workspace:*",
+    "@beamhop/harness-kit": "workspace:*",
+    "@agentclientprotocol/sdk": "2.6.0"
+  }
+}
