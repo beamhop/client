@@ -1,11 +1,10 @@
 /**
- * Device key generated ON the phone (JOURNEYS §9.3): a non-extractable WebCrypto key pair whose private
- * half never leaves this browser (stored as a CryptoKey object in IndexedDB). Only the public key is
- * sent to the daemon. Falls back to an in-memory key when IndexedDB is unavailable (private mode).
- *
- * TODO(pairing): Nostr control events need a secp256k1 key; switch to the shared pairing module from
- * `packages/channel-nostr` once it exists. P-256 here proves the storage/UX path.
+ * Device key generated ON the phone (JOURNEYS §9.3). A Nostr keypair: the public key goes to the
+ * daemon, the secret stays in this browser's IndexedDB (falls back to memory for this tab when
+ * IndexedDB is blocked, e.g. some private modes). Never logged, never sent.
  */
+import { type AgentKey, generateAgentKey } from '@beamhop/channel-nostr/keys';
+
 const DB = 'beamhop-device';
 const STORE = 'keys';
 
@@ -17,35 +16,26 @@ const idb = (): Promise<IDBDatabase> =>
     req.onerror = () => reject(req.error);
   });
 
-const put = async (key: string, value: unknown) => {
+const putSecret = async (secret: Uint8Array) => {
   const db = await idb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put(value, key);
+    tx.objectStore(STORE).put(secret, 'device');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 };
 
-const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+/** Generate a fresh device key (re-pairing replaces the old key, keeps the name — JOURNEYS §9). */
+export const newDeviceKey = (): AgentKey => generateAgentKey();
 
-/** Create (or replace) this device's key and return the public key as hex. */
-export const createDeviceKey = async (): Promise<string> => {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) {
-    // Insecure context: a random id still lets the daemon track the device; signing needs HTTPS.
-    const r = new Uint8Array(33);
-    globalThis.crypto.getRandomValues(r);
-    return hex(r.buffer);
-  }
-  const pair = await subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
-  const raw = await subtle.exportKey('raw', pair.publicKey);
+/** Persist the secret once the user commits to pairing. */
+export const saveDeviceKey = async (key: AgentKey): Promise<void> => {
   try {
-    await put('device', pair);
+    await putSecret(key.secretKey);
   } catch {
-    /* IndexedDB blocked: key lives for this tab only */
+    /* IndexedDB blocked: the key lives for this tab only */
   }
-  return hex(raw);
 };
 
 const ID_KEY = 'bh.deviceId';

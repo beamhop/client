@@ -2,28 +2,29 @@
  * Computer (trusted) side of device pairing — JOURNEYS §1.04 and §9 steps 1 & 3.
  * Used by onboarding step 04 and Settings → Devices → Pair a device.
  *
- * QR (link with the one-time token in the fragment) + Doto expiry countdown + `Show code instead` +
- * `Copy link`, the 4-word safety phrase the phone will show, and a live wait for the phone: we poll
- * `device.list` and resolve as soon as a device that wasn't there before appears.
- *
- * TODO(core): JOURNEYS §9.3 wants the final "Yes, pair" on the computer. The API has no
- * `device.pairConfirm`; today the phone confirms the match and calls `device.pairComplete`.
+ * `device.pairStart({ requireConfirm: true })` → QR of the hosted pairing URL (payload in the fragment)
+ * + Doto expiry countdown + `Show code instead` + `Copy link`. We poll `device.pairStatus`:
+ * `waiting` → `awaiting-confirm` (the phone answered; the 4 words appear here) → the owner compares
+ * and presses `Yes, pair iPhone · Safari` (`device.pairConfirm`) — confirmation happens on the trusted
+ * side, which defends against swapped/relayed QR codes (linked-device phishing, MITRE T1676).
+ * `No, cancel` rejects and the daemon logs a failed pairing (security event).
  */
-import type { DeviceView } from '@beamhop/core';
-import { ArrowClockwise, Check, Copy, DeviceMobile, QrCode as QrIcon } from '@phosphor-icons/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useApi, useBeamhop, useCall } from '../../api/index.ts';
+import type { DeviceView, PairingStatusView } from '@beamhop/core';
+import { ArrowClockwise, Check, Copy, QrCode as QrIcon, X } from '@phosphor-icons/react';
+import { useEffect, useRef, useState } from 'react';
+import { useApi, useMutationApi } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { countdown } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { Button } from '../../ui/Button.tsx';
+import { TicketCard } from '../../ui/Card.tsx';
 import { Readout } from '../../ui/Meta.tsx';
 import { QrCode } from '../../ui/QrCode.tsx';
 import { ErrorState, Skeleton } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
-import { tokenFromUri, useSafetyPhrase } from './safetyPhrase.ts';
+import { phraseWords } from './safetyPhrase.ts';
 
 /** Four words, numbered, big mono caps. Screen readers get one sentence. */
 export const SafetyPhrase = ({
@@ -39,14 +40,14 @@ export const SafetyPhrase = ({
     {words ? (
       <>
         <p className="sr-only">Safety phrase: {words.join(', ')}.</p>
-        <ol aria-hidden="true" className="grid grid-cols-2 gap-x-4 gap-y-2 medium:grid-cols-4">
+        <ol aria-hidden="true" className="grid grid-cols-2 gap-x-4 gap-y-2">
           {words.map((w, i) => (
-            <li key={`${w}-${i}`} className="flex items-baseline gap-2 border-b border-line pb-1.5">
+            <li key={`${w}-${i}`} className="flex min-w-0 items-baseline gap-2 border-b border-line pb-1.5">
               <span className="type-micro text-ink-3">{i + 1}</span>
               <span
                 className={cx(
-                  'font-mono font-semibold tracking-[0.04em] text-ink',
-                  size === 'lg' ? 'text-[22px] leading-8' : 'text-[17px] leading-6',
+                  'truncate font-mono font-semibold tracking-[0.04em] text-ink',
+                  size === 'lg' ? 'text-[21px] leading-8' : 'text-[17px] leading-6',
                 )}
                 style={{ fontVariationSettings: '"wdth" 87.5' }}
               >
@@ -57,9 +58,11 @@ export const SafetyPhrase = ({
         </ol>
       </>
     ) : (
-      <div aria-hidden="true" className="grid grid-cols-2 gap-3 medium:grid-cols-4">
+      <div aria-hidden="true" className="grid grid-cols-2 gap-x-4 gap-y-2">
         {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="h-7 rounded-sm border border-line" />
+          <span key={i} className="flex h-8 items-end gap-2 border-b border-dashed border-line-strong pb-1.5">
+            <span className="type-micro text-ink-3">{i + 1}</span>
+          </span>
         ))}
       </div>
     )}
@@ -77,57 +80,64 @@ const STEPS = ['Scan with your phone camera', 'Check the 4 words match', 'Allow 
 
 export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps) => {
   const now = useNow(1000);
-  const call = useCall();
-  const { mock } = useBeamhop();
   const start = useApi(
     'device.pairStart',
-    { name: 'New device' },
+    { name: 'New device', requireConfirm: true },
     { staleTime: Number.POSITIVE_INFINITY, gcTime: 0, refetchOnWindowFocus: false, retry: false },
   );
+  const pairingId = start.data?.pairingId ?? '';
+  const [final, setFinal] = useState<PairingStatusView>();
+  const status = useApi(
+    'device.pairStatus',
+    { pairingId },
+    {
+      enabled: !!pairingId && !final,
+      refetchInterval: (q) => {
+        const s = q.state.data?.status;
+        return s === 'waiting' || s === undefined ? 1500 : false;
+      },
+    },
+  );
+  const confirm = useMutationApi('device.pairConfirm', { invalidate: ['device.list'] });
   const [showCode, setShowCode] = useState(false);
-  const [paired, setPaired] = useState<DeviceView>();
   const [copied, setCopied] = useState(false);
-  const known = useRef<Set<string> | null>(null);
+  const announced = useRef<string>(undefined);
+
+  const current = final ?? status.data;
+  const state = current?.status ?? 'waiting';
   const expiresAt = start.data ? new Date(start.data.expiresAt).getTime() : 0;
   const left = expiresAt - now;
-  const expired = !!start.data && left <= 0;
-  const devices = useApi('device.list', undefined, {
-    refetchInterval: paired || expired ? false : 2000,
-  });
+  const expired = state === 'expired' || (state === 'waiting' && !!start.data && left <= 0);
+  const words = phraseWords(current?.safetyPhrase);
+  const device = current?.device;
 
-  // Remember devices that existed when the code was issued; any new one is "the phone".
   useEffect(() => {
-    if (!devices.data) return;
-    if (!known.current) {
-      known.current = new Set(devices.data.devices.map((d) => d.id));
-      return;
+    if (state === announced.current) return;
+    announced.current = state;
+    if (state === 'awaiting-confirm' && device) {
+      haptic('tick');
+      announce(`${device.name} answered. Check that it shows: ${words?.join(', ')}.`);
     }
-    if (paired) return;
-    const fresh = devices.data.devices.find((d) => !known.current!.has(d.id));
-    if (fresh) {
-      setPaired(fresh);
+  }, [state, device, words]);
+
+  const restart = () => {
+    setFinal(undefined);
+    confirm.reset();
+    void start.refetch();
+  };
+
+  const decide = async (accept: boolean) => {
+    const r = await confirm.mutateAsync({ pairingId, accept });
+    setFinal(r);
+    if (accept && r.status === 'paired' && r.device) {
       haptic('confirm');
-      announce(`Paired ${fresh.name}.`);
-      onPaired?.(fresh);
+      announce(`Paired ${r.device.name}.`);
+      onPaired?.(r.device);
+    } else if (!accept) {
+      haptic('reject');
+      announce('Pairing cancelled. Nothing was paired.');
     }
-  }, [devices.data, paired, onPaired]);
-
-  const secret = start.data ? (showCode ? start.data.code : tokenFromUri(start.data.uri)) : undefined;
-  const words = useSafetyPhrase(secret);
-  const qrSize = compact ? 200 : 240;
-
-  const steps = useMemo(
-    () =>
-      STEPS.map((s, i) => (
-        <li key={s} className="flex items-start gap-3">
-          <span className="grid size-6 shrink-0 place-items-center rounded-full border border-line-strong font-mono text-[11px] text-ink-2">
-            {i + 1}
-          </span>
-          <span className="pt-0.5 type-body-sm text-ink">{s}</span>
-        </li>
-      )),
-    [],
-  );
+  };
 
   if (start.isError) {
     return (
@@ -143,51 +153,119 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
   }
   if (!start.data) return <Skeleton variant="detail" count={1} label="Preparing a pairing code" />;
 
-  if (paired) {
+  if (state === 'paired' && device) {
     return (
-      <div className={cx('flex flex-col gap-3 rounded-lg border border-line bg-go-wash p-4', className)}>
+      <div
+        className={cx('flex flex-col gap-3 rounded-lg border border-line bg-go-wash p-4', className)}
+        data-pairing="paired"
+      >
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-md bg-surface text-go-text">
+          <span className="grid size-10 shrink-0 place-items-center rounded-md bg-surface text-go-text">
             <Check size={22} weight="bold" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="type-title-3 text-ink">Paired · {paired.name}</p>
+            <p className="type-title-3 text-ink">Paired · {device.name}</p>
             <p className="type-meta text-ink-2">
-              {paired.pushEnabled ? 'notifications on' : 'notifications not on yet'} · key{' '}
-              {paired.pubkey.slice(0, 12)}…
+              {device.pushEnabled ? 'notifications on' : 'notifications not on yet'} · phrase confirmed
             </p>
           </div>
         </div>
         <p className="type-body-sm text-ink-2">
-          It can now approve requests and stop agents. Remove it any time in Settings → Devices.
+          It can approve requests and stop agents now. Remove it any time in Settings → Devices.
         </p>
       </div>
     );
   }
 
+  if (state === 'rejected') {
+    return (
+      <div className={cx('flex flex-col items-start gap-3', className)} data-pairing="rejected">
+        <StatusDot state="stopped" label="cancelled" />
+        <p className="type-title-3 text-ink">Pairing cancelled. Nothing was paired.</p>
+        <p className="type-body-sm text-ink-2">
+          The code can't be used again, and the attempt is in the audit log. If someone else scanned your
+          code, that's where you'll see it.
+        </p>
+        <Button
+          variant="secondary"
+          icon={<ArrowClockwise size={16} aria-hidden="true" />}
+          onPress={restart}
+        >
+          Start again
+        </Button>
+      </div>
+    );
+  }
+
+  if (state === 'awaiting-confirm' && device) {
+    return (
+      <TicketCard
+        className={className}
+        eyebrow="Safety check"
+        tag={<StatusDot state="needs-you" label="answered" />}
+        decision={
+          <div className="flex flex-col gap-2 medium:flex-row-reverse">
+            <Button
+              variant="allow"
+              size="lg"
+              fullWidth
+              icon={<Check size={18} weight="bold" aria-hidden="true" />}
+              isPending={confirm.isPending && confirm.variables?.accept === true}
+              onPress={() => void decide(true)}
+            >
+              Yes, pair {device.name}
+            </Button>
+            <Button
+              variant="deny"
+              size="lg"
+              fullWidth
+              icon={<X size={18} weight="bold" aria-hidden="true" />}
+              isPending={confirm.isPending && confirm.variables?.accept === false}
+              onPress={() => void decide(false)}
+            >
+              No, cancel
+            </Button>
+          </div>
+        }
+      >
+        <div data-pairing="awaiting-confirm" className="flex flex-col gap-3">
+          <p className="type-title-3 text-ink">Does {device.name} show these words?</p>
+          <SafetyPhrase words={words} size="lg" />
+          <p className="type-body-sm text-ink-2">
+            Only confirm if every word matches, in order. If they differ, someone else's code may have been
+            swapped in.
+          </p>
+          {confirm.isError && <p className="type-body-sm text-stop-text">{confirm.error.message}</p>}
+        </div>
+      </TicketCard>
+    );
+  }
+
+  const qrSize = compact ? 208 : 240;
   return (
     <div
       className={cx(
-        'flex flex-col gap-5 expanded:grid expanded:grid-cols-[auto_1fr] expanded:items-start expanded:gap-8',
+        'flex flex-col gap-5 medium:grid medium:grid-cols-[auto_1fr] medium:items-start medium:gap-8',
         className,
       )}
+      data-pairing={expired ? 'expired' : 'waiting'}
     >
       <div className="flex flex-col items-start gap-3">
         <div className="relative">
           {showCode ? (
             <div
-              className="grid place-items-center rounded-md border border-line bg-surface"
+              className="grid place-items-center rounded-md border border-line bg-surface p-4"
               style={{ width: qrSize, height: qrSize }}
             >
               <div className="text-center">
                 <p className="type-micro text-ink-2">Pairing code</p>
                 <p
-                  className="mt-2 font-mono text-[28px] leading-9 font-semibold tracking-[0.08em] text-ink select-all"
+                  className="mt-2 font-mono text-[26px] leading-9 font-semibold tracking-[0.08em] text-ink select-all"
                   aria-label={`Pairing code ${start.data.code.split('').join(' ')}`}
                 >
                   {start.data.code}
                 </p>
-                <p className="mt-1 type-meta text-ink-2">Open beamhop on the phone → Enter code</p>
+                <p className="mt-1 type-meta text-ink-2">On the phone: beamhop → Enter code</p>
               </div>
             </div>
           ) : (
@@ -202,18 +280,16 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
               <span aria-hidden="true" className="hatch absolute inset-0 rounded-md text-ink-3" />
               <Button
                 variant="primary"
+                className="relative"
                 icon={<ArrowClockwise size={16} weight="bold" aria-hidden="true" />}
-                onPress={() => {
-                  known.current = null;
-                  void start.refetch();
-                }}
+                onPress={restart}
               >
                 Get a new code
               </Button>
             </div>
           )}
         </div>
-        <div className="flex items-baseline gap-3" aria-live="off">
+        <div className="flex items-baseline gap-3">
           <span className="type-meta text-ink-2">{expired ? 'Expired' : 'Expires in'}</span>
           <Readout size="md" tone={expired ? 'stop' : left < 30_000 ? 'caution' : 'ink'}>
             {countdown(Math.max(0, left))}
@@ -254,14 +330,23 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
         </div>
       </div>
       <div className="flex min-w-0 flex-col gap-5">
-        <ol className="flex flex-col gap-3">{steps}</ol>
+        <ol className="flex flex-col gap-3">
+          {STEPS.map((s, i) => (
+            <li key={s} className="flex items-start gap-3">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full border border-line-strong font-mono text-[11px] text-ink-2">
+                {i + 1}
+              </span>
+              <span className="pt-0.5 type-body-sm text-ink">{s}</span>
+            </li>
+          ))}
+        </ol>
         <section aria-labelledby="pair-phrase" className="flex flex-col gap-2.5">
           <h3 id="pair-phrase" className="type-micro text-ink-2">
-            Your phone will show
+            Safety phrase
           </h3>
-          <SafetyPhrase words={words} />
+          <SafetyPhrase />
           <p className="type-body-sm text-ink-2">
-            If the words differ, don't confirm on the phone. Someone else's code may have been swapped in.
+            The 4 words appear here once your phone answers. You'll compare them with the phone's.
           </p>
         </section>
         <div className="flex items-center gap-2" role="status">
@@ -270,23 +355,6 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
             {expired ? 'This code expired. Get a new one.' : 'Waiting for your phone…'}
           </span>
         </div>
-        {mock && !expired && (
-          <Button
-            variant="quiet"
-            size="sm"
-            className="-ml-3 self-start"
-            icon={<DeviceMobile size={16} aria-hidden="true" />}
-            onPress={() =>
-              void call('device.pairComplete', {
-                code: start.data.code,
-                pubkey: `demo-${Math.random().toString(16).slice(2, 14)}`,
-                name: 'Demo phone · Safari',
-              }).then(() => void devices.refetch())
-            }
-          >
-            Demo: pair a test phone
-          </Button>
-        )}
       </div>
     </div>
   );

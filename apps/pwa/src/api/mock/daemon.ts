@@ -24,6 +24,7 @@ import {
   type SessionEventView,
   type SessionView,
 } from '@beamhop/core';
+import { MockPairing } from './pairing.ts';
 import { ago, ahead, type MockState, NPUBS, OWNER, seed } from './seed.ts';
 
 type Handler<M extends MethodName> = (p: ParsedParams<M>) => Result<M> | Promise<Result<M>>;
@@ -53,8 +54,27 @@ export class MockDaemon {
   /** Hook for the simulator: called after a user message so the agent can answer. */
   onUserMessage?: (sessionId: string, text: string) => void;
 
+  /** Pairing + onboarding hello simulation (mock/pairing.ts). */
+  pairing: MockPairing;
+
   constructor(now = Date.now()) {
     this.state = seed(now);
+    this.pairing = new MockPairing({
+      addDevice: (d) => {
+        this.state.devices = [...this.state.devices.filter((x) => x.pubkey !== d.pubkey), d];
+      },
+      audit: (type, summary, severity) => this.audit({ actor: 'alice', type, severity, summary }),
+    });
+  }
+
+  /** Run a pairing call, mapping its errors to RPC errors. */
+  private pair<T>(fn: () => T): T {
+    try {
+      return fn();
+    } catch (e) {
+      const code = (e as { code?: string }).code === 'not_found' ? 'not_found' : 'conflict';
+      return fail(code, (e as Error).message);
+    }
   }
 
   // ─────────── events ───────────
@@ -825,19 +845,11 @@ export class MockDaemon {
 
     // ── devices
     'device.list': () => ({ devices: this.state.devices }),
-    'device.pairStart': () => {
-      // Runtime-built one-time token (never a literal in source).
-      const token = Array.from(
-        { length: 24 },
-        () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)],
-      ).join('');
-      return {
-        uri: `https://app.beamhop.dev/pair#${token}`,
-        code: 'AMBR-RLY8',
-        expiresAt: ahead(Date.now(), 2),
-      };
-    },
+    'device.pairStart': (p) => this.pairing.start(p.name, p.requireConfirm),
     'device.pairComplete': (p) => {
+      // A code from a pairing started on this daemon follows the real flow (awaiting confirm).
+      const answered = this.pairing.complete(p.code, p.pubkey, p.name);
+      if (answered) return answered;
       const d = {
         id: `dev_${Date.now().toString(36)}`,
         name: p.name,
@@ -874,6 +886,8 @@ export class MockDaemon {
     // ── identity
     'identity.get': () => ({
       npub: OWNER.npub,
+      ownerKeyHeld: true,
+      daemonNpub: this.pairing.daemonKey.npub,
       agents: [...this.state.agents.values()].map((a) => ({
         name: a.config.name,
         npub: a.config.identity.npub,
@@ -907,18 +921,8 @@ export class MockDaemon {
     },
 
     // ── identity / pairing / onboarding (minimal mock; screen builders may enrich)
-    'device.pairStatus': (p) => ({
-      pairingId: p.pairingId,
-      status: 'awaiting-confirm' as const,
-      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-      safetyPhrase: ['amber', 'relay', 'harbor', 'violet'],
-    }),
-    'device.pairConfirm': (p) => ({
-      pairingId: p.pairingId,
-      status: p.accept ? ('paired' as const) : ('rejected' as const),
-      expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
-      safetyPhrase: ['amber', 'relay', 'harbor', 'violet'],
-    }),
+    'device.pairStatus': (p) => this.pair(() => this.pairing.status(p.pairingId)),
+    'device.pairConfirm': (p) => this.pair(() => this.pairing.confirm(p.pairingId, p.accept)),
     'identity.ownerCreate': () => ({ npub: MOCK_OWNER_NPUB }),
     'identity.ownerImport': (p) => ({ npub: p.npub }),
     'identity.ownerExport': () => ({ nsec: 'nsec1…(mock: never shown in demo)' }),
@@ -938,23 +942,20 @@ export class MockDaemon {
       published: [{ kind: 0, id: 'mock', relays: ['wss://relay.damus.io'] }],
       attestation: 'published' as const,
     }),
-    'onboarding.hello': (p) => ({
-      to: MOCK_OWNER_NPUB,
-      from: `npub1${p.agent}…`,
-      id: 'mock',
-      sentAt: new Date().toISOString(),
-    }),
-    'onboarding.helloStatus': () => ({
-      sent: true,
-      replied: true,
-      sentAt: new Date().toISOString(),
-      repliedAt: new Date().toISOString(),
-      from: MOCK_OWNER_NPUB,
-    }),
+    'onboarding.hello': (p) => {
+      const a = this.agent(p.agent);
+      return {
+        to: OWNER.npub,
+        from: a.config.identity.npub ?? `npub1${p.agent}`,
+        id: `hello_${Date.now().toString(36)}`,
+        sentAt: this.pairing.hello(p.agent),
+      };
+    },
+    'onboarding.helloStatus': (p) => this.pairing.helloStatus(p.agent),
   };
 }
 
-const MOCK_OWNER_NPUB = 'npub1owner…';
+const MOCK_OWNER_NPUB = OWNER.npub;
 
 export const describeApproval = (a: ApprovalView): string => {
   const i = (a.input ?? {}) as Record<string, unknown>;

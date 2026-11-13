@@ -127,6 +127,9 @@ importers:
 
   apps/pwa:
     dependencies:
+      '@beamhop/channel-nostr':
+        specifier: workspace:*
+        version: link:../../packages/channel-nostr
       '@beamhop/client':
         specifier: workspace:*
         version: link:../../packages/client

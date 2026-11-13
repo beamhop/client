@@ -13,12 +13,23 @@
  * - WCAG 3.3.8 Accessible Authentication: a match check, never recall; paste allowed for the code.
  * - iOS web push needs the installed app (16.4+) and a user gesture; no beforeinstallprompt on iOS:
  *   https://developer.mozilla.org/en-US/docs/Web/Progressive_Web_Apps/Add_to_home_screen
- * Safety phrase: local derivation (`safetyPhrase.ts`), TODO switch to packages/channel-nostr pairing.ts.
+ * Payload + safety phrase: shared `@beamhop/channel-nostr/pairing` (words from daemon + device pubkeys).
+ * The final "Yes, pair" happens on the computer (device.pairConfirm); the phone only sends the request.
  */
 import type { DeviceView } from '@beamhop/core';
-import { ArrowRight, Bell, Check, DeviceMobile, Export, PlusSquare, X } from '@phosphor-icons/react';
+import { completePairing } from '@beamhop/channel-nostr/pairing';
+import {
+  ArrowRight,
+  Bell,
+  Check,
+  DeviceMobile,
+  Export,
+  PaperPlaneTilt,
+  PlusSquare,
+  X,
+} from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
-import { useCall } from '../../api/index.ts';
+import { useApi, useBeamhop, useCall } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -29,18 +40,19 @@ import { TicketCard } from '../../ui/Card.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { Eyebrow } from '../../ui/Meta.tsx';
 import { Banner, ErrorState } from '../../ui/States.tsx';
+import { StatusDot } from '../../ui/Status.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
-import { createDeviceKey, deviceNameFromUA, rememberDeviceId } from './deviceKey.ts';
+import { deviceNameFromUA, newDeviceKey, rememberDeviceId, saveDeviceKey } from './deviceKey.ts';
 import { SafetyPhrase } from './PairingPanel.tsx';
 import { requestPush, useInstallPrompt, usePushEnv } from './push.tsx';
-import { formatPairCode, useSafetyPhrase } from './safetyPhrase.ts';
+import { formatPairCode, type PairingPayload, tryDecodePayload, tryPhrase } from './safetyPhrase.ts';
 
-type Phase = 'enter' | 'compare' | 'cancelled' | 'done';
+type Phase = 'enter' | 'invalid' | 'compare' | 'confirm' | 'cancelled' | 'done';
 
 const readToken = () => {
   if (typeof window === 'undefined') return '';
   const h = window.location.hash.replace(/^#/, '');
-  return h && !h.includes('=') ? decodeURIComponent(h) : '';
+  return h && !h.includes('=') ? h : '';
 };
 
 const Frame = ({ step, children }: { step: number; children: React.ReactNode }) => (
@@ -84,8 +96,7 @@ const EnterCode = ({ onCode }: { onCode: (code: string) => void }) => {
           onBlur={() => setTouched(true)}
           mono
           autoComplete="one-time-code"
-          autoCapitalize="characters"
-          spellCheck={false}
+          spellCheck="false"
           placeholder="AMBR-RLY8"
           description={t('pair.enter.hint')}
           isInvalid={touched && raw.length > 0 && !code}
@@ -111,33 +122,52 @@ const EnterCode = ({ onCode }: { onCode: (code: string) => void }) => {
   );
 };
 
-// ─────────── 2 · compare ───────────
+// ─────────── 2 · compare + send ───────────
+interface Target {
+  /** From the QR link: daemon key, relays, code, computer name, expiry. */
+  payload?: PairingPayload;
+  /** Manual code entry (needs a direct connection to the daemon: the local PWA, or the demo). */
+  code?: string;
+}
+
 const Compare = ({
-  secret,
-  onPaired,
+  target,
+  onSent,
   onCancel,
 }: {
-  secret: string;
-  onPaired: (d: DeviceView) => void;
+  target: Target;
+  onSent: (d: DeviceView, words: string[] | undefined) => void;
   onCancel: () => void;
 }) => {
-  const words = useSafetyPhrase(secret);
+  const key = useMemo(newDeviceKey, []);
+  const { mock } = useBeamhop();
+  const identity = useApi('identity.get', undefined, { enabled: !target.payload });
+  const daemon = target.payload?.daemon ?? identity.data?.daemonNpub;
+  const words = useMemo(() => tryPhrase(daemon, key.pubkey), [daemon, key.pubkey]);
   const [name, setName] = useState(deviceNameFromUA);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error>();
   const call = useCall();
+  const computer = target.payload?.name;
+  const expired = !!target.payload?.exp && target.payload.exp * 1000 < Date.now();
 
-  const pair = async () => {
+  const send = async () => {
     if (!name.trim()) return;
     setBusy(true);
     setError(undefined);
     try {
-      const pubkey = await createDeviceKey();
-      const d = await call('device.pairComplete', { code: secret, pubkey, name: name.trim() });
-      rememberDeviceId(d.id);
+      await saveDeviceKey(key);
+      const code = target.payload?.code ?? target.code ?? '';
+      let device: DeviceView;
+      if (target.payload && !mock) {
+        // Hosted PWA: reach the daemon over its relays, signed with the new device key.
+        device = (await completePairing(target.payload, key.secretKey, { name: name.trim() })).device;
+      } else {
+        device = await call('device.pairComplete', { code, pubkey: key.npub, name: name.trim() });
+      }
+      rememberDeviceId(device.id);
       haptic('confirm');
-      announce(t('pair.done.title', { name: d.name }));
-      onPaired(d);
+      onSent(device, words);
     } catch (e) {
       haptic('error');
       setError(e as Error);
@@ -146,10 +176,25 @@ const Compare = ({
     }
   };
 
+  if (expired)
+    return (
+      <>
+        <div className="flex flex-col gap-2">
+          <h1 className="type-title-1 text-ink">{t('pair.expired.title')}</h1>
+          <p className="type-body text-ink-2">{t('pair.expired.body')}</p>
+        </div>
+        <Button variant="primary" size="lg" fullWidth onPress={onCancel}>
+          {t('pair.cancelled.again')}
+        </Button>
+      </>
+    );
+
   return (
     <>
       <div className="flex flex-col gap-2">
-        <h1 className="type-title-1 text-ink">{t('pair.compare.title')}</h1>
+        <h1 className="type-title-1 text-ink">
+          {computer ? t('pair.compare.titleNamed', { name: computer }) : t('pair.compare.title')}
+        </h1>
         <p className="type-body text-ink-2">{t('pair.compare.body')}</p>
       </div>
       <TextField
@@ -162,33 +207,27 @@ const Compare = ({
         errorMessage={t('pair.name.required')}
       />
       {error && (
-        <ErrorState title={t('pair.error.title')} details={error} onRetry={() => void pair()}>
+        <ErrorState title={t('pair.error.title')} details={error} onRetry={() => void send()}>
           {error.message} {t('pair.error.body')}
         </ErrorState>
       )}
       <TicketCard
         eyebrow={t('pair.phrase.eyebrow')}
         decision={
-          <div className="flex flex-col gap-2 medium:flex-row-reverse">
+          <div className="flex flex-col gap-1">
             <Button
-              variant="allow"
+              variant="primary"
               size="lg"
               fullWidth
-              icon={<Check size={18} weight="bold" aria-hidden="true" />}
+              icon={<PaperPlaneTilt size={18} weight="bold" aria-hidden="true" />}
               isPending={busy}
               isDisabled={!words || !name.trim()}
-              onPress={() => void pair()}
+              onPress={() => void send()}
             >
-              {t('pair.compare.yes')}
+              {t('pair.compare.send')}
             </Button>
-            <Button
-              variant="deny"
-              size="lg"
-              fullWidth
-              icon={<X size={18} weight="bold" aria-hidden="true" />}
-              onPress={onCancel}
-            >
-              {t('pair.compare.no')}
+            <Button variant="quiet" fullWidth onPress={onCancel}>
+              {t('pair.compare.notMine')}
             </Button>
           </div>
         }
@@ -199,6 +238,54 @@ const Compare = ({
     </>
   );
 };
+
+// ─────────── 2b · confirm on the computer ───────────
+const ConfirmThere = ({
+  device,
+  words,
+  onContinue,
+  onMismatch,
+}: {
+  device: DeviceView;
+  words?: string[];
+  onContinue: () => void;
+  onMismatch: () => void;
+}) => (
+  <>
+    <div className="flex flex-col gap-2">
+      <h1 className="type-title-1 text-ink">{t('pair.confirm.title')}</h1>
+      <p className="type-body text-ink-2">{t('pair.confirm.body', { name: device.name })}</p>
+    </div>
+    <TicketCard
+      eyebrow={t('pair.phrase.eyebrow')}
+      tag={<StatusDot state="needs-you" label={t('pair.confirm.waiting')} />}
+      decision={
+        <div className="flex flex-col gap-2 medium:flex-row-reverse">
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            icon={<ArrowRight size={18} weight="bold" aria-hidden="true" />}
+            onPress={onContinue}
+          >
+            {t('pair.confirm.continue')}
+          </Button>
+          <Button
+            variant="deny"
+            size="lg"
+            fullWidth
+            icon={<X size={18} weight="bold" aria-hidden="true" />}
+            onPress={onMismatch}
+          >
+            {t('pair.confirm.mismatch')}
+          </Button>
+        </div>
+      }
+    >
+      <SafetyPhrase words={words} size="lg" />
+    </TicketCard>
+  </>
+);
 
 // ─────────── 3 · install + push ───────────
 const AfterPair = ({ device }: { device: DeviceView }) => {
@@ -321,37 +408,55 @@ const AfterPair = ({ device }: { device: DeviceView }) => {
 };
 
 export const PairScreen = () => {
-  const initialToken = useMemo(readToken, []);
-  const [secret, setSecret] = useState(initialToken);
-  const [phase, setPhase] = useState<Phase>(initialToken ? 'compare' : 'enter');
-  const [device, setDevice] = useState<DeviceView>();
+  const initial = useMemo(readToken, []);
+  const [target, setTarget] = useState<Target | null>(() => {
+    const payload = tryDecodePayload(initial);
+    return payload ? { payload } : null;
+  });
+  const [phase, setPhase] = useState<Phase>(target ? 'compare' : initial ? 'invalid' : 'enter');
+  const [sent, setSent] = useState<{ device: DeviceView; words?: string[] }>();
 
-  // The token is a one-time secret: drop it from the address bar (and history) once read.
+  // The fragment carries a one-time secret: drop it from the address bar (and history) once read.
   useEffect(() => {
-    if (initialToken && typeof history !== 'undefined')
+    if (initial && typeof history !== 'undefined')
       history.replaceState(history.state, '', `${location.pathname}${location.search}`);
-  }, [initialToken]);
+  }, [initial]);
 
-  if (phase === 'done' && device) return <AfterPair device={device} />;
+  const restart = () => {
+    setTarget(null);
+    setPhase('enter');
+  };
+
+  if (phase === 'done' && sent) return <AfterPair device={sent.device} />;
 
   return (
     <Frame step={0}>
-      {phase === 'enter' && (
+      {phase === 'invalid' && <Banner tone="caution">{t('pair.invalid')}</Banner>}
+      {(phase === 'enter' || phase === 'invalid') && (
         <EnterCode
-          onCode={(c) => {
-            setSecret(c);
+          onCode={(code) => {
+            setTarget({ code });
             setPhase('compare');
           }}
         />
       )}
-      {phase === 'compare' && (
+      {phase === 'compare' && target && (
         <Compare
-          secret={secret}
-          onPaired={(d) => {
-            setDevice(d);
-            setPhase('done');
+          target={target}
+          onSent={(device, words) => {
+            setSent({ device, words });
+            announce(t('pair.confirm.title'));
+            setPhase('confirm');
           }}
-          onCancel={() => {
+          onCancel={restart}
+        />
+      )}
+      {phase === 'confirm' && sent && (
+        <ConfirmThere
+          device={sent.device}
+          words={sent.words}
+          onContinue={() => setPhase('done')}
+          onMismatch={() => {
             haptic('reject');
             announce(t('pair.cancelled.title'));
             setPhase('cancelled');
@@ -365,15 +470,7 @@ export const PairScreen = () => {
             <h1 className="type-title-1 text-ink">{t('pair.cancelled.title')}</h1>
             <p className="type-body text-ink-2">{t('pair.cancelled.body')}</p>
           </div>
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            onPress={() => {
-              setSecret('');
-              setPhase('enter');
-            }}
-          >
+          <Button variant="primary" size="lg" fullWidth onPress={restart}>
             {t('pair.cancelled.again')}
           </Button>
         </>
