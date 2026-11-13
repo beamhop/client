@@ -74,6 +74,8 @@ test('screenshot pairing safety check (trusted side)', async ({ page }, info) =>
 
 test('screenshot panic band', async ({ page }, info) => {
   await page.goto('/?mock=1&still=1');
+  // main.tsx exposes __beamhop once the demo daemon chunk has loaded.
+  await expect(page.locator('#bh-main-content').first()).toBeVisible();
   await page.evaluate(async () => {
     const w = window as unknown as {
       __beamhop: { runtime: { client: { call: (m: string, p?: unknown) => Promise<unknown> } } };
@@ -85,4 +87,64 @@ test('screenshot panic band', async ({ page }, info) => {
   await page.getByRole('link', { name: 'Review & resume' }).first().click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `screenshots/${info.project.name}/panic-resume.png` });
+});
+
+test('screenshot high contrast (light + dark)', async ({ page }, info) => {
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, contrast: 'more' });
+    for (const [path, name] of [
+      ['/', 'home'],
+      ['/inbox', 'inbox'],
+      ['/agents/reviewer', 'agents_reviewer'],
+      ['/settings/notifications', 'settings_notifications'],
+    ] as const) {
+      await page.goto(`${path}?mock=1&still=1`);
+      await expect(page.locator('#bh-main-content').first()).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `screenshots/${info.project.name}/${name}-hc-${scheme}.png` });
+    }
+  }
+});
+
+test('screenshot command palette, shortcut sheet, connection sheet', async ({ page }, info) => {
+  const mobile = info.project.name === 'mobile';
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    const suffix = scheme === 'dark' ? '-dark' : '';
+    await page.goto(`${mobile ? '/more' : '/'}?mock=1&still=1`);
+    await expect(page.locator('#bh-main-content').first()).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    if (mobile) await page.getByRole('button', { name: /Search agents, sessions, settings/ }).click();
+    else await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+    await page.keyboard.type('re');
+    // On touch devices RAC reveals the modal once the on-screen keyboard settles (<= 600 ms).
+    await page.waitForTimeout(mobile ? 900 : 0);
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `screenshots/${info.project.name}/palette${suffix}.png` });
+    await page.keyboard.press('Escape');
+    if (!mobile) {
+      await page.keyboard.press('?');
+      await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `screenshots/${info.project.name}/shortcuts${suffix}.png` });
+      await page.keyboard.press('Escape');
+    }
+    await page
+      .getByRole('button', { name: /Connection/ })
+      .first()
+      .click();
+    await expect(page.getByRole('dialog', { name: 'Connection' })).toBeVisible();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `screenshots/${info.project.name}/connection${suffix}.png` });
+  }
+});
+
+test('screenshot never-paired browser', async ({ page }, info) => {
+  await page.goto('/');
+  await expect(page.locator('#bh-main-content').first()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `screenshots/${info.project.name}/home-unpaired.png` });
 });

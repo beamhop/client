@@ -5,6 +5,7 @@
 import { Key, Plus } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { ago } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -59,15 +60,15 @@ const SetSecretSheet = ({
     <Sheet
       isOpen={open}
       onOpenChange={(o) => (o ? onOpenChange(o) : close())}
-      title={fixed ? `Replace ${fixed}` : 'Add a secret'}
+      title={fixed ? `Replace ${fixed}` : t('settings.secrets.addASecret')}
       isDismissable={false}
       footer={
         <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button variant="primary" size="lg" fullWidth isPending={set.isPending} onPress={() => void save()}>
-            {fixed ? 'Replace value' : 'Save to keychain'}
+            {fixed ? t('settings.secrets.replaceValue') : t('settings.secrets.saveToKeychain')}
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={close}>
-            Cancel
+            {t('settings.identity.cancel')}
           </Button>
         </div>
       }
@@ -81,22 +82,22 @@ const SetSecretSheet = ({
       >
         {!fixed && (
           <TextField
-            label="Name"
+            label={t('settings.secrets.name')}
             mono
             value={name}
             onChange={setName}
             placeholder="ANTHROPIC_API_KEY"
-            description="Letters, digits, _ . / -. Agents and channels refer to secrets by this name."
+            description={t('settings.secrets.lettersDigitsAgentsAnd')}
             isInvalid={touched && !nameOk}
-            errorMessage="Use letters, digits and _ . / - only (max 128)."
+            errorMessage={t('settings.secrets.useLettersDigitsAnd')}
           />
         )}
         <SecretField
-          label="Value"
+          label={t('settings.secrets.value')}
           value={value}
           onChange={setValue}
           isInvalid={touched && !value}
-          description="Stored in the OS keychain on this computer. beamhop never shows it again."
+          description={t('settings.secrets.storedInTheOs')}
         />
         {set.isError && <p className="type-body-sm text-stop-text">{set.error.message}</p>}
       </form>
@@ -115,11 +116,18 @@ export const SecretsSection = () => {
 
   if (q.isError)
     return (
-      <ErrorState title="Couldn't read the secret store." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={t('settings.secrets.couldnTReadThe')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
-  if (q.isPending) return showSkeleton ? <Skeleton variant="list" count={5} label="Loading secrets" /> : null;
+  if (q.isPending)
+    return showSkeleton ? (
+      <Skeleton variant="list" count={5} label={t('settings.secrets.loadingSecrets')} />
+    ) : null;
   const secrets = [...q.data.secrets].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -127,26 +135,26 @@ export const SecretsSection = () => {
       <p className="flex items-start gap-2 type-body-sm text-ink-2">
         <Key size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ink" />
         <span>
-          Stored in <span className="text-ink">{q.data.backend}</span>. Agents never see values: beamhop's
-          broker adds them to requests for the hosts you allowed.
+          {t('settings.secrets.storedIn')} <span className="text-ink">{q.data.backend}</span>.{' '}
+          {t('settings.secrets.broker')}
         </span>
       </p>
       {secrets.length === 0 ? (
         <EmptyState
           glyph={<Key size={32} aria-hidden="true" />}
-          title="No secrets yet."
+          title={t('settings.secrets.noSecretsYet')}
           cli="beamhop secret set ANTHROPIC_API_KEY"
           action={
             <Button variant="primary" onPress={() => setAdding(true)}>
-              Add a secret
+              {t('settings.secrets.addASecret')}
             </Button>
           }
         >
-          API keys and bot tokens live here, by name. Channel wizards add theirs automatically.
+          {t('settings.secrets.apiKeysAndBot')}
         </EmptyState>
       ) : (
         <Group
-          title={`Secrets · ${secrets.length}`}
+          title={t('settings.secrets.count', { count: secrets.length })}
           id="sec-list"
           action={
             <Button
@@ -155,11 +163,11 @@ export const SecretsSection = () => {
               icon={<Plus size={16} weight="bold" aria-hidden="true" />}
               onPress={() => setAdding(true)}
             >
-              Add
+              {t('settings.secrets.add')}
             </Button>
           }
         >
-          <List label="Secrets">
+          <List label={t('settings.section.secrets')}>
             {secrets.map((s) => (
               <Row
                 key={s.name}
@@ -171,12 +179,20 @@ export const SecretsSection = () => {
                     {s.name}
                   </span>
                 }
-                slug={<MetaLine items={['•••• hidden', s.updatedAt && `updated ${ago(s.updatedAt)}`]} />}
+                slug={
+                  <MetaLine
+                    items={[t('settings.secrets.hidden'), s.updatedAt && `updated ${ago(s.updatedAt)}`]}
+                  />
+                }
                 actions={
                   <RowMenu
-                    label={`Actions for ${s.name}`}
+                    label={t('settings.actionsFor', { name: s.name })}
                     items={[
-                      { id: 'replace', label: 'Replace value…', onAction: () => setReplacing(s.name) },
+                      {
+                        id: 'replace',
+                        label: t('settings.secrets.replaceValue2'),
+                        onAction: () => setReplacing(s.name),
+                      },
                       {
                         id: 'delete',
                         label: 'Delete…',
@@ -201,8 +217,8 @@ export const SecretsSection = () => {
       <ConfirmDialog
         isOpen={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
-        title={`Delete ${deleting}?`}
-        confirmLabel={`Delete ${deleting}`}
+        title={t('settings.secrets.deleteTitle', { name: deleting ?? '' })}
+        confirmLabel={t('settings.secrets.deleteName', { name: deleting ?? '' })}
         isPending={del.isPending}
         onConfirm={async () => {
           if (!deleting) return;
@@ -215,8 +231,7 @@ export const SecretsSection = () => {
           }
         }}
       >
-        Agents and channels that use {deleting} stop authenticating until you add it again. This can't be
-        undone; the value is gone from the keychain.
+        {t('settings.secrets.deleteBody', { name: deleting ?? '' })}
       </ConfirmDialog>
     </div>
   );

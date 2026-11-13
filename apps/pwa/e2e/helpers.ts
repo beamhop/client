@@ -13,8 +13,6 @@ export const open = async (page: Page, path: string) => {
 export const expectAccessible = async (page: Page) => {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    // react-aria's LiveAnnouncer keeps a transient node whose label may already have unmounted.
-    .exclude('div[role="log"][aria-live] > div[role="img"]')
     .analyze();
   const bad = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
   expect(

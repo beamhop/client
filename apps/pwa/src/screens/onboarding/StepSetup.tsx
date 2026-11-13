@@ -10,6 +10,7 @@ import { Check, Key, Plus } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -41,16 +42,14 @@ const WhatsThisKey = () => (
         slot="trigger"
         className="flex min-h-11 w-full items-center px-3 text-left type-label text-ink outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
       >
-        What's this key for?
+        {t('setup.setup.whatSThisKey')}
       </RACButton>
     </Heading>
     <DisclosurePanel>
       <ul className="flex list-disc flex-col gap-1 px-3 pb-3 pl-7 type-body-sm text-ink-2">
-        <li>
-          It signs role changes, device pairings and control messages, so only you can change who can do what.
-        </li>
-        <li>Each agent gets its own key. A leaked agent key never lets anyone act as you.</li>
-        <li>It's a Nostr key: the same identity works in any Nostr app you like.</li>
+        <li>{t('setup.setup.itSignsRoleChanges')}</li>
+        <li>{t('setup.setup.eachAgentGetsIts')}</li>
+        <li>{t('setup.setup.itSANostr')}</li>
       </ul>
     </DisclosurePanel>
   </Disclosure>
@@ -91,20 +90,20 @@ export const StepIdentity = () => {
   return (
     <StepFrame
       step="identity"
-      title="Who owns these agents?"
+      title={t('setup.setup.whoOwnsTheseAgents')}
       lede="Your owner key signs every change you make. Agents get their own keys."
       cli="beamhop identity create"
       primary={
         have
           ? {
-              label: 'Continue · Phone',
+              label: t('setup.setup.continuePhone'),
               onPress: () => {
                 update((p) => markDone(p, 'identity'));
                 go('phone');
               },
             }
           : {
-              label: choice === 'create' ? 'Create owner key' : 'Use this key',
+              label: choice === 'create' ? t('setup.setup.createOwnerKey') : t('setup.setup.useThisKey'),
               icon: <Key size={16} weight="bold" aria-hidden="true" />,
               pending: create.isPending || imp.isPending,
               disabled: choice === 'nip46' && !bunkerNpub,
@@ -113,11 +112,15 @@ export const StepIdentity = () => {
       }
     >
       {q.isError ? (
-        <ErrorState title="Couldn't read your identity." details={q.error} onRetry={() => void q.refetch()}>
+        <ErrorState
+          title={t('setup.setup.couldnTReadYour')}
+          details={q.error}
+          onRetry={() => void q.refetch()}
+        >
           {q.error.message}
         </ErrorState>
       ) : !q.data ? (
-        <Skeleton variant="detail" count={2} label="Loading identity" />
+        <Skeleton variant="detail" count={2} label={t('setup.setup.loadingIdentity')} />
       ) : have ? (
         <>
           <div
@@ -128,37 +131,32 @@ export const StepIdentity = () => {
               <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-ink text-bg">
                 <Check size={16} weight="bold" aria-hidden="true" />
               </span>
-              <span className="flex-1 type-title-3 text-ink">Owner key ready</span>
+              <span className="flex-1 type-title-3 text-ink">{t('setup.setup.ownerKeyReady')}</span>
               <Badge tone={q.data.ownerKeyHeld ? 'neutral' : 'outline'}>
-                {q.data.ownerKeyHeld ? 'in OS keychain' : 'your signer'}
+                {q.data.ownerKeyHeld ? t('setup.setup.inOsKeychain') : t('setup.setup.yourSigner')}
               </Badge>
             </div>
             <div className="flex items-center gap-1">
               <code title={q.data.npub} className="min-w-0 flex-1 truncate type-meta text-ink">
                 {middleTruncate(q.data.npub!, 30)}
               </code>
-              <CopyButton value={q.data.npub!} label="Copy owner npub" compact />
+              <CopyButton value={q.data.npub!} label={t('setup.setup.copyOwnerNpub')} compact />
             </div>
           </div>
           <WhatsThisKey />
           {q.data.ownerKeyHeld && (
             <div className="flex flex-col gap-2">
-              <p className="type-label text-ink">Back it up?</p>
+              <p className="type-label text-ink">{t('setup.setup.backItUp')}</p>
               {backup === 'done' && exp.data ? (
                 <div className="flex items-center gap-1 rounded-md bg-sunken py-0.5 pr-0.5 pl-3">
                   <code className="min-w-0 flex-1 truncate py-2 type-code text-ink">{exp.data.nsec}</code>
-                  <CopyButton value={exp.data.nsec} label="Copy secret key" compact />
+                  <CopyButton value={exp.data.nsec} label={t('setup.setup.copySecretKey')} compact />
                 </div>
               ) : backup === 'later' ? (
-                <p className="type-body-sm text-ink-2">
-                  OK. Settings → Identity reminds you until it's done.
-                </p>
+                <p className="type-body-sm text-ink-2">{t('setup.setup.okSettingsIdentityReminds')}</p>
               ) : (
                 <>
-                  <p className="type-body-sm text-ink-2">
-                    If this computer dies, the backup is how you prove you own your agents. Put it in a
-                    password manager.
-                  </p>
+                  <p className="type-body-sm text-ink-2">{t('setup.setup.ifThisComputerDies')}</p>
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"
@@ -166,10 +164,10 @@ export const StepIdentity = () => {
                       isPending={exp.isPending}
                       onPress={() => void exp.mutateAsync({}).then(() => setBackup('done'))}
                     >
-                      Export backup now
+                      {t('setup.setup.exportBackupNow')}
                     </Button>
                     <Button variant="quiet" size="sm" onPress={() => setBackup('later')}>
-                      Later
+                      {t('setup.setup.later')}
                     </Button>
                   </div>
                 </>
@@ -177,46 +175,46 @@ export const StepIdentity = () => {
             </div>
           )}
           <Button variant="quiet" size="sm" className="-ml-3 self-start" onPress={() => setReplace(true)}>
-            Use a different key…
+            {t('setup.setup.useADifferentKey')}
           </Button>
         </>
       ) : (
         <>
           <RadioGroup
-            label="Owner key"
+            label={t('setup.setup.ownerKey')}
             hideLabel
             variant="cards"
             value={choice}
             onChange={(v) => setChoice(v as IdChoice)}
           >
-            <Radio value="create" description="Stored in your OS keychain. You can export it later.">
-              Create a new owner key
+            <Radio value="create" description={t('setup.setup.storedInYourOs')}>
+              {t('setup.setup.createANewOwner')}
             </Radio>
             {hasExt && (
-              <Radio value="nip07" description="Your browser extension keeps the key and signs for you.">
-                Use my Nostr extension (NIP-07)
+              <Radio value="nip07" description={t('setup.setup.yourBrowserExtensionKeeps')}>
+                {t('setup.setup.useMyNostrExtension')}
               </Radio>
             )}
-            <Radio value="nip46" description="A remote signer (nsec.app, Amber…) keeps the key.">
-              Connect a bunker (NIP-46)
+            <Radio value="nip46" description={t('setup.setup.aRemoteSignerNsec')}>
+              {t('setup.setup.connectABunkerNip')}
             </Radio>
           </RadioGroup>
           {choice === 'nip46' && (
             <TextField
-              label="Bunker URL"
+              label={t('setup.setup.bunkerUrl')}
               mono
               value={bunker}
               onChange={setBunker}
               placeholder="bunker://…?relay=wss://…"
-              description="Paste it from your signer app."
+              description={t('setup.setup.pasteItFromYour')}
               isInvalid={bunker.length > 0 && !bunkerNpub}
-              errorMessage="A bunker URL starts with bunker:// followed by a 64-character key."
+              errorMessage={t('setup.setup.aBunkerUrlStarts')}
             />
           )}
           {err && <p className="type-body-sm text-stop-text">{err.message}</p>}
           {q.data.npub && (
             <Button variant="quiet" size="sm" className="-ml-3 self-start" onPress={() => setReplace(false)}>
-              Keep my current key
+              {t('setup.setup.keepMyCurrentKey')}
             </Button>
           )}
           <WhatsThisKey />
@@ -234,11 +232,11 @@ export const StepPhone = () => {
   return (
     <StepFrame
       step="phone"
-      title="Pair your phone"
+      title={t('setup.setup.pairYourPhone')}
       lede="Approve requests and stop agents from your pocket. The phone gets its own key; your owner key stays here."
       cli="beamhop pair-device"
       primary={{
-        label: 'Continue · Agent',
+        label: t('setup.setup.continueAgent'),
         disabled: !paired,
         onPress: () => {
           update((p) => markDone(p, 'phone'));
@@ -249,7 +247,7 @@ export const StepPhone = () => {
         paired
           ? undefined
           : {
-              label: 'Skip for now',
+              label: t('setup.checks.skipForNow'),
               onPress: () => {
                 update((p) => markSkipped(p, 'phone'));
                 go('agent');
@@ -258,11 +256,7 @@ export const StepPhone = () => {
       }
     >
       <PairingPanel onPaired={() => setPaired(true)} />
-      {!paired && (
-        <p className="type-body-sm text-ink-2">
-          No phone handy? Skip. In step 06 you can reply from any Nostr app instead.
-        </p>
-      )}
+      {!paired && <p className="type-body-sm text-ink-2">{t('setup.setup.noPhoneHandySkip')}</p>}
     </StepFrame>
   );
 };
@@ -330,9 +324,9 @@ export const StepAgent = () => {
     return (
       <StepFrame
         step="agent"
-        title={`${existing.config.name} is ready`}
-        lede="It has its own Nostr key and a profile that says who operates it."
-        primary={{ label: 'Continue · Hello', onPress: () => go('hello') }}
+        title={t('setup.setup.isReady', { name: existing.config.name })}
+        lede={t('setup.setup.ownKey')}
+        primary={{ label: t('setup.setup.continueHello'), onPress: () => go('hello') }}
       >
         <div
           className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
@@ -358,15 +352,22 @@ export const StepAgent = () => {
               >
                 {middleTruncate(existing.config.identity.npub, 30)}
               </code>
-              <CopyButton value={existing.config.identity.npub} label="Copy agent npub" compact />
+              <CopyButton
+                value={existing.config.identity.npub}
+                label={t('setup.setup.copyAgentNpub')}
+                compact
+              />
             </div>
           )}
           <div className="rounded-md bg-sunken p-3">
-            <p className="type-micro text-ink-3">Nostr profile preview</p>
+            <p className="type-micro text-ink-3">{t('setup.setup.nostrProfilePreview')}</p>
             <p className="mt-1 type-body text-ink">{existing.config.name}</p>
             <p className="type-body-sm text-ink-2">
-              AI agent operated by{' '}
-              {status.data?.owner.npub ? middleTruncate(status.data.owner.npub, 18) : 'you'}
+              {t('setup.setup.operatedBy', {
+                owner: status.data?.owner.npub
+                  ? middleTruncate(status.data.owner.npub, 18)
+                  : t('setup.setup.you'),
+              })}
             </p>
           </div>
         </div>
@@ -377,7 +378,7 @@ export const StepAgent = () => {
   return (
     <StepFrame
       step="agent"
-      title="Create your first agent"
+      title={t('setup.setup.createYourFirstAgent')}
       lede="Pick what it's for; everything else is prefilled. You can change any of it later."
       cli={`beamhop agent create ${name || '<name>'} --preset ${preset} --harness ${harness || '<harness>'}${folder ? ` --mount ${folder}:${mode}` : ''}`}
       primary={{
@@ -396,10 +397,10 @@ export const StepAgent = () => {
       }}
     >
       {!presets.data || !harnesses.data ? (
-        <Skeleton variant="detail" count={3} label="Loading presets" />
+        <Skeleton variant="detail" count={3} label={t('setup.setup.loadingPresets')} />
       ) : (
         <>
-          <RadioGroup label="What's it for?" variant="cards" value={preset} onChange={setPreset}>
+          <RadioGroup label={t('setup.setup.whatSItFor')} variant="cards" value={preset} onChange={setPreset}>
             {presets.data.presets.map((x) => (
               <Radio key={x.id} value={x.id} description={x.description}>
                 {x.title}
@@ -407,25 +408,25 @@ export const StepAgent = () => {
             ))}
           </RadioGroup>
           <TextField
-            label="Name"
+            label={t('setup.setup.name')}
             mono
             value={name}
             onChange={(v) => {
               setNameTouched(true);
               setName(v.toLowerCase());
             }}
-            description="Also its Nostr profile name. Lowercase letters, digits, dashes."
+            description={t('setup.setup.alsoItsNostrProfile')}
             isInvalid={!!name && !nameOk}
             errorMessage={
-              taken.includes(name) ? `${name} already exists.` : 'Use lowercase letters, digits and dashes.'
+              taken.includes(name) ? `${name} already exists.` : t('setup.setup.useLowercaseLettersDigits')
             }
           />
           {ready.length ? (
             <RadioGroup
-              label="Harness"
+              label={t('setup.setup.harness')}
               value={harness}
               onChange={setHarness}
-              description="Only harnesses that are ready."
+              description={t('setup.setup.onlyHarnessesThatAre')}
             >
               {ready.map((h) => (
                 <Radio
@@ -438,14 +439,14 @@ export const StepAgent = () => {
               ))}
             </RadioGroup>
           ) : (
-            <ErrorState title="No harness is ready.">
-              Go back one step and log in to one, or install one.
+            <ErrorState title={t('setup.setup.noHarnessIsReady')}>
+              {t('setup.setup.goBackOneStep')}
             </ErrorState>
           )}
           <div className="flex flex-col gap-2">
-            <PathPicker label="Folder it can see" value={folder} onChange={setFolder} />
+            <PathPicker label={t('setup.setup.folderItCanSee')} value={folder} onChange={setFolder} />
             <SegmentedControl
-              label="Folder access"
+              label={t('setup.setup.folderAccess')}
               value={mode}
               onChange={setMode}
               options={[
@@ -455,7 +456,7 @@ export const StepAgent = () => {
             />
             {mode === 'rw' && (
               <p className="type-body-sm text-ink-2">
-                If it's a git repo, each session gets its own branch{' '}
+                {t('setup.setup.gitBranch')}{' '}
                 <span className="font-mono text-ink">beamhop/&lt;thread&gt;</span>.
               </p>
             )}
@@ -466,34 +467,35 @@ export const StepAgent = () => {
             aria-live="polite"
           >
             <h2 id="exposure" className="type-micro text-ink-2">
-              What {name || 'it'} can reach
+              {t('setup.setup.whatCanReach', { name: name || t('setup.setup.it') })}
             </h2>
             <ul className="mt-2 flex flex-col gap-1.5 type-body-sm text-ink">
               <li>
                 {reads.length ? (
                   <>
-                    Can {mode === 'rw' ? 'read and write' : 'read'}{' '}
+                    {mode === 'rw' ? t('setup.setup.canReadWrite') : t('setup.setup.canRead')}{' '}
                     <span className="font-mono">{folder}</span>
                   </>
                 ) : (
-                  'Sees no folders'
+                  t('setup.setup.seesNoFolders')
                 )}
               </li>
               <li>
-                Can reach the {ready.find((h) => h.id === harness)?.displayName ?? 'harness'} API, nothing
-                else until you allow it
+                {t('setup.setup.canReachApi', {
+                  harness: ready.find((h) => h.id === harness)?.displayName ?? t('setup.setup.theHarness'),
+                })}
               </li>
               <li>
-                Sandbox profile: <span className="font-mono">{profile}</span>
+                {t('setup.setup.sandboxProfile')} <span className="font-mono">{profile}</span>
               </li>
               <li className="text-ink-2">
-                Never <span className="font-mono">~/.ssh</span>, <span className="font-mono">~/.aws</span>,
-                keychains
+                {t('setup.setup.never')} <span className="font-mono">~/.ssh</span>,{' '}
+                <span className="font-mono">~/.aws</span>, {t('setup.setup.keychains')}
               </li>
             </ul>
           </section>
           {create.isError && (
-            <ErrorState title={`Couldn't create ${name}.`} details={create.error}>
+            <ErrorState title={t('setup.setup.couldntCreate', { name })} details={create.error}>
               {create.error.message}
             </ErrorState>
           )}

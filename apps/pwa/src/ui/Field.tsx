@@ -30,6 +30,7 @@ import {
   type TextFieldProps as RACTextFieldProps,
   Text,
 } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { HopMeter } from './glyphs/index.tsx';
 
@@ -210,7 +211,7 @@ export const SecretField = ({
               <CheckCircle size={14} weight="bold" aria-hidden="true" /> format ✓ · {formatLabel}
             </>
           ) : (
-            "format: doesn't look like a token yet"
+            t('ui.field.formatDoesnTLook')
           )}
         </p>
       )}
@@ -292,7 +293,7 @@ export const SearchField = ({
         className={cx(inputShell, 'h-11 pl-10 pr-11 [&::-webkit-search-cancel-button]:hidden')}
       />
       <RACButton
-        aria-label="Clear search"
+        aria-label={t('ui.field.clearSearch')}
         className="absolute right-0 grid size-11 place-items-center text-ink-2 group-data-[empty]:hidden data-[hovered]:text-ink"
       >
         <X size={16} aria-hidden="true" />

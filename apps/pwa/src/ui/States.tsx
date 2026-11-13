@@ -4,6 +4,7 @@
  */
 import { ArrowClockwise, Copy, Info, WarningCircle } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { t as tr } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 import { Button } from './Button.tsx';
@@ -194,7 +195,7 @@ export const ErrorState = ({
                 icon={<ArrowClockwise size={16} aria-hidden="true" />}
                 onPress={onRetry}
               >
-                Retry
+                {tr('ui.states.retry')}
               </Button>
             )}
             {details !== undefined && (
@@ -213,7 +214,7 @@ export const ErrorState = ({
                   }
                 }}
               >
-                {copied ? 'Copied' : 'Copy details'}
+                {copied ? tr('ui.cliStrip.copied') : tr('ui.states.copyDetails')}
               </Button>
             )}
             {actions}

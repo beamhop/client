@@ -10,11 +10,13 @@
 import { CloudArrowUp, Plus } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { deployMonogram, useApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { shortDate } from '../../lib/format.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { LinkButton } from '../../ui/Button.tsx';
+import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
@@ -60,7 +62,7 @@ export const DeployScreen = () => {
               items={[
                 d.size?.split(' · ')[0],
                 d.monthlyCostUsd !== undefined && !destroyed && `${usd(d.monthlyCostUsd)}/mo`,
-                `since ${shortDate(d.createdAt)}`,
+                t('deploy.list.since', { date: shortDate(d.createdAt) }),
               ]}
             />
           </span>
@@ -75,14 +77,14 @@ export const DeployScreen = () => {
       hasDetail={hasDetail}
       list={
         <Screen
-          title="Deploy"
+          title={t('deploy.deploy.deploy')}
           pane="list"
           slug={
             live.length > 0 ? (
               <MetaLine
                 items={[
-                  `${live.length} cloud ${live.length === 1 ? 'agent' : 'agents'}`,
-                  `${usd(monthly)}/mo est.`,
+                  t('deploy.list.count', { count: live.length }),
+                  t('deploy.list.monthly', { cost: usd(monthly) }),
                 ]}
               />
             ) : undefined
@@ -94,46 +96,49 @@ export const DeployScreen = () => {
               size="sm"
               icon={<Plus size={16} weight="bold" aria-hidden="true" />}
             >
-              New cloud agent
+              {t('deploy.deploy.newCloudAgent')}
             </LinkButton>
           }
         >
           {q.isError ? (
-            <ErrorState title="Couldn't load deployments." details={q.error} onRetry={() => void q.refetch()}>
+            <ErrorState
+              title={t('deploy.deploy.couldnTLoadDeployments')}
+              details={q.error}
+              onRetry={() => void q.refetch()}
+            >
               {q.error.message}
             </ErrorState>
           ) : q.isPending ? (
             showSkeleton ? (
-              <Skeleton variant="list" count={3} label="Loading deployments" />
+              <Skeleton variant="list" count={3} label={t('deploy.deploy.loadingDeployments')} />
             ) : null
           ) : all.length === 0 ? (
             <EmptyState
               glyph={<CloudArrowUp size={32} aria-hidden="true" />}
-              title="No cloud agents yet."
+              title={t('deploy.deploy.noCloudAgentsYet')}
               cli="beamhop deploy plan reviewer --provider hetzner"
               action={
                 <LinkButton href="/deploy/new" variant="secondary">
-                  New cloud agent
+                  {t('deploy.deploy.newCloudAgent')}
                 </LinkButton>
               }
             >
-              Run an agent on Hetzner, DigitalOcean, Fly.io, Render or Railway so it answers while this
-              computer sleeps. Move an existing one from its page (Move to cloud), or start a new one here.
-              You see the monthly cost and every change before anything is created.
+              {t('deploy.deploy.runAnAgentOn')}
             </EmptyState>
           ) : (
             <div className="flex flex-col gap-4">
-              <ul aria-label="Cloud agents" className="-mx-2 flex flex-col">
+              <ul aria-label={t('deploy.deploy.cloudAgents')} className="-mx-2 flex flex-col">
                 {live.map(row)}
               </ul>
               {gone.length > 0 && (
                 <section aria-labelledby="dep-gone">
                   <Eyebrow id="dep-gone" count={gone.length}>
-                    Destroyed
+                    {t('deploy.deploy.destroyed')}
                   </Eyebrow>
                   <ul className="-mx-2 flex flex-col">{gone.map(row)}</ul>
                 </section>
               )}
+              <CliStrip command="beamhop deploy list" />
             </div>
           )}
         </Screen>

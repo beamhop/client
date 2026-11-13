@@ -25,6 +25,7 @@ import {
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { useExpanded } from '../../lib/media.ts';
@@ -41,7 +42,13 @@ import { useToast } from '../../ui/Toast.tsx';
 import { AGENT_NAME_RE, PROVIDER_INFO, providerTokenSecret, usd } from './model.ts';
 import { PlanDiff, TickRuler } from './PlanDiff.tsx';
 
-const STEPS = ['Agent', 'Provider', 'Size', 'Files', 'Plan'];
+const STEPS = [
+  t('deploy.step.agent'),
+  t('deploy.step.provider'),
+  t('deploy.step.size'),
+  t('deploy.step.files'),
+  t('deploy.step.plan'),
+];
 const PLAN = STEPS.length - 1;
 type Mode = 'move' | 'new';
 type Sync = 'git-clone' | 'rsync' | 'mutagen' | 'skip';
@@ -87,32 +94,26 @@ const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =
   return (
     <div className="flex flex-col gap-6">
       <RadioGroup
-        label="What do you want to run in the cloud?"
+        label={t('deploy.newDeploy.whatDoYouWant')}
         variant="cards"
         value={d.mode}
         onChange={(v) => set({ mode: v as Mode, agent: v === 'move' ? (local[0]?.config.name ?? '') : '' })}
       >
-        <Radio
-          value="move"
-          description="Same agent, same identity and memberships. It stops here and runs there."
-        >
-          Move an agent to the cloud
+        <Radio value="move" description={t('deploy.newDeploy.sameAgentSameIdentity')}>
+          {t('deploy.newDeploy.moveAnAgentTo')}
         </Radio>
-        <Radio
-          value="new"
-          description="A fresh agent that lives only on the server. Configure it after it's up."
-        >
-          New cloud agent
+        <Radio value="new" description={t('deploy.newDeploy.aFreshAgentThat')}>
+          {t('deploy.deploy.newCloudAgent')}
         </Radio>
       </RadioGroup>
       {d.mode === 'move' ? (
         local.length ? (
           <RadioGroup
-            label="Agent"
+            label={t('deploy.newDeploy.agent')}
             variant="cards"
             value={d.agent || null}
             onChange={(v) => set({ agent: v })}
-            description="Its key moves to the server's vault; API keys stay on this computer and are brokered."
+            description={t('deploy.newDeploy.itsKeyMovesTo')}
           >
             {local.map((a) => (
               <Radio
@@ -132,20 +133,20 @@ const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =
         ) : agents.isPending ? (
           <Skeleton variant="list" count={1} />
         ) : (
-          <p className="type-body-sm text-ink-2">
-            Every agent already runs in the cloud. Start a new one instead.
-          </p>
+          <p className="type-body-sm text-ink-2">{t('deploy.newDeploy.everyAgentAlreadyRuns')}</p>
         )
       ) : (
         <TextField
-          label="Agent name"
+          label={t('deploy.newDeploy.agentName')}
           mono
           value={d.agent}
           onChange={(v) => set({ agent: v.toLowerCase() })}
           placeholder="night-shift"
-          description="Lowercase letters, digits and dashes. It's also the agent's Nostr profile name."
+          description={t('deploy.newDeploy.lowercaseLettersDigitsAnd')}
           isInvalid={nameBad}
-          errorMessage={taken ? `${d.agent} already exists.` : 'Use lowercase letters, digits and dashes.'}
+          errorMessage={
+            taken ? `${d.agent} already exists.` : t('deploy.newDeploy.useLowercaseLettersDigits')
+          }
         />
       )}
     </div>
@@ -160,14 +161,13 @@ const TokenInline = ({ provider, name }: { provider: string; name: string }) => 
   return (
     <div className="mt-1 mb-2 ml-9 flex flex-col gap-2 rounded-md border border-line bg-sunken p-3">
       <SecretField
-        label={`${name} API token`}
+        label={t('deploy.newDeploy.apiToken', { name })}
         value={value}
         onChange={setValue}
         description={info?.tokenHelp}
       />
       <p className="flex items-center gap-1.5 type-meta text-ink-2">
-        <LockSimple size={14} aria-hidden="true" /> Saved to this computer's keychain. It never leaves this
-        machine.
+        <LockSimple size={14} aria-hidden="true" /> {t('deploy.newDeploy.tokenKeychain')}
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -177,11 +177,11 @@ const TokenInline = ({ provider, name }: { provider: string; name: string }) => 
           isPending={set.isPending}
           onPress={() => set.mutate({ name: providerTokenSecret(provider), value: value.trim() })}
         >
-          Save token
+          {t('deploy.newDeploy.saveToken')}
         </Button>
         {info && (
           <TextLink href={info.tokenUrl} external className="type-body-sm">
-            Get a token
+            {t('deploy.newDeploy.getAToken')}
           </TextLink>
         )}
       </div>
@@ -194,23 +194,31 @@ const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }
   const q = useApi('deploy.providers');
   if (q.isError)
     return (
-      <ErrorState title="Couldn't load providers." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={t('deploy.newDeploy.couldnTLoadProviders')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
-  if (!q.data) return <Skeleton variant="list" count={5} label="Loading providers" />;
+  if (!q.data) return <Skeleton variant="list" count={5} label={t('deploy.newDeploy.loadingProviders')} />;
   const groups = [
-    { kind: 'vps' as const, title: 'VPS · your own server', note: 'Full sandbox. Fixed monthly price.' },
+    {
+      kind: 'vps' as const,
+      title: t('deploy.newDeploy.vpsYourOwnServer'),
+      note: t('deploy.newDeploy.fullSandboxFixedMonthly'),
+    },
     {
       kind: 'paas' as const,
-      title: 'Platform · managed runtime',
-      note: 'Less to run. The container or VM is the filesystem boundary.',
+      title: t('deploy.newDeploy.platformManagedRuntime'),
+      note: t('deploy.newDeploy.lessToRunThe'),
     },
   ];
   return (
     <div className="flex flex-col gap-6">
       <RadioGroup
-        label="Provider"
+        label={t('deploy.newDeploy.provider')}
         hideLabel
         value={d.provider || null}
         onChange={(v) => set({ provider: v, size: undefined, region: undefined })}
@@ -246,9 +254,9 @@ const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }
                           <LetterTile code={deployMonogram(p.id)} size={24} />
                           {p.displayName}
                           {p.configured ? (
-                            <Badge tone="go">token saved</Badge>
+                            <Badge tone="go">{t('deploy.newDeploy.tokenSaved')}</Badge>
                           ) : (
-                            <Badge tone="outline">needs token</Badge>
+                            <Badge tone="outline">{t('deploy.newDeploy.needsToken')}</Badge>
                           )}
                         </span>
                       </Radio>
@@ -274,14 +282,23 @@ const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =>
   }, [q.data, d.size, d.region, set]);
   if (q.isError)
     return (
-      <ErrorState title="Couldn't load sizes." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={t('deploy.newDeploy.couldnTLoadSizes')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
-  if (!q.data) return <Skeleton variant="list" count={3} label="Loading sizes" />;
+  if (!q.data) return <Skeleton variant="list" count={3} label={t('deploy.newDeploy.loadingSizes')} />;
   return (
     <div className="flex flex-col gap-6">
-      <RadioGroup label="Size" variant="cards" value={d.size ?? null} onChange={(v) => set({ size: v })}>
+      <RadioGroup
+        label={t('deploy.newDeploy.size')}
+        variant="cards"
+        value={d.size ?? null}
+        onChange={(v) => set({ size: v })}
+      >
         {q.data.sizes.map((s) => (
           <Radio key={s.id} value={s.id}>
             <span className="flex items-baseline gap-3">
@@ -296,14 +313,12 @@ const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =>
           </Radio>
         ))}
       </RadioGroup>
-      <p className="-mt-4 type-meta text-ink-2">
-        Estimates from the provider's catalog prices. Bandwidth billed by the provider.
-      </p>
+      <p className="-mt-4 type-meta text-ink-2">{t('deploy.newDeploy.estimatesFromTheProvider')}</p>
       <RadioGroup
-        label="Region"
+        label={t('deploy.newDeploy.region')}
         value={d.region ?? null}
         onChange={(v) => set({ region: v })}
-        description="Pick one close to you and your relays: approvals round-trip through it."
+        description={t('deploy.newDeploy.pickOneCloseTo')}
       >
         {q.data.regions.map((r) => (
           <Radio key={r.id} value={r.id}>
@@ -446,14 +461,18 @@ const PlanBlock = ({
   const sizes = useApi('deploy.options', { provider: d.provider }, { enabled: !!d.provider });
   const sizeCost = sizes.data?.sizes.find((s) => s.id === d.size)?.monthlyUsd;
   if (!d.provider || !d.agent)
-    return <p className="type-body-sm text-ink-2">Choose an agent and a provider to see what will change.</p>;
+    return <p className="type-body-sm text-ink-2">{t('deploy.newDeploy.chooseAnAgentAnd')}</p>;
   if (plan.isError)
     return (
-      <ErrorState title="Couldn't plan this deploy." details={plan.error} onRetry={() => void plan.refetch()}>
+      <ErrorState
+        title={t('deploy.newDeploy.couldnTPlanThis')}
+        details={plan.error}
+        onRetry={() => void plan.refetch()}
+      >
         {plan.error.message}
       </ErrorState>
     );
-  if (!plan.data) return <Skeleton variant="detail" count={2} label="Planning" />;
+  if (!plan.data) return <Skeleton variant="detail" count={2} label={t('deploy.newDeploy.planning')} />;
   const cost = sizeCost ?? plan.data.monthlyCostUsd;
   return (
     <div className="flex flex-col gap-4" data-plan="">
@@ -469,13 +488,13 @@ const PlanBlock = ({
                 aria-hidden="true"
               />
               <span>
-                <span className="font-mono text-caution-text">! sandbox</span> {w}
+                <span className="font-mono text-caution-text">{t('deploy.newDeploy.sandbox')}</span> {w}
               </span>
             </p>
           ))}
           {setAck && (
             <Checkbox isSelected={ack} onChange={setAck}>
-              I understand the sandbox is weaker on this provider
+              {t('deploy.newDeploy.iUnderstandTheSandbox')}
             </Checkbox>
           )}
         </div>
@@ -483,8 +502,8 @@ const PlanBlock = ({
       <TickRuler />
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="type-micro text-ink-2">Estimated</p>
-          <p className="type-meta text-ink-2">+ bandwidth · billed by {d.provider}</p>
+          <p className="type-micro text-ink-2">{t('deploy.newDeploy.estimated')}</p>
+          <p className="type-meta text-ink-2">{t('deploy.newDeploy.bandwidth', { provider: d.provider })}</p>
         </div>
         {compact ? (
           <p className="type-title-2 text-ink tabular-nums">{usd(cost)}/mo</p>
@@ -562,19 +581,21 @@ export const NewDeployScreen = () => {
   };
 
   const title =
-    d.mode === 'move' ? (d.agent ? `Move ${d.agent} to the cloud` : 'Move to cloud') : 'New cloud agent';
+    d.mode === 'move'
+      ? d.agent
+        ? `Move ${d.agent} to the cloud`
+        : t('deploy.newDeploy.moveToCloud')
+      : t('deploy.deploy.newCloudAgent');
   const body = [
     <AgentStep key="a" d={d} set={set} />,
     <ProviderStep key="p" d={d} set={set} />,
     <SizeStep key="s" d={d} set={set} />,
     <FilesStep key="f" d={d} set={set} setSync={setSync} />,
     <div key="plan" className="flex flex-col gap-4">
-      <p className="type-body-sm text-ink-2">
-        Nothing is created until you press Deploy. Tap a row for its details.
-      </p>
+      <p className="type-body-sm text-ink-2">{t('deploy.newDeploy.nothingIsCreatedUntil')}</p>
       <PlanBlock d={d} ack={ack} setAck={setAck} />
       <div className="flex flex-wrap items-center gap-2">
-        <CopyButton value={cliFor(d)} label="Copy plan as CLI" />
+        <CopyButton value={cliFor(d)} label={t('deploy.newDeploy.copyPlanAsCli')} />
       </div>
     </div>,
   ][step];
@@ -586,9 +607,9 @@ export const NewDeployScreen = () => {
           variant="secondary"
           icon={<ArrowLeft size={16} aria-hidden="true" />}
           onPress={() => setStep((s) => s - 1)}
-          aria-label={`Back to ${STEPS[step - 1]}`}
+          aria-label={t('a11y.backTo', { label: STEPS[step - 1] ?? '' })}
         >
-          Back
+          {t('deploy.newDeploy.back')}
         </Button>
       )}
       <span className="flex-1" />
@@ -599,7 +620,7 @@ export const NewDeployScreen = () => {
           onPress={() => setStep((s) => s + 1)}
           icon={<ArrowRight size={16} weight="bold" aria-hidden="true" />}
         >
-          Continue · {STEPS[step + 1]}
+          {t('deploy.newDeploy.continue', { step: STEPS[step + 1] ?? '' })}
         </Button>
       ) : (
         <Button
@@ -609,7 +630,9 @@ export const NewDeployScreen = () => {
           icon={<CloudArrowUp size={18} weight="bold" aria-hidden="true" />}
           onPress={() => void deploy()}
         >
-          Deploy{cost !== undefined ? ` · ${usd(cost)}/mo` : ''}
+          {cost !== undefined
+            ? t('deploy.newDeploy.deployCost', { cost: usd(cost) })
+            : t('deploy.newDeploy.deploy')}
         </Button>
       )}
     </div>
@@ -621,7 +644,10 @@ export const NewDeployScreen = () => {
       back={{ href: '/deploy', label: 'Deploy' }}
       pane="detail"
       maxWidth="none"
-      crumbs={[{ label: 'Deploy', href: '/deploy' }, { label: d.mode === 'move' ? 'Move to cloud' : 'New' }]}
+      crumbs={[
+        { label: 'Deploy', href: '/deploy' },
+        { label: d.mode === 'move' ? t('deploy.newDeploy.moveToCloud') : t('deploy.newDeploy.new') },
+      ]}
       footer={footer}
     >
       <div
@@ -635,11 +661,11 @@ export const NewDeployScreen = () => {
           <h2 className="type-title-2 text-ink">
             {
               [
-                'Which agent?',
-                'Where should it run?',
-                'How big, and where?',
-                'Files and harness login',
-                'Review the plan',
+                t('deploy.newDeploy.whichAgent'),
+                t('deploy.newDeploy.whereShouldItRun'),
+                t('deploy.newDeploy.howBigAndWhere'),
+                t('deploy.newDeploy.filesLogin'),
+                t('deploy.newDeploy.reviewThePlan'),
               ][step]
             }
           </h2>
@@ -648,10 +674,10 @@ export const NewDeployScreen = () => {
         </div>
         {expanded && step < PLAN && (
           <aside
-            aria-label="Plan preview"
+            aria-label={t('deploy.newDeploy.planPreview')}
             className="sticky top-[88px] flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
           >
-            <Eyebrow level={2}>Plan preview</Eyebrow>
+            <Eyebrow level={2}>{t('deploy.newDeploy.planPreview')}</Eyebrow>
             <PlanBlock d={d} compact />
           </aside>
         )}

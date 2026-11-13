@@ -3,6 +3,7 @@
  * explicit-confirm app updates (`updates.get` / `updates.set`), cloud daemons' versions.
  */
 import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
@@ -32,7 +33,7 @@ export const UpdatesSection = () => {
               <p className="type-title-3 text-ink">beamhopd {status.data.version}</p>
               <MetaLine items={[status.data.home, `up ${Math.round(status.data.uptimeSec / 3600)} h`]} />
             </div>
-            <StatusDot state="ready" label="up to date" />
+            <StatusDot state="ready" label={t('settings.updates.upToDate')} />
           </div>
         ) : (
           <Skeleton variant="list" count={1} />
@@ -66,7 +67,7 @@ export const UpdatesSection = () => {
         )}
       </Group>
 
-      <Group title="Cloud daemons" id="upd-cloud">
+      <Group title={t('settings.updates.cloudDaemons')} id="upd-cloud">
         {clouds.length ? (
           <List>
             {clouds.map((d) => (
@@ -75,12 +76,12 @@ export const UpdatesSection = () => {
                 leading={<LetterTile code={deployMonogram(d.provider)} />}
                 title={`${d.agent} @ ${d.provider} ${d.region ?? ''}`}
                 slug={<MetaLine items={[`beamhopd ${status.data?.version ?? '…'}`, d.status]} />}
-                aside={<StatusDot state="ready" label="same version" hideLabel />}
+                aside={<StatusDot state="ready" label={t('settings.updates.sameVersion')} hideLabel />}
               />
             ))}
           </List>
         ) : (
-          <p className="type-body-sm text-ink-2">No cloud daemons. They follow this computer's version.</p>
+          <p className="type-body-sm text-ink-2">{t('settings.updates.noCloudDaemonsThey')}</p>
         )}
       </Group>
       <CliStrip command="beamhop update --check" />

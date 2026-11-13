@@ -56,7 +56,15 @@ import { hiddenStore, openSheet, useStore } from '../inbox/store.ts';
 import { useDecisions } from '../inbox/useDecisions.tsx';
 
 const LAST_VISIT_KEY = 'bh.home.lastVisit';
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = [
+  t('home.home.sun'),
+  t('home.home.mon'),
+  t('home.home.tue'),
+  t('home.home.wed'),
+  t('home.home.thu'),
+  t('home.home.fri'),
+  t('home.home.sat'),
+];
 
 /** The previous visit (read once per mount); this visit is stored for next time. */
 const useLastVisit = (): number | null => {
@@ -278,7 +286,8 @@ const AgentCard = ({
   const budget = a.config.budgets.dailyUsd ?? 0;
   const href = session && live ? `/sessions/${session.id}` : `/agents/${a.config.name}`;
   const learning = a.config.sandbox.profile === 'custom' && a.config.public;
-  const word = lamp === 'needs-you' ? 'needs you' : learning && lamp === 'ready' ? 'learning' : undefined;
+  const word =
+    lamp === 'needs-you' ? t('home.home.needsYou') : learning && lamp === 'ready' ? 'learning' : undefined;
   return (
     <Card
       href={href}
@@ -538,7 +547,7 @@ const Signals = () => {
     },
     {
       lamp: sug > 0 ? 'needs-you' : 'ready',
-      word: sug > 0 ? 'needs you' : 'clear',
+      word: sug > 0 ? t('home.home.needsYou') : 'clear',
       text: t('home.signals.policy', { count: sug }),
       href: '/policy',
     },

@@ -47,7 +47,7 @@ export const TabBar = () => {
                   {isInbox && (
                     <CountBadge
                       count={pending}
-                      label={pending === 1 ? 'approval waiting,' : 'approvals waiting,'}
+                      label={pending === 1 ? t('ui.tabBar.approvalWaiting') : t('ui.tabBar.approvalsWaiting')}
                       className="absolute -top-1.5 -right-3"
                     />
                   )}

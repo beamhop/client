@@ -5,6 +5,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import type { LampState } from '../api/derive.ts';
+import { t as tr } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { HopMeter, Lamp } from './glyphs/index.tsx';
 import { useReduced } from './motion.ts';
@@ -222,14 +223,17 @@ export const RouteLine = ({
     <div className={cx('min-w-0', className)}>
       <div
         role="img"
-        aria-label={`Route: ${label}${state === 'broken' ? ', broken' : state === 'blocked' ? ', blocked by policy' : ''}`}
+        aria-label={`Route: ${label}${state === 'broken' ? tr('ui.status.broken') : state === 'blocked' ? tr('ui.status.blockedByPolicy') : ''}`}
         className="flex min-w-0 items-center gap-2 type-meta text-ink-2"
       >
         {nodes.map((n, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: labels may repeat; position is identity
           <Fragment key={`${n.label}-${i}`}>
             {i > 0 && (
-              <span className="relative flex h-3 min-w-6 flex-1 items-center" aria-hidden="true">
+              <span
+                className="relative flex h-3 min-w-6 flex-1 items-center overflow-hidden"
+                aria-hidden="true"
+              >
                 <span
                   className={cx(
                     'h-px w-full',
@@ -266,7 +270,9 @@ export const RouteLine = ({
             )}
             <span className="flex min-w-0 shrink items-center gap-1.5">
               {n.kind !== 'relay' && <NodeMark kind={n.kind} filled={flash && i === dest} />}
-              <span className={cx('truncate', n.kind === 'agent' && 'text-ink')}>{n.label}</span>
+              <span className={cx('min-w-0 truncate', n.kind === 'agent' && 'text-ink')} title={n.label}>
+                {n.label}
+              </span>
             </span>
           </Fragment>
         ))}

@@ -6,6 +6,7 @@
 import type { MethodName, Params } from '@beamhop/core';
 import { useMatches } from '@tanstack/react-router';
 import { useApi } from '../api/index.ts';
+import { t } from '../i18n/index.ts';
 import { CliStrip } from '../ui/CliStrip.tsx';
 import { Badge } from '../ui/Meta.tsx';
 import { StatusDot } from '../ui/Status.tsx';
@@ -78,7 +79,7 @@ export const ScreenStub = ({ spec, owner, outline, calls = [], cli }: ScreenStub
       </div>
       <section aria-labelledby="stub-outline">
         <h2 id="stub-outline" className="mb-2 type-micro text-ink-2">
-          Will show
+          {t('ui.screenStub.willShow')}
         </h2>
         <ol className="flex flex-col gap-1.5">
           {outline.map((o, i) => (
@@ -94,7 +95,7 @@ export const ScreenStub = ({ spec, owner, outline, calls = [], cli }: ScreenStub
       {calls.length > 0 && (
         <section aria-labelledby="stub-data">
           <h2 id="stub-data" className="mb-2 type-micro text-ink-2">
-            Data (live)
+            {t('ui.screenStub.dataLive')}
           </h2>
           <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
             {calls.map((c) => (

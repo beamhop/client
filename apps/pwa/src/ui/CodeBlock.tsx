@@ -6,6 +6,7 @@
 import { CaretRight } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { Button as RACButton } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { CopyButton } from './CliStrip.tsx';
 
@@ -45,9 +46,9 @@ export const CodeBlock = ({
             onPress={() => setWrap((w) => !w)}
             className="min-h-11 rounded-md px-2 type-meta text-ink-2 data-[hovered]:text-ink aria-pressed:text-ink"
           >
-            Wrap
+            {t('ui.codeBlock.wrap')}
           </RACButton>
-          {copy && <CopyButton value={code} label="Copy code" compact />}
+          {copy && <CopyButton value={code} label={t('ui.codeBlock.copyCode')} compact />}
         </div>
       </div>
       <div
@@ -75,7 +76,7 @@ export const CodeBlock = ({
           onPress={() => setAll((a) => !a)}
           className="min-h-11 w-full border-t border-line px-3 text-left type-label text-ink data-[hovered]:bg-[color-mix(in_oklch,var(--bh-sunken),var(--bh-ink)_5%)]"
         >
-          {all ? 'Show less' : `Show all ${lines.length} lines`}
+          {all ? t('ui.codeBlock.showLess') : `Show all ${lines.length} lines`}
         </RACButton>
       )}
     </div>
@@ -168,7 +169,7 @@ export const DiffView = ({
           onPress={() => setWrap((w) => !w)}
           className="min-h-11 px-3 type-meta text-ink-2 data-[hovered]:text-ink aria-pressed:text-ink"
         >
-          Wrap
+          {t('ui.codeBlock.wrap')}
         </RACButton>
       </div>
       {files.map((f) => {

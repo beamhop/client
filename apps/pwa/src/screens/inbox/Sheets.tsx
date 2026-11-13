@@ -15,7 +15,7 @@ import { t } from '../../i18n/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
 import { TextField } from '../../ui/Field.tsx';
-import { Kbd, MetaLine } from '../../ui/Meta.tsx';
+import { MetaLine } from '../../ui/Meta.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
 import { useMe } from './me.ts';
 import { inputOf, quorumOf, reachOf, ruleChoices, ruleLine, type SlipGroup, scopeOptions } from './model.ts';
@@ -193,7 +193,7 @@ const AccessSheet = ({
   const [busy, setBusy] = useState(false);
   const who = approval.requestedBy.displayName ?? approval.requestedBy.principal;
   const offered = (roles.data?.roles ?? []).filter((r) => r.name !== 'owner' && r.name !== 'agent');
-  const list = offered.length > 0 ? offered : [{ name: 'viewer', description: 'Read-only Q&A.' }];
+  const list = offered.length > 0 ? offered : [{ name: 'viewer', description: t('inbox.sheets.readOnlyQA') }];
   // Least privilege first.
   const order = ['viewer', 'user', 'admin'];
   const sorted = [...list].sort((x, y) => order.indexOf(x.name) - order.indexOf(y.name));
@@ -297,35 +297,6 @@ const ReasonSheet = ({ ids, target, onClose }: { ids: string[]; target: string; 
   );
 };
 
-export const SHORTCUTS: Array<[string, string]> = [
-  ['J / K', 'inbox.keys.move'],
-  ['A', 'inbox.keys.allow'],
-  ['⇧A', 'inbox.keys.scope'],
-  ['D', 'inbox.keys.deny'],
-  ['↵', 'inbox.keys.details'],
-  ['U / Z', 'inbox.keys.undo'],
-  ['R', 'inbox.keys.reason'],
-  ['X', 'inbox.keys.select'],
-  ['?', 'inbox.keys.help'],
-];
-
-const HelpSheet = ({ onClose }: { onClose: () => void }) => (
-  <Sheet isOpen onOpenChange={(o) => !o && onClose()} title={t('inbox.keys.title')}>
-    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2.5">
-      {SHORTCUTS.map(([k, label]) => (
-        <div key={k} className="contents">
-          <dt className="flex gap-1">
-            {k.split(' / ').map((x) => (
-              <Kbd key={x}>{x}</Kbd>
-            ))}
-          </dt>
-          <dd className="type-body-sm text-ink">{t(label as Parameters<typeof t>[0])}</dd>
-        </div>
-      ))}
-    </dl>
-  </Sheet>
-);
-
 /** Renders whichever decision sheet is open. Mount once per screen that can decide (Inbox, Home). */
 export const DecisionLayer = () => {
   const s = useStore(sheetStore);
@@ -340,7 +311,5 @@ export const DecisionLayer = () => {
       return <AccessSheet key={s.approval.id} approval={s.approval} onClose={close} onDone={s.onDone} />;
     case 'reason':
       return <ReasonSheet ids={s.ids} target={s.target} onClose={close} />;
-    case 'help':
-      return <HelpSheet onClose={close} />;
   }
 };

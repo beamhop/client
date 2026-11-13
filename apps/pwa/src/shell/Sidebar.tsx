@@ -2,15 +2,17 @@
  * Expanded sidebar (DESIGN §9.4): 240px, wordmark, nav groups with micro headers, connection + Stop
  * everything at the bottom. Collapses to a 64px icon rail (⌘\ / Ctrl+\), remembered per browser.
  */
-import { SidebarSimple, Stop } from '@phosphor-icons/react';
+import { MagnifyingGlass, SidebarSimple, Stop } from '@phosphor-icons/react';
 import { Link, useRouterState } from '@tanstack/react-router';
+import { Button as RACButton } from 'react-aria-components';
 import { useApi } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { Button, IconButton } from '../ui/Button.tsx';
-import { CountBadge } from '../ui/Meta.tsx';
+import { CountBadge, Kbd } from '../ui/Meta.tsx';
 import { ConnectionPill } from './Connection.tsx';
 import { isActive, SIDEBAR_GROUPS } from './nav.ts';
+import { modKey, openOverlay } from './overlays.ts';
 import { usePanicSheet, usePanicState } from './panic.tsx';
 import { Wordmark } from './Wordmark.tsx';
 
@@ -25,10 +27,10 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   return (
     <aside
       className={cx(
-        'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg',
+        'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg pt-safe pb-safe',
         collapsed ? 'w-16' : 'w-60',
       )}
-      aria-label="Sidebar"
+      aria-label={t('ui.sidebar.sidebar')}
       data-sidebar={collapsed ? 'rail' : 'full'}
     >
       <div
@@ -40,11 +42,30 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </Link>
         )}
         <IconButton
-          label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          label={collapsed ? t('ui.sidebar.expandSidebar') : t('ui.sidebar.collapseSidebar')}
           shortcut="⌘\"
           icon={<SidebarSimple size={20} />}
           onPress={onToggle}
         />
+      </div>
+      <div className={cx('pb-1', collapsed ? 'flex justify-center' : 'px-3')}>
+        {collapsed ? (
+          <IconButton
+            label={t('palette.open')}
+            shortcut={`${modKey()}K`}
+            icon={<MagnifyingGlass size={20} />}
+            onPress={() => openOverlay('palette')}
+          />
+        ) : (
+          <RACButton
+            onPress={() => openOverlay('palette')}
+            className="flex h-10 w-full items-center gap-2.5 rounded-md border border-line bg-surface px-2.5 text-left text-ink-2 outline-none data-[hovered]:border-line-strong data-[hovered]:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
+          >
+            <MagnifyingGlass size={18} aria-hidden="true" />
+            <span className="flex-1 type-label">{t('palette.open')}</span>
+            <Kbd>{`${modKey()}K`}</Kbd>
+          </RACButton>
+        )}
       </div>
       <nav aria-label={t('nav.main')} className="pane-scroll flex-1 px-3 pb-4">
         {SIDEBAR_GROUPS.map((g) => (
@@ -78,7 +99,9 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       {!collapsed && badge > 0 && (
                         <CountBadge
                           count={badge}
-                          label={badge === 1 ? 'approval waiting' : 'approvals waiting'}
+                          label={
+                            badge === 1 ? t('ui.sidebar.approvalWaiting') : t('ui.sidebar.approvalsWaiting')
+                          }
                         />
                       )}
                       {collapsed && badge > 0 && (
@@ -93,7 +116,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                             'size-1.5 rounded-full bg-caution-text',
                             collapsed && 'absolute top-2 right-2.5',
                           )}
-                          aria-label="has findings"
+                          aria-label={t('ui.sidebar.hasFindings')}
                           role="img"
                         />
                       )}
@@ -110,7 +133,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {!panic &&
           (collapsed ? (
             <IconButton
-              label="Stop everything"
+              label={t('ui.sidebar.stopEverything')}
               shortcut="⌘⇧."
               icon={<Stop size={20} weight="fill" />}
               variant="destructive-ghost"

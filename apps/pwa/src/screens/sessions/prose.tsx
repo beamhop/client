@@ -4,6 +4,7 @@
  * No HTML is ever interpreted — agent output is untrusted — so this builds React nodes, never innerHTML.
  */
 import { Fragment, type ReactNode } from 'react';
+import { t } from '../../i18n/index.ts';
 import { TextLink } from '../../ui/Button.tsx';
 import { CodeBlock } from '../../ui/CodeBlock.tsx';
 
@@ -142,7 +143,7 @@ export const Prose = ({ text, caret }: { text: string; caret?: boolean }) => {
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: prose blocks are positional
             <div key={i}>
-              <CodeBlock code={b.code} label={b.lang ? `Code · ${b.lang}` : 'Code'} />
+              <CodeBlock code={b.code} label={b.lang ? `Code · ${b.lang}` : t('sessions.prose.code')} />
               {end && <Caret />}
             </div>
           );

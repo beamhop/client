@@ -25,23 +25,35 @@ const MARK: Record<Mark, ReactNode> = {
 const ROWS: Array<{ id: string; cells: Record<Profile, [Mark, string]> }> = [
   {
     id: 'read',
-    cells: { strict: ['yes', 'mounted'], workspace: ['yes', 'mounted'], custom: ['some', 'your list'] },
+    cells: {
+      strict: ['yes', 'mounted'],
+      workspace: ['yes', 'mounted'],
+      custom: ['some', t('policy.profileInfo.yourList')],
+    },
   },
   {
     id: 'write',
-    cells: { strict: ['no', 'nothing'], workspace: ['yes', 'rw mounts'], custom: ['some', 'your list'] },
+    cells: {
+      strict: ['no', 'nothing'],
+      workspace: ['yes', t('policy.profileInfo.rwMounts')],
+      custom: ['some', t('policy.profileInfo.yourList')],
+    },
   },
   {
     id: 'net',
     cells: {
-      strict: ['some', 'AI provider'],
-      workspace: ['yes', '+ registries'],
-      custom: ['some', 'your list'],
+      strict: ['some', t('policy.profileInfo.aiProvider')],
+      workspace: ['yes', t('policy.profileInfo.registries')],
+      custom: ['some', t('policy.profileInfo.yourList')],
     },
   },
   {
     id: 'private',
-    cells: { strict: ['no', 'blocked'], workspace: ['no', 'blocked'], custom: ['some', 'your choice'] },
+    cells: {
+      strict: ['no', 'blocked'],
+      workspace: ['no', 'blocked'],
+      custom: ['some', t('policy.profileInfo.yourChoice')],
+    },
   },
   {
     id: 'locked',

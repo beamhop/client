@@ -10,6 +10,7 @@ import type { DoctorCheck, HarnessView } from '@beamhop/core';
 import { Plus } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
 import { harnessLamp, harnessMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { t as tr } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { announce } from '../../lib/live.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -67,23 +68,20 @@ const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
           {WHY[c.id] && <p className="type-body-sm text-ink-2">{WHY[c.id]}</p>}
           {c.id === 'userns' ? (
             <>
-              <p className="type-label text-ink">Allow it for bubblewrap only (recommended)</p>
+              <p className="type-label text-ink">{tr('setup.checks.allowItForBubblewrap')}</p>
               <CommandLine
-                label="Copy AppArmor profile command"
+                label={tr('setup.checks.copyApparmorProfileCommand')}
                 cmd={`sudo tee /etc/apparmor.d/bwrap <<'EOF'\nabi <abi/4.0>,\ninclude <tunables/global>\nprofile bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n}\nEOF\nsudo systemctl reload apparmor`}
               />
-              <p className="type-label text-ink">Or turn the restriction off system-wide</p>
-              <p className="type-body-sm text-ink-2">
-                Simpler, but every program gets user namespaces again.
-              </p>
-              {c.fix && <CommandLine cmd={c.fix} label="Copy sysctl command" />}
+              <p className="type-label text-ink">{tr('setup.checks.orTurnTheRestriction')}</p>
+              <p className="type-body-sm text-ink-2">{tr('setup.checks.simplerButEveryProgram')}</p>
+              {c.fix && <CommandLine cmd={c.fix} label={tr('setup.checks.copySysctlCommand')} />}
             </>
           ) : (
-            c.fix && <CommandLine cmd={c.fix} label={`Copy fix for ${c.title}`} />
+            c.fix && <CommandLine cmd={c.fix} label={tr('setup.checks.copyFix', { title: c.title })} />
           )}
           <p className="type-meta text-ink-2">
-            Or run <span className="text-ink">beamhop doctor --fix</span> in a terminal; it asks for your
-            password there.
+            {tr('setup.checks.orRun')} <span className="text-ink">beamhop doctor --fix</span>
           </p>
         </div>
       )}
@@ -129,11 +127,11 @@ export const StepDoctor = () => {
   return (
     <StepFrame
       step="doctor"
-      title="Check this computer"
+      title={tr('setup.checks.checkThisComputer')}
       lede="beamhop sandboxes every agent. These are the parts it needs. Nothing is installed without you."
       cli="beamhop doctor"
       primary={{
-        label: 'Continue · Harnesses',
+        label: tr('setup.checks.continueHarnesses'),
         disabled: !finished || fails > 0,
         onPress: () => {
           update((p) => markDone(p, 'doctor'));
@@ -143,7 +141,7 @@ export const StepDoctor = () => {
       skip={
         fails > 0
           ? {
-              label: 'Skip for now',
+              label: tr('setup.checks.skipForNow'),
               onPress: () => {
                 update((p) => markSkipped(p, 'doctor'));
                 go('harnesses');
@@ -153,16 +151,19 @@ export const StepDoctor = () => {
       }
     >
       {q.isError ? (
-        <ErrorState title="Couldn't run the checks." details={q.error} onRetry={() => void q.refetch()}>
-          {q.error.message} Is beamhopd running? Start it with{' '}
-          <code className="font-mono">beamhop start</code>.
+        <ErrorState
+          title={tr('setup.checks.couldnTRunThe')}
+          details={q.error}
+          onRetry={() => void q.refetch()}
+        >
+          {q.error.message} {tr('setup.checks.isRunning')} <code className="font-mono">beamhop start</code>
         </ErrorState>
       ) : !q.data ? (
-        <Skeleton variant="list" count={5} label="Running checks" />
+        <Skeleton variant="list" count={5} label={tr('setup.checks.runningChecks')} />
       ) : (
         <>
           <ul
-            aria-label="Checks"
+            aria-label={tr('setup.checks.checks')}
             aria-busy={!finished}
             className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
           >
@@ -182,18 +183,17 @@ export const StepDoctor = () => {
               onPress={() => void q.refetch()}
               isPending={q.isFetching && !!q.data}
             >
-              Run again
+              {tr('setup.checks.runAgain')}
             </Button>
           </div>
           {finished && warns > 0 && fails === 0 && (
             <Banner tone="caution" className="rounded-md border-x px-4">
-              You can continue. Fix the item above when you can; until then the sandbox is weaker on this
-              computer.
+              {tr('setup.checks.youCanContinueFix')}
             </Banner>
           )}
           {finished && fails > 0 && (
             <Banner tone="stop" className="rounded-md border-x px-4">
-              Agents can't be sandboxed until the missing parts are installed. Run the fix, then Run again.
+              {tr('setup.checks.agentsCanTBe')}
             </Banner>
           )}
         </>
@@ -217,25 +217,25 @@ const InstallSheet = ({
     <Sheet
       isOpen
       onOpenChange={(o) => !o && onClose()}
-      title={`Install ${h.displayName}`}
+      title={tr('setup.checks.installName', { name: h.displayName })}
       footer={
         <Button variant="primary" size="lg" fullWidth onPress={onCheck}>
-          Check again
+          {tr('setup.checks.checkAgain')}
         </Button>
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="type-body-sm text-ink-2">Run one of these in a terminal, then check again.</p>
+        <p className="type-body-sm text-ink-2">{tr('setup.checks.runOneOfThese')}</p>
         {opts.length ? (
           opts.map(([pm, cmd]) => (
             <div key={pm} className="flex flex-col gap-1.5">
               <span className="type-micro text-ink-2">{pm}</span>
-              <CommandLine cmd={cmd} label={`Copy ${pm} command`} />
+              <CommandLine cmd={cmd} label={tr('setup.checks.copyPm', { pm })} />
             </div>
           ))
         ) : (
           <p className="type-body-sm text-ink-2">
-            See {h.install?.url ?? 'the vendor’s site'} for install steps.
+            {tr('setup.checks.seeUrl', { url: h.install?.url ?? tr('setup.checks.theVendorSSite') })}
           </p>
         )}
       </div>
@@ -258,13 +258,13 @@ export const StepHarnesses = () => {
   return (
     <StepFrame
       step="harnesses"
-      title="Find your coding agents"
+      title={tr('setup.checks.findYourCodingAgents')}
       lede="A harness is the agent program beamhop drives: Claude Code, Codex, Gemini CLI and others. It uses your own login."
       cli="beamhop harness scan"
       primary={
         ready.length || !firstInstallable
           ? {
-              label: 'Continue · Identity',
+              label: tr('setup.checks.continueIdentity'),
               disabled: !ready.length,
               onPress: () => {
                 update((p) => markDone(p, 'harnesses'));
@@ -279,18 +279,22 @@ export const StepHarnesses = () => {
       }
     >
       {q.isError ? (
-        <ErrorState title="Couldn't scan for harnesses." details={q.error} onRetry={() => void q.refetch()}>
+        <ErrorState
+          title={tr('setup.checks.couldnTScanFor')}
+          details={q.error}
+          onRetry={() => void q.refetch()}
+        >
           {q.error.message}
         </ErrorState>
       ) : !q.data ? (
-        <Skeleton variant="list" count={5} label="Scanning" />
+        <Skeleton variant="list" count={5} label={tr('setup.checks.scanning')} />
       ) : (
         <>
           <p className="type-meta text-ink-2" role="status">
-            {hs.length} found · {ready.length} ready
+            {tr('setup.checks.found', { found: hs.length, ready: ready.length })}
           </p>
           <ul
-            aria-label="Harnesses"
+            aria-label={tr('setup.checks.harnesses')}
             className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
           >
             {hs.map((h) => (
@@ -318,7 +322,10 @@ export const StepHarnesses = () => {
                 </div>
                 {h.status === 'needs-login' && (
                   <div className="flex flex-col gap-2 pl-10">
-                    <CommandLine cmd={`${h.command} login`} label={`Copy ${h.displayName} login command`} />
+                    <CommandLine
+                      cmd={`${h.command} login`}
+                      label={tr('setup.checks.copyLogin', { name: h.displayName })}
+                    />
                     <Button
                       variant="quiet"
                       size="sm"
@@ -326,7 +333,7 @@ export const StepHarnesses = () => {
                       isPending={q.isFetching}
                       onPress={() => void q.refetch()}
                     >
-                      Check again
+                      {tr('setup.checks.checkAgain')}
                     </Button>
                   </div>
                 )}
@@ -337,7 +344,7 @@ export const StepHarnesses = () => {
                     className="ml-10 self-start"
                     onPress={() => setInstalling(h)}
                   >
-                    Install…
+                    {tr('setup.checks.install')}
                   </Button>
                 )}
                 {(h.status === 'unsupported-version' || h.status === 'error') && h.message && (
@@ -357,12 +364,12 @@ export const StepHarnesses = () => {
               }}
             >
               <TextField
-                label="ACP agent command"
+                label={tr('setup.checks.acpAgentCommand')}
                 mono
                 value={cmd}
                 onChange={setCmd}
-                placeholder="my-agent --acp"
-                description="Any program that speaks the Agent Client Protocol on stdio."
+                placeholder={tr('setup.checks.myAgentAcp')}
+                description={tr('setup.checks.anyProgramThatSpeaks')}
               />
               <Button
                 type="submit"
@@ -371,19 +378,19 @@ export const StepHarnesses = () => {
                 isPending={add.isPending}
                 isDisabled={!cmd.trim()}
               >
-                Test handshake
+                {tr('setup.checks.testHandshake')}
               </Button>
               {add.data && (
                 <StatusDot
                   state="ready"
-                  label={`${add.data.displayName}: ${add.data.message ?? 'handshake ok'}`}
+                  label={`${add.data.displayName}: ${add.data.message ?? tr('setup.checks.handshakeOk')}`}
                 />
               )}
               {add.isError && <p className="type-body-sm text-stop-text">{add.error.message}</p>}
             </form>
           ) : (
             <Button variant="quiet" className="-ml-3 self-start" onPress={() => setAcp(true)}>
-              Add ACP agent…
+              {tr('setup.checks.addAcpAgent')}
             </Button>
           )}
         </>

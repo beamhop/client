@@ -58,7 +58,12 @@ export const AuditScreen = () => {
     </Button>
   );
   return (
-    <Screen title={t('nav.audit')} actions={expanded ? tabs : undefined} maxWidth="wide">
+    <Screen
+      title={t('nav.audit')}
+      slug={t('audit.slug')}
+      actions={expanded ? tabs : undefined}
+      maxWidth="wide"
+    >
       {!expanded && <div className="mb-5">{tabs}</div>}
       <div className="relative">
         {tab === 'usage' && <UsageTab alertButton={alertButton} />}

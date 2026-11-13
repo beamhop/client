@@ -5,16 +5,17 @@
  * hello step talks to.
  */
 import { useSyncExternalStore } from 'react';
+import { t } from '../../i18n/index.ts';
 
 export const SETUP_STEPS = ['doctor', 'harnesses', 'identity', 'phone', 'agent', 'hello'] as const;
 export type SetupStep = (typeof SETUP_STEPS)[number];
 export const STEP_LABEL: Record<SetupStep, string> = {
-  doctor: 'Doctor',
-  harnesses: 'Harnesses',
-  identity: 'Identity',
-  phone: 'Phone',
-  agent: 'Agent',
-  hello: 'Hello',
+  doctor: t('setup.step.doctor'),
+  harnesses: t('setup.step.harnesses'),
+  identity: t('setup.step.identity'),
+  phone: t('setup.step.phone'),
+  agent: t('setup.step.agent'),
+  hello: t('setup.step.hello'),
 };
 
 export interface SetupProgress {

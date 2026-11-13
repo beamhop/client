@@ -13,6 +13,7 @@ import type { DeviceView, PairingStatusView } from '@beamhop/core';
 import { ArrowClockwise, Check, Copy, QrCode as QrIcon, X } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { countdown } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -77,7 +78,11 @@ export interface PairingPanelProps {
   className?: string;
 }
 
-const STEPS = ['Scan with your phone camera', 'Check the 4 words match', 'Allow notifications'];
+const STEPS = [
+  t('pair.pairingPanel.scanWithYourPhone'),
+  t('pair.pairingPanel.checkThe4Words'),
+  t('pair.pairingPanel.allowNotifications'),
+];
 
 export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps) => {
   const now = useNow(1000);
@@ -143,7 +148,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
   if (start.isError) {
     return (
       <ErrorState
-        title="Couldn't start pairing."
+        title={t('pair.pairingPanel.couldnTStartPairing')}
         details={start.error}
         onRetry={() => void start.refetch()}
         className={className}
@@ -152,7 +157,8 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
       </ErrorState>
     );
   }
-  if (!start.data) return <Skeleton variant="detail" count={1} label="Preparing a pairing code" />;
+  if (!start.data)
+    return <Skeleton variant="detail" count={1} label={t('pair.pairingPanel.preparingAPairingCode')} />;
 
   if (state === 'paired' && device) {
     return (
@@ -167,13 +173,14 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
           <div className="min-w-0">
             <p className="type-title-3 text-ink">Paired · {device.name}</p>
             <p className="type-meta text-ink-2">
-              {device.pushEnabled ? 'notifications on' : 'notifications not on yet'} · phrase confirmed
+              {device.pushEnabled
+                ? t('pair.pairingPanel.notificationsOn')
+                : t('pair.pairingPanel.notificationsNotOnYet')}{' '}
+              · phrase confirmed
             </p>
           </div>
         </div>
-        <p className="type-body-sm text-ink-2">
-          It can approve requests and stop agents now. Remove it any time in Settings → Devices.
-        </p>
+        <p className="type-body-sm text-ink-2">{t('pair.pairingPanel.itCanApproveRequests')}</p>
       </div>
     );
   }
@@ -182,13 +189,10 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
     return (
       <div className={cx('flex flex-col items-start gap-3', className)} data-pairing="rejected">
         <StatusDot state="stopped" label="cancelled" />
-        <p className="type-title-3 text-ink">Pairing cancelled. Nothing was paired.</p>
-        <p className="type-body-sm text-ink-2">
-          The code can't be used again, and the attempt is in the audit log. If someone else scanned your
-          code, that's where you'll see it.
-        </p>
+        <p className="type-title-3 text-ink">{t('pair.pairingPanel.pairingCancelledNothingWas')}</p>
+        <p className="type-body-sm text-ink-2">{t('pair.pairingPanel.theCodeCanT')}</p>
         <Button variant="secondary" icon={<ArrowClockwise size={16} aria-hidden="true" />} onPress={restart}>
-          Start again
+          {t('pair.cancelled.again')}
         </Button>
       </div>
     );
@@ -198,7 +202,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
     return (
       <TicketCard
         className={className}
-        eyebrow="Safety check"
+        eyebrow={t('pair.pairingPanel.safetyCheck')}
         tag={<StatusDot state="needs-you" label="answered" />}
         decision={
           <div className="grid gap-2 medium:grid-cols-2 medium:[&>*:first-child]:order-2">
@@ -220,7 +224,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
               isPending={confirm.isPending && confirm.variables?.accept === false}
               onPress={() => void decide(false)}
             >
-              No, cancel
+              {t('pair.pairingPanel.noCancel')}
             </Button>
           </div>
         }
@@ -228,10 +232,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
         <div data-pairing="awaiting-confirm" className="flex flex-col gap-3">
           <p className="type-title-3 text-ink">Does {device.name} show these words?</p>
           <SafetyPhrase words={words} size="lg" />
-          <p className="type-body-sm text-ink-2">
-            Only confirm if every word matches, in order. If they differ, someone else's code may have been
-            swapped in.
-          </p>
+          <p className="type-body-sm text-ink-2">{t('pair.pairingPanel.onlyConfirmIfEvery')}</p>
           {confirm.isError && <p className="type-body-sm text-stop-text">{confirm.error.message}</p>}
         </div>
       </TicketCard>
@@ -255,22 +256,18 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
               style={{ width: qrSize, height: qrSize }}
             >
               <div className="text-center">
-                <p className="type-micro text-ink-2">Pairing code</p>
+                <p className="type-micro text-ink-2">{t('pair.enter.label')}</p>
                 <p
                   className="mt-2 font-mono text-[26px] leading-9 font-semibold tracking-[0.08em] text-ink select-all"
                   aria-label={`Pairing code ${start.data.code.split('').join(' ')}`}
                 >
                   {start.data.code}
                 </p>
-                <p className="mt-1 type-meta text-ink-2">On the phone: beamhop → Enter code</p>
+                <p className="mt-1 type-meta text-ink-2">{t('pair.pairingPanel.onThePhoneBeamhop')}</p>
               </div>
             </div>
           ) : (
-            <QrCode
-              value={start.data.uri}
-              size={qrSize}
-              label="QR code to pair your phone. Scan it with the phone's camera."
-            />
+            <QrCode value={start.data.uri} size={qrSize} label={t('pair.pairingPanel.qrCodeToPair')} />
           )}
           {expired && (
             <div className="absolute inset-0 grid place-items-center rounded-md bg-bg/85">
@@ -281,13 +278,15 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
                 icon={<ArrowClockwise size={16} weight="bold" aria-hidden="true" />}
                 onPress={restart}
               >
-                Get a new code
+                {t('pair.pairingPanel.getANewCode')}
               </Button>
             </div>
           )}
         </div>
         <div className="flex items-baseline gap-3">
-          <span className="type-meta text-ink-2">{expired ? 'Expired' : 'Expires in'}</span>
+          <span className="type-meta text-ink-2">
+            {expired ? t('pair.pairingPanel.expired') : t('pair.pairingPanel.expiresIn')}
+          </span>
           <Readout size="md" tone={expired ? 'stop' : left < 30_000 ? 'caution' : 'ink'}>
             {countdown(Math.max(0, left))}
           </Readout>
@@ -299,7 +298,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
             icon={showCode ? <QrIcon size={16} aria-hidden="true" /> : undefined}
             onPress={() => setShowCode((v) => !v)}
           >
-            {showCode ? 'Show QR instead' : 'Show code instead'}
+            {showCode ? t('pair.pairingPanel.showQrInstead') : t('pair.pairingPanel.showCodeInstead')}
           </Button>
           <Button
             variant="quiet"
@@ -322,7 +321,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
               setTimeout(() => setCopied(false), 1500);
             }}
           >
-            {copied ? 'Copied' : 'Copy link'}
+            {copied ? t('pair.pairingPanel.copied') : t('pair.pairingPanel.copyLink')}
           </Button>
         </div>
       </div>
@@ -339,17 +338,15 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
         </ol>
         <section aria-labelledby="pair-phrase" className="flex flex-col gap-2.5">
           <h3 id="pair-phrase" className="type-micro text-ink-2">
-            Safety phrase
+            {t('pair.phrase.eyebrow')}
           </h3>
           <SafetyPhrase />
-          <p className="type-body-sm text-ink-2">
-            The 4 words appear here once your phone answers. You'll compare them with the phone's.
-          </p>
+          <p className="type-body-sm text-ink-2">{t('pair.pairingPanel.the4WordsAppear')}</p>
         </section>
         <div className="flex items-center gap-2" role="status">
           <StatusDot state={expired ? 'stopped' : 'needs-you'} label={expired ? 'expired' : 'waiting'} />
           <span className="type-body-sm text-ink-2">
-            {expired ? 'This code expired. Get a new one.' : 'Waiting for your phone…'}
+            {expired ? t('pair.pairingPanel.thisCodeExpiredGet') : t('pair.pairingPanel.waitingForYourPhone')}
           </span>
         </div>
       </div>

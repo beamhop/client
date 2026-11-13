@@ -8,6 +8,7 @@ import { X } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { type ReactNode, useRef } from 'react';
 import { Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { haptic } from '../lib/haptics.ts';
 import { useExpanded } from '../lib/media.ts';
@@ -36,6 +37,8 @@ export interface SheetProps {
   role?: 'dialog' | 'alertdialog';
   /** Move initial focus to the title instead of the first control (read consequences first). */
   focusTitle?: boolean;
+  /** No focusable content (a reference sheet): the scroll body takes a tab stop so keys can scroll it. */
+  readOnly?: boolean;
   className?: string;
 }
 
@@ -51,6 +54,7 @@ export const Sheet = ({
   full,
   role = 'dialog',
   focusTitle,
+  readOnly,
   className,
 }: SheetProps) => {
   const expanded = useExpanded();
@@ -138,10 +142,25 @@ export const Sheet = ({
                         </Heading>
                         {subtitle && <div className="mt-0.5 type-meta text-ink-2">{subtitle}</div>}
                       </div>
-                      <IconButton label="Close" icon={<X size={20} />} onPress={close} tooltip={false} />
+                      <IconButton
+                        label={t('ui.sheet.close')}
+                        icon={<X size={20} />}
+                        onPress={close}
+                        tooltip={false}
+                      />
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 expanded:px-6">
+                  <div
+                    // Read-only sheets (nothing focusable inside) still scroll by keyboard.
+                    {...(readOnly
+                      ? {
+                          tabIndex: 0,
+                          role: 'region',
+                          'aria-label': typeof title === 'string' ? title : undefined,
+                        }
+                      : {})}
+                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus expanded:px-6"
+                  >
                     {children}
                   </div>
                   {footer && (

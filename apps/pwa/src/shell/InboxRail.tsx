@@ -5,6 +5,7 @@
 import { CaretDoubleRight } from '@phosphor-icons/react';
 import { Link } from 'react-aria-components';
 import { approvalTarget, RISK_LABEL, useApi } from '../api/index.ts';
+import { t } from '../i18n/index.ts';
 import { countdown } from '../lib/format.ts';
 import { IconButton } from '../ui/Button.tsx';
 import { Eyebrow, RiskTag } from '../ui/Meta.tsx';
@@ -15,17 +16,21 @@ export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
   const list = approvals.data?.approvals ?? [];
   return (
     <aside
-      aria-label="Pending approvals"
+      aria-label={t('ui.inboxRail.pendingApprovals')}
       className="pane-scroll h-full w-[360px] shrink-0 border-l border-line bg-bg px-5 py-3"
     >
       <div className="flex items-center justify-between">
         <Eyebrow count={list.length} href="/inbox">
-          Needs you
+          {t('ui.inboxRail.needsYou')}
         </Eyebrow>
-        <IconButton label="Hide approvals rail" icon={<CaretDoubleRight size={18} />} onPress={onCollapse} />
+        <IconButton
+          label={t('ui.inboxRail.hideApprovalsRail')}
+          icon={<CaretDoubleRight size={18} />}
+          onPress={onCollapse}
+        />
       </div>
       {list.length === 0 && (
-        <p className="type-body-sm text-ink-2">Inbox clear. Nothing is waiting on you.</p>
+        <p className="type-body-sm text-ink-2">{t('ui.inboxRail.inboxClearNothingIs')}</p>
       )}
       <ul className="flex flex-col gap-2">
         {list.map((a) => (

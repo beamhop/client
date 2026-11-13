@@ -101,7 +101,11 @@ const InstallSheet = ({
           : ''
       }
       subtitle={
-        h && <MetaLine items={[h.command, h.version ? `found ${h.version}` : 'not on PATH', h.message]} />
+        h && (
+          <MetaLine
+            items={[h.command, h.version ? `found ${h.version}` : t('harnesses.notOnPath'), h.message]}
+          />
+        )
       }
       footer={
         <Button
@@ -159,7 +163,7 @@ const InstallSheet = ({
             >
               {t('harnesses.install.docs', { name: h.displayName })}
               <ArrowUpRight size={14} aria-hidden="true" />
-              <span className="sr-only"> (opens in a new tab)</span>
+              <span className="sr-only"> {t('harnesses.harnesses.opensInANew')}</span>
             </a>
           )}
           <p className="type-meta text-ink-2">{t('harnesses.install.after')}</p>
@@ -252,7 +256,7 @@ const AddAcpSheet = ({
         <TextField
           label={t('harnesses.acp.command')}
           description={t('harnesses.acp.commandHint')}
-          placeholder="goose acp"
+          placeholder={t('harnesses.harnesses.gooseAcp')}
           mono
           value={line}
           onChange={(v) => {
@@ -265,7 +269,7 @@ const AddAcpSheet = ({
           <MetaLine
             items={[
               `command ${parsed.command}`,
-              parsed.args.length ? `args [${parsed.args.join(', ')}]` : 'no args',
+              parsed.args.length ? `args [${parsed.args.join(', ')}]` : t('harnesses.harnesses.noArgs'),
               { value: `id acp:${id || '…'}`, tone: idOk && !clash ? 'ink' : 'stop' },
             ]}
           />
@@ -361,7 +365,7 @@ const HarnessRow = ({
   const slug: Array<string | false | undefined> =
     h.status === 'ready'
       ? [
-          h.protocol === 'acp' ? 'ACP ✓' : h.protocol,
+          h.protocol === 'acp' ? t('harnesses.harnesses.acp') : h.protocol,
           h.message?.replace(/^ACP ✓ · /, ''),
           users.length > 0 && t('harnesses.usedBy', { count: users.length }),
         ]
@@ -465,7 +469,10 @@ const Details = ({
         t('harnesses.notOnPath')
       ),
     ],
-    [t('harnesses.d.protocol'), h.protocol === 'acp' ? 'ACP (Agent Client Protocol)' : h.protocol],
+    [
+      t('harnesses.d.protocol'),
+      h.protocol === 'acp' ? t('harnesses.harnesses.acpAgentClientProtocol') : h.protocol,
+    ],
     [t('harnesses.d.message'), h.message ?? '—'],
   ];
   return (
@@ -691,7 +698,7 @@ export const HarnessesScreen = () => {
       slug={
         <MetaLine
           items={[
-            'Catalog v2026.11.12',
+            t('harnesses.harnesses.catalogV20261112'),
             { value: 'signed ✓', tone: 'go' },
             q.data && t('harnesses.slugReady', { ready: ready.length, total }),
             lastScan && t('harnesses.slugScanned', { time: clock(lastScan) }),

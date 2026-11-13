@@ -5,6 +5,7 @@
 import { CaretRight, Check, Copy, TerminalWindow } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 
@@ -31,7 +32,7 @@ export const CopyButton = ({
   const [copied, setCopied] = useState(false);
   return (
     <RACButton
-      aria-label={compact ? (copied ? 'Copied' : label) : undefined}
+      aria-label={compact ? (copied ? t('ui.cliStrip.copied') : label) : undefined}
       onPress={async () => {
         try {
           await navigator.clipboard.writeText(value);
@@ -52,7 +53,7 @@ export const CopyButton = ({
       ) : (
         <Copy size={16} aria-hidden="true" />
       )}
-      {!compact && <span>{copied ? 'Copied' : label}</span>}
+      {!compact && <span>{copied ? t('ui.cliStrip.copied') : label}</span>}
     </RACButton>
   );
 };
@@ -99,7 +100,7 @@ export const CliStrip = ({
             </span>
             {command}
           </code>
-          <CopyButton value={command} label="Copy command" compact />
+          <CopyButton value={command} label={t('ui.cliStrip.copyCommand')} compact />
         </div>
       </DisclosurePanel>
     </Disclosure>

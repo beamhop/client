@@ -7,6 +7,7 @@ import type { DeviceView } from '@beamhop/core';
 import { DeviceMobile, Laptop, Plus } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useBeamhop, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { ago, shortDate } from '../../lib/format.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -54,7 +55,7 @@ const DeviceRow = ({
       title={d.name}
       aside={
         me ? (
-          <Badge tone="outline">this device</Badge>
+          <Badge tone="outline">{t('settings.devices.thisDevice')}</Badge>
         ) : idle >= 90 ? (
           <Badge tone="caution">inactive {idle} d</Badge>
         ) : null
@@ -64,14 +65,21 @@ const DeviceRow = ({
           items={[
             `paired ${shortDate(d.pairedAt)}`,
             d.lastSeenAt && (me ? 'now' : `last seen ${ago(d.lastSeenAt, now)}`),
-            d.pushEnabled ? { value: 'push on', tone: 'go' } : 'push off',
+            d.pushEnabled ? { value: 'push on', tone: 'go' } : t('settings.ntf.state.off'),
           ]}
         />
       }
       actions={
         <RowMenu
-          label={`Actions for ${d.name}`}
-          items={[{ id: 'remove', label: 'Remove…', destructive: true, onAction: () => onRemove(d) }]}
+          label={t('settings.actionsFor', { name: d.name })}
+          items={[
+            {
+              id: 'remove',
+              label: t('settings.devices.removeMenu'),
+              destructive: true,
+              onAction: () => onRemove(d),
+            },
+          ]}
         />
       }
     />
@@ -90,11 +98,18 @@ export const DevicesSection = () => {
 
   if (q.isError)
     return (
-      <ErrorState title="Couldn't load your devices." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={t('settings.devices.couldnTLoadYour')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
-  if (q.isPending) return showSkeleton ? <Skeleton variant="list" count={3} label="Loading devices" /> : null;
+  if (q.isPending)
+    return showSkeleton ? (
+      <Skeleton variant="list" count={3} label={t('settings.devices.loadingDevices')} />
+    ) : null;
 
   const devices = q.data.devices;
   const others = devices.filter((d) => d.id !== me?.id);
@@ -105,7 +120,7 @@ export const DevicesSection = () => {
       {devices.length === 0 ? (
         <EmptyState
           glyph={<DeviceMobile size={32} aria-hidden="true" />}
-          title="No paired devices yet."
+          title={t('settings.devices.noPairedDevicesYet')}
           cli="beamhop pair-device"
           action={
             <Button
@@ -113,11 +128,11 @@ export const DevicesSection = () => {
               icon={<Plus size={16} weight="bold" aria-hidden="true" />}
               onPress={() => setPairing(true)}
             >
-              Pair a device
+              {t('settings.devices.pairADevice')}
             </Button>
           }
         >
-          Pair your phone to approve requests and stop agents when you're away from this computer.
+          {t('settings.devices.pairYourPhoneTo')}
         </EmptyState>
       ) : (
         <>
@@ -129,16 +144,16 @@ export const DevicesSection = () => {
             </Banner>
           )}
           {me && (
-            <Group title="This device" id="dev-this">
+            <Group title={t('settings.ntf.thisDevice')} id="dev-this">
               <List>
                 <DeviceRow d={me} me now={now} onRemove={setTarget} />
               </List>
             </Group>
           )}
           <Group
-            title={me ? 'Other devices' : 'Devices'}
+            title={me ? t('settings.devices.otherDevices') : t('settings.section.devices')}
             id="dev-other"
-            note="Paired devices can approve requests, start and stop agents, and stop everything. They can't see your keys."
+            note={t('settings.devices.pairedDevicesCanApprove')}
           >
             {others.length ? (
               <List>
@@ -147,7 +162,7 @@ export const DevicesSection = () => {
                 ))}
               </List>
             ) : (
-              <p className="type-body-sm text-ink-2">Only this device so far.</p>
+              <p className="type-body-sm text-ink-2">{t('settings.devices.onlyThisDeviceSo')}</p>
             )}
           </Group>
           <Button
@@ -156,7 +171,7 @@ export const DevicesSection = () => {
             icon={<Plus size={16} weight="bold" aria-hidden="true" />}
             onPress={() => setPairing(true)}
           >
-            Pair a device
+            {t('settings.devices.pairADevice')}
           </Button>
         </>
       )}
@@ -165,8 +180,8 @@ export const DevicesSection = () => {
       <Sheet
         isOpen={pairing}
         onOpenChange={setPairing}
-        title="Pair a device"
-        subtitle="QR + 4-word safety check · expires in 2 min"
+        title={t('settings.devices.pairADevice')}
+        subtitle={t('settings.devices.qr4WordSafety')}
         isDismissable={false}
         className="expanded:max-w-[720px]"
       >
@@ -176,8 +191,10 @@ export const DevicesSection = () => {
       <ConfirmDialog
         isOpen={!!target}
         onOpenChange={(o) => !o && setTarget(undefined)}
-        title={`Remove ${target?.name ?? 'device'}?`}
-        confirmLabel={`Remove ${target?.name ?? 'device'}`}
+        title={t('settings.devices.removeTitle', { name: target?.name ?? t('settings.devices.device') })}
+        confirmLabel={t('settings.devices.removeName', {
+          name: target?.name ?? t('settings.devices.device'),
+        })}
         isPending={remove.isPending}
         onConfirm={async () => {
           if (!target) return;
@@ -190,13 +207,11 @@ export const DevicesSection = () => {
           }
         }}
       >
-        <p>{target?.name} won't be able to control your agents. This doesn't sign it out of other apps.</p>
+        <p>{t('settings.devices.removeBody', { name: target?.name ?? '' })}</p>
         {target?.id === me?.id && (
-          <p className="mt-2 text-caution-text">
-            That's the device you're using. This browser stops working as a control device right away.
-          </p>
+          <p className="mt-2 text-caution-text">{t('settings.devices.thatSTheDevice')}</p>
         )}
-        <p className="mt-2 type-body-sm">It's removed from every daemon's allowlist and logged in Audit.</p>
+        <p className="mt-2 type-body-sm">{t('settings.devices.itSRemovedFrom')}</p>
       </ConfirmDialog>
     </div>
   );

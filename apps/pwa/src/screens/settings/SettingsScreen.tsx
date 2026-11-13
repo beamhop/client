@@ -22,6 +22,7 @@ import {
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { useAppearance } from '../../lib/appearance.ts';
 import { cx } from '../../lib/cx.ts';
 import { middleTruncate } from '../../lib/format.ts';
@@ -29,62 +30,80 @@ import { usePanicState } from '../../shell/panic.tsx';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { Badge, Eyebrow } from '../../ui/Meta.tsx';
-import { inactiveDays } from './DevicesSection.tsx';
+import { inactiveDays, useThisDevice } from './DevicesSection.tsx';
 
 export interface SettingsSectionMeta {
   id: string;
   title: string;
   slug: string;
-  group: 'Trust' | 'Data' | 'This app' | 'Kill switch';
+  group: 'trust' | 'data' | 'app' | 'kill';
   icon: Icon;
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-  { id: 'devices', title: 'Devices', slug: 'paired phones and browsers', group: 'Trust', icon: DeviceMobile },
+  {
+    id: 'devices',
+    title: t('settings.section.devices'),
+    slug: t('settings.settings.pairedPhonesAndBrowsers'),
+    group: 'trust',
+    icon: DeviceMobile,
+  },
   {
     id: 'identity',
-    title: 'Identity & NIP-05',
-    slug: 'owner key, agent keys, handles',
-    group: 'Trust',
+    title: t('settings.section.identity'),
+    slug: t('settings.settings.ownerKeyAgentKeys'),
+    group: 'trust',
     icon: IdentificationBadge,
   },
   {
     id: 'owners',
-    title: 'Owners & people',
-    slug: 'co-owners, quorum, linked accounts',
-    group: 'Trust',
+    title: t('settings.section.owners'),
+    slug: t('settings.settings.coOwnersQuorumLinked'),
+    group: 'trust',
     icon: Crown,
   },
-  { id: 'secrets', title: 'Secrets', slug: 'API keys and tokens, by name', group: 'Trust', icon: Key },
+  {
+    id: 'secrets',
+    title: t('settings.section.secrets'),
+    slug: t('settings.settings.apiKeysAndTokens'),
+    group: 'trust',
+    icon: Key,
+  },
   {
     id: 'retention',
-    title: 'Retention & data',
-    slug: 'transcripts 30 d · audit 1 y',
-    group: 'Data',
+    title: t('settings.section.retention'),
+    slug: t('settings.settings.transcripts30DAudit'),
+    group: 'data',
     icon: ClockCounterClockwise,
   },
   {
     id: 'notifications',
-    title: 'Notifications',
-    slug: 'push, alerts, Nostr DM fallback',
-    group: 'This app',
+    title: t('settings.section.notifications'),
+    slug: t('settings.settings.pushAlertsNostrDm'),
+    group: 'app',
     icon: Bell,
   },
   {
     id: 'updates',
-    title: 'Updates',
-    slug: 'beamhop, catalog, cloud daemons',
-    group: 'This app',
+    title: t('settings.section.updates'),
+    slug: t('settings.settings.beamhopCatalogCloudDaemons'),
+    group: 'app',
     icon: ArrowsClockwise,
   },
   {
     id: 'appearance',
-    title: 'Appearance',
-    slug: 'theme, contrast, motion, haptics',
-    group: 'This app',
+    title: t('settings.section.appearance'),
+    slug: t('settings.settings.themeContrastMotionHaptics'),
+    group: 'app',
     icon: Palette,
   },
-  { id: 'stop', title: 'Stop everything', slug: 'kill switch and history', group: 'Kill switch', icon: Stop },
+  {
+    id: 'stop',
+    title: t('settings.section.stop'),
+    slug: t('settings.settings.killSwitchAndHistory'),
+    group: 'kill',
+    icon: Stop,
+  },
 ];
 
 const THEME_WORD = { system: 'System', light: 'Paper', dark: 'Night shift' } as const;
@@ -92,6 +111,7 @@ const THEME_WORD = { system: 'System', light: 'Paper', dark: 'Night shift' } as 
 /** Live, cheap status per section. Falls back to the static slug while loading. */
 const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
   const devices = useApi('device.list');
+  const me = useThisDevice(devices.data?.devices);
   const identity = useApi('identity.get');
   const secrets = useApi('secret.list');
   const status = useApi('system.status');
@@ -103,30 +123,48 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
     const n = devices.data.devices.length;
     const stale = devices.data.devices.filter((d) => inactiveDays(d, now) >= 90).length;
     out.devices = {
-      text: `${n} ${n === 1 ? 'device' : 'devices'}${stale ? ` · ${stale} inactive` : ''}`,
-      flag: stale ? <Badge tone="caution">{stale} inactive</Badge> : undefined,
+      text: stale
+        ? t('settings.live.devicesStale', { count: n, stale })
+        : t('settings.live.devices', { count: n }),
+      flag: stale ? <Badge tone="caution">{t('settings.live.inactive', { count: stale })}</Badge> : undefined,
     };
   }
   if (identity.data?.npub) {
     const unattested = identity.data.agents.filter((a) => a.attested === false).length;
     out.identity = {
-      text: `${middleTruncate(identity.data.npub, 16)} · ${identity.data.agents.length} agents${unattested ? ` · ${unattested} not attested` : ''}`,
+      text: t(unattested ? 'settings.live.identityUnattested' : 'settings.live.identity', {
+        npub: middleTruncate(identity.data.npub, 16),
+        count: identity.data.agents.length,
+        unattested,
+      }),
     };
   }
   if (secrets.data) {
     out.secrets = {
-      text: `${secrets.data.secrets.length} names · ${secrets.data.backend.replace(/ \(.*\)/, '')}`,
+      text: t('settings.live.secrets', {
+        count: secrets.data.secrets.length,
+        backend: secrets.data.backend.replace(/ \(.*\)/, ''),
+      }),
     };
   }
-  if (status.data) out.updates = { text: `beamhopd ${status.data.version} · up to date` };
+  if (status.data) out.updates = { text: t('settings.live.updates', { version: status.data.version }) };
   out.appearance = {
-    text: `${THEME_WORD[prefs.theme]} · contrast ${prefs.contrast} · motion ${prefs.motion}`,
+    text: t('settings.live.appearance', {
+      theme: THEME_WORD[prefs.theme],
+      contrast: prefs.contrast,
+      motion: prefs.motion,
+    }),
   };
-  if (panic) out.stop = { text: 'everything is stopped', flag: <Badge tone="stop">stopped</Badge> };
-  if (typeof Notification !== 'undefined')
-    out.notifications = {
-      text: `push ${Notification.permission === 'granted' ? 'on' : 'off'} on this device`,
+  if (panic)
+    out.stop = {
+      text: t('settings.settings.everythingIsStopped'),
+      flag: <Badge tone="stop">{t('settings.live.stopped')}</Badge>,
     };
+  // Same rule as Settings → Notifications: on = the browser allows it AND the daemon has a subscription.
+  if (typeof Notification !== 'undefined') {
+    const on = Notification.permission === 'granted' && (me?.pushEnabled ?? true);
+    out.notifications = { text: on ? t('settings.live.pushOn') : t('settings.live.pushOff') };
+  }
   return out;
 };
 
@@ -139,11 +177,11 @@ export const SettingsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={
-        <Screen title="Settings" pane="list">
-          <nav aria-label="Settings sections" className="flex flex-col gap-4">
+        <Screen title={t('settings.settings.settings')} pane="list">
+          <nav aria-label={t('settings.settings.settingsSections')} className="flex flex-col gap-4">
             {groups.map((g) => (
-              <section key={g} aria-labelledby={`set-${g.replace(/\s/g, '')}`}>
-                <Eyebrow id={`set-${g.replace(/\s/g, '')}`}>{g}</Eyebrow>
+              <section key={g} aria-labelledby={`set-${g}`}>
+                <Eyebrow id={`set-${g}`}>{t(`settings.group.${g}`)}</Eyebrow>
                 <ul className="-mx-2 flex flex-col">
                   {SETTINGS_SECTIONS.filter((s) => s.group === g).map((s) => {
                     const href = `/settings/${s.id}`;

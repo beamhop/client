@@ -13,28 +13,37 @@ const FLARE = '#f6641b';
 const INK = '#1b1612';
 const PAPER = '#f8f5f1';
 
-// A transmission slip (ink, notched at the perforation) crossed by one diagonal beam line with a node.
+// The mark (DESIGN §3.10): a transmission slip with the two perforation notches, a hop meter in the
+// "what is asked" zone and the carrier square (the wordmark's ■) in the "decision" zone. One beam line
+// crosses the tile diagonally *behind* the slip, so it reads as a signal passing through.
 // Everything that matters sits inside the 80% maskable safe circle (r = 205 of 512).
-const slip = (fill, cut, beam) => `
-  <path d="M150 112 h212 a14 14 0 0 1 14 14 v170 a22 22 0 0 0 0 44 v46 a14 14 0 0 1 -14 14 h-212 a14 14 0 0 1 -14 -14 v-46 a22 22 0 0 0 0 -44 v-170 a14 14 0 0 1 14 -14 z" fill="${fill}"/>
-  <path d="M168 318 H344" stroke="${cut}" stroke-width="5" stroke-dasharray="10 12" stroke-linecap="butt"/>
-  <path d="M182 172 H300 M182 214 H258 M182 256 H284" stroke="${cut}" stroke-width="16" stroke-linecap="square" opacity="0.9"/>
-  <path d="M96 420 L416 100" stroke="${beam}" stroke-width="14" stroke-linecap="square"/>
-  <circle cx="256" cy="260" r="24" fill="${beam}"/>
-  <circle cx="256" cy="260" r="11" fill="${fill === 'none' ? beam : fill}"/>`;
+const SLIP =
+  'M160 100 h192 a20 20 0 0 1 20 20 v160 a24 24 0 0 0 0 48 v84 a20 20 0 0 1 -20 20 h-192 a20 20 0 0 1 -20 -20 v-84 a24 24 0 0 0 0 -48 v-160 a20 20 0 0 1 20 -20 z';
+const BEAM = 'M58 454 L454 58';
+// Cut-outs drawn in `cut` (or black inside a mask): perforation, 4 ascending hop bars, carrier square.
+const cuts = (cut) => `
+  <path d="M176 304 H336" stroke="${cut}" stroke-width="6" stroke-dasharray="12 10"/>
+  <rect x="180" y="226" width="26" height="36" rx="3" fill="${cut}"/>
+  <rect x="222" y="198" width="26" height="64" rx="3" fill="${cut}"/>
+  <rect x="264" y="170" width="26" height="92" rx="3" fill="${cut}"/>
+  <rect x="306" y="142" width="26" height="120" rx="3" fill="${cut}"/>
+  <rect x="180" y="342" width="34" height="34" rx="3" fill="${cut}"/>`;
+const mark = (fill, cut, beam) => `
+  <path d="${BEAM}" stroke="${beam}" stroke-width="16" stroke-linecap="square"/>
+  <path d="${SLIP}" fill="${fill}"/>${cuts(cut)}`;
 
 const icon = (bg, body) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">${bg}${body}</svg>`;
 
 const svgs = {
   // any: rounded flare tile
-  'icon.svg': icon(`<rect width="512" height="512" rx="112" fill="${FLARE}"/>`, slip(INK, FLARE, PAPER)),
+  'icon.svg': icon(`<rect width="512" height="512" rx="112" fill="${FLARE}"/>`, mark(INK, FLARE, PAPER)),
   // maskable: full-bleed flare square (platform applies its own mask)
-  'maskable.svg': icon(`<rect width="512" height="512" fill="${FLARE}"/>`, slip(INK, FLARE, PAPER)),
-  // monochrome (iOS 18 tinted / Android themed): white shapes on transparent
+  'maskable.svg': icon(`<rect width="512" height="512" fill="${FLARE}"/>`, mark(INK, FLARE, PAPER)),
+  // monochrome (iOS 18 tinted / Android themed): one white silhouette on transparent, cut-outs punched
   'monochrome.svg': icon(
-    `<defs><mask id="m"><rect width="512" height="512" fill="#fff"/>${slip('none', '#000', '#000').replace(/fill="none"/, 'fill="none"')}</mask></defs>`,
-    `<g mask="url(#m)">${slip('#fff', '#fff', '#fff')}</g><path d="M96 420 L150 366 M362 154 L416 100" stroke="#fff" stroke-width="14" stroke-linecap="square"/>`,
+    `<defs><mask id="m"><rect width="512" height="512" fill="#fff"/>${cuts('#000')}</mask></defs>`,
+    `<g mask="url(#m)">${mark('#fff', '#fff', '#fff')}</g>`,
   ),
   'shortcut-stop.svg': icon(
     `<rect width="512" height="512" rx="112" fill="${INK}"/>`,
@@ -42,7 +51,7 @@ const svgs = {
   ),
   'shortcut-inbox.svg': icon(
     `<rect width="512" height="512" rx="112" fill="${PAPER}"/>`,
-    slip(INK, PAPER, FLARE),
+    mark(INK, PAPER, FLARE),
   ),
 };
 

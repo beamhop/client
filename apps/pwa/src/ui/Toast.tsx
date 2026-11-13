@@ -16,6 +16,7 @@ import {
   useState,
 } from 'react';
 import { Button as RACButton } from 'react-aria-components';
+import { t as tr } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 import { reduced, spring, useReduced } from './motion.ts';
@@ -119,7 +120,7 @@ const ToastRegion = ({
   return (
     <section
       ref={ref}
-      aria-label="Notifications"
+      aria-label={tr('ui.toast.notifications')}
       className="pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom)+8px)] expanded:bottom-6 expanded:pl-[calc(var(--bh-sidebar-w)+16px)]"
       data-toast-region=""
     >
@@ -187,7 +188,7 @@ const ToastRegion = ({
               )}
               {!toast.onUndo && (
                 <RACButton
-                  aria-label="Dismiss notification"
+                  aria-label={tr('ui.toast.dismissNotification')}
                   onPress={() => onDismiss(toast.id)}
                   className="grid size-11 shrink-0 place-items-center rounded-md text-ink-2 data-[hovered]:bg-sunken"
                 >

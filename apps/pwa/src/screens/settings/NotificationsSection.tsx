@@ -9,9 +9,10 @@
  */
 import type { AlertRulesPatch, PushCategory } from '@beamhop/core';
 import { Bell, BellSlash } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useApi, useCall, useMutationApi } from '../../api/index.ts';
-import { enablePush } from '../../api/push.ts';
+import { methodKey, useApi, useBeamhop, useConnection } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Switch } from '../../ui/Choice.tsx';
@@ -19,93 +20,96 @@ import { NumberField } from '../../ui/Field.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { useAlertRules } from '../audit/alerts.ts';
-import { requestPush, usePushEnv } from '../pair/push.tsx';
+import { turnOnPush, usePushDeviceId, usePushEnv, usePushPrefs } from '../pair/push.tsx';
 import { useThisDevice } from './DevicesSection.tsx';
 import { Group } from './kit.tsx';
 
 export const NotificationsSection = () => {
   const [env, refresh] = usePushEnv();
+  const conn = useConnection();
+  const { client } = useBeamhop();
   const devices = useApi('device.list');
   const me = useThisDevice(devices.data?.devices);
-  const call = useCall();
+  // Paired device id (hosted), "browser" (local daemon), or the demo's device.
+  const deviceId = usePushDeviceId();
+  const prefs = usePushPrefs(deviceId);
+  const toast = useToast();
+  const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
-  const toast = useToast();
   const alerts = useAlertRules();
   const a = alerts.rules;
   const set = (patch: AlertRulesPatch) =>
     void alerts.save(patch).catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
-  // Categories for THIS device ("browser" is the PWA served by the local daemon). Unset = on.
-  const deviceId = me?.id ?? 'browser';
-  const prefsQ = useApi('device.pushPrefs', { id: deviceId });
-  const prefsM = useMutationApi('device.pushPrefs', { invalidate: ['device.pushPrefs'] });
-  const cat = (c: PushCategory) => prefsQ.data?.prefs[c] ?? true;
+  // Categories for THIS device (`device.pushPrefs`); unset = on.
+  const cat = (c: PushCategory) => prefs.isOn(c);
   const setCat = (c: PushCategory, v: boolean) =>
-    prefsM
-      .mutateAsync({ id: deviceId, prefs: { [c]: v } })
-      .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+    prefs.set(c, v).catch(() => toast.show({ message: t('settings.ntf.prefFailed'), tone: 'error' }));
 
-  const on = env.permission === 'granted';
+  // On = the browser allows it AND the daemon holds a subscription for this device.
+  const on = env.permission === 'granted' && (me?.pushEnabled ?? true);
   const turnOn = async () => {
+    if (!deviceId) return;
     setBusy(true);
     try {
-      // Subscribe with the daemon's VAPID key (`device.pushKey`) and register it for this device.
-      const r = await enablePush({ call }, deviceId);
-      if (r === 'unsupported') await requestPush();
+      // device.pushKey → PushManager → device.pushSubscribe (a placeholder subscription in the demo).
+      const r = await turnOnPush(client, deviceId, { demo: conn.kind === 'mock' });
       refresh();
-      if (r === 'subscribed') haptic('confirm');
-    } catch (e) {
-      toast.show({ message: (e as Error).message, tone: 'error' });
+      await qc.invalidateQueries({ queryKey: methodKey('device.list') });
+      if (r === 'granted') {
+        haptic('confirm');
+        toast.show({ message: t('settings.ntf.onToast'), tone: 'success' });
+      }
+    } catch (err) {
+      toast.show({
+        message: t('settings.ntf.failed', { reason: String((err as Error).message ?? err) }),
+        tone: 'error',
+      });
     } finally {
       setBusy(false);
     }
   };
   const test = () => {
     try {
-      new Notification('beamhop · test', { body: 'Notifications work on this device.', tag: 'bh-test' });
-      setNote('Sent. It should appear in a moment.');
+      new Notification(t('settings.ntf.testTitle'), { body: t('settings.ntf.testBody'), tag: 'bh-test' });
+      setNote(t('settings.ntf.testSent'));
     } catch {
-      setNote('This browser only shows notifications from the installed app.');
+      setNote(t('settings.ntf.testInstalledOnly'));
     }
   };
 
   return (
     <div className="flex flex-col gap-8">
-      <Group title="This device" id="ntf-device">
+      <Group title={t('settings.ntf.thisDevice')} id="ntf-device">
         <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
           <div className="flex items-center gap-3">
             {on ? <Bell size={22} aria-hidden="true" /> : <BellSlash size={22} aria-hidden="true" />}
-            <span className="min-w-0 flex-1 type-title-3 text-ink">{me?.name ?? 'This browser'}</span>
+            <span className="min-w-0 flex-1 type-title-3 text-ink">
+              {me?.name ?? t('settings.ntf.thisBrowser')}
+            </span>
             <StatusDot
               state={on ? 'ready' : env.permission === 'denied' ? 'error' : 'stopped'}
               label={
                 on
-                  ? 'push on'
+                  ? t('settings.ntf.state.on')
                   : env.permission === 'denied'
-                    ? 'blocked'
+                    ? t('settings.ntf.state.blocked')
                     : env.permission === 'unsupported'
-                      ? 'unsupported'
-                      : 'push off'
+                      ? t('settings.ntf.state.unsupported')
+                      : t('settings.ntf.state.off')
               }
             />
           </div>
           {env.needsInstall ? (
-            <p className="type-body-sm text-ink-2">
-              iPhone sends alerts only to the installed app (iOS 16.4+). Tap Share, then Add to Home Screen,
-              and turn notifications on from there.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.needsInstall')}</p>
           ) : env.permission === 'unsupported' ? (
-            <p className="type-body-sm text-ink-2">
-              This browser can't show notifications. Use the Nostr DM fallback below.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.unsupported')}</p>
           ) : env.permission === 'denied' ? (
-            <p className="type-body-sm text-ink-2">
-              Blocked for this site. Allow notifications in your browser's site settings, then come back.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.denied')}</p>
           ) : on ? (
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="secondary" size="sm" onPress={test}>
-                Send a test notification
+                {t('settings.ntf.test')}
               </Button>
               {note && (
                 <span role="status" className="type-body-sm text-ink-2">
@@ -115,13 +119,17 @@ export const NotificationsSection = () => {
             </div>
           ) : (
             <>
-              <p className="type-body-sm text-ink-2">
-                Get approvals on this device? You'll be notified when an agent needs a decision, a budget runs
-                out, or an agent stops. Nothing else.
-              </p>
-              <Button variant="primary" className="self-start" isPending={busy} onPress={() => void turnOn()}>
-                Turn on notifications
+              <p className="type-body-sm text-ink-2">{t('settings.ntf.prePrompt')}</p>
+              <Button
+                variant="primary"
+                className="self-start"
+                isPending={busy}
+                isDisabled={!deviceId}
+                onPress={() => void turnOn()}
+              >
+                {t('settings.ntf.turnOn')}
               </Button>
+              {!deviceId && <p className="type-meta text-ink-2">{t('settings.ntf.noDevice')}</p>}
             </>
           )}
         </div>
@@ -134,7 +142,7 @@ export const NotificationsSection = () => {
             onChange={(v) => void setCat('approvals', v)}
             description="Always on the lock screen, with Allow / Deny where the platform supports it."
           >
-            Approvals waiting
+            {t('settings.ntf.approvals')}
           </Switch>
           <Switch
             isSelected={cat('budget')}
@@ -148,7 +156,7 @@ export const NotificationsSection = () => {
             onChange={(v) => void setCat('crash', v)}
             description="Exit codes and the last log line."
           >
-            Agent stopped unexpectedly
+            {t('settings.ntf.crash')}
           </Switch>
           <Switch
             isSelected={cat('security')}
@@ -217,14 +225,14 @@ export const NotificationsSection = () => {
             onChange={(v) => set({ quietHours: v })}
             description={`${a.quietStart}–${a.quietEnd} on your computer's clock. Security alerts still come through.`}
           >
-            Quiet hours
+            {t('settings.ntf.quiet')}
           </Switch>
           <Switch
             isSelected={a.nostrDm}
             onChange={(v) => set({ nostrDm: v })}
             description="The daemon also DMs owners over Nostr, so alerts arrive even where push isn't available."
           >
-            Nostr DM fallback
+            {t('settings.ntf.dm')}
           </Switch>
         </div>
       </Group>

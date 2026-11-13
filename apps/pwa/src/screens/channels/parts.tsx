@@ -1,6 +1,7 @@
 /** Small building blocks shared by the channel screens and the wizard. */
 import { ArrowUpRight, CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { forwardRef, type ReactNode } from 'react';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { type ButtonVariant, buttonClass } from '../../ui/Button.tsx';
 import { CopyButton } from '../../ui/CliStrip.tsx';
@@ -43,7 +44,7 @@ export const ExternalButton = ({
   >
     <span className="min-w-0 truncate">{children}</span>
     <ArrowUpRight size={18} weight="bold" aria-hidden="true" />
-    <span className="sr-only"> (opens in a new tab)</span>
+    <span className="sr-only"> {t('channels.parts.opensInANew')}</span>
   </a>
 );
 
@@ -129,13 +130,18 @@ export const IdentityCard = ({
       {note && <p className="mt-1 type-body-sm text-ink">{note}</p>}
     </div>
     {tone === 'neutral' ? null : tone === 'go' ? (
-      <CheckCircle size={22} weight="fill" className="shrink-0 text-go-text" aria-label="Valid" />
+      <CheckCircle
+        size={22}
+        weight="fill"
+        className="shrink-0 text-go-text"
+        aria-label={t('channels.parts.valid')}
+      />
     ) : (
       <WarningCircle
         size={22}
         weight="fill"
         className="shrink-0 text-caution-text"
-        aria-label="Valid with a warning"
+        aria-label={t('channels.parts.validWithAWarning')}
       />
     )}
   </div>
