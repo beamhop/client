@@ -20,8 +20,12 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 | Deployers (Hetzner, DO, Fly, Render, Railway)                 | —             | ⏳                   |
 | E2E, security suite, UX iteration                             | —             | ⏳                   |
 
+## Needs your attention
+- ⚠️ `OPENROUTER_API_KEY` in the cloud environment is **expired** (OpenRouter returns 401). OpenRouter live tests can't pass until it's replaced. opencode's free default model was used for real agent runs instead.
+
 ## Log
 
 - 01:10 — Phase 0 done: bubblewrap/socat installed, monorepo + core contracts (11 tests green), conventions. Wave A launched (6 builders + design research).
 - 01:40 — MCP + Telegram merged (108 tests green). Design direction CARRIER delivered. PWA foundation started.
 - 01:30 — sandbox/broker, store/authz, Slack/Discord merged: 500 tests green. Daemon builder + security reviewer launched.
+- 02:00 — Nostr, harnesses, deploy, security wave A merged: 742 tests green. Review wave B (channels/authz fuzzing) running. Daemon integrating everything.
