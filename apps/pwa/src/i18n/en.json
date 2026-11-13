@@ -2590,5 +2590,7 @@
   "agents.sandbox.testHint": "Checks each required host through this agent's sandbox.",
   "agents.sandbox.testOk": "reachable",
   "agents.sandbox.testBlocked": "blocked by the sandbox",
-  "agents.sandbox.testUnreachable": "not reachable ({detail})"
+  "agents.sandbox.testUnreachable": "not reachable ({detail})",
+  "agents.sandbox.userAllowStrict": "The strict profile ignores extra hosts. Switch to workspace to use an allowlist, or allow all network above.",
+  "agents.sandbox.testSkipped": "skipped: a wildcard, checked when a host under it is used"
 }

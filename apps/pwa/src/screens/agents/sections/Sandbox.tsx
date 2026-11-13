@@ -4,7 +4,14 @@
  * loosens enforcement), pending learning suggestions, and a hand-off to the full Policy editor.
  */
 import { type AgentView, SandboxPolicy, type SandboxProfileName } from '@beamhop/core';
-import { ArrowRight, CheckCircle, ShieldCheck, Warning, XCircle } from '@phosphor-icons/react';
+import {
+  ArrowRight,
+  CheckCircle,
+  MinusCircle,
+  PlugsConnected,
+  ShieldCheck,
+  XCircle,
+} from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useMutationApi } from '../../../api/index.ts';
 import { t } from '../../../i18n/index.ts';
@@ -101,7 +108,9 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
       <Block
         id="sb-allowlist"
         title={t('agents.sandbox.userAllow')}
-        description={t('agents.sandbox.userAllowHint')}
+        description={
+          profile === 'strict' ? t('agents.sandbox.userAllowStrict') : t('agents.sandbox.userAllowHint')
+        }
       >
         {userAllow.length === 0 ? (
           <p className="type-body-sm text-ink-2">{t('agents.sandbox.userAllowNone')}</p>
@@ -144,7 +153,11 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
               mono
             />
           </div>
-          <Button type="submit" variant="secondary" isDisabled={!host.trim() || save.isPending}>
+          <Button
+            type="submit"
+            variant="secondary"
+            isDisabled={!host.trim() || save.isPending || profile === 'strict'}
+          >
             {t('agents.sandbox.addHost')}
           </Button>
         </form>
@@ -166,7 +179,7 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
                   <Button
                     size="sm"
                     variant="allow"
-                    isDisabled={apply.isPending}
+                    isDisabled={apply.isPending || profile === 'strict'}
                     onPress={() => void decide(b.id, true)}
                   >
                     {t('agents.sandbox.allow')}
@@ -209,7 +222,7 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="secondary"
-            icon={<Warning size={18} aria-hidden="true" />}
+            icon={<PlugsConnected size={18} aria-hidden="true" />}
             isDisabled={test.isPending}
             onPress={() => void runTest()}
           >
@@ -225,7 +238,9 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
                 className="flex flex-wrap items-center gap-2 type-body-sm text-ink"
               >
                 {r.status === 'ok' ? (
-                  <CheckCircle size={16} aria-hidden="true" className="text-allow-text" />
+                  <CheckCircle size={16} aria-hidden="true" className="text-go-text" />
+                ) : r.status === 'skipped' ? (
+                  <MinusCircle size={16} aria-hidden="true" className="text-ink-2" />
                 ) : (
                   <XCircle size={16} aria-hidden="true" className="text-stop-text" />
                 )}
@@ -235,7 +250,9 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
                     ? t('agents.sandbox.testOk')
                     : r.status === 'blocked'
                       ? t('agents.sandbox.testBlocked')
-                      : t('agents.sandbox.testUnreachable', { detail: r.detail ?? '' })}
+                      : r.status === 'skipped'
+                        ? t('agents.sandbox.testSkipped')
+                        : t('agents.sandbox.testUnreachable', { detail: r.detail ?? '' })}
                 </span>
               </li>
             ))}
@@ -271,7 +288,7 @@ export const SandboxSection = ({ agent }: { agent: AgentView }) => {
   const eff = policy.data?.effective;
   // While the profile is being changed, preview the new reach instead of the compiled one.
   const reach = reachOf(c, c.sandbox.profile === agent.config.sandbox.profile ? eff : undefined);
-  const pending = suggestions.data?.suggestions.length ?? 0;
+  const pending = (suggestions.data?.suggestions ?? []).filter((s) => s.kind !== 'net.allow').length;
 
   const setLearning = (on: boolean) => {
     if (!eff || !policy.data) return;

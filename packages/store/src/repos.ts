@@ -512,7 +512,10 @@ export class PolicySuggestionRepo {
     };
   }
 
-  /** Record an srt violation seen in learning mode; repeated values bump the count. */
+  /**
+   * Record an srt violation; repeated values bump the count. A value accepted earlier but seen again is
+   * no longer covered by the policy (the rule was removed), so it is offered again; a rejected one is not.
+   */
   record(
     agent: string,
     kind: PolicySuggestion['kind'],
@@ -521,7 +524,8 @@ export class PolicySuggestionRepo {
   ): PolicySuggestion {
     this.db.run(
       `INSERT INTO policy_suggestions (id, agent, kind, value, count, last_seen_at) VALUES (?, ?, ?, ?, 1, ?)
-       ON CONFLICT(agent, kind, value) DO UPDATE SET count = count + 1, last_seen_at = excluded.last_seen_at`,
+       ON CONFLICT(agent, kind, value) DO UPDATE SET count = count + 1, last_seen_at = excluded.last_seen_at,
+         status = CASE WHEN status = 'accepted' THEN 'open' ELSE status END`,
       newId('pol'),
       agent,
       kind,

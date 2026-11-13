@@ -169,7 +169,10 @@ export interface SubmitInput {
 
 /** Failure text that points at the network (a dropped or refused connection), not at the model. */
 const NETWORK_FAILURE =
-  /routing discovery|reconnect|connect|network|dns|tls|certificate|proxy|timed? ?out|fetch|sandbox/i;
+  /routing discovery|reconnect|connect|network|dns|tls|certificate|proxy|timed? ?out|fetch failed|econn|enotfound/i;
+
+const blockedNote = (hosts: string[]): string =>
+  `Blocked by the sandbox: ${hosts.join(', ')}. Allow ${hosts.length === 1 ? 'it' : 'them'} in the agent's Sandbox settings (Blocked), then send the message again.`;
 
 export class SessionManager {
   private readonly lives = new Map<string, LiveSession>();
@@ -184,23 +187,38 @@ export class SessionManager {
 
   constructor(private readonly d: Daemon) {}
 
-  /**
-   * A harness failure, with the sandbox's refusals named when there were any: the harness only sees a
-   * dropped connection, so the user needs the host to act on.
-   */
-  private async explainError(sessionId: string, agent: AgentConfig, message: string): Promise<string> {
+  /** The failure text, with the hosts the sandbox refused during this turn named (when known yet). */
+  private explainError(sessionId: string, message: string): string {
     const hosts = [...(this.blockedHosts.get(sessionId) ?? [])];
+    if (hosts.length === 0) return message;
+    return `${message}\n${blockedNote(hosts)}`;
+  }
+
+  /**
+   * After a failed turn, explain a network cause the error text did not name: a refusal the proxy reported
+   * a moment after the failure, or (for a connection-level failure with no refusal at all, e.g. a system
+   * TLS call the sandbox blocks silently) the harness's own hosts that do not answer through the sandbox.
+   * Runs after the error is shown, so it never delays it; adds one system event at most.
+   */
+  private async diagnoseFailure(live: LiveSession, agent: AgentConfig, message: string, named: boolean) {
+    await new Promise((ok) => setTimeout(ok, 500));
+    const hosts = [...(this.blockedHosts.get(live.id) ?? [])];
+    if (named) return;
     if (hosts.length > 0) {
-      const it = hosts.length === 1 ? 'it' : 'them';
-      return `${message}\nBlocked by the sandbox: ${hosts.join(', ')}. Allow ${it} under the agent's Sandbox settings, then send the message again.`;
+      this.event(live.id, { kind: 'system', text: blockedNote(hosts) });
+      return;
     }
-    // Nothing was refused by name, but a connection-level failure can still be the sandbox (for example a
-    // system TLS call it blocks silently). Probe the harness's hosts and name the ones that do not answer.
-    if (!NETWORK_FAILURE.test(message)) return message;
-    const bad = await unreachableRequired(this.d, agent).catch(() => []);
-    if (bad.length === 0) return message;
-    const list = bad.map((b) => `${b.host} (${b.detail ?? b.status})`).join(', ');
-    return `${message}\nCould not reach: ${list}. Run Test under the agent's Sandbox settings for details.`;
+    if (!NETWORK_FAILURE.test(message)) return;
+    const bad = await unreachableRequired(this.d, agent).catch((e) => {
+      this.d.log.debug('connection check failed', { session: live.id, error: errMsg(e) });
+      return [];
+    });
+    if (bad.length === 0) return;
+    const list = bad.map((b) => `${b.host} (${b.detail ?? b.status})`).join('; ');
+    this.event(live.id, {
+      kind: 'system',
+      text: `Connection check: the sandbox cannot reach ${list}. Open the agent's Sandbox settings and run Test connections.`,
+    });
   }
 
   live(id: string): LiveSession | undefined {
@@ -608,6 +626,7 @@ export class SessionManager {
     }
     await rt.sandbox.close().catch(() => {});
     await rt.homeSync?.stop().catch(() => {});
+    this.blockedHosts.delete(live.id);
   }
 
   // ───────────────────────────── turns ─────────────────────────────
@@ -734,6 +753,8 @@ export class SessionManager {
     let text = '';
     let error: string | undefined;
     let retryNotice = false;
+    let errorNamedHosts = false;
+    this.blockedHosts.delete(live.id);
     let watchdog: NodeJS.Timeout | undefined;
     const pendingPerms: Promise<void>[] = [];
     const transcript = new AssistantStream(this, live.id);
@@ -851,7 +872,11 @@ export class SessionManager {
           case 'error':
             transcript.close();
             error = ev.message;
-            this.event(live.id, { kind: 'error', text: await this.explainError(live.id, agent, ev.message) });
+            {
+              const shown = this.explainError(live.id, ev.message);
+              errorNamedHosts = shown !== ev.message;
+              this.event(live.id, { kind: 'error', text: shown });
+            }
             break;
           case 'done':
             if (ev.resume) d.store.sessions.update(live.id, { resume: ev.resume });
@@ -861,9 +886,10 @@ export class SessionManager {
     } catch (e) {
       transcript.close();
       error = errMsg(e);
-      this.event(live.id, { kind: 'error', text: await this.explainError(live.id, agent, error) });
+      const shown = this.explainError(live.id, error);
+      errorNamedHosts = shown !== error;
+      this.event(live.id, { kind: 'error', text: shown });
     } finally {
-      this.blockedHosts.delete(live.id);
       if (watchdog) clearTimeout(watchdog);
       for (const l of locks) l();
       const stopped = abort.signal.aborted;
@@ -872,6 +898,7 @@ export class SessionManager {
       release();
       transcript.close();
       // A turn that failed on its own (not stopped, not the session watchdog) is an agent crash (§9B).
+      if (error && !stopped) void this.diagnoseFailure(live, agent, error, errorNamedHosts);
       if (error && !stopped)
         d.audit({
           type: 'agent.crash',

@@ -17,7 +17,7 @@ export interface RequiredHost {
   source: string;
 }
 
-export type HostStatus = 'ok' | 'blocked' | 'unreachable';
+export type HostStatus = 'ok' | 'blocked' | 'unreachable' | 'skipped';
 
 export interface HostResult extends RequiredHost {
   status: HostStatus;
@@ -94,6 +94,10 @@ export const probeHosts = async (
   try {
     const results: HostResult[] = [];
     for (const r of required) {
+      if (r.host.startsWith('*.')) {
+        results.push({ ...r, status: 'skipped', detail: 'a wildcard; checked when a host under it is used' });
+        continue;
+      }
       const res = await curlHost((c, a) => sb.wrap(c, a), r.host);
       // The violation is reported by the proxy a moment after the refused request.
       await new Promise((ok) => setTimeout(ok, 150));
@@ -112,5 +116,7 @@ export const probeHosts = async (
 /** Required hosts that the sandbox cannot reach, for a failure message. Empty when all are fine. */
 export const unreachableRequired = async (d: Daemon, agent: AgentConfig): Promise<HostResult[]> => {
   const required = await requiredHosts(d, agent.harness);
-  return (await probeHosts(d, agent, required)).filter((r) => r.status !== 'ok');
+  return (await probeHosts(d, agent, required)).filter(
+    (r) => r.status === 'blocked' || r.status === 'unreachable',
+  );
 };

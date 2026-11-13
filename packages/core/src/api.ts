@@ -730,7 +730,7 @@ export const methods = {
         z.object({
           host: z.string(),
           source: z.string(),
-          status: z.enum(['ok', 'blocked', 'unreachable']),
+          status: z.enum(['ok', 'blocked', 'unreachable', 'skipped']),
           detail: z.string().optional(),
         }),
       ),

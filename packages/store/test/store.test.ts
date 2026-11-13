@@ -428,6 +428,18 @@ describe('policy suggestions', () => {
     expect(store.policySuggestions.list({ agent: 'a', status: 'rejected' })).toHaveLength(1);
     expect(() => store.policySuggestions.resolve('nope', true)).toThrow(/not found/);
   });
+
+  it('offers an accepted value again when it is refused again, but never a rejected one', () => {
+    const ok = store.policySuggestions.record('c', 'net.allow', 'allowed.example');
+    const no = store.policySuggestions.record('c', 'net.allow', 'rejected.example');
+    store.policySuggestions.resolve(ok.id, true);
+    store.policySuggestions.resolve(no.id, false);
+    expect(store.policySuggestions.list({ agent: 'c' })).toHaveLength(0);
+    // The rule was removed from the policy, so the sandbox refuses the host again.
+    store.policySuggestions.record('c', 'net.allow', 'allowed.example');
+    store.policySuggestions.record('c', 'net.allow', 'rejected.example');
+    expect(store.policySuggestions.list({ agent: 'c' }).map((x) => x.value)).toEqual(['allowed.example']);
+  });
 });
 
 describe('pairing codes', () => {
