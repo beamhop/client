@@ -356,7 +356,7 @@ It refused only `transport === 'nostr'`. It now requires `caller === 'local'` on
 ```
 pnpm run typecheck                         # clean
 pnpm run lint                              # clean
-pnpm vitest run                            # see final report
+pnpm vitest run                            # 75 files, 1076 passed, 1 skipped (one load-related NOS-1 timeout passes alone)
 node scripts/check-no-secrets.mjs          # clean
 (cd apps/pwa && pnpm run typecheck && pnpm run test && pnpm run build)
 (cd apps/pwa && pnpm exec playwright test e2e/smoke.spec.ts e2e/pair.spec.ts --project=desktop)  # 54 passed
