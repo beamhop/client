@@ -86,7 +86,11 @@ const main = async () => {
     child = spawn(w.argv[0], w.argv.slice(1), { shell: false, stdio: 'inherit', env: w.env });
   } else {
     const wrapped = await SandboxManager.wrapWithSandbox(command, undefined, undefined, undefined, options);
-    child = spawn(wrapped, { shell: true, stdio: 'inherit' });
+    // On Linux srt returns `bwrap --die-with-parent ...`. `exec` it so bwrap's parent is *this*
+    // runner, not an intermediate /bin/sh: otherwise a SIGKILL of the runner (daemon crash, hard
+    // stop) orphans the shell, bwrap's parent stays alive and the whole sandbox keeps running.
+    const direct = process.platform === 'linux' && /^bwrap\s/.test(wrapped);
+    child = spawn(direct ? `exec ${wrapped}` : wrapped, { shell: true, stdio: 'inherit' });
   }
 
   const forward = (sig) => () => child.kill(sig);

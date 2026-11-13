@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, win32 } from 'node:path';
@@ -185,7 +185,14 @@ export const createSandbox = async (
     throw new BeamhopError('invalid_input', `Invalid sandbox policy: ${valid.error.message}`);
   }
 
-  const dir = mkdtempSync(join(opts.tmpDir ?? tmpdir(), 'bh-sbx-'));
+  const dir = realpathSync(mkdtempSync(join(opts.tmpDir ?? tmpdir(), 'bh-sbx-')));
+  // The runner's config and the violation socket are host-side only: hide them from the sandbox
+  // (the config reveals the full policy; a writable/connectable socket would allow forged
+  // learning-mode suggestions on platforms where srt does not block AF_UNIX).
+  if (backend !== 'wsl2') {
+    srtConfig.filesystem.denyRead.push(dir);
+    srtConfig.filesystem.denyWrite.push(dir);
+  }
   const seen: Violation[] = [];
   const listeners = new Set<(v: Violation) => void>();
   const vserver = await startViolationServer(dir, (msg) => {

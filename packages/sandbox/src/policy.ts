@@ -62,6 +62,22 @@ export const PRIVATE_IP_RANGES = [
   'fe80::/10',
 ] as const;
 
+/**
+ * True for allow entries that would open the *host's* loopback through srt's proxy: the reserved
+ * `localhost` names (srt lets them resolve to loopback by design) and loopback / unspecified IP
+ * literals. That would expose every local service (daemon API, other sessions' MCP bridges, dev
+ * servers). Host-loopback access is only granted per `ip:port` via `localAllow` (e.g. the broker).
+ */
+export const isLoopbackAllowEntry = (entry: string): boolean => {
+  let h = entry.trim().toLowerCase();
+  const m = /^\[([^\]]+)\](?::\d+)?$/.exec(h);
+  if (m?.[1]) h = m[1];
+  else if ((h.match(/:/g) ?? []).length === 1) h = h.replace(/:\d+$/, '');
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  if (/^(127|0)\.\d+\.\d+\.\d+(\/\d+)?$/.test(h)) return true;
+  return h === '::1' || h === '::' || h.startsWith('::ffff:127.') || h.startsWith('::ffff:0.');
+};
+
 export interface PathOptions {
   /** Home directory used to expand `~` (default: os.homedir()). */
   home?: string;
@@ -113,7 +129,8 @@ export type PolicyOverrides = {
  *
  * Always: ALWAYS_DENY_READ is merged into fs.deny (expanded), `denyPrivateIps` is on, and
  * deny wins over allow (read/write entries inside a denied path are dropped; network allow
- * entries that are also denied are dropped).
+ * entries that are also denied are dropped). Loopback names/literals are never allow-listed
+ * (see `isLoopbackAllowEntry`); use `localAllow` with an explicit `ip:port` instead.
  */
 export const compilePolicy = (
   profile: SandboxProfileName,
@@ -155,7 +172,7 @@ export const compilePolicy = (
 
   const netDeny = uniq((o.net?.deny ?? []).map((h) => h.trim().toLowerCase()).filter(Boolean));
   const netAllow = uniq(allow.map((h) => h.trim().toLowerCase()).filter(Boolean)).filter(
-    (h) => !netDeny.includes(h),
+    (h) => !netDeny.includes(h) && !isLoopbackAllowEntry(h),
   );
 
   return SandboxPolicy.parse({
