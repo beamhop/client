@@ -408,6 +408,13 @@ async function run(): Promise<void> {
     isAllowedPermission(permission, origin, daemonUrl),
   );
 
+  // The UI is the daemon's PWA. Its service worker would keep serving the screens cached by an earlier
+  // build (it only offers a "Reload" toast), but here the UI and the daemon always update together:
+  // drop its worker and caches so every launch shows this build's UI. Local storage (the session) stays.
+  await session.defaultSession
+    .clearStorageData({ origin: new URL(daemonUrl).origin, storages: ['serviceworkers', 'cachestorage'] })
+    .catch((e: Error) => console.warn(`beamhop desktop: could not clear the UI cache: ${e.message}`));
+
   if (!existsSync(join(daemonDir, 'bin', 'beamhopd.js')))
     console.warn(`beamhop desktop: no bundled daemon at ${daemonDir}; can only attach to a running one`);
 
