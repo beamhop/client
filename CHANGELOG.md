@@ -32,6 +32,17 @@ All notable changes to beamhop are documented here. The format follows
 - **Chat with any agent from its page.** A Chat button sits next to Stop. An agent no channel can reach says
   so at the top of its page ("Only you can reach it, here in the app") with Connect a channel and Chat.
 
+### Fixed
+
+- **Links from Home's first-run screen** (`/agents/new?preset=…`) now open on that preset.
+- **External links open where they point.** "Open the pull request" and other full URLs went to a path in
+  the app instead of GitHub.
+- **Retry after a screen fails to load** now loads it, instead of showing the same error until a reload.
+- **The panic "Note for the audit log"** is saved with the resume event (`system.resume` takes `note`).
+- **"Dismiss" on a "Blocked by design" learning card** works.
+- **Activity → Log** no longer retries a failed page of older events many times a second.
+- **"Budget alert at"** keeps round numbers (typing 70 saved 71).
+
 ## [0.3.0] - 2026-11-13
 
 ### Added

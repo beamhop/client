@@ -705,8 +705,8 @@ export class ApiHandlers {
         await d.panic(p.reason, this.principal(ctx));
         return OK;
       },
-      'system.resume': async (_p, ctx) => {
-        await d.resume(this.principal(ctx));
+      'system.resume': async (p, ctx) => {
+        await d.resume(this.principal(ctx), p.note);
         return OK;
       },
 

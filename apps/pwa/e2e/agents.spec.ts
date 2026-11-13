@@ -6,6 +6,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { settle } from './helpers.ts';
 
 const open = async (page: Page, path: string) => {
   const sep = path.includes('?') ? '&' : '?';
@@ -18,6 +19,7 @@ const axe = async (page: Page) => {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow, 'horizontal page overflow (px)').toBeLessThanOrEqual(0);
+  await settle(page);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
@@ -324,15 +326,13 @@ test.describe('screenshots', () => {
             fullPage: true,
           });
       }
-      // New-agent steps + an edit in progress + the webhook secret
+      // The one-page new-agent form + an edit in progress
       await open(page, '/agents/new');
-      await page.getByRole('button', { name: 'Continue · Harness' }).click();
       await page.waitForTimeout(300);
-      await page.screenshot({ path: `screenshots/${info.project.name}/agents_new_harness${suffix}.png` });
-      await page.getByRole('button', { name: 'Continue · Folders' }).click();
-      await page.getByRole('button', { name: /Skip · Review/ }).click();
-      await page.waitForTimeout(300);
-      await page.screenshot({ path: `screenshots/${info.project.name}/agents_new_review${suffix}.png` });
+      await page.screenshot({
+        path: `screenshots/${info.project.name}/agents_new_full${suffix}.png`,
+        fullPage: true,
+      });
       await open(page, '/agents/reviewer/abilities');
       await page.getByRole('radio', { name: 'Read-write' }).nth(1).click();
       await page.getByRole('button', { name: 'Review & save' }).click();

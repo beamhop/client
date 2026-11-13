@@ -5,6 +5,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { settle } from './helpers.ts';
 
 // Built at runtime so no token-shaped literal is committed.
 const tgToken = () => `${'7'.repeat(9)}:${'Ab3_'.repeat(9)}`;
@@ -20,6 +21,7 @@ const open = async (page: Page, path: string) => {
 };
 
 const axe = async (page: Page) => {
+  await settle(page);
   const r = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

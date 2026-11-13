@@ -5,6 +5,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { settle } from './helpers.ts';
 
 const open = async (page: Page, path: string) => {
   const sep = path.includes('?') ? '&' : '?';
@@ -17,6 +18,7 @@ const axe = async (page: Page) => {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow, 'horizontal page overflow (px)').toBeLessThanOrEqual(0);
+  await settle(page);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

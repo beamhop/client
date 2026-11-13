@@ -90,15 +90,18 @@ export const LogTab = () => {
   const loadRef = useRef(loadMore);
   loadRef.current = loadMore;
 
+  // One observer while there is more to load. Never auto-retry a failed page: after an error only the
+  // visible Retry button loads again (a fresh observer per render fired at once and looped).
+  const autoLoad = hasMore && !olderError;
   useEffect(() => {
     const el = sentinel.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
+    if (!autoLoad || !el || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver((es) => es[0]?.isIntersecting && void loadRef.current(), {
       rootMargin: '400px 0px',
     });
     io.observe(el);
     return () => io.disconnect();
-  });
+  }, [autoLoad]);
 
   const types = useMemo(() => [...new Set(all.map((e) => e.type))].sort(), [all]);
   const shown = all.filter((e) =>

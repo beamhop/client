@@ -1,5 +1,5 @@
 /**
- * New Agent flow against the real daemon: the agent exists on the daemon and as YAML on disk; the
+ * New Agent (one page) against the real daemon: the agent exists on the daemon and as YAML on disk; the
  * Folders step browses the daemon's real directories (`fs.list`, under its home directory).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -10,14 +10,8 @@ test('create an agent with the New Agent flow → agent.get + agents/<name>.yaml
   await bh.open(page, '/agents/new');
   await axe(page);
   await page.getByRole('textbox', { name: 'Name' }).fill('scout');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
-  await expect(page.getByRole('heading', { name: 'Which harness runs it?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Which AI account should it use?' })).toBeVisible();
   await page.getByText('Fake Harness', { exact: true }).first().click();
-  await axe(page);
-  await page.getByRole('button', { name: 'Continue · Folders' }).click();
-  await axe(page);
-  await page.getByRole('button', { name: /Skip · Review|Continue · Review/ }).click();
-  await expect(page.getByRole('heading', { name: 'Check and create' })).toBeVisible();
   await axe(page);
   await page.getByRole('button', { name: 'Create scout', exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/scout/);
@@ -36,8 +30,9 @@ test('create an agent with the New Agent flow → agent.get + agents/<name>.yaml
 test('a name the daemon already has is caught before creating', async ({ page, bh }) => {
   await bh.open(page, '/agents/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('bot');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
+  await page.getByRole('button', { name: 'Create bot', exact: true }).click();
   await expect(page.getByText(/bot already exists/).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/agents\/new/);
   const { agents } = await bh.rpc<{ agents: unknown[] }>('agent.list');
   expect(agents).toHaveLength(1);
 });
@@ -62,9 +57,7 @@ test('New Agent → Folders → Browse lists the daemon’s real directories (fs
 
   await bh.open(page, '/agents/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('reader');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
   await page.getByText('Fake Harness', { exact: true }).first().click();
-  await page.getByRole('button', { name: 'Continue · Folders' }).click();
   await page.getByRole('button', { name: 'Add folder' }).click();
   await page.getByRole('button', { name: 'Browse' }).click();
 
@@ -87,7 +80,6 @@ test('New Agent → Folders → Browse lists the daemon’s real directories (fs
   await expect(page.getByRole('list', { name: /folder/i }).getByText('~/projects/site')).toBeVisible();
   await axe(page);
 
-  await page.getByRole('button', { name: 'Continue · Review' }).click();
   await page.getByRole('button', { name: 'Create reader', exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/reader/);
   const a = await bh.rpc<{ config: { mounts: { path: string; mode: string }[] } }>('agent.get', {

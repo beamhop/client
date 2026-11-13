@@ -87,7 +87,8 @@ const SuggestionSlip = ({
               locked ? (
                 <div className="flex items-center justify-between gap-2 pl-1">
                   <p className="type-body-sm text-ink-2">{t('policy.learn.lockedNote')}</p>
-                  <Button variant="secondary" size="sm" onPress={() => commit('left')}>
+                  {/* The card can't be swiped (locked), so the button decides directly. */}
+                  <Button variant="secondary" size="sm" onPress={keep}>
                     {t('policy.learn.dismiss')}
                   </Button>
                 </div>

@@ -162,7 +162,10 @@ export const useCreateAgent = ({ onCreated }: { onCreated: (r: CreatedAgent) => 
   const taken = useMemo(() => (agentsQ.data?.agents ?? []).map((a) => a.config.name), [agentsQ.data]);
   const options = useMemo(() => listenOptions(channelsQ.data?.channels ?? []), [channelsQ.data]);
 
-  const [presetId, setPresetId] = useState('personal-assistant');
+  // `/agents/new?preset=code-reviewer` (Home's first-run links) starts on that preset.
+  const [presetId, setPresetId] = useState(
+    () => new URLSearchParams(window.location.search).get('preset') ?? 'personal-assistant',
+  );
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [harness, setHarness] = useState('');
@@ -173,6 +176,10 @@ export const useCreateAgent = ({ onCreated }: { onCreated: (r: CreatedAgent) => 
   const [tried, setTried] = useState(false);
   const [scratchProfile, setScratchProfile] = useState<'strict' | 'workspace'>('workspace');
 
+  useEffect(() => {
+    if (presets.length && presetId !== SCRATCH && !presets.some((p) => p.id === presetId))
+      setPresetId('personal-assistant');
+  }, [presets, presetId]);
   const scratch = presetId === SCRATCH;
   const preset = presets.find((p) => p.id === presetId);
   const meta = PRESET_META[presetId];

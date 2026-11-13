@@ -184,7 +184,8 @@ export const NotificationsSection = () => {
           <NumberField
             label="Budget alert at"
             unit="% of the daily budget"
-            minValue={1}
+            // With step 5 the steps start at minValue: 5 keeps them on round numbers (70, not 71).
+            minValue={5}
             maxValue={a.budgetAlert}
             step={5}
             value={a.budgetWarn}

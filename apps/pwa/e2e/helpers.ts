@@ -10,7 +10,34 @@ export const open = async (page: Page, path: string) => {
 };
 
 /** axe (serious/critical) on whatever is on screen now, e.g. with a sheet open. */
+/**
+ * Wait until nothing is mid-animation: sheets and dialogs fade in, and axe measuring colour contrast on a
+ * half-transparent dialog reports failures that no user ever sees.
+ */
+export const settle = async (page: Page) => {
+  await page
+    .waitForFunction(
+      () => {
+        const running = document
+          .getAnimations()
+          .some((a) => a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity);
+        if (running) return false;
+        for (const d of document.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
+          for (let el: Element | null = d; el; el = el.parentElement)
+            if (Number(getComputedStyle(el).opacity) < 1) return false;
+          const t = getComputedStyle(d).transform;
+          if (t && t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)') return false;
+        }
+        return true;
+      },
+      null,
+      { timeout: 4000, polling: 50 },
+    )
+    .catch(() => {});
+};
+
 export const expectAccessible = async (page: Page) => {
+  await settle(page);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

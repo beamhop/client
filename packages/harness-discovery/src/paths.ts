@@ -37,12 +37,21 @@ export const expandPath = (p: string, host: HostInfo): string | undefined => {
 };
 
 /** Directories that commonly contain globally installed CLIs, in priority order (PATH first). */
-export const searchDirs = (host: HostInfo, extra: string[] = []): string[] => {
+export const searchDirs = (
+  host: HostInfo,
+  extra: string[] = [],
+  opts: { wellKnown?: boolean } = {},
+): string[] => {
   const P = pathMod(host.platform);
   const { env, home } = host;
   const sep = host.platform === 'win32' ? ';' : ':';
   const pathVar = env.PATH ?? env.Path ?? '';
   const dirs: (string | undefined)[] = [...pathVar.split(sep)];
+  // `wellKnown: false`: PATH and the given dirs only (tests that must not see what this machine has).
+  if (opts.wellKnown === false) {
+    for (const e of extra) dirs.push(expandPath(e, host));
+    return [...new Set(dirs.filter((d): d is string => !!d?.trim()).map((d) => P.normalize(d.trim())))];
+  }
   const npmPrefix = env.npm_config_prefix ?? env.NPM_CONFIG_PREFIX;
   if (host.platform === 'win32') {
     dirs.push(

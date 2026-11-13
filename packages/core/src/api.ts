@@ -436,7 +436,11 @@ export const methods = {
   /** Who "you" are for this connection (local → owner; a paired device → its owner link). */
   'system.whoami': { params: empty, result: WhoamiView },
   'system.panic': { params: z.object({ reason: z.string().optional() }).default({}), result: ok },
-  'system.resume': { params: empty, result: ok },
+  /** `note` (optional): the owner's words for the audit log, kept with the resume event. */
+  'system.resume': {
+    params: z.object({ note: z.string().max(2000).optional() }).default({}),
+    result: ok,
+  },
   /**
    * Apply a doctor fix by its action id (local only). Admin fixes go through the OS prompt (macOS admin
    * dialog, pkexec); `elevate: 'none'` refuses them instead (the CLI then offers sudo itself).

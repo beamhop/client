@@ -4,6 +4,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { settle } from './helpers.ts';
 
 const open = async (page: Page, path: string) => {
   await page.goto(`${path}?mock=1&still=1`);
@@ -11,6 +12,7 @@ const open = async (page: Page, path: string) => {
 };
 
 const axe = async (page: Page) => {
+  await settle(page);
   const r = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();

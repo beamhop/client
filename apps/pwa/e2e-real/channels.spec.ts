@@ -45,9 +45,15 @@ test('add a plugin channel via the wizard, pair an owner, join an agent', async 
   // Pair: the wizard shows a code; the owner sends it to the bot from their account.
   await expect(page).toHaveURL(/\/channels\/add\/fake\/4/);
   await expect(page.getByText(/Waiting for \/pair/).first()).toBeVisible();
-  const main = (await page.locator('#bh-main-content').last().textContent()) ?? '';
-  const code = /\/pair\s*([A-Z2-9]{6})/.exec(main)?.[1] ?? '';
-  expect(code).toMatch(/^[A-Z2-9]{6}$/);
+  // The code is issued a moment after the step shows: wait for it rather than read the page once.
+  let code = '';
+  await expect
+    .poll(async () => {
+      const main = (await page.locator('#bh-main-content').last().textContent()) ?? '';
+      code = /\/pair\s*([A-Z2-9]{6})/.exec(main)?.[1] ?? '';
+      return code;
+    })
+    .toMatch(/^[A-Z2-9]{6}$/);
   await axe(page);
   await bh.inject({
     channel: added.config.name,

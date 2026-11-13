@@ -34,6 +34,8 @@ export interface ScanOptions {
   includeMissing?: boolean;
   /** Extra directories to search. */
   extraDirs?: string[];
+  /** Also search the usual install places (/usr/local/bin, Homebrew, ~/.local/bin…). Default true. */
+  wellKnownDirs?: boolean;
   /** beamhop home, whose `harnesses/` folder holds beamhop-installed harnesses (default $BEAMHOP_HOME or ~/.beamhop). */
   beamhopHome?: string;
   /** Restrict to these catalog ids. */
@@ -117,11 +119,15 @@ export const scanBeamhopHome = (
 /** Directories to search for `entry`: PATH and the usual places, its install dirs, then beamhop's own. */
 export const harnessSearchDirs = (entry: CatalogEntry, opts: ScanOptions = {}): string[] => {
   const host = hostFrom(opts);
-  return searchDirs(host, [
-    ...(opts.extraDirs ?? []),
-    ...entry.installDirs,
-    ...managedDirs(scanBeamhopHome(opts), entry.id, host.platform),
-  ]);
+  return searchDirs(
+    host,
+    [
+      ...(opts.extraDirs ?? []),
+      ...entry.installDirs,
+      ...managedDirs(scanBeamhopHome(opts), entry.id, host.platform),
+    ],
+    { wellKnown: opts.wellKnownDirs !== false },
+  );
 };
 
 /** A detection plus whether beamhop installed it (under <beamhop home>/harnesses). */

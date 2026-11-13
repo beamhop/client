@@ -15,12 +15,17 @@ declare module 'react-aria-components' {
   }
 }
 
+/** A URL with its own scheme (https:, mailto:, nostr:…), not a path in this app. */
+const EXTERNAL = /^[a-z][a-z0-9+.-]*:/i;
+
 export const Root = () => {
   const router = useRouter();
   return (
     <AriaRouterProvider
       navigate={(href, opts) => router.navigate({ ...(opts ?? {}), href })}
-      useHref={(href) => router.buildLocation({ href } as never).href}
+      // External links (GitHub compare pages, docs, provider consoles) keep their own origin: the router
+      // only knows in-app paths and would turn https://github.com/… into /…
+      useHref={(href) => (EXTERNAL.test(href) ? href : router.buildLocation({ href } as never).href)}
     >
       <ToastProvider>
         <PanicProvider>

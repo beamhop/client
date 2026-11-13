@@ -55,7 +55,7 @@ const ResumeReview = ({ since }: { since?: string }) => {
       for (const s of schedules.data?.schedules ?? [])
         if (!picked.has(`schedule:${s.id}`) && s.enabled && !s.paused)
           await call('schedule.update', { id: s.id, patch: { paused: true } });
-      await call('system.resume');
+      await call('system.resume', note.trim() ? { note: note.trim() } : {});
       for (const k of picked) {
         const [kind, id] = k.split(':') as [string, string];
         if (kind === 'agent') await call('agent.start', { name: id });

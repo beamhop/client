@@ -485,7 +485,15 @@ describe('harness install API', () => {
     env = await makeEnv({
       plugins: {
         discovery: {
-          scan: () => scanHarnesses({ beamhopHome: home, env: { PATH: '' }, home, only: ['gemini'] }),
+          // Only beamhop's own folders: a Gemini CLI installed on this machine must not count.
+          scan: () =>
+            scanHarnesses({
+              beamhopHome: home,
+              env: { PATH: '' },
+              home,
+              only: ['gemini'],
+              wellKnownDirs: false,
+            }),
         },
       },
       harnessTools: {

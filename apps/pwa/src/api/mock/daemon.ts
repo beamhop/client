@@ -608,14 +608,20 @@ export class MockDaemon {
       this.emit({ type: 'panic', active: true });
       return OK;
     },
-    'system.resume': () => {
+    'system.resume': (p) => {
       const st = this.state;
+      const why = (p as { note?: string } | undefined)?.note?.trim();
       if (!st.panic.active) return OK;
       st.panic = { active: false, snapshot: st.panic.snapshot };
       // Channels reconnect; agents and schedules stay stopped until resumed one by one (§7A).
       for (const c of st.channels.values())
         if (c.status === 'disconnected') this.putChannel({ ...c, status: 'connected' });
-      this.audit({ actor: 'alice', type: 'resume', severity: 'info', summary: 'alice resumed after review' });
+      this.audit({
+        actor: 'alice',
+        type: 'resume',
+        severity: 'info',
+        summary: why ? `alice resumed after review: ${why}` : 'alice resumed after review',
+      });
       this.emit({ type: 'panic', active: false });
       return OK;
     },

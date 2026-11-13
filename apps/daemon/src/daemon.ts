@@ -873,7 +873,7 @@ export class Daemon {
     await this.remotes.command('panic', reason);
   }
 
-  async resume(actor: string): Promise<void> {
+  async resume(actor: string, note?: string): Promise<void> {
     if (!this.isPanic()) {
       await this.remotes.command('resume');
       return;
@@ -883,7 +883,14 @@ export class Daemon {
     this.seedBudgets();
     await this.channels.startAll();
     this.scheduler.start();
-    this.audit({ type: 'panic.resume', severity: 'security', summary: 'Resumed after panic', actor });
+    const why = note?.trim();
+    this.audit({
+      type: 'panic.resume',
+      severity: 'security',
+      summary: why ? `Resumed after panic: ${why.slice(0, 200)}` : 'Resumed after panic',
+      actor,
+      ...(why ? { data: { note: why } } : {}),
+    });
     this.emit({ type: 'panic', active: false });
     for (const a of this.config.agents.list()) this.emitAgent(a.name);
     await this.remotes.command('resume');

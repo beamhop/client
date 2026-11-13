@@ -4,6 +4,7 @@
  */
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { settle } from './helpers.ts';
 
 const open = async (page: Page) => {
   await page.goto('/?mock=1&still=1');
@@ -23,6 +24,7 @@ test('briefing, sections and a11y', async ({ page }) => {
     await expect(page.getByRole('heading', { name: new RegExp(`^${name}`) })).toBeAttached();
   await expect(page.getByRole('meter', { name: 'reviewer budget today' })).toBeVisible();
   await expect(page.getByRole('meter', { name: 'Spend today against daily budgets' })).toBeAttached();
+  await settle(page);
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
