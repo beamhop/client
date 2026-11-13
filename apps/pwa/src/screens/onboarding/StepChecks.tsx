@@ -34,7 +34,13 @@ const WHY: Record<string, string> = {
 /** A fix command with a copy button (DESIGN §9.1 Copy field). */
 export const CommandLine = ({ cmd, label }: { cmd: string; label: string }) => (
   <div className="flex items-center gap-1 rounded-md bg-sunken py-0.5 pr-0.5 pl-3">
-    <code className="min-w-0 flex-1 overflow-x-auto py-2 type-code whitespace-pre text-ink">{cmd}</code>
+    <code
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be reachable by keyboard
+      tabIndex={0}
+      className="min-w-0 flex-1 overflow-x-auto py-2 type-code whitespace-pre text-ink outline-none focus-visible:outline-2 focus-visible:outline-focus"
+    >
+      {cmd}
+    </code>
     <CopyButton value={cmd} label={label} compact />
   </div>
 );

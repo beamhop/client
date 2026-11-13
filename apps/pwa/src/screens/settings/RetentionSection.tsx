@@ -32,7 +32,7 @@ const EditRetention = ({ agent, onClose }: { agent: AgentView; onClose: () => vo
       onOpenChange={(o) => !o && onClose()}
       title={`Retention · ${agent.config.name}`}
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button
             variant="primary"
             size="lg"
@@ -125,7 +125,7 @@ const PurgeSheet = ({
       role="alertdialog"
       focusTitle
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button
             variant="destructive"
             size="lg"

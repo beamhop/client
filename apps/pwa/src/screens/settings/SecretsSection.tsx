@@ -62,7 +62,7 @@ const SetSecretSheet = ({
       title={fixed ? `Replace ${fixed}` : 'Add a secret'}
       isDismissable={false}
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button variant="primary" size="lg" fullWidth isPending={set.isPending} onPress={() => void save()}>
             {fixed ? 'Replace value' : 'Save to keychain'}
           </Button>

@@ -170,7 +170,14 @@ export class MockPairing {
     return new Date().toISOString();
   }
 
-  helloStatus(agent: string) {
+  helloStatus(agent: string): {
+    sent: boolean;
+    replied: boolean;
+    sentAt?: string;
+    repliedAt?: string;
+    from?: string;
+    text?: string;
+  } {
     const h = this.hellos.get(agent);
     if (!h) return { sent: false, replied: false };
     const replied = Date.now() - h.sentAt > REPLY_MS;

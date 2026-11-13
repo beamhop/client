@@ -261,7 +261,7 @@ const ConfirmThere = ({
       eyebrow={t('pair.phrase.eyebrow')}
       tag={<StatusDot state="needs-you" label={t('pair.confirm.waiting')} />}
       decision={
-        <div className="flex flex-col gap-2 medium:flex-row-reverse">
+        <div className="grid gap-2 medium:grid-cols-2 medium:[&>*:first-child]:order-2">
           <Button
             variant="primary"
             size="lg"
