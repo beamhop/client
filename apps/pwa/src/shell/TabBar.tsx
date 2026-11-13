@@ -4,16 +4,15 @@
  * flare bar above the icon. The only blur in the system: 92% bg + 12px blur.
  */
 import { Link, useRouterState } from '@tanstack/react-router';
-import { useApi } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
+import { useNeedsYouCount } from '../screens/inbox/needs.ts';
 import { CountBadge } from '../ui/Meta.tsx';
 import { isActive, TABS } from './nav.ts';
 
 export const TabBar = () => {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const status = useApi('system.status', undefined, { refetchInterval: 30_000 });
-  const pending = status.data?.pendingApprovals ?? 0;
+  const pending = useNeedsYouCount();
   return (
     <nav
       aria-label={t('nav.main')}

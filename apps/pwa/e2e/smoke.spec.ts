@@ -106,8 +106,11 @@ test('panic: one confirm stops everything; band offers review & resume', async (
   const sheet = page.getByRole('alertdialog', { name: 'Stop everything?' });
   await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'Stop everything' }).click();
-  await expect(sheet.getByText('Everything is stopped.')).toBeVisible();
-  await sheet.getByRole('button', { name: 'Close' }).first().click();
+  // The sheet retitles itself once the daemon confirmed, and its ledger ticks.
+  const done = page.getByRole('alertdialog', { name: 'Everything is stopped.' });
+  await expect(done).toBeVisible();
+  await expect(done.getByRole('list', { name: 'What will stop' }).getByText('acknowledged')).toBeVisible();
+  await done.getByRole('button', { name: 'Close' }).first().click();
   await expect(page.getByRole('region', { name: /Everything is stopped/ })).toBeVisible();
   await page.getByRole('link', { name: 'Review & resume' }).click();
   await expect(page.getByRole('button', { name: 'Resume without agents' })).toBeVisible();

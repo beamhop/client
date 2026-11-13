@@ -8,6 +8,7 @@ import { Button as RACButton } from 'react-aria-components';
 import { useApi } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
+import { useNeedsYouCount } from '../screens/inbox/needs.ts';
 import { Button, IconButton } from '../ui/Button.tsx';
 import { CountBadge, Kbd } from '../ui/Meta.tsx';
 import { ConnectionPill } from './Connection.tsx';
@@ -18,9 +19,8 @@ import { Wordmark } from './Wordmark.tsx';
 
 export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) => {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const status = useApi('system.status', undefined, { refetchInterval: 30_000 });
   const findings = useApi('policy.suggestions');
-  const pending = status.data?.pendingApprovals ?? 0;
+  const pending = useNeedsYouCount();
   const { open } = usePanicSheet();
   const { panic } = usePanicState();
 

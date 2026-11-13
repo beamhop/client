@@ -28,7 +28,7 @@ import { useExpanded } from '../../lib/media.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
-import { IconButton, LinkButton } from '../../ui/Button.tsx';
+import { BarAction, IconButton, LinkButton } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
@@ -248,14 +248,11 @@ export const AgentsScreen = () => {
             ) : undefined
           }
           actions={
-            <LinkButton
+            <BarAction
               href="/agents/new"
-              variant="primary"
-              size="sm"
-              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
-            >
-              {t('agents.new')}
-            </LinkButton>
+              label={t('agents.new')}
+              icon={<Plus size={20} weight="bold" aria-hidden="true" />}
+            />
           }
         >
           {body}

@@ -114,3 +114,44 @@
   scrollbar-width: thin;
   scrollbar-color: var(--bh-line-strong) transparent;
 }
+
+/* Bleed to the screen edge from inside a px-gutter container (full-width banners, list rails). */
+@utility -mx-gutter {
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left)));
+  margin-right: calc(-1 * max(16px, env(safe-area-inset-right)));
+  @variant medium {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+}
+
+/*
+ * Horizontal rails (filter chips, tab lists): no scrollbar, and an edge fade on whichever side still
+ * has content, so a cut-off chip reads as "more this way" instead of a layout bug. The mask is
+ * transparency only (no colour), set by useScrollEdges() through data-edge-start / data-edge-end.
+ */
+@utility scroll-rail {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  scroll-padding-inline: 24px;
+  --rail-fade: 40px;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  &[data-edge-end] {
+    mask-image: linear-gradient(to right, black calc(100% - var(--rail-fade)), transparent);
+  }
+  &[data-edge-start] {
+    mask-image: linear-gradient(to right, transparent, black var(--rail-fade));
+  }
+  &[data-edge-start][data-edge-end] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--rail-fade),
+      black calc(100% - var(--rail-fade)),
+      transparent
+    );
+  }
+}

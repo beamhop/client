@@ -14,7 +14,7 @@
 import type { AgentView } from '@beamhop/core';
 import { CloudArrowUp, Copy as CopyIcon, Play, Stop, Trash, XCircle } from '@phosphor-icons/react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { Link } from 'react-aria-components';
 import { agentLamp, harnessMonogram, useApi, useMutationApi } from '../../api/index.ts';
 import { type MessageKey, t } from '../../i18n/index.ts';
@@ -22,6 +22,7 @@ import { cx } from '../../lib/cx.ts';
 import { middleTruncate, usd } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { useExpanded } from '../../lib/media.ts';
+import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen } from '../../shell/Screen.tsx';
 import { Button, IconButton, LinkButton } from '../../ui/Button.tsx';
@@ -50,14 +51,7 @@ const sectionLabel = (s: AgentSection) => t(`agents.section.${s}` as MessageKey)
 
 const SectionNav = ({ name, current }: { name: string; current: AgentSection }) => {
   const ref = useRef<HTMLUListElement>(null);
-  useEffect(() => {
-    const ul = ref.current;
-    const el = ul?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!ul || !el || ul.scrollWidth <= ul.clientWidth) return;
-    const left = el.offsetLeft - ul.offsetLeft;
-    if (left < ul.scrollLeft || left + el.offsetWidth > ul.scrollLeft + ul.clientWidth)
-      ul.scrollLeft = left - 16;
-  }, []);
+  useScrollEdges(ref, [current]);
   return (
     <nav
       aria-label={t('agents.sectionsNav', { name })}
@@ -70,7 +64,8 @@ const SectionNav = ({ name, current }: { name: string; current: AgentSection }) 
       <ul
         ref={ref}
         className={cx(
-          'flex overflow-x-auto border-b border-line [scrollbar-width:none]',
+          'scroll-rail flex border-b border-line',
+          '@min-[44rem]/detail:[mask-image:none]',
           '@min-[44rem]/detail:sticky @min-[44rem]/detail:top-4 @min-[44rem]/detail:flex-col @min-[44rem]/detail:overflow-visible @min-[44rem]/detail:border-b-0',
         )}
       >

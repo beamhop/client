@@ -6,6 +6,7 @@ import { Button as RACButton } from 'react-aria-components';
 import { useApi, useDaemons } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { since } from '../lib/format.ts';
+import { useNeedsYouCount } from '../screens/inbox/needs.ts';
 import { Badge, Kbd } from '../ui/Meta.tsx';
 import { StatusDot } from '../ui/Status.tsx';
 import { useConnectionSummary } from './Connection.tsx';
@@ -18,6 +19,7 @@ export const StatusStrip = () => {
   const connected = link === 'reachable' || link === 'no-answer';
   const status = useApi('system.status', undefined, { refetchInterval: 30_000, enabled: connected });
   const { panic } = usePanicState();
+  const needs = useNeedsYouCount();
   const s = status.data;
   const via =
     conn.kind === 'mock'
@@ -51,11 +53,7 @@ export const StatusStrip = () => {
         />
       </span>
       {relays && <span>{t('strip.relays', { up: relays.up, total: relays.total })}</span>}
-      {s && (
-        <span>
-          {t('strip.counts', { agents: s.agents, channels: s.channels, pending: s.pendingApprovals })}
-        </span>
-      )}
+      {s && <span>{t('strip.counts', { agents: s.agents, channels: s.channels, pending: needs })}</span>}
       <span className="ml-auto flex items-center gap-3">
         {conn.kind === 'mock' && <Badge tone="flare">{t('strip.demo')}</Badge>}
         <RACButton

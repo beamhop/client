@@ -5,24 +5,20 @@
  * Desktop with nothing selected: profiles compared side by side.
  */
 import type { AgentView } from '@beamhop/core';
-import { CaretRight, UsersThree } from '@phosphor-icons/react';
+import { CaretRight, ShieldCheck, UsersThree } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { harnessMonogram, useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
-import { cx } from '../../lib/cx.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
+import { ListGroup, listRowClass } from '../../ui/Card.tsx';
 import { Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { findingsFor, PROFILES } from './model.ts';
 import { ProfileCompare } from './ProfileInfo.tsx';
 
-const rowClass = (active: boolean) =>
-  cx(
-    'flex min-h-16 items-center gap-3 rounded-md px-2 py-2.5 outline-none data-[focus-visible]:outline-2 focus-visible:outline-2 focus-visible:outline-focus',
-    active ? 'bg-flare-wash' : 'hover:bg-sunken',
-  );
+const rowClass = (active: boolean) => listRowClass(active);
 
 const useActive = () => useRouterState({ select: (s) => s.location.pathname });
 
@@ -63,6 +59,7 @@ const AgentRow = ({ a, path }: { a: AgentView; path: string }) => {
         ) : (
           <StatusDot state="ready" label={t('policy.list.ok')} />
         )}
+        <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />
       </Link>
     </li>
   );
@@ -111,16 +108,16 @@ export const PolicyScreen = () => {
                 {t('policy.list.emptyBody')}
               </EmptyState>
             ) : (
-              <ul aria-label={t('policy.list.agents')} className="-mx-2 flex flex-col">
+              <ListGroup aria-label={t('policy.list.agents')}>
                 {list.map((a) => (
                   <AgentRow key={a.config.name} a={a} path={path} />
                 ))}
-              </ul>
+              </ListGroup>
             )}
           </section>
           <section aria-labelledby="pol-profiles" className="mt-6">
             <Eyebrow id="pol-profiles">{t('policy.list.profiles')}</Eyebrow>
-            <ul aria-label={t('policy.list.profiles')} className="-mx-2 flex flex-col">
+            <ListGroup aria-label={t('policy.list.profiles')}>
               {PROFILES.map((p) => {
                 const used = usage(p);
                 const active = path === `/policy/${p}`;
@@ -132,6 +129,9 @@ export const PolicyScreen = () => {
                       aria-current={active ? 'page' : undefined}
                       className={rowClass(active)}
                     >
+                      <span className="grid size-7 shrink-0 self-start place-items-center rounded-sm bg-sunken text-ink-2">
+                        <ShieldCheck size={16} aria-hidden="true" />
+                      </span>
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="font-mono text-[15px] font-medium text-ink">{p}</span>
                         <span className="type-body-sm text-ink-2">{t(`policy.profile.${p}.short`)}</span>
@@ -148,11 +148,11 @@ export const PolicyScreen = () => {
                   </li>
                 );
               })}
-            </ul>
+            </ListGroup>
           </section>
           <section aria-labelledby="pol-roles" className="mt-6">
             <Eyebrow id="pol-roles">{t('policy.list.rolesTitle')}</Eyebrow>
-            <ul className="-mx-2 flex flex-col">
+            <ListGroup>
               <li>
                 <Link
                   to="/policy/$profile"
@@ -170,7 +170,7 @@ export const PolicyScreen = () => {
                   <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />
                 </Link>
               </li>
-            </ul>
+            </ListGroup>
           </section>
         </Screen>
       }

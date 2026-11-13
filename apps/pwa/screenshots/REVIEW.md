@@ -1,96 +1,101 @@
-# Screenshot review — integration & polish pass
+# Screenshot review — fresh-eyes design pass (after-state)
 
-Regenerated with the full Playwright run (`pnpm test:e2e`, plus `BH_SHOTS=1` for the agents / channels /
-harnesses sets). Mock mode, frozen timers, 390×844 (mobile) and 1280×800 (desktop) at 1×. New in this pass:
-`*-hc-light|dark` (high contrast), `palette*`, `shortcuts*`, `connection*`, `home-unpaired`.
-Honest notes, one block per screen: **+** what works, **−** what is still weak.
+Regenerated with the full Playwright run (`PW_PORT=<private> BH_SHOTS=1 pnpm test:e2e`). Mock mode, frozen
+timers, 390×844 (mobile, touch) and 1280×800 (desktop) at 1×. This pass was a fresh-eyes review: the journeys
+(first launch, triage, follow + steer a session, add Telegram, new agent, tighten a policy, panic & resume)
+were walked by touch emulation and keyboard, then the 15 most impactful problems were fixed with shared
+components first. Ranked list and status:
+
+| #   | Problem (before)                                                                                                                                                   | Fix                                                                                                                                                    | Status                                                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 1   | One number, four values: tab badge 7, Inbox readout 07, filter "All 5", Home "Needs you · 5", strip "7 pending"                                                    | `useNeedsYouCount()` (screens/inbox/needs.ts): every surface counts _decisions_ (grouped slips, minus voted/queued/optimistic)                         | fixed                                                          |
+| 2   | Compact top bar crowded: full orange "New agent / New cloud agent / Add" + "Scan" next to pill, DEMO and Stop                                                      | `BarAction` (ui/Button): labelled button on desktop, one 44px icon action on compact; Harnesses' Scan now matches Home's refresh                       | fixed                                                          |
+| 3   | Kill switch in the compact bar was an unlabelled red square that reads as a status light                                                                           | Labelled "■ Stop" control (accessible name unchanged)                                                                                                  | fixed                                                          |
+| 4   | Chip/tab rails cut off hard with no affordance (Inbox, Sessions, agent tabs, Tabs)                                                                                 | `scroll-rail` utility + `useScrollEdges` + `FilterRail`: edge fades on the side that hides content, selected item scrolled into view                   | fixed                                                          |
+| 5   | `-mx-gutter` was used for full-bleed banners/lists but never defined — everything meant to bleed sat inset                                                         | Defined the utility (compact/medium); session list hairlines, banners and rails now reach the edge as designed                                         | fixed                                                          |
+| 6   | Session rows truncated titles at ~20 chars; `…` menu fought the timestamp                                                                                          | Two-line titles, menu tucked under the timestamp at the row's bottom-right                                                                             | fixed                                                          |
+| 7   | Policy and Deploy lists were bare rows while Agents/Channels use cards                                                                                             | `ListGroup` + `listRowClass` (ui/Card); Policy rows gain carets and tiles, Deploy gets an eyebrow + card                                               | fixed                                                          |
+| 8   | Deploy row title "ci-bot @ fly ams" + status squeezed the slug into "shared-cpu-1x · $5.70/mo · si…"                                                               | Status on the title line; `provider region · size` slug; cost · since on its own line                                                                  | fixed                                                          |
+| 9   | Disabled primary = 45% flare: pink, reads broken                                                                                                                   | Filled variants disable to a dashed `sunken` slot in ink-3 ("not armed yet")                                                                           | fixed                                                          |
+| 10  | Panic confirm: four Doto counters repeating the sentence above; "1 cloud daemons"; after the press the sheet still said "Stop everything?" with Close _and_ Cancel | One ledger (box · count · noun · verb) that ticks row by row after the press; ICU plurals; sheet retitles to "Everything is stopped." and drops Cancel | fixed                                                          |
+| 11  | Two chip styles for the same job (Inbox square chips vs Sessions rounded chips with tiles)                                                                         | Both use `FilterRail`                                                                                                                                  | fixed                                                          |
+| 12  | Appearance: three segmented controls with no preview                                                                                                               | Live specimen (slip with lamp, slug, Doto clock, Deny/Allow) built from tokens; caption states theme · contrast · motion                               | fixed                                                          |
+| 13  | Wide Inbox rail listed 7 raw requests under "Needs you"                                                                                                            | Rail shows the same grouped slips (×N badge) and count                                                                                                 | fixed                                                          |
+| 14  | "Continue · Step" labels render the middle dot almost without spacing in Instrument Sans (Pair, New agent)                                                         | —                                                                                                                                                      | open (font metrics; needs a thin-space or `· ` span treatment) |
+| 15  | HC dark Allow (mint fill) is very bright next to everything else                                                                                                   | —                                                                                                                                                      | open (needs a design decision: HC is meant to be loud)         |
+
+Honest notes per screen below: **+** works, **−** still weak.
 
 ## Shell (all screens)
 
-- **+** One connection model (`link`) behind pill, sheet, status strip and banners; hosted mode finally shows
-  its own relays, daemon key, "Pair again" and a real "Disconnect this browser". A never-paired browser gets a
-  landing (`home-unpaired`) instead of skeletons that never resolve.
-- **+** ⌘K palette (`palette`) is instant, mirrors CLI verbs, reaches agents/sessions/channels/settings and runs
-  actions; `?` opens one shortcut sheet for every screen (`shortcuts`), current screen first.
-- **+** Desktop sidebar now carries "Search… ⌘K", the strip shows ⌘K / ? instead of a lone `g i` hint.
-- **−** On touch devices RAC reveals the palette only after the on-screen keyboard settles (≤600 ms) — not quite
-  "instant" on phones. **−** The compact top bar is crowded on narrow phones (pill + DEMO + primary + Stop).
+- **+** Compact bar is now pill · one icon action · labelled Stop on every top-level screen. Counts agree
+  everywhere (badge, sidebar, strip, Inbox readout, Home eyebrow, wide rail).
+- **−** On touch devices RAC reveals the palette only after the on-screen keyboard settles (≤600 ms).
+- **−** The DEMO badge still costs ~60px of the compact bar in mock mode.
 
 ## Home (`home`, `home-dark`, `home-hc-*`, `home-panic`)
 
-- **+** Reads like an instrument: needs-you slips with countdown, live lamp, beam lines, budget meters.
-- **−** Inbox badge (7) vs "Needs you · 5" (grouped ×3 slips) still looks like a mismatch to a first-time user.
+- **+** Reads like an instrument: needs-you slips with countdown, live lamp, beam lines, budget meters;
+  "Needs you · 5" now matches the Inbox badge.
 
 ## Inbox (`inbox*`, `inbox_apr_a41f`)
 
-- **+** Transmission slips with perforation; Allow/Deny differ in shape; Doto pending count; keyboard row.
-- **−** Agent filter chips overflow horizontally on mobile with no fade/edge affordance.
+- **+** Readout counts decisions (05) like "All 5" and "1 of 5"; agent chips fade at the edge and bleed to the
+  screen edge. **−** "×3" collapsing is explained only by the badge; a first-timer may not know three
+  requests are decided at once (the scope sheet says so).
 
 ## Sessions (`sessions*`, `sessions_ses_842*`, `sessions_ses_836*`)
 
-- **+** Tick rail, tool rows, inline approval slip and "waiting for you" bar above the composer are strong.
-- **−** Session list rows truncate titles aggressively at 390px; the `…` row menu competes with the timestamp.
+- **+** Full-bleed list, two-line titles, quieter row menu; agent rail shares the Inbox chip style.
+- **−** Two stacked filter rows (status segmented + agent chips) still take ~110px above the list.
 
 ## Agents (`agents*`, `agents_new*`, `agents_reviewer_*`)
 
-- **+** Cards with one-tap Stop; preset-first New agent with a live "will reach" summary on desktop.
-- **−** Detail tabs (Overview…Identity) scroll off-screen on mobile without an edge fade. New agent keeps the
-  tab bar while Deploy/Channel wizards hide it — intentional per SCREENS, but inconsistent to the eye.
+- **+** Detail section tabs fade at the edge. **−** New agent keeps the tab bar while Deploy/Channel wizards
+  hide it (intentional per SCREENS, inconsistent to the eye).
 
 ## Channels (`channels*`, `channels_tg*`, `channels_add*`)
 
-- **+** Provider monograms, wizard stepper rail, CLI strip on every step; the route beam no longer draws over
-  the "Telegram" label (pulse clipped, labels truncate).
-- **−** Disabled primary ("Check token") at 45% flare reads a little washed out on Paper.
+- **+** Disabled "Check token" is now a dashed slot instead of a washed-out orange.
 
 ## Harnesses (`harnesses*`)
 
-- **+** Needs-you first with the exact command; catalog signature in the slug line.
-- **−** "Scan" sits in the top bar as a secondary button — the only screen doing that.
+- **+** Scan is a top-bar icon like Home's refresh (pull-to-refresh still works).
 
 ## Policy (`policy*`, `policy_reviewer*`, `policy_roles`, `policy_workspace`)
 
-- **+** Reach table with hatched "Never" row is the clearest security surface in the app.
-- **−** Policy list rows are bare (no card) while Agents/Channels use cards on mobile — a rhythm break.
+- **+** Agents, profiles and roles are three card groups with the Channels rhythm; every row has a tile and
+  a caret. Reach table with hatched "Never" row unchanged.
 
 ## Deploy (`deploy*`, `deploy_new*`, `deploy_detail-dark`)
 
-- **+** Plan diff before anything is created; cost estimate in the button; now has its CLI strip and i18n.
-- **−** List rows are bare on mobile (no card) and the empty-state/list rhythm differs from Agents.
+- **+** Eyebrow + card list; status no longer crushes the slug. **−** Destroyed rows are hatched inside the
+  card; with many of them the hatch gets busy.
 
 ## Audit (`audit*`)
 
-- **+** Usage readout + per-budget meters; security categories with sparklines; log with tick rail.
-- **−** Three Doto-ish numerals compete on Usage when the panic band is also present.
+- **−** Three Doto-ish numerals still compete on Usage when the panic band is also present (not touched).
 
 ## Settings (`settings*`)
 
-- **+** Live slugs on every row ("3 devices · 1 inactive", "push off on this device"); Notifications now
-  registers real Web Push (device.pushKey → PushManager → device.pushSubscribe) and per-device categories.
-- **−** Appearance is three segmented controls with no preview swatch; Retention "Purge" sits close to Export.
+- **+** Appearance has a live preview. **−** Retention "Purge" still sits close to Export.
 
 ## Onboarding (`setup_*`)
 
-- **+** Left-aligned instrument flow, stepper rail, CLI strip per step; the phone step footer now fits Back +
-  Skip + Continue at 390px.
-- **−** Harness step shows skeleton rows while scanning with no progress line ("checking 2 of 5").
+- **+** Doctor step shows "checking 2 of 5…"; disabled Continue reads as "not yet" instead of broken.
 
 ## Pair (`pair*`, `setup_phone-confirm`)
 
-- **+** Safety phrase is a match check, code entry allows paste; install + push asked in context afterwards.
-- **−** The QR panel is visually heavy next to the small Doto expiry readout.
+- **−** The QR panel is visually heavy next to the small Doto expiry readout (not touched).
 
 ## Panic (`panic*`, `home-panic`, `panic-resume`)
 
-- **+** One confirm, hatched band everywhere, review-before-resume checklist.
-- **−** The four small Doto counters on the confirm violate "one readout per screen".
+- **+** One ledger before and after the press; one Doto readout (the band's time on Home) per screen again.
 
 ## High contrast (`*-hc-light`, `*-hc-dark`)
 
-- **+** Pure grounds, solid hairlines, chips gain borders; Allow/Deny still distinguishable by shape.
-- **−** HC dark Allow (mint fill) is very bright next to everything else.
+- **+** Pure grounds, solid hairlines, chips gain borders. **−** HC dark Allow is very bright (see #15).
 
 ## Icon
 
-- **+** New mark: notched slip with a hop meter and the carrier square, beam passing behind; real monochrome
-  silhouette for themed icons. **−** At 16px favicon size the hop bars merge into a block.
+- **−** At 16px favicon size the hop bars merge into a block (not touched).

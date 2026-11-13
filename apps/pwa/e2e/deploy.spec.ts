@@ -5,7 +5,7 @@ import { expectAccessible, open } from './helpers.ts';
 test('list shows cloud agents with cost and opens the detail', async ({ page }) => {
   await open(page, '/deploy');
   await expect(page.getByText('2 cloud agents')).toBeVisible();
-  await page.getByRole('link', { name: /ci-bot @ fly ams/ }).click();
+  await page.getByRole('link', { name: /^ci-bot.*fly ams/ }).click();
   await expect(page).toHaveURL(/\/deploy\/dep_fly_ams1/);
   await expect(page.getByRole('img', { name: /Route: you to relays to ci-bot@ams/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Destroy…' })).toBeVisible();
