@@ -16,6 +16,8 @@ export const SMOKE_PATHS = [
   '/harnesses',
   '/policy',
   '/policy/workspace',
+  '/policy/reviewer',
+  '/policy/roles',
   '/deploy',
   '/deploy/new',
   '/deploy/dep_fly_ams1',

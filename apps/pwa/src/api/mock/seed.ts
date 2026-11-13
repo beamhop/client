@@ -1054,6 +1054,15 @@ export const seed = (now = Date.now()): MockState => {
         data: { path: '~/.ssh/id_ed25519' },
       });
   }
+  // Audit screen: a blocked peer agent (mesh allowlist) so every security category has an example.
+  au(60 * 30 + 12, {
+    agent: 'helpdesk',
+    actor: 'mesh',
+    type: 'mesh.peer_blocked',
+    severity: 'security',
+    summary: 'helpdesk refused a message from peer agent npub1pr…3xq — not on its mesh allowlist',
+    data: { peer: 'npub1pr…3xq' },
+  });
   audit.sort((a, b) => b.at.localeCompare(a.at));
 
   // ─────────── Usage (14 days) ───────────
@@ -1084,6 +1093,32 @@ export const seed = (now = Date.now()): MockState => {
         usd,
         minutes: Math.round(usd * 11),
       });
+    }
+  }
+
+  // Older usage (days 14–59) for Audit's period comparison and 30-day range. Separate PRNG so the
+  // rows above (and everything that follows) stay identical.
+  {
+    const rnd2 = prng(4242);
+    for (let d = 59; d >= 14; d--) {
+      const day = new Date(now - d * 86_400_000).toISOString().slice(0, 10);
+      const weekend = [0, 6].includes(new Date(now - d * 86_400_000).getDay());
+      for (const [name, p] of Object.entries(profile)) {
+        let usd = (p.lo + rnd2() * (p.hi - p.lo)) * 0.8;
+        if (weekend) usd *= 0.35;
+        usd = Math.round(usd * 100) / 100;
+        const tok = Math.round(usd * 128_000);
+        usage.push({
+          day,
+          agent: name,
+          channel: p.channel,
+          peer: p.peer,
+          inputTokens: Math.round(tok * 0.94),
+          outputTokens: Math.round(tok * 0.06),
+          usd,
+          minutes: Math.round(usd * 11),
+        });
+      }
     }
   }
 
