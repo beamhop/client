@@ -1,5 +1,14 @@
 # beamhop — overnight build progress
 
+**Morning report:** https://claude.ai/artifact/Q77kgqtUBeN3PZoGPsLYpq (private)
+
+## Final state (06:40 Berlin)
+
+- Everything planned is implemented: daemon, CLI, PWA, Nostr/Telegram/Slack/Discord channels, 12-harness catalog + ACP/Claude/Codex/pi adapters, srt sandbox + key broker + DLP, 5 cloud deployers, packaging and docs.
+- Gates: root typecheck + lint clean · **1088** backend tests · **219** PWA unit tests · **~435** mock-mode Playwright e2e (axe on every route) · **116/116** Playwright e2e against the real daemon · secret scan clean.
+- Proven live: Nostr DM on public relays → sandboxed opencode → MCP tool → reply; Telegram bot send/edit/buttons/files/approval cards; NIP-29 groups; control plane over Nostr; phone pairing; npm pack → global install; linux-x64 standalone binary.
+- Security: 3 adversarial review waves, 36 confirmed issues fixed with regression tests (docs/security/).
+
 Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog every ~25 min.
 
 ## Status board
@@ -38,3 +47,4 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 - 04:40 — API completeness + security wave C merged (36 confirmed security issues fixed across 3 waves). 1076 backend + 196 PWA unit tests green, secret scan clean.
 - 04:55 — Screen wiring + real-daemon E2E merged. 1088 backend + 209 PWA unit tests green. Running real E2E suite post-merge.
 - 05:25 — UX polish merged. Real-daemon PWA suite post-merge: 102 passed, 0 failed, 12 fixme. Fresh-eyes UX round + pending e2e journeys running.
+- 06:40 — Final polish merged, report published. Real-daemon e2e 116/116, all gates green.
