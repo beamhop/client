@@ -363,11 +363,11 @@
   --bh-focus-width:   3px;
   --bh-scrim:         oklch(0 0 0 / 0.7);
 
-  --bh-chart-1:       oklch(0.45 0.130 45);
-  --bh-chart-2:       oklch(0.45 0.130 250);
-  --bh-chart-3:       oklch(0.45 0.085 185);
-  --bh-chart-4:       oklch(0.45 0.130 330);
-  --bh-chart-5:       oklch(0.45 0.100 110);
+  --bh-chart-1:       oklch(0.45 0.125 45);   /* #8b3906 */
+  --bh-chart-2:       oklch(0.45 0.125 250);  /* #045797 */
+  --bh-chart-3:       oklch(0.45 0.075 185);  /* #0f635b */
+  --bh-chart-4:       oklch(0.45 0.130 330);  /* #7b3577 */
+  --bh-chart-5:       oklch(0.45 0.095 110);  /* #595907 */
 
   --bh-shadow-pop:    0 0 0 2px oklch(0 0 0);
   --bh-shadow-sheet:  0 0 0 2px oklch(0 0 0);
@@ -410,11 +410,11 @@
   --bh-focus:         oklch(1 0 0);
   --bh-scrim:         oklch(0 0 0 / 0.8);
 
-  --bh-chart-1:       oklch(0.80 0.110 45);
-  --bh-chart-2:       oklch(0.80 0.110 250);
-  --bh-chart-3:       oklch(0.80 0.110 185);
-  --bh-chart-4:       oklch(0.80 0.110 330);
-  --bh-chart-5:       oklch(0.80 0.110 110);
+  --bh-chart-1:       oklch(0.80 0.110 45);   /* #f9a782 */
+  --bh-chart-2:       oklch(0.80 0.100 250);  /* #8cc3fc */
+  --bh-chart-3:       oklch(0.80 0.110 185);  /* #5cd5c7 */
+  --bh-chart-4:       oklch(0.80 0.110 330);  /* #e6a4e0 */
+  --bh-chart-5:       oklch(0.80 0.110 110);  /* #c2c46e */
 
   --bh-shadow-pop:    0 0 0 2px oklch(1 0 0);
   --bh-shadow-sheet:  0 0 0 2px oklch(1 0 0);

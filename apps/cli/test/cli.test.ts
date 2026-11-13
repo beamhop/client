@@ -86,7 +86,7 @@ describe('cli', () => {
     );
     await t.run('channel', 'add', 'telegram', '--name', 'mybot', '--token-env', 'TG');
     expect(t.calls.map((c) => c[0])).toEqual(['channel.validate', 'channel.add']);
-    expect((t.calls[1]?.[1] as { secrets: { token: string } }).secrets.token).toBe('secret-token');
+    expect((t.calls[1]![1] as { secrets: { token: string } }).secrets.token).toBe('secret-token');
     expect(t.out.join('\n')).not.toContain('secret-token');
   });
 

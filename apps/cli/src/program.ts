@@ -252,22 +252,18 @@ export const buildProgram = (deps: CliDeps): Command => {
         },
       ),
     );
-  agent
-    .command('rm <name>')
-    .action(
-      act(async (c, name: string) => ({
-        data: await c.call('agent.delete', { name }),
-        human: () => `removed ${name}`,
-      })),
-    );
-  agent
-    .command('start <name>')
-    .action(
-      act(async (c, name: string) => ({
-        data: await c.call('agent.start', { name }),
-        human: () => `${pc.green('started')} ${name}`,
-      })),
-    );
+  agent.command('rm <name>').action(
+    act(async (c, name: string) => ({
+      data: await c.call('agent.delete', { name }),
+      human: () => `removed ${name}`,
+    })),
+  );
+  agent.command('start <name>').action(
+    act(async (c, name: string) => ({
+      data: await c.call('agent.start', { name }),
+      human: () => `${pc.green('started')} ${name}`,
+    })),
+  );
   agent
     .command('stop <name>')
     .option('--hard', 'kill running sessions immediately')
@@ -277,14 +273,12 @@ export const buildProgram = (deps: CliDeps): Command => {
         human: () => `stopped ${name}`,
       })),
     );
-  agent
-    .command('clone <name> <newName>')
-    .action(
-      act(async (c, name: string, newName: string) => ({
-        data: await c.call('agent.clone', { name, newName }),
-        human: () => `cloned ${name} → ${newName}`,
-      })),
-    );
+  agent.command('clone <name> <newName>').action(
+    act(async (c, name: string, newName: string) => ({
+      data: await c.call('agent.clone', { name, newName }),
+      human: () => `cloned ${name} → ${newName}`,
+    })),
+  );
   agent.command('presets').action(
     act(async (c) => {
       const { presets } = await c.call('agent.presets');
@@ -430,14 +424,12 @@ export const buildProgram = (deps: CliDeps): Command => {
         },
       ),
     );
-  channel
-    .command('rm <name>')
-    .action(
-      act(async (c, name: string) => ({
-        data: await c.call('channel.remove', { name }),
-        human: () => `removed ${name}`,
-      })),
-    );
+  channel.command('rm <name>').action(
+    act(async (c, name: string) => ({
+      data: await c.call('channel.remove', { name }),
+      human: () => `removed ${name}`,
+    })),
+  );
   channel
     .command('pair <name>')
     .description('get a one-time code; send /pair <code> to the bot to become owner')
@@ -530,22 +522,18 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  session
-    .command('send <id> <text...>')
-    .action(
-      act(async (c, id: string, text: string[]) => ({
-        data: await c.call('session.send', { id, text: text.join(' ') }),
-        human: () => 'sent',
-      })),
-    );
-  session
-    .command('stop <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('session.stop', { id }),
-        human: () => `stopped ${id}`,
-      })),
-    );
+  session.command('send <id> <text...>').action(
+    act(async (c, id: string, text: string[]) => ({
+      data: await c.call('session.send', { id, text: text.join(' ') }),
+      human: () => 'sent',
+    })),
+  );
+  session.command('stop <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('session.stop', { id }),
+      human: () => `stopped ${id}`,
+    })),
+  );
 
   // ── approvals ─────────────────────────────────────────────
   program
@@ -587,14 +575,12 @@ export const buildProgram = (deps: CliDeps): Command => {
         human: () => pc.green(`approved ${id}`),
       })),
     );
-  program
-    .command('deny <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('approval.decide', { id, allow: false }),
-        human: () => `denied ${id}`,
-      })),
-    );
+  program.command('deny <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('approval.decide', { id, allow: false }),
+      human: () => `denied ${id}`,
+    })),
+  );
 
   // ── roles / people / owners ─────────────────────────────────────────────
   const role = program.command('role').description('roles and grants');
@@ -648,22 +634,18 @@ export const buildProgram = (deps: CliDeps): Command => {
       })),
     );
   const owner = program.command('owner').description('manage owners (multiple owners supported)');
-  owner
-    .command('add <principal>')
-    .action(
-      act(async (c, principal: string) => ({
-        data: await c.call('owner.add', { principal }),
-        human: () => `${principal} is now an owner`,
-      })),
-    );
-  owner
-    .command('rm <principal>')
-    .action(
-      act(async (c, principal: string) => ({
-        data: await c.call('owner.remove', { principal }),
-        human: () => `${principal} is no longer an owner`,
-      })),
-    );
+  owner.command('add <principal>').action(
+    act(async (c, principal: string) => ({
+      data: await c.call('owner.add', { principal }),
+      human: () => `${principal} is now an owner`,
+    })),
+  );
+  owner.command('rm <principal>').action(
+    act(async (c, principal: string) => ({
+      data: await c.call('owner.remove', { principal }),
+      human: () => `${principal} is no longer an owner`,
+    })),
+  );
 
   // ── policy ─────────────────────────────────────────────
   const policy = program.command('policy').description('sandbox policy');
@@ -691,22 +673,18 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  policy
-    .command('accept <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('policy.applySuggestion', { id, accept: true }),
-        human: () => `accepted ${id}`,
-      })),
-    );
-  policy
-    .command('reject <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('policy.applySuggestion', { id, accept: false }),
-        human: () => `rejected ${id}`,
-      })),
-    );
+  policy.command('accept <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('policy.applySuggestion', { id, accept: true }),
+      human: () => `accepted ${id}`,
+    })),
+  );
+  policy.command('reject <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('policy.applySuggestion', { id, accept: false }),
+      human: () => `rejected ${id}`,
+    })),
+  );
 
   // ── secrets ─────────────────────────────────────────────
   const secret = program
@@ -733,14 +711,12 @@ export const buildProgram = (deps: CliDeps): Command => {
         return { data: await c.call('secret.set', { name, value }), human: () => `stored ${name}` };
       }),
     );
-  secret
-    .command('rm <name>')
-    .action(
-      act(async (c, name: string) => ({
-        data: await c.call('secret.delete', { name }),
-        human: () => `deleted ${name}`,
-      })),
-    );
+  secret.command('rm <name>').action(
+    act(async (c, name: string) => ({
+      data: await c.call('secret.delete', { name }),
+      human: () => `deleted ${name}`,
+    })),
+  );
 
   // ── schedules ─────────────────────────────────────────────
   const schedule = program.command('schedule').description('scheduled and event-driven prompts');
@@ -786,22 +762,18 @@ export const buildProgram = (deps: CliDeps): Command => {
         },
       ),
     );
-  schedule
-    .command('rm <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('schedule.remove', { id }),
-        human: () => `removed ${id}`,
-      })),
-    );
-  schedule
-    .command('run <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('schedule.run', { id }),
-        human: () => `triggered ${id}`,
-      })),
-    );
+  schedule.command('rm <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('schedule.remove', { id }),
+      human: () => `removed ${id}`,
+    })),
+  );
+  schedule.command('run <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('schedule.run', { id }),
+      human: () => `triggered ${id}`,
+    })),
+  );
 
   // ── deploy ─────────────────────────────────────────────
   const deploy = program
@@ -869,14 +841,12 @@ export const buildProgram = (deps: CliDeps): Command => {
       };
     }),
   );
-  deploy
-    .command('destroy <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('deploy.destroy', { id }),
-        human: () => `destroying ${id}`,
-      })),
-    );
+  deploy.command('destroy <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('deploy.destroy', { id }),
+      human: () => `destroying ${id}`,
+    })),
+  );
 
   // ── audit / usage ─────────────────────────────────────────────
   program
@@ -955,14 +925,12 @@ export const buildProgram = (deps: CliDeps): Command => {
         };
       }),
     );
-  device
-    .command('rm <id>')
-    .action(
-      act(async (c, id: string) => ({
-        data: await c.call('device.remove', { id }),
-        human: () => `removed device ${id}`,
-      })),
-    );
+  device.command('rm <id>').action(
+    act(async (c, id: string) => ({
+      data: await c.call('device.remove', { id }),
+      human: () => `removed device ${id}`,
+    })),
+  );
 
   const identity = program.command('identity').description('Nostr identities and NIP-05');
   identity.command('show').action(act(async (c) => ({ data: await c.call('identity.get') })));
