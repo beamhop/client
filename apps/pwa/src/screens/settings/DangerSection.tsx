@@ -33,8 +33,11 @@ export const DangerSection = () => {
   return (
     <div className="flex flex-col gap-8">
       <div className="relative overflow-hidden rounded-lg border border-line bg-stop-wash p-4">
-        <span aria-hidden="true" className="hatch pointer-events-none absolute inset-0 text-stop-text" />
-        <div className="relative flex flex-col gap-3">
+        <span
+          aria-hidden="true"
+          className="hatch pointer-events-none absolute inset-y-0 left-0 w-3 border-r border-line text-stop-text"
+        />
+        <div className="relative flex flex-col gap-3 pl-4">
           <h2 className="flex items-center gap-2 type-title-2 text-ink">
             <Stop size={22} weight="fill" className="text-stop-text" aria-hidden="true" />
             {panic ? 'Everything is stopped' : 'Stop everything'}
@@ -65,8 +68,11 @@ export const DangerSection = () => {
             </Button>
           )}
           <p className="type-meta text-ink-2">
-            Also: <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> anywhere · Stop in the top bar · from any paired
-            phone
+            Also:{' '}
+            <span className="pointer-coarse:hidden">
+              <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> anywhere ·{' '}
+            </span>
+            Stop in the top bar · from any paired phone
           </p>
         </div>
       </div>
