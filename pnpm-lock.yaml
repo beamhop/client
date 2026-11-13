@@ -64,6 +64,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/channel-telegram:
+    dependencies:
+      '@beamhop/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/core:
     dependencies:
       zod:
