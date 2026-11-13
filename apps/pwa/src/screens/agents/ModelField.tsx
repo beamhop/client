@@ -33,7 +33,12 @@ export const modelOptions = (
     },
     ...listed.map((m) => ({
       id: m.id,
-      label: m.label && m.label !== m.id ? `${m.label} (${m.id})` : m.id,
+      // The id is shown only when the name does not already say it (it is what /model and the CLI take).
+      label: !m.label
+        ? m.id
+        : m.label.toLowerCase() === m.id.toLowerCase()
+          ? m.label
+          : `${m.label} (${m.id})`,
       ...(m.description ? { description: m.description } : {}),
     })),
     { id: CUSTOM, label: t('agents.model.other') },

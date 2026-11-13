@@ -10,8 +10,13 @@ describe('modelOptions', () => {
     expect(opts.map((o) => o.id)).toEqual([DEFAULT_MODEL, 'gpt-a', 'gpt-b', '__custom']);
     // The default row names what the harness would pick.
     expect(opts[0]?.description).toContain('GPT-A');
-    expect(opts[1]).toMatchObject({ label: 'GPT-A (gpt-a)', description: 'fast' });
+    // A name that only differs from the id in case is not repeated; a different one shows the id.
+    expect(opts[1]).toMatchObject({ label: 'GPT-A', description: 'fast' });
     expect(opts[2]).toMatchObject({ label: 'gpt-b' });
+  });
+
+  it('shows the id next to a name that differs from it', () => {
+    expect(modelOptions([{ id: 'opus', label: 'Opus 5.5' }])[1]).toMatchObject({ label: 'Opus 5.5 (opus)' });
   });
 
   it('does not repeat a harness row that is itself called "default"', () => {
