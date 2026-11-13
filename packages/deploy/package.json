@@ -1,6 +1,6 @@
 {
   "name": "@beamhop/deploy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "license": "Apache-2.0",
   "description": "Cloud deployers (Hetzner, DigitalOcean, Fly.io, Render, Railway) for beamhop agents",
