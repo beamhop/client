@@ -1,13 +1,16 @@
 /**
  * Global keyboard shortcuts (SCREENS §0.3): `g h` Home, `g i` Inbox, `g s` Sessions, `g a` Agents,
- * `g c` Channels, `g p` Policy, `g d` Deploy, `g u` Audit; `⌘⇧.` / `Ctrl+Shift+.` panic; `⌘\` sidebar.
- * Ignored while typing in a field. Screens add their own keys locally (J/K/A/D in Inbox).
+ * `g c` Channels, `g p` Policy, `g d` Deploy, `g u` Audit; `⌘⇧.` / `Ctrl+Shift+.` panic; `⌘\` sidebar;
+ * `⌘K` / `Ctrl K` command palette (also while typing); `?` the shortcut sheet.
+ * Letter keys are ignored while typing in a field. Screens add their own keys locally (J/K/A/D in
+ * Inbox) and list them in `shortcut-list.ts` so the `?` sheet shows them.
  */
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { NAV } from './nav.ts';
+import { openOverlay } from './overlays.ts';
 
-const typing = (e: KeyboardEvent) => {
+export const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
   return (
     !!el &&
@@ -32,12 +35,22 @@ export const useGlobalShortcuts = ({
         onPanic();
         return;
       }
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        openOverlay('palette');
+        return;
+      }
       if (mod && e.key === '\\') {
         e.preventDefault();
         onToggleSidebar();
         return;
       }
-      if (mod || e.altKey || typing(e)) return;
+      if (mod || e.altKey || typing(e) || e.defaultPrevented) return;
+      if (e.key === '?') {
+        e.preventDefault();
+        openOverlay('shortcuts');
+        return;
+      }
       if (e.key === 'g') {
         gAt = Date.now();
         return;

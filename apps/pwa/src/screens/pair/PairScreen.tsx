@@ -30,7 +30,7 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
-import { useApi, useBeamhop, useCall } from '../../api/index.ts';
+import { useApi, useBeamhop, useCall, useConnection } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -45,7 +45,14 @@ import { StatusDot } from '../../ui/Status.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 import { deviceNameFromUA, newDeviceKey, rememberDeviceId, saveDeviceKey } from './deviceKey.ts';
 import { SafetyPhrase } from './PairingPanel.tsx';
-import { requestPush, useInstallPrompt, usePushEnv } from './push.tsx';
+import {
+  askPermissionForLater,
+  type PushPermission,
+  rememberPendingPush,
+  turnOnPush,
+  useInstallPrompt,
+  usePushEnv,
+} from './push.tsx';
 import { formatPairCode, type PairingPayload, tryDecodePayload, tryPhrase } from './safetyPhrase.ts';
 
 type Phase = 'enter' | 'invalid' | 'compare' | 'confirm' | 'cancelled' | 'done';
@@ -292,7 +299,8 @@ const ConfirmThere = ({
 const AfterPair = ({ device }: { device: DeviceView }) => {
   const [env, refresh] = usePushEnv();
   const install = useInstallPrompt();
-  const call = useCall();
+  const { client, mock } = useBeamhop();
+  const conn = useConnection();
   const [pushState, setPushState] = useState<'idle' | 'busy' | 'on' | 'denied' | 'later'>(
     env.permission === 'granted' ? 'on' : 'idle',
   );
@@ -300,18 +308,27 @@ const AfterPair = ({ device }: { device: DeviceView }) => {
 
   const turnOn = async () => {
     setPushState('busy');
-    const r = await requestPush();
-    refresh();
-    if (r.permission === 'granted') {
-      try {
-        await call('device.pushSubscribe', { id: device.id, subscription: r.subscription });
-      } catch {
-        /* the daemon will ask again next time */
+    let permission: PushPermission;
+    try {
+      // Connected to the daemon (local / demo / hosted after reload): subscribe for real now —
+      // device.pushKey → PushManager → device.pushSubscribe (api/push.ts).
+      if (conn.kind !== 'none') permission = await turnOnPush(client, device.id, { demo: !!mock });
+      else {
+        // Fresh hosted pairing: this tab has no control connection yet. Ask now (inside the tap),
+        // and <PushResume/> registers the subscription once the app boots into the paired daemon.
+        permission = await askPermissionForLater(device.id);
       }
+    } catch {
+      permission =
+        typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'granted' : 'default';
+      if (permission === 'granted') rememberPendingPush(device.id);
+    }
+    refresh();
+    if (permission === 'granted') {
       haptic('confirm');
       setPushState('on');
       announce(t('pair.push.on'));
-    } else setPushState(r.permission === 'denied' ? 'denied' : 'idle');
+    } else setPushState(permission === 'denied' ? 'denied' : 'idle');
   };
 
   return (

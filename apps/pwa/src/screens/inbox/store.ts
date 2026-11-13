@@ -76,7 +76,6 @@ export type SheetState =
   | { type: 'scope'; group: SlipGroup; onDone?: () => void }
   | { type: 'access'; approval: ApprovalView; onDone?: () => void }
   | { type: 'reason'; ids: string[]; target: string }
-  | { type: 'help' }
   | null;
 export const sheetStore = store<SheetState>(null);
 export const openSheet = (s: SheetState) => sheetStore.set(s);

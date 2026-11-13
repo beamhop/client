@@ -5,7 +5,7 @@
  */
 import { CaretDoubleLeft } from '@phosphor-icons/react';
 import { Outlet, useMatches, useRouterState } from '@tanstack/react-router';
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { useExpanded, useWide } from '../lib/media.ts';
@@ -43,6 +43,29 @@ const writeBool = (k: string, v: boolean) => {
   } catch {
     /* ignore */
   }
+};
+
+// Palette, shortcut sheet: their own chunk, fetched after first paint (never on the boot path).
+const Overlays = lazy(() => import('./Overlays.tsx'));
+// Finishes a push subscription granted during a fresh hosted pairing (screens/pair/push.tsx).
+const PushResume = lazy(() => import('../screens/pair/push.tsx').then((m) => ({ default: m.PushResume })));
+const pushPending = () => {
+  try {
+    return !!localStorage.getItem('bh.push.pending');
+  } catch {
+    return false;
+  }
+};
+
+/** Lazy shell extras, mounted once on every layout. */
+const ShellExtras = () => {
+  const [pending] = useState(pushPending);
+  return (
+    <Suspense fallback={null}>
+      <Overlays />
+      {pending && <PushResume />}
+    </Suspense>
+  );
 };
 
 export const LiveRegions = () => (
@@ -87,6 +110,7 @@ export const AppShell = () => {
           <Outlet />
         </main>
         <UpdatePrompt />
+        <ShellExtras />
       </>
     );
   }
@@ -100,6 +124,7 @@ export const AppShell = () => {
         </main>
         {!flags.hideTabBar && <TabBar />}
         <UpdatePrompt />
+        <ShellExtras />
       </>
     );
   }
@@ -141,6 +166,7 @@ export const AppShell = () => {
         </div>
       </div>
       <UpdatePrompt />
+      <ShellExtras />
     </>
   );
 };

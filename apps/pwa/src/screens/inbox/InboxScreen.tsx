@@ -42,6 +42,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { useNow } from '../../lib/useNow.ts';
+import { openOverlay } from '../../shell/overlays.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { Button, IconButton, LinkButton } from '../../ui/Button.tsx';
 import { TicketCard } from '../../ui/Card.tsx';
@@ -879,9 +880,6 @@ export const InboxScreen = () => {
                 return n;
               });
             return !!g && L.expanded;
-          case '?':
-            openSheet({ type: 'help' });
-            return true;
           default:
             return false;
         }
@@ -1023,7 +1021,7 @@ export const InboxScreen = () => {
           variant="quiet"
           size="sm"
           icon={<Keyboard size={14} aria-hidden="true" />}
-          onPress={() => openSheet({ type: 'help' })}
+          onPress={() => openOverlay('shortcuts')}
         >
           {t('inbox.keys.all')}
         </Button>

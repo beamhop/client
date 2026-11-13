@@ -3,19 +3,23 @@
  * pre-prompt, permission only inside the tap, test notification, denied/iOS explanations), which alerts
  * are sent, thresholds, quiet hours and the Nostr DM fallback.
  *
- * TODO(core): alert rules are daemon config without an API yet; they are kept on this device
- * (useLocalPref) and the CLI equivalent is shown.
+ * Categories are the daemon's per-device push prefs (`device.pushPrefs`); thresholds, quiet hours and
+ * the DM fallback are daemon config without an API yet, so they stay on this device (useLocalPref).
  */
+
+import type { PushCategory } from '@beamhop/core';
 import { Bell, BellSlash } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { useApi, useCall } from '../../api/index.ts';
+import { useApi, useBeamhop, useConnection } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { NumberField } from '../../ui/Field.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
-import { requestPush, usePushEnv } from '../pair/push.tsx';
+import { useToast } from '../../ui/Toast.tsx';
+import { turnOnPush, usePushDeviceId, usePushEnv, usePushPrefs } from '../pair/push.tsx';
 import { useThisDevice } from './DevicesSection.tsx';
 import { Group, useLocalPref } from './kit.tsx';
 
@@ -32,72 +36,82 @@ export const ALERT_DEFAULTS = {
 
 export const NotificationsSection = () => {
   const [env, refresh] = usePushEnv();
+  const conn = useConnection();
+  const { client } = useBeamhop();
   const devices = useApi('device.list');
   const me = useThisDevice(devices.data?.devices);
-  const call = useCall();
+  const deviceId = usePushDeviceId();
+  const prefs = usePushPrefs(deviceId);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
   const [a, set] = useLocalPref('bh.settings.alerts', ALERT_DEFAULTS);
 
-  const on = env.permission === 'granted';
+  // On = the browser allows it AND the daemon holds a subscription for this device.
+  const on = env.permission === 'granted' && (me?.pushEnabled ?? true);
   const turnOn = async () => {
+    if (!deviceId) return;
     setBusy(true);
     try {
-      const r = await requestPush();
+      const r = await turnOnPush(client, deviceId, { demo: conn.kind === 'mock' });
       refresh();
-      if (r.permission === 'granted' && me)
-        await call('device.pushSubscribe', { id: me.id, subscription: r.subscription });
-      if (r.permission === 'granted') haptic('confirm');
+      if (r === 'granted') {
+        haptic('confirm');
+        toast.show({ message: t('settings.ntf.onToast'), tone: 'success' });
+      }
+    } catch (err) {
+      toast.show({
+        message: t('settings.ntf.failed', { reason: String((err as Error).message ?? err) }),
+        tone: 'error',
+      });
     } finally {
       setBusy(false);
     }
   };
+  const togglePref = (c: PushCategory, v: boolean) => {
+    prefs.set(c, v).catch(() => toast.show({ message: t('settings.ntf.prefFailed'), tone: 'error' }));
+  };
   const test = () => {
     try {
-      new Notification('beamhop · test', { body: 'Notifications work on this device.', tag: 'bh-test' });
-      setNote('Sent. It should appear in a moment.');
+      new Notification(t('settings.ntf.testTitle'), { body: t('settings.ntf.testBody'), tag: 'bh-test' });
+      setNote(t('settings.ntf.testSent'));
     } catch {
-      setNote('This browser only shows notifications from the installed app.');
+      setNote(t('settings.ntf.testInstalledOnly'));
     }
   };
 
   return (
     <div className="flex flex-col gap-8">
-      <Group title="This device" id="ntf-device">
+      <Group title={t('settings.ntf.thisDevice')} id="ntf-device">
         <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
           <div className="flex items-center gap-3">
             {on ? <Bell size={22} aria-hidden="true" /> : <BellSlash size={22} aria-hidden="true" />}
-            <span className="min-w-0 flex-1 type-title-3 text-ink">{me?.name ?? 'This browser'}</span>
+            <span className="min-w-0 flex-1 type-title-3 text-ink">
+              {me?.name ?? t('settings.ntf.thisBrowser')}
+            </span>
             <StatusDot
               state={on ? 'ready' : env.permission === 'denied' ? 'error' : 'stopped'}
               label={
                 on
-                  ? 'push on'
+                  ? t('settings.ntf.state.on')
                   : env.permission === 'denied'
-                    ? 'blocked'
+                    ? t('settings.ntf.state.blocked')
                     : env.permission === 'unsupported'
-                      ? 'unsupported'
-                      : 'push off'
+                      ? t('settings.ntf.state.unsupported')
+                      : t('settings.ntf.state.off')
               }
             />
           </div>
           {env.needsInstall ? (
-            <p className="type-body-sm text-ink-2">
-              iPhone sends alerts only to the installed app (iOS 16.4+). Tap Share, then Add to Home Screen,
-              and turn notifications on from there.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.needsInstall')}</p>
           ) : env.permission === 'unsupported' ? (
-            <p className="type-body-sm text-ink-2">
-              This browser can't show notifications. Use the Nostr DM fallback below.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.unsupported')}</p>
           ) : env.permission === 'denied' ? (
-            <p className="type-body-sm text-ink-2">
-              Blocked for this site. Allow notifications in your browser's site settings, then come back.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('settings.ntf.denied')}</p>
           ) : on ? (
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="secondary" size="sm" onPress={test}>
-                Send a test notification
+                {t('settings.ntf.test')}
               </Button>
               {note && (
                 <span role="status" className="type-body-sm text-ink-2">
@@ -107,39 +121,43 @@ export const NotificationsSection = () => {
             </div>
           ) : (
             <>
-              <p className="type-body-sm text-ink-2">
-                Get approvals on this device? You'll be notified when an agent needs a decision, a budget runs
-                out, or an agent stops. Nothing else.
-              </p>
-              <Button variant="primary" className="self-start" isPending={busy} onPress={() => void turnOn()}>
-                Turn on notifications
+              <p className="type-body-sm text-ink-2">{t('settings.ntf.prePrompt')}</p>
+              <Button
+                variant="primary"
+                className="self-start"
+                isPending={busy}
+                isDisabled={!deviceId}
+                onPress={() => void turnOn()}
+              >
+                {t('settings.ntf.turnOn')}
               </Button>
+              {!deviceId && <p className="type-meta text-ink-2">{t('settings.ntf.noDevice')}</p>}
             </>
           )}
         </div>
       </Group>
 
-      <Group title="Send me" id="ntf-rules" note="These apply to every device with notifications on.">
+      <Group title={t('settings.ntf.sendMe')} id="ntf-rules" note={t('settings.ntf.sendMeNote')}>
         <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
           <Switch
-            isSelected={a.approvals}
-            onChange={(v) => set({ approvals: v })}
-            description="Always on the lock screen, with Allow / Deny where the platform supports it."
+            isSelected={prefs.isOn('approvals')}
+            onChange={(v) => togglePref('approvals', v)}
+            description={t('settings.ntf.approvals.desc')}
           >
-            Approvals waiting
+            {t('settings.ntf.approvals')}
           </Switch>
           <div className="flex flex-col gap-2 py-1">
             <Switch
-              isSelected={a.budget}
-              onChange={(v) => set({ budget: v })}
-              description="Once per agent per day."
+              isSelected={prefs.isOn('budget')}
+              onChange={(v) => togglePref('budget', v)}
+              description={t('settings.ntf.budget.desc')}
             >
-              Budget threshold
+              {t('settings.ntf.budget')}
             </Switch>
-            {a.budget && (
+            {prefs.isOn('budget') && (
               <NumberField
-                label="Alert at"
-                unit="% of the daily budget"
+                label={t('settings.ntf.budget.at')}
+                unit={t('settings.ntf.budget.unit')}
                 minValue={10}
                 maxValue={100}
                 step={5}
@@ -150,24 +168,31 @@ export const NotificationsSection = () => {
             )}
           </div>
           <Switch
-            isSelected={a.crash}
-            onChange={(v) => set({ crash: v })}
-            description="Exit codes and the last log line."
+            isSelected={prefs.isOn('crash')}
+            onChange={(v) => togglePref('crash', v)}
+            description={t('settings.ntf.crash.desc')}
           >
-            Agent stopped unexpectedly
+            {t('settings.ntf.crash')}
+          </Switch>
+          <Switch
+            isSelected={prefs.isOn('offline')}
+            onChange={(v) => togglePref('offline', v)}
+            description={t('settings.ntf.offline.desc')}
+          >
+            {t('settings.ntf.offline')}
           </Switch>
           <div className="flex flex-col gap-2 py-1">
             <Switch
-              isSelected={a.security}
-              onChange={(v) => set({ security: v })}
-              description="Blocked hosts, DLP blocks, unknown senders."
+              isSelected={prefs.isOn('security')}
+              onChange={(v) => togglePref('security', v)}
+              description={t('settings.ntf.security.desc')}
             >
-              Security spike
+              {t('settings.ntf.security')}
             </Switch>
-            {a.security && (
+            {prefs.isOn('security') && (
               <NumberField
-                label="When more than"
-                unit="events per hour"
+                label={t('settings.ntf.security.when')}
+                unit={t('settings.ntf.security.unit')}
                 minValue={1}
                 maxValue={100}
                 value={a.securityPerHour}
@@ -179,16 +204,16 @@ export const NotificationsSection = () => {
           <Switch
             isSelected={a.quiet}
             onChange={(v) => set({ quiet: v })}
-            description="22:00–07:00 local time. Approvals still come through, silently."
+            description={t('settings.ntf.quiet.desc')}
           >
-            Quiet hours
+            {t('settings.ntf.quiet')}
           </Switch>
           <Switch
             isSelected={a.dmFallback}
             onChange={(v) => set({ dmFallback: v })}
-            description="When push isn't available, the daemon DMs your owner npub over Nostr."
+            description={t('settings.ntf.dm.desc')}
           >
-            Nostr DM fallback
+            {t('settings.ntf.dm')}
           </Switch>
         </div>
       </Group>
