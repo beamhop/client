@@ -1,0 +1,14 @@
+{
+  "name": "@beamhop/channel-discord",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/core": "workspace:*",
+    "@discordjs/rest": "^2.4.0",
+    "discord.js": "^14.16.0"
+  }
+}
