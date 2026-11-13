@@ -3,6 +3,7 @@ export * from './budget.ts';
 export * from './commands.ts';
 export * from './glob.ts';
 export * from './mesh.ts';
+export * from './nostr-key.ts';
 export * from './pairing.ts';
 export * from './roles.ts';
 export * from './routes.ts';
