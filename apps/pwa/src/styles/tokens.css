@@ -1,0 +1,684 @@
+/* ==========================================================================
+   beamhop — CARRIER design tokens (Tailwind v4)
+   Source of truth for every value in docs/design/DESIGN.md.
+
+   Usage (apps/pwa/src/styles/app.css):
+     @import "tailwindcss";
+     @import "../../../../docs/design/tokens.css";   (or copy to src/styles/tokens.css)
+
+   Theme resolution: the inline boot script in index.html ALWAYS sets
+   <html data-theme="light|dark" data-contrast="normal|more"> before first
+   paint, from the user's setting or (default "system") from
+   prefers-color-scheme / prefers-contrast, and keeps them in sync via
+   matchMedia listeners. The no-JS fallback below only covers dark mode.
+
+     <script>
+       (function () {
+         var s = {}; try { s = JSON.parse(localStorage.getItem('bh.appearance') || '{}'); } catch (e) {}
+         var mq = function (q) { return window.matchMedia(q).matches; };
+         var theme = s.theme && s.theme !== 'system' ? s.theme : (mq('(prefers-color-scheme: dark)') ? 'dark' : 'light');
+         var contrast = s.contrast && s.contrast !== 'system' ? s.contrast : (mq('(prefers-contrast: more)') ? 'more' : 'normal');
+         var r = document.documentElement; r.dataset.theme = theme; r.dataset.contrast = contrast;
+       })();
+     </script>
+
+   All colours authored in OKLCH and gamut-fitted to sRGB; hex in comments is
+   the exact rendered value. Contrast ratios are documented in DESIGN.md §4.
+   ========================================================================== */
+
+/* --- Variants ------------------------------------------------------------ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@custom-variant hc (&:where([data-contrast="more"], [data-contrast="more"] *));
+@custom-variant standalone (@media (display-mode: standalone));
+@custom-variant pointer-fine (@media (pointer: fine));
+@custom-variant pointer-coarse (@media (pointer: coarse));
+
+/* --- Tailwind theme ------------------------------------------------------ */
+/* Remove Tailwind's default palette entirely: only beamhop roles exist.     */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+  --breakpoint-*: initial;
+
+  /* Fonts (self-hosted via @fontsource-variable/*, @fontsource/doto) */
+  --font-sans: "Instrument Sans Variable", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Martian Mono Variable", "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-display: "Doto", "Martian Mono Variable", ui-monospace, monospace;
+
+  /* Breakpoints: compact <600, medium ≥600, expanded ≥1024, wide ≥1440 */
+  --breakpoint-medium: 37.5rem;
+  --breakpoint-expanded: 64rem;
+  --breakpoint-wide: 90rem;
+
+  /* Type scale (size / line-height / tracking / weight) */
+  --text-readout: 3rem;
+  --text-readout--line-height: 3rem;
+  --text-readout--font-weight: 700;
+  --text-title-1: 1.75rem;
+  --text-title-1--line-height: 2rem;
+  --text-title-1--letter-spacing: -0.015em;
+  --text-title-1--font-weight: 600;
+  --text-title-2: 1.375rem;
+  --text-title-2--line-height: 1.75rem;
+  --text-title-2--letter-spacing: -0.01em;
+  --text-title-2--font-weight: 600;
+  --text-title-3: 1.0625rem;
+  --text-title-3--line-height: 1.5rem;
+  --text-title-3--font-weight: 600;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.25rem;
+  --text-label: 0.875rem;
+  --text-label--line-height: 1.25rem;
+  --text-label--letter-spacing: 0.005em;
+  --text-label--font-weight: 500;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-micro--letter-spacing: 0.06em;
+  --text-micro--font-weight: 500;
+  --text-code: 0.8125rem;
+  --text-code--line-height: 1.25rem;
+
+  /* Radius */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Easing & durations */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Keyframe animations */
+  --animate-lamp: bh-lamp 1.6s var(--ease-out) infinite;
+  --animate-caret: bh-caret 1s steps(2, jump-none) infinite;
+  --animate-sweep: bh-sweep 1.4s linear infinite;
+  --animate-hop: bh-hop 0.9s var(--ease-in-out) infinite;
+
+  @keyframes bh-lamp {
+    0% {
+      transform: scale(1);
+      opacity: 0.35;
+    }
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+  @keyframes bh-caret {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes bh-sweep {
+    0% {
+      transform: translateY(0);
+    }
+    100% {
+      transform: translateY(var(--bh-sweep-distance, 400px));
+    }
+  }
+  @keyframes bh-hop {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+/* Colours, shadows map to runtime variables so theme switches need no rebuild.
+   `inline` makes utilities emit var(--bh-*) directly (correct with switching). */
+@theme inline {
+  --color-bg: var(--bh-bg);
+  --color-surface: var(--bh-surface);
+  --color-sunken: var(--bh-sunken);
+  --color-line: var(--bh-line);
+  --color-line-strong: var(--bh-line-strong);
+  --color-ink: var(--bh-ink);
+  --color-ink-2: var(--bh-ink-2);
+  --color-ink-3: var(--bh-ink-3);
+
+  --color-flare: var(--bh-flare);
+  --color-on-flare: var(--bh-on-flare);
+  --color-flare-text: var(--bh-flare-text);
+  --color-flare-wash: var(--bh-flare-wash);
+
+  --color-go: var(--bh-go);
+  --color-on-go: var(--bh-on-go);
+  --color-go-text: var(--bh-go-text);
+  --color-go-wash: var(--bh-go-wash);
+
+  --color-stop: var(--bh-stop);
+  --color-on-stop: var(--bh-on-stop);
+  --color-stop-text: var(--bh-stop-text);
+  --color-stop-wash: var(--bh-stop-wash);
+
+  --color-caution: var(--bh-caution);
+  --color-on-caution: var(--bh-on-caution);
+  --color-caution-text: var(--bh-caution-text);
+  --color-caution-wash: var(--bh-caution-wash);
+
+  --color-focus: var(--bh-focus);
+  --color-scrim: var(--bh-scrim);
+
+  --color-chart-1: var(--bh-chart-1);
+  --color-chart-2: var(--bh-chart-2);
+  --color-chart-3: var(--bh-chart-3);
+  --color-chart-4: var(--bh-chart-4);
+  --color-chart-5: var(--bh-chart-5);
+
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --shadow-pop: var(--bh-shadow-pop);
+  --shadow-sheet: var(--bh-shadow-sheet);
+  --shadow-lift: var(--bh-shadow-lift);
+}
+
+/* --- Non-colour runtime tokens ------------------------------------------ */
+:root {
+  /* Spacing scale (Tailwind's --spacing: 0.25rem already matches; named aliases) */
+  --bh-space-0: 0;
+  --bh-space-1: 2px;
+  --bh-space-2: 4px;
+  --bh-space-3: 8px;
+  --bh-space-4: 12px;
+  --bh-space-5: 16px;
+  --bh-space-6: 20px;
+  --bh-space-7: 24px;
+  --bh-space-8: 32px;
+  --bh-space-9: 40px;
+  --bh-space-10: 48px;
+  --bh-space-11: 64px;
+  --bh-space-12: 80px;
+
+  --bh-gutter: max(16px, env(safe-area-inset-left));
+  --bh-target: 44px; /* minimum touch target (exceeds WCAG 2.5.8) */
+  --bh-topbar-h: 52px;
+  --bh-tabbar-h: 56px;
+  --bh-sidebar-w: 240px;
+  --bh-sidebar-rail-w: 64px;
+  --bh-inbox-rail-w: 360px;
+  --bh-safe-top: env(safe-area-inset-top, 0px);
+  --bh-safe-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+
+  /* Durations */
+  --dur-instant: 0ms;
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --dur-beam: 600ms;
+
+  /* Font axes */
+  --bh-wdth-title-1: 80;
+  --bh-wdth-title-2: 85;
+  --bh-wdth-title-3: 90;
+  --bh-wdth-label: 95;
+  --bh-wdth-meta: 87.5;
+  --bh-wdth-code: 75;
+
+  /* Focus ring */
+  --bh-focus-width: 2px;
+  --bh-focus-offset: 2px;
+
+  color-scheme: light dark;
+}
+
+/* --- Light · "Paper" (default) ------------------------------------------ */
+:root,
+:root[data-theme="light"] {
+  --bh-bg: oklch(0.972 0.007 85); /* #f8f5f1 */
+  --bh-surface: oklch(0.993 0.004 85); /* #fefdfa */
+  --bh-sunken: oklch(0.945 0.009 85); /* #efece6 */
+  --bh-line: oklch(0.885 0.01 80); /* #ddd8d2 decorative */
+  --bh-line-strong: oklch(0.56 0.012 70); /* #79736d 4.30:1 bg */
+  --bh-ink: oklch(0.205 0.012 60); /* #1b1612 16.55:1 */
+  --bh-ink-2: oklch(0.43 0.012 60); /* #554e49 7.50:1 */
+  --bh-ink-3: oklch(0.52 0.012 65); /* #6e6862 5.09:1 (4.70 on sunken) */
+
+  --bh-flare: oklch(0.68 0.195 42); /* #f6641b FILL ONLY in light */
+  --bh-on-flare: oklch(0.18 0.03 40); /* #1d0d07 6.07:1 on flare */
+  --bh-flare-text: oklch(0.53 0.17 38); /* #b83b07 5.27:1 bg */
+  --bh-flare-wash: oklch(0.945 0.03 50); /* #fee8db */
+
+  --bh-go: oklch(0.5 0.125 152); /* #12773d */
+  --bh-on-go: oklch(0.99 0.01 150); /* #f7fef8 5.51:1 */
+  --bh-go-text: oklch(0.47 0.12 152); /* #0a6d37 5.94:1 */
+  --bh-go-wash: oklch(0.95 0.035 152); /* #def6e3 */
+
+  --bh-stop: oklch(0.53 0.195 24); /* #c3212e */
+  --bh-on-stop: oklch(0.99 0 0); /* #fcfcfc 5.68:1 */
+  --bh-stop-text: oklch(0.5 0.19 24); /* #b71727 6.12:1 */
+  --bh-stop-wash: oklch(0.945 0.025 24); /* #fde7e5 */
+
+  --bh-caution: oklch(0.83 0.15 82); /* #f8bd40 FILL ONLY */
+  --bh-on-caution: oklch(0.22 0.03 70); /* #24180a 10.16:1 */
+  --bh-caution-text: oklch(0.5 0.105 70); /* #895709 5.67:1 */
+  --bh-caution-wash: oklch(0.955 0.045 85); /* #feefcf */
+
+  --bh-focus: var(--bh-flare-text);
+  --bh-scrim: oklch(0.205 0.012 60 / 0.42);
+
+  --bh-chart-1: oklch(0.56 0.13 45); /* #b1582b ember */
+  --bh-chart-2: oklch(0.56 0.13 250); /* #2d78bd cobalt */
+  --bh-chart-3: oklch(0.56 0.095 185); /* #12867c teal */
+  --bh-chart-4: oklch(0.56 0.13 330); /* #9e5598 plum */
+  --bh-chart-5: oklch(0.56 0.12 110); /* #797a08 olive */
+
+  --bh-shadow-pop: 0 1px 2px oklch(0.205 0.012 60 / 0.06), 0 8px 24px -6px oklch(0.205 0.012 60 / 0.14);
+  --bh-shadow-sheet: 0 -1px 0 oklch(0.885 0.01 80), 0 -12px 40px -12px oklch(0.205 0.012 60 / 0.22);
+  --bh-shadow-lift: 0 2px 4px oklch(0.205 0.012 60 / 0.08), 0 18px 36px -10px oklch(0.205 0.012 60 / 0.28);
+
+  --bh-hatch-opacity: 0.14;
+  --bh-theme-color: #f8f5f1;
+}
+
+/* --- Dark · "Night shift" ----------------------------------------------- */
+:root[data-theme="dark"] {
+  --bh-bg: oklch(0.165 0.008 60); /* #110e0b */
+  --bh-surface: oklch(0.205 0.009 60); /* #1a1613 */
+  --bh-sunken: oklch(0.135 0.007 60); /* #0a0806 */
+  --bh-line: oklch(0.29 0.01 60); /* #2f2a26 decorative */
+  --bh-line-strong: oklch(0.58 0.012 70); /* #7f7973 4.49:1 bg */
+  --bh-ink: oklch(0.945 0.01 85); /* #f0ece5 16.42:1 */
+  --bh-ink-2: oklch(0.76 0.01 80); /* #b4b0aa 8.98:1 */
+  --bh-ink-3: oklch(0.66 0.01 75); /* #96918c 6.19:1 */
+
+  --bh-flare: oklch(0.72 0.18 45); /* #fd7933 7.29:1 bg */
+  --bh-on-flare: oklch(0.17 0.03 40); /* #1a0b06 7.26:1 */
+  --bh-flare-text: oklch(0.76 0.155 48); /* #ff8f51 8.54:1 */
+  --bh-flare-wash: oklch(0.255 0.045 45); /* #351b10 */
+
+  --bh-go: oklch(0.72 0.15 152); /* #4dbf74 */
+  --bh-on-go: oklch(0.17 0.03 150); /* #061308 8.15:1 */
+  --bh-go-text: oklch(0.76 0.14 152); /* #63ca84 9.49:1 */
+  --bh-go-wash: oklch(0.25 0.04 152); /* #122718 */
+
+  --bh-stop: oklch(0.66 0.19 25); /* #f05653 */
+  --bh-on-stop: oklch(0.15 0.03 25); /* #160605 5.81:1 */
+  --bh-stop-text: oklch(0.72 0.17 25); /* #fd736d 7.22:1 */
+  --bh-stop-wash: oklch(0.25 0.05 25); /* #361715 */
+
+  --bh-caution: oklch(0.83 0.15 82); /* #f8bd40 */
+  --bh-on-caution: oklch(0.2 0.03 70); /* #1f1306 10.62:1 */
+  --bh-caution-text: oklch(0.85 0.14 85); /* #f8c655 12.11:1 */
+  --bh-caution-wash: oklch(0.26 0.045 82); /* #2f2207 */
+
+  --bh-focus: var(--bh-flare-text);
+  --bh-scrim: oklch(0 0 0 / 0.6);
+
+  --bh-chart-1: oklch(0.74 0.12 45); /* #e99169 */
+  --bh-chart-2: oklch(0.74 0.12 250); /* #6db0f4 */
+  --bh-chart-3: oklch(0.74 0.12 185); /* #31c3b5 */
+  --bh-chart-4: oklch(0.74 0.12 330); /* #d58ecf */
+  --bh-chart-5: oklch(0.74 0.12 110); /* #afb151 */
+
+  --bh-shadow-pop: 0 0 0 1px oklch(0.29 0.01 60), 0 12px 28px -8px oklch(0 0 0 / 0.6);
+  --bh-shadow-sheet: inset 0 1px 0 oklch(0.58 0.012 70 / 0.5), 0 -16px 48px -12px oklch(0 0 0 / 0.7);
+  --bh-shadow-lift: 0 0 0 1px oklch(0.58 0.012 70 / 0.6), 0 20px 40px -10px oklch(0 0 0 / 0.7);
+
+  --bh-hatch-opacity: 0.18;
+  --bh-theme-color: #110e0b;
+}
+
+/* No-JS fallback: follow the OS when the boot script didn't run */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bh-bg: oklch(0.165 0.008 60);
+    --bh-surface: oklch(0.205 0.009 60);
+    --bh-sunken: oklch(0.135 0.007 60);
+    --bh-line: oklch(0.29 0.01 60);
+    --bh-line-strong: oklch(0.58 0.012 70);
+    --bh-ink: oklch(0.945 0.01 85);
+    --bh-ink-2: oklch(0.76 0.01 80);
+    --bh-ink-3: oklch(0.66 0.01 75);
+    --bh-flare: oklch(0.72 0.18 45);
+    --bh-on-flare: oklch(0.17 0.03 40);
+    --bh-flare-text: oklch(0.76 0.155 48);
+    --bh-flare-wash: oklch(0.255 0.045 45);
+    --bh-go: oklch(0.72 0.15 152);
+    --bh-on-go: oklch(0.17 0.03 150);
+    --bh-go-text: oklch(0.76 0.14 152);
+    --bh-go-wash: oklch(0.25 0.04 152);
+    --bh-stop: oklch(0.66 0.19 25);
+    --bh-on-stop: oklch(0.15 0.03 25);
+    --bh-stop-text: oklch(0.72 0.17 25);
+    --bh-stop-wash: oklch(0.25 0.05 25);
+    --bh-caution: oklch(0.83 0.15 82);
+    --bh-on-caution: oklch(0.2 0.03 70);
+    --bh-caution-text: oklch(0.85 0.14 85);
+    --bh-caution-wash: oklch(0.26 0.045 82);
+    --bh-scrim: oklch(0 0 0 / 0.6);
+    --bh-theme-color: #110e0b;
+  }
+}
+
+/* --- High contrast · light ---------------------------------------------- */
+:root[data-contrast="more"] {
+  --bh-bg: oklch(1 0 0); /* #ffffff */
+  --bh-surface: oklch(1 0 0); /* #ffffff */
+  --bh-sunken: oklch(0.96 0 0); /* #f2f2f2 */
+  --bh-line: oklch(0.4 0 0); /* #484848 */
+  --bh-line-strong: oklch(0.2 0 0); /* #161616 18.1:1 */
+  --bh-ink: oklch(0 0 0); /* #000000 21:1 */
+  --bh-ink-2: oklch(0.25 0.01 60); /* #25211d 16.0:1 */
+  --bh-ink-3: oklch(0.32 0.01 60); /* #37322e 12.7:1 */
+
+  --bh-flare: oklch(0.45 0.145 38); /* #942d03 */
+  --bh-on-flare: oklch(1 0 0); /* 7.96:1 */
+  --bh-flare-text: oklch(0.42 0.14 36); /* #892504 9.04:1 */
+  --bh-flare-wash: oklch(0.95 0.025 50); /* #fdeae0 (flare-text 7.77) */
+
+  --bh-go: oklch(0.38 0.1 152); /* #005126 */
+  --bh-on-go: oklch(1 0 0); /* 9.56:1 */
+  --bh-go-text: oklch(0.36 0.09 152); /* #074a24 10.43:1 */
+  --bh-go-wash: oklch(0.95 0.03 152); /* #e0f5e5 */
+
+  --bh-stop: oklch(0.4 0.16 25); /* #8a0314 */
+  --bh-on-stop: oklch(1 0 0); /* 10.0:1 */
+  --bh-stop-text: oklch(0.38 0.15 25); /* #800613 10.79:1 */
+  --bh-stop-wash: oklch(0.95 0.02 25);
+
+  --bh-caution: oklch(0.4 0.085 65); /* #663c08 */
+  --bh-on-caution: oklch(1 0 0); /* 9.42:1 */
+  --bh-caution-text: oklch(0.38 0.085 65); /* #613700 10.24:1 */
+  --bh-caution-wash: oklch(0.95 0.04 85); /* #fbedd1 */
+
+  --bh-focus: oklch(0 0 0);
+  --bh-focus-width: 3px;
+  --bh-scrim: oklch(0 0 0 / 0.7);
+
+  --bh-chart-1: oklch(0.45 0.125 45); /* #8b3906 */
+  --bh-chart-2: oklch(0.45 0.125 250); /* #045797 */
+  --bh-chart-3: oklch(0.45 0.075 185); /* #0f635b */
+  --bh-chart-4: oklch(0.45 0.13 330); /* #7b3577 */
+  --bh-chart-5: oklch(0.45 0.095 110); /* #595907 */
+
+  --bh-shadow-pop: 0 0 0 2px oklch(0 0 0);
+  --bh-shadow-sheet: 0 0 0 2px oklch(0 0 0);
+  --bh-shadow-lift: 0 0 0 2px oklch(0 0 0);
+  --bh-hatch-opacity: 0.3;
+  --bh-theme-color: #ffffff;
+}
+
+/* --- High contrast · dark ----------------------------------------------- */
+:root[data-contrast="more"][data-theme="dark"] {
+  --bh-bg: oklch(0 0 0); /* #000000 */
+  --bh-surface: oklch(0.1 0 0); /* #030303 */
+  --bh-sunken: oklch(0 0 0);
+  --bh-line: oklch(0.7 0 0); /* #9e9e9e */
+  --bh-line-strong: oklch(0.9 0 0); /* #dedede 15.6:1 */
+  --bh-ink: oklch(1 0 0); /* 21:1 */
+  --bh-ink-2: oklch(0.88 0.01 80); /* #dbd7d0 14.6:1 */
+  --bh-ink-3: oklch(0.82 0.01 80); /* #c7c3bd 12.0:1 */
+
+  --bh-flare: oklch(0.8 0.125 52); /* #fda670 */
+  --bh-on-flare: oklch(0 0 0); /* 10.86:1 */
+  --bh-flare-text: oklch(0.82 0.115 55); /* #feb07a 11.69:1 */
+  --bh-flare-wash: oklch(0.22 0.05 45); /* #2d1205 */
+
+  --bh-go: oklch(0.82 0.15 152); /* #70e093 */
+  --bh-on-go: oklch(0 0 0); /* 12.72:1 */
+  --bh-go-text: oklch(0.84 0.14 152); /* #7ee59d 13.54:1 */
+  --bh-go-wash: oklch(0.22 0.05 152); /* #05210e */
+
+  --bh-stop: oklch(0.78 0.125 25); /* #fd968f */
+  --bh-on-stop: oklch(0 0 0); /* 9.98:1 */
+  --bh-stop-text: oklch(0.8 0.11 25); /* #fda19a 10.76:1 */
+  --bh-stop-wash: oklch(0.22 0.05 25); /* #2e100e */
+
+  --bh-caution: oklch(0.88 0.14 88); /* #fed25f */
+  --bh-on-caution: oklch(0 0 0); /* 14.57:1 */
+  --bh-caution-text: oklch(0.88 0.14 88);
+  --bh-caution-wash: oklch(0.22 0.04 85); /* #231903 */
+
+  --bh-focus: oklch(1 0 0);
+  --bh-scrim: oklch(0 0 0 / 0.8);
+
+  --bh-chart-1: oklch(0.8 0.11 45); /* #f9a782 */
+  --bh-chart-2: oklch(0.8 0.1 250); /* #8cc3fc */
+  --bh-chart-3: oklch(0.8 0.11 185); /* #5cd5c7 */
+  --bh-chart-4: oklch(0.8 0.11 330); /* #e6a4e0 */
+  --bh-chart-5: oklch(0.8 0.11 110); /* #c2c46e */
+
+  --bh-shadow-pop: 0 0 0 2px oklch(1 0 0);
+  --bh-shadow-sheet: 0 0 0 2px oklch(1 0 0);
+  --bh-shadow-lift: 0 0 0 2px oklch(1 0 0);
+  --bh-hatch-opacity: 0.35;
+  --bh-theme-color: #000000;
+}
+
+/* --- Base ---------------------------------------------------------------- */
+@layer base {
+  html {
+    background: var(--bh-bg);
+    color: var(--bh-ink);
+    font-family: var(--font-sans);
+    font-size: 100%; /* respect user font size */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--bh-bg);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-variation-settings: "wdth" 100;
+    overscroll-behavior-y: none; /* we implement our own pull-to-refresh */
+  }
+  ::selection {
+    background: var(--bh-flare-wash);
+    color: var(--bh-ink);
+  }
+
+  /* Global focus ring — never removed */
+  :focus-visible,
+  [data-focus-visible] {
+    outline: var(--bh-focus-width) solid var(--bh-focus);
+    outline-offset: var(--bh-focus-offset);
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Mono everywhere gets tabular numerals */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variant-numeric: tabular-nums slashed-zero;
+  }
+
+  /* Inputs never below 16px (prevents iOS zoom-on-focus) */
+  input,
+  textarea,
+  select {
+    font-size: max(1rem, 16px);
+  }
+
+  /* Keep focused content clear of sticky bars (WCAG 2.4.11) */
+  [data-scroll-root] {
+    scroll-padding-top: calc(var(--bh-topbar-h) + var(--bh-safe-top) + 8px);
+    scroll-padding-bottom: calc(var(--bh-tabbar-h) + var(--bh-safe-bottom) + 8px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* --- Type utilities (apply font axes Tailwind can't express) ------------- */
+@utility type-readout {
+  font-family: var(--font-display);
+  font-size: var(--text-readout);
+  line-height: var(--text-readout--line-height);
+  font-weight: 700;
+  font-variation-settings: "ROND" 0;
+  font-variant-numeric: tabular-nums;
+  @variant expanded {
+    font-size: 3.5rem;
+    line-height: 3.5rem;
+  }
+}
+@utility type-title-1 {
+  font-size: var(--text-title-1);
+  line-height: var(--text-title-1--line-height);
+  letter-spacing: var(--text-title-1--letter-spacing);
+  font-weight: 600;
+  font-variation-settings: "wdth" var(--bh-wdth-title-1);
+}
+@utility type-title-2 {
+  font-size: var(--text-title-2);
+  line-height: var(--text-title-2--line-height);
+  letter-spacing: var(--text-title-2--letter-spacing);
+  font-weight: 600;
+  font-variation-settings: "wdth" var(--bh-wdth-title-2);
+}
+@utility type-title-3 {
+  font-size: var(--text-title-3);
+  line-height: var(--text-title-3--line-height);
+  font-weight: 600;
+  font-variation-settings: "wdth" var(--bh-wdth-title-3);
+}
+@utility type-body {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 400;
+  font-variation-settings: "wdth" 100;
+}
+@utility type-body-sm {
+  font-size: var(--text-body-sm);
+  line-height: var(--text-body-sm--line-height);
+  font-weight: 400;
+  font-variation-settings: "wdth" 100;
+}
+@utility type-label {
+  font-size: var(--text-label);
+  line-height: var(--text-label--line-height);
+  letter-spacing: var(--text-label--letter-spacing);
+  font-weight: 500;
+  font-variation-settings: "wdth" var(--bh-wdth-label);
+}
+@utility type-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 400;
+  font-variation-settings: "wdth" var(--bh-wdth-meta);
+  font-variant-numeric: tabular-nums;
+}
+@utility type-micro {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  letter-spacing: var(--text-micro--letter-spacing);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-variation-settings: "wdth" var(--bh-wdth-meta);
+  font-variant-numeric: tabular-nums;
+}
+@utility type-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--text-code--line-height);
+  font-weight: 400;
+  font-variation-settings: "wdth" var(--bh-wdth-code);
+  font-variant-numeric: tabular-nums slashed-zero;
+  tab-size: 2;
+}
+
+/* --- Motif utilities ----------------------------------------------------- */
+/* 45° hatch for locked / stopped / not-allowed areas */
+@utility hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklch, currentColor calc(var(--bh-hatch-opacity) * 100%), transparent) 0 1px,
+    transparent 1px 6px
+  );
+}
+/* Transmission-slip notches: 6px half-circles cut into both edges at --bh-perf-y */
+@utility slip-notch {
+  --bh-perf-y: 60%;
+  -webkit-mask:
+    radial-gradient(circle 6px at 0 var(--bh-perf-y), transparent 5.5px, #000 6px) left / 51% 100% no-repeat,
+    radial-gradient(circle 6px at 100% var(--bh-perf-y), transparent 5.5px, #000 6px) right / 51% 100%
+    no-repeat;
+  mask:
+    radial-gradient(circle 6px at 0 var(--bh-perf-y), transparent 5.5px, #000 6px) left / 51% 100% no-repeat,
+    radial-gradient(circle 6px at 100% var(--bh-perf-y), transparent 5.5px, #000 6px) right / 51% 100%
+    no-repeat;
+}
+/* Perforation rule between slip zones */
+@utility perforation {
+  height: 1px;
+  background-image: repeating-linear-gradient(90deg, var(--bh-line-strong) 0 2px, transparent 2px 5px);
+}
+/* Tick rail (vertical timeline gutter) */
+@utility tick-rail {
+  background-image:
+    linear-gradient(var(--bh-line-strong), var(--bh-line-strong)),
+    repeating-linear-gradient(180deg, var(--bh-line-strong) 0 1px, transparent 1px 12px);
+  background-size:
+    1px 100%,
+    4px 100%;
+  background-position:
+    0 0,
+    0 0;
+  background-repeat: no-repeat;
+}
+/* Safe-area helpers */
+@utility pt-safe {
+  padding-top: var(--bh-safe-top);
+}
+@utility pb-safe {
+  padding-bottom: var(--bh-safe-bottom);
+}
+@utility px-gutter {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  @variant medium {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  @variant expanded {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+/* Minimum target */
+@utility target {
+  min-width: var(--bh-target);
+  min-height: var(--bh-target);
+}
+/* Middle-of-string emphasis-free truncation container (JS does the middle ellipsis) */
+@utility slug {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--bh-ink-2);
+}

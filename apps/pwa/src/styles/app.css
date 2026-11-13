@@ -1,0 +1,116 @@
+@import "tailwindcss";
+/* tokens.css is a verbatim copy of docs/design/tokens.css — keep them in sync (README § Tokens). */
+@import "./tokens.css";
+
+/* ---------------------------------------------------------------------------
+   App-level additions on top of the design tokens. Keep this file small:
+   component styling belongs in the component (Tailwind utilities).
+   ------------------------------------------------------------------------- */
+
+/* In-app "Motion: Reduced" setting mirrors prefers-reduced-motion (DESIGN §8.3). */
+@layer base {
+  :root[data-motion="reduced"] *,
+  :root[data-motion="reduced"] *::before,
+  :root[data-motion="reduced"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  html {
+    scroll-padding-top: calc(var(--bh-topbar-h) + var(--bh-safe-top) + 8px);
+    scroll-padding-bottom: calc(var(--bh-tabbar-h) + var(--bh-safe-bottom) + 8px);
+  }
+
+  /* Martian Mono defaults to its "data" width (DESIGN §5: meta wdth 87.5). type-code narrows to 75. */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono {
+    font-variation-settings: "wdth" 87.5;
+  }
+
+  button,
+  [role="button"] {
+    cursor: default;
+  }
+  a[href] {
+    cursor: pointer;
+  }
+
+  /* RAC sets data-focus-visible on wrappers; the ring belongs on the control itself. */
+  [data-rac][data-focus-visible]:where(.bh-no-ring) {
+    outline: none;
+  }
+
+  /* High contrast: every chip-like element gets a visible border (DESIGN §4.4). */
+  :root[data-contrast="more"] .bh-chip {
+    border: 1px solid var(--bh-line-strong);
+  }
+}
+
+/* Live lamp halo honours the in-app reduced-motion setting too. */
+@utility lamp-halo {
+  animation: var(--animate-lamp);
+}
+
+/* Hop bars "busy" sequence (Button pending state, tool rows). */
+@utility hop-busy {
+  & > :nth-child(1) {
+    animation: bh-hop 0.9s var(--ease-in-out) infinite;
+  }
+  & > :nth-child(2) {
+    animation: bh-hop 0.9s var(--ease-in-out) 0.15s infinite;
+  }
+  & > :nth-child(3) {
+    animation: bh-hop 0.9s var(--ease-in-out) 0.3s infinite;
+  }
+  & > :nth-child(4) {
+    animation: bh-hop 0.9s var(--ease-in-out) 0.45s infinite;
+  }
+}
+
+/* Skeleton beam sweep line (DESIGN §8.3) */
+@keyframes bh-sweep-y {
+  0% {
+    top: 0%;
+  }
+  100% {
+    top: 100%;
+  }
+}
+@utility skeleton-sweep {
+  animation: bh-sweep-y 1.4s linear infinite;
+}
+
+/* Undo toast: the 2px beam line shrinks over the undo window */
+@keyframes bh-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@utility toast-countdown {
+  transform-origin: left center;
+  animation: bh-shrink var(--bh-toast-ms, 5000ms) linear forwards;
+}
+
+/* Wordmark */
+@utility wordmark {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-variation-settings: "wdth" 75;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+/* Thin, warm scrollbars on desktop panes */
+@utility pane-scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bh-line-strong) transparent;
+}
