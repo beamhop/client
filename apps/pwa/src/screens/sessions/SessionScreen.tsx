@@ -467,7 +467,7 @@ export const SessionScreen = () => {
   const footer = (
     <div className="relative">
       {!pinned && (
-        <div className="pointer-events-none absolute -top-14 right-0 left-0 flex justify-center">
+        <div className="pointer-events-none absolute -top-14 right-0 left-0 flex justify-end px-gutter expanded:px-8">
           <div className="pointer-events-auto">
             <JumpPill count={unseen} onPress={() => scrollToBottom(!reduce)} />
           </div>

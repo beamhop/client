@@ -67,6 +67,7 @@
   "sessions.row.stop": "Stop",
   "sessions.swipeHint": "Swipe a live row left to stop it, or use its ⋯ menu.",
   "sessions.pick.title": "Pick a session",
+  "sessions.pick.attention": "Live and waiting on you",
   "sessions.pick.body": "{live, plural, =0 {Nothing is live right now} one {# session is live} other {# sessions are live}}{needs, plural, =0 {.} one {, # needs you.} other {, # need you.}} Use [ and ] to step through an agent's sessions once one is open.",
   "session.title": "Session",
   "session.loading": "Loading transcript",

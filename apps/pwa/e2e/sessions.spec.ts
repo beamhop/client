@@ -38,10 +38,13 @@ test.describe('sessions list', () => {
     await expect(page.getByRole('heading', { name: /reviewer\s*· 4/i })).toBeVisible();
     const live = page.getByRole('radio', { name: /^Live, 1$/ });
     await live.click();
-    await expect(page.getByRole('link', { name: /can you fix the login redirect/ })).toBeVisible();
-    await expect(page.getByRole('link', { name: /review PR #211/ })).toHaveCount(0);
+    const rows = page.getByRole('list', { name: 'Sessions of reviewer' });
+    await expect(rows.getByRole('link', { name: /can you fix the login redirect/ })).toBeVisible();
+    await expect(rows.getByRole('link', { name: /review PR #211/ })).toHaveCount(0);
     await page.getByRole('radio', { name: /^Needs you/ }).click();
-    await expect(page.getByRole('link', { name: /How do I rotate my API key/ })).toBeVisible();
+    await expect(
+      page.getByRole('list', { name: 'Sessions of helpdesk' }).getByRole('link', { name: /How do I rotate/ }),
+    ).toBeVisible();
     // Agent rail narrows further; an empty result explains itself and offers a reset.
     await page.getByRole('radio', { name: /^scribe/ }).click();
     await expect(page.getByRole('heading', { name: 'No needs you sessions' })).toBeVisible();

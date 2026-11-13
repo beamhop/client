@@ -79,11 +79,15 @@ const RailRow = ({
   children: ReactNode;
   kind: Block['kind'];
 }) => (
-  <li className="tx-block relative pl-[52px] expanded:pl-[60px]" data-kind={kind}>
+  <li
+    className="tx-block group/row relative pl-[52px] expanded:pl-[60px]"
+    data-kind={kind}
+    data-row={kind === 'tool' || kind === 'run' ? 'tool' : 'msg'}
+  >
     {showTime && (
       <time
         dateTime={at}
-        className="absolute top-[3px] left-0 w-9 text-right font-mono text-[11px] leading-4 text-ink-3 tabular-nums expanded:w-11"
+        className="absolute top-[3px] group-data-[row=tool]/row:top-[13px] pointer-coarse:group-data-[row=tool]/row:top-[15px] left-0 w-9 text-right font-mono text-[11px] leading-4 text-ink-3 tabular-nums expanded:w-11"
       >
         {clock(at)}
       </time>
@@ -91,7 +95,7 @@ const RailRow = ({
     <span
       aria-hidden="true"
       className={cx(
-        'absolute top-[10px] h-px bg-line-strong',
+        'absolute top-[10px] h-px bg-line-strong group-data-[row=tool]/row:top-[20px] pointer-coarse:group-data-[row=tool]/row:top-[22px]',
         showTime ? 'left-[40px] w-2 expanded:left-[48px]' : 'left-[44px] w-1 expanded:left-[52px]',
         fresh && 'tx-tick-new',
       )}
@@ -260,7 +264,7 @@ export const ToolRow = ({ tool, ctx, nested }: { tool: ToolItem; ctx: Transcript
   const target = stats ? tool.target.replace(/\s*\+\d+\s*[−-]\d+\s*$/, '') : tool.target;
   const tail = tool.status === 'running' ? tool.progress.slice(-6) : [];
   return (
-    <div className={cx(nested ? 'py-0' : 'pb-2')}>
+    <div className={cx(nested ? 'py-0' : 'pb-1')}>
       <RACButton
         aria-expanded={open}
         onPress={() => setOpen(!open)}
@@ -347,7 +351,7 @@ const ToolRun = ({ tools, ctx }: { tools: ToolItem[]; ctx: TranscriptCtx }) => {
     .filter(Boolean)
     .join(' · ');
   return (
-    <div className="pb-2">
+    <div className="pb-1">
       <RACButton
         aria-expanded={open}
         onPress={() => setOpen(!open)}

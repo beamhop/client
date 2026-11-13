@@ -630,7 +630,12 @@ export const seed = (now = Date.now()): MockState => {
       e(t0 - 1.0, { kind: 'tool_result', tool: { id: 'z4', name: 'Edit', ok: true, diff: zodDiff } }),
       e(t0 - 1.1, {
         kind: 'tool_call',
-        tool: { id: 'z5', name: 'Bash', title: 'Bash npm run typecheck', input: { command: 'npm run typecheck' } },
+        tool: {
+          id: 'z5',
+          name: 'Bash',
+          title: 'Bash npm run typecheck',
+          input: { command: 'npm run typecheck' },
+        },
       }),
       e(t0 - 1.9, {
         kind: 'tool_result',
@@ -691,13 +696,19 @@ export const seed = (now = Date.now()): MockState => {
         at: ago(now, m),
         kind: 'user',
         from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' },
-        text: i === 0 ? 'turn my meeting notes into a todo list' : `next note: ${lines[i % lines.length]} (${i})`,
+        text:
+          i === 0 ? 'turn my meeting notes into a todo list' : `next note: ${lines[i % lines.length]} (${i})`,
       });
       list.push({
         seq: ++n,
         at: ago(now, m - 0.1),
         kind: 'tool_call',
-        tool: { id: `s${i}`, name: 'Read', title: `Read ~/notes/2026-11-${String((i % 28) + 1).padStart(2, '0')}.md`, input: {} },
+        tool: {
+          id: `s${i}`,
+          name: 'Read',
+          title: `Read ~/notes/2026-11-${String((i % 28) + 1).padStart(2, '0')}.md`,
+          input: {},
+        },
       });
       list.push({
         seq: ++n,

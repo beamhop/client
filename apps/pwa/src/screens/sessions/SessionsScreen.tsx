@@ -20,7 +20,7 @@ import type { LampState } from '../../api/derive.ts';
 import { harnessMonogram, sessionLamp, targetLabel, useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
-import { ago, since, usd, when } from '../../lib/format.ts';
+import { ago, clock, shortDate, since, usd } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useExpanded } from '../../lib/media.ts';
@@ -64,6 +64,13 @@ const write = (k: string, v?: string) => {
   } catch {
     /* ignore */
   }
+};
+
+/** Compact list time: `4 min ago` under an hour, `10:42` today, `12 Nov` before. */
+const rowTime = (iso: string, now: number) => {
+  const d = new Date(iso);
+  if (now - d.getTime() < 3_600_000) return ago(iso, now);
+  return new Date(now).toDateString() === d.toDateString() ? clock(d) : shortDate(d);
 };
 
 const FILTERS: SessionFilter[] = ['all', 'live', 'needs-you', 'today'];
@@ -186,9 +193,7 @@ const SessionRow = ({
             <span className="flex items-baseline gap-2">
               <span className="min-w-0 flex-1 truncate type-body-strong text-ink">{s.title}</span>
               <span className="shrink-0 type-meta text-ink-3 tabular-nums">
-                {now - new Date(s.lastActivityAt).getTime() < 3_600_000
-                  ? ago(s.lastActivityAt, now)
-                  : when(s.lastActivityAt, new Date(now))}
+                {rowTime(s.lastActivityAt, now)}
               </span>
             </span>
             <MetaLine
@@ -476,17 +481,54 @@ export const SessionsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={list}
-      empty={<NoSelection live={counts.live} needs={counts['needs-you']} />}
+      empty={
+        <NoSelection
+          live={counts.live}
+          needs={counts['needs-you']}
+          lampOf={lampOf}
+          attention={sessions
+            .filter((s) => needsYou.has(s.id) || s.status === 'running' || s.status === 'queued')
+            .slice(0, 4)}
+        />
+      }
     >
       <Outlet />
     </SplitView>
   );
 };
 
-const NoSelection = ({ live, needs }: { live: number; needs: number }) => (
+const NoSelection = ({
+  live,
+  needs,
+  attention,
+  lampOf,
+}: {
+  live: number;
+  needs: number;
+  attention: SessionView[];
+  lampOf: (s: SessionView) => LampState;
+}) => (
   <div id="bh-main-content" className="flex h-full flex-col justify-center gap-3 px-8">
     <ChatsTeardrop size={32} aria-hidden="true" className="text-ink-2" />
     <h2 className="type-title-3 text-ink">{t('sessions.pick.title')}</h2>
     <p className="max-w-[44ch] type-body-sm text-ink-2">{t('sessions.pick.body', { live, needs })}</p>
+    {attention.length > 0 && (
+      <ul className="mt-3 flex max-w-[520px] flex-col gap-2" aria-label={t('sessions.pick.attention')}>
+        {attention.map((s) => (
+          <li key={s.id}>
+            <Link
+              href={`/sessions/${s.id}`}
+              className="flex min-h-14 items-center gap-3 rounded-lg border border-line bg-surface px-4 py-2 outline-none data-[hovered]:border-line-strong data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus"
+            >
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate type-label text-ink">{s.title}</span>
+                <MetaLine as="span" items={[s.agent, `thread ${s.threadId}`, usd(s.usage.usd)]} />
+              </span>
+              <StatusDot state={lampOf(s)} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    )}
   </div>
 );
