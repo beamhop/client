@@ -54,3 +54,26 @@ export const createBridgeClient = (opts: BridgeClientOptions): BridgeCall => {
     };
   };
 };
+
+/**
+ * A `fetch` that honours the sandbox's HTTP(S)_PROXY / NO_PROXY (node's global `fetch` ignores
+ * them), or undefined when no proxy is configured. On Linux srt keeps 127.0.0.1 in NO_PROXY and
+ * beamhop forwards the bridge port inside the sandbox, so this goes direct; on macOS 127.0.0.1 is
+ * routed through srt's proxy, which only allows the bridge's `127.0.0.1:<port>`.
+ */
+export const envProxyFetch = async (
+  env: Record<string, string | undefined> = process.env,
+): Promise<typeof fetch | undefined> => {
+  const httpProxy = env.HTTP_PROXY ?? env.http_proxy;
+  const httpsProxy = env.HTTPS_PROXY ?? env.https_proxy ?? httpProxy;
+  if (!httpProxy && !httpsProxy) return undefined;
+  const { EnvHttpProxyAgent, fetch: undiciFetch } = await import('undici');
+  const noProxy = env.NO_PROXY ?? env.no_proxy;
+  const dispatcher = new EnvHttpProxyAgent({
+    ...(httpProxy ? { httpProxy } : {}),
+    ...(httpsProxy ? { httpsProxy } : {}),
+    ...(noProxy !== undefined ? { noProxy } : {}),
+  });
+  return ((input: string | URL, init?: RequestInit) =>
+    undiciFetch(input, { ...(init as object), dispatcher } as never)) as unknown as typeof fetch;
+};

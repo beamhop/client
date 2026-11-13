@@ -1,6 +1,6 @@
 /** Stdio entry logic for the `beamhop-mcp` process (see bin/beamhop-mcp.ts). */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createBridgeClient } from './client.ts';
+import { createBridgeClient, envProxyFetch } from './client.ts';
 import { createBeamhopMcpServer } from './server.ts';
 import { ENV_TOKEN, ENV_URL } from './wire.ts';
 
@@ -28,7 +28,10 @@ export const runStdio = async (env: Record<string, string | undefined> = process
     process.stderr.write(`beamhop-mcp: ${cfg.error}\n`);
     process.exit(2);
   }
-  const server = createBeamhopMcpServer({ call: createBridgeClient(cfg) });
+  const proxied = await envProxyFetch(env);
+  const server = createBeamhopMcpServer({
+    call: createBridgeClient({ ...cfg, ...(proxied ? { fetch: proxied } : {}) }),
+  });
   const transport = new StdioServerTransport();
   const shutdown = () => {
     server.close().finally(() => process.exit(0));
