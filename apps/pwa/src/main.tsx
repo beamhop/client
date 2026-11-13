@@ -9,7 +9,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { MotionConfig } from 'motion/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BeamhopProvider, createRuntime, resolveConnection } from './api/index.ts';
+import { BeamhopProvider, createRuntime, loadMock, resolveConnection } from './api/index.ts';
 import { initAppearance, useAppearance } from './lib/appearance.ts';
 import { createAppRouter } from './router.tsx';
 import { LiveRegions } from './shell/AppShell.tsx';
@@ -28,7 +28,10 @@ const queryClient = new QueryClient({
   },
 });
 
-const runtime = createRuntime(resolveConnection(), queryClient);
+const connection = resolveConnection();
+// The demo daemon (seed data + zod schemas) is its own chunk: real daemons never download it.
+const mock = connection.kind === 'mock' ? await loadMock(connection) : undefined;
+const runtime = createRuntime(connection, queryClient, undefined, mock ? { mock } : {});
 const router = createAppRouter();
 
 // Dev/e2e handle for poking the demo daemon from the console: `__beamhop.mock.daemon.state`.

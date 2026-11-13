@@ -22,7 +22,7 @@ import type { ConnectionConfig, ConnectionStatus } from './connection.ts';
 import { applyServerEvent } from './events.ts';
 import { lazyNostrTransport } from './hosted-lazy.ts';
 import type { HostedIdentity } from './identity.ts';
-import { createMockTransport, type MockTransport } from './mock/index.ts';
+import type { MockTransport } from './mock/index.ts';
 import type { HostedHealth, NostrTransportOptions } from './nostr.ts';
 
 export interface BeamhopRuntime {
@@ -45,7 +45,18 @@ export interface RuntimeOptions {
   identity?: HostedIdentity | (() => Promise<HostedIdentity>);
   /** Hosted mode: extra transport options (tests: WebSocket, timeouts). */
   nostr?: Partial<NostrTransportOptions>;
+  /**
+   * Mock mode: the in-browser daemon. Loaded by the caller (`loadMock`) so the demo data and zod
+   * schemas stay out of the main chunk for real daemons.
+   */
+  mock?: MockTransport;
 }
+
+/** Mock mode only: dynamically import the fake daemon (its own chunk). */
+export const loadMock = async (connection: ConnectionConfig): Promise<MockTransport> => {
+  const { createMockTransport } = await import('./mock/index.ts');
+  return createMockTransport({ live: connection.live ?? true, failMethods: connection.failMethods ?? [] });
+};
 
 /** `kind: 'none'`: nothing to talk to yet; every call fails with `not_paired` until the user pairs. */
 const unpairedTransport = (): Transport => ({
@@ -104,10 +115,14 @@ export const createRuntime = (
   } else if (connection.kind === 'none' || connection.kind === 'nostr') {
     transport = unpairedTransport();
     queueMicrotask(() => setStatus('closed'));
-  } else {
-    mock = createMockTransport({ live: connection.live ?? true, failMethods: connection.failMethods ?? [] });
+  } else if (opts.mock) {
+    mock = opts.mock;
     transport = mock;
     queueMicrotask(() => setStatus('open'));
+  } else {
+    // Mock connection without a loaded mock (should not happen: main.tsx awaits loadMock).
+    transport = unpairedTransport();
+    queueMicrotask(() => setStatus('closed'));
   }
 
   const client = createClient(transport);

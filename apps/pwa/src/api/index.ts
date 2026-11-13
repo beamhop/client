@@ -23,6 +23,7 @@ export {
   BeamhopProvider,
   type BeamhopRuntime,
   createRuntime,
+  loadMock,
   type RuntimeOptions,
   useBeamhop,
   useConnection,
