@@ -12,10 +12,10 @@ harness ──stdio──▶ beamhop-mcp (in sandbox) ──HTTP POST, Bearer to
 import { createMcpBridge } from '@beamhop/mcp';
 
 const bridge = await createMcpBridge({ handlers, log }); // handlers: McpHandlers<YourSessionCtx>
-const token = bridge.addSession(ctx);                     // one token per harness session
-spec.mcpServers.push(bridge.spec(token));                 // = mcpServerSpec(token, bridge.url)
+const token = bridge.addSession(ctx); // one token per harness session
+spec.mcpServers.push(bridge.spec(token)); // = mcpServerSpec(token, bridge.url)
 // on session end:
-bridge.removeSession(token);                              // revokes token, aborts in-flight calls
+bridge.removeSession(token); // revokes token, aborts in-flight calls
 ```
 
 The bridge validates the token and all input (zod, same schemas as the MCP server; history `limit` is
