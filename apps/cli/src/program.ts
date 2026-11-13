@@ -389,7 +389,16 @@ export const buildProgram = (deps: CliDeps): Command => {
           } catch {
             /* plain string */
           }
-          patch[k] = val;
+          // `budgets.dailyUsd=3` → { budgets: { dailyUsd: 3 } } (the daemon deep-merges the patch).
+          const keys = k.split('.');
+          if (keys.some((x) => !x || x === '__proto__' || x === 'constructor' || x === 'prototype'))
+            throw new Error(`invalid key "${k}"`);
+          let node = patch;
+          for (const key of keys.slice(0, -1)) {
+            if (!node[key] || typeof node[key] !== 'object') node[key] = {};
+            node = node[key] as Record<string, unknown>;
+          }
+          node[keys[keys.length - 1]!] = val;
         }
         return { data: await c.call('agent.update', { name, patch }), human: () => `updated ${name}` };
       }),
@@ -510,7 +519,7 @@ export const buildProgram = (deps: CliDeps): Command => {
           return {
             data: ch,
             human: () =>
-              `${pc.green('connected')} ${ch.config.name} as ${v.identity?.handle ?? v.identity?.name ?? '?'}\nnext: ${pc.bold(`beamhop channel pair ${ch.config.name}`)} to link your account as owner`,
+              `${pc.green('connected')} ${ch.config.name} as ${v.identity?.handle ?? v.identity?.name ?? '?'}${v.message ? `\n${v.message}` : ''}\nnext: ${pc.bold(`beamhop channel pair ${ch.config.name}`)} to link your account as owner`,
           };
         },
       ),

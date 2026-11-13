@@ -82,6 +82,23 @@ export interface BuiltinContext {
 type Loader = (mod: Record<string, unknown>, ctx: BuiltinContext) => void | Promise<void>;
 
 /**
+ * Literal `import()` per built-in, so bundlers (the npm package / standalone binary build) can see
+ * and include every plugin. A specifier-only `import(module)` would be invisible to them.
+ */
+const IMPORTERS: Record<string, () => Promise<unknown>> = {
+  '@beamhop/channel-nostr': () => import('@beamhop/channel-nostr'),
+  '@beamhop/channel-telegram': () => import('@beamhop/channel-telegram'),
+  '@beamhop/channel-slack': () => import('@beamhop/channel-slack'),
+  '@beamhop/channel-discord': () => import('@beamhop/channel-discord'),
+  '@beamhop/deploy': () => import('@beamhop/deploy'),
+  '@beamhop/harness-acp': () => import('@beamhop/harness-acp'),
+  '@beamhop/harness-claude': () => import('@beamhop/harness-claude'),
+  '@beamhop/harness-codex': () => import('@beamhop/harness-codex'),
+  '@beamhop/harness-pi': () => import('@beamhop/harness-pi'),
+  '@beamhop/harness-discovery': () => import('@beamhop/harness-discovery'),
+};
+
+/**
  * Optional built-in packages, imported lazily. A missing package is skipped silently, so the
  * daemon works with any subset installed. Add new channels/harnesses/deployers here.
  */
@@ -184,7 +201,8 @@ export const loadBuiltinPlugins = async (ctx: BuiltinContext): Promise<string[]>
   for (const { module, load } of BUILTIN_PLUGINS) {
     let mod: Record<string, unknown>;
     try {
-      mod = (await import(/* @vite-ignore */ module)) as Record<string, unknown>;
+      const importer = IMPORTERS[module];
+      mod = (await (importer ? importer() : import(/* @vite-ignore */ module))) as Record<string, unknown>;
     } catch (e) {
       if (!isMissing(e)) ctx.log.warn('plugin failed to load', { module, error: String(e) });
       continue;

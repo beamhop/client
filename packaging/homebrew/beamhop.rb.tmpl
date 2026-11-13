@@ -1,0 +1,57 @@
+# Homebrew formula for beamhop — rendered by packaging/render.mjs from the release checksums.
+# Publish it to a tap (e.g. github.com/{{OWNER}}/homebrew-tap, Formula/beamhop.rb):
+#   brew install {{OWNER}}/tap/beamhop
+#
+# The standalone build is a Node SEA binary plus a lib/ directory (native addons, sandbox runner,
+# MCP server, web UI) that must stay next to it, so everything goes to libexec and bin/ gets a wrapper.
+class Beamhop < Formula
+  desc "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed"
+  homepage "https://github.com/{{REPO}}"
+  version "{{VERSION}}"
+  license "Apache-2.0"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/{{REPO}}/releases/download/v{{VERSION}}/beamhop-{{VERSION}}-macos-arm64.tar.gz"
+      sha256 "{{SHA256_MACOS_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/{{REPO}}/releases/download/v{{VERSION}}/beamhop-{{VERSION}}-macos-x64.tar.gz"
+      sha256 "{{SHA256_MACOS_X64}}"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/{{REPO}}/releases/download/v{{VERSION}}/beamhop-{{VERSION}}-linux-arm64.tar.gz"
+      sha256 "{{SHA256_LINUX_ARM64}}"
+    end
+    on_intel do
+      url "https://github.com/{{REPO}}/releases/download/v{{VERSION}}/beamhop-{{VERSION}}-linux-x64.tar.gz"
+      sha256 "{{SHA256_LINUX_X64}}"
+    end
+    # srt (the sandbox) also needs socat (and bubblewrap from the distro) on Linux.
+    depends_on "socat"
+  end
+
+  # srt uses ripgrep on every platform; `beamhop doctor` checks all prerequisites.
+  depends_on "ripgrep"
+
+  def install
+    libexec.install "beamhop", "lib"
+    (bin/"beamhop").write_exec_script libexec/"beamhop"
+  end
+
+  def caveats
+    <<~EOS
+      Start the daemon, then run the first-run wizard:
+        beamhop daemon      # keep running (or run it as a login service)
+        beamhop init
+      On Linux the sandbox also needs bubblewrap from your distribution (e.g. `apt install bubblewrap`).
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/beamhop --version")
+  end
+end

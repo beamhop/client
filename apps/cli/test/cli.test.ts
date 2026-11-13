@@ -130,6 +130,29 @@ describe('cli', () => {
     ]);
   });
 
+  it('expands dotted keys into nested patches', async () => {
+    const t = setup(async () => ({}));
+    await t.run(
+      'agent',
+      'set',
+      'bot',
+      'budgets.dailyUsd=3',
+      'sandbox.policy.learning=true',
+      'sandbox.profile=strict',
+    );
+    expect(t.calls[0]).toEqual([
+      'agent.update',
+      {
+        name: 'bot',
+        patch: { budgets: { dailyUsd: 3 }, sandbox: { policy: { learning: true }, profile: 'strict' } },
+      },
+    ]);
+    const bad = setup(async () => ({}));
+    await bad.run('agent', 'set', 'bot', '__proto__.x=1');
+    expect(bad.calls).toEqual([]);
+    expect(bad.io.exitCode).toBe(1);
+  });
+
   it('joins with triggers', async () => {
     const t = setup(async () => ({}));
     await t.run(

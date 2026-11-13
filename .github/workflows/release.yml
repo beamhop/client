@@ -1,0 +1,291 @@
+# Release pipeline. Push a tag `vX.Y.Z` (matching apps/cli/package.json "version") to run it.
+#
+#   verify  ─┬─ npm (bundle, smoke, publish with provenance) ── image (ghcr, multi-arch, cosign)
+#            └─ binaries (Node SEA per OS/arch, signed/notarized when secrets exist)
+#                                         └── release (SHA256SUMS + cosign, GitHub release, manifests)
+#
+# Secrets:
+#   NPM_TOKEN                                    npm automation token (publish)
+#   APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,  optional: Developer ID signing + notarization;
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD  unsigned (ad-hoc) macOS binaries otherwise
+#   WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD  optional: Authenticode signing
+# Image signing and checksum signing use keyless cosign (GitHub OIDC); no key material is stored.
+name: release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build everything but do not publish (npm, ghcr, GitHub release)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+  IMAGE: ghcr.io/${{ github.repository_owner }}/agent
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Version matches tag
+        id: v
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/cli/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match apps/cli/package.json version $version"
+            exit 1
+          fi
+      - name: Linux sandbox prerequisites
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap socat ripgrep
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm exec tsx scripts/gen-cli-docs.ts --check
+
+  npm:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: Linux sandbox prerequisites
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat ripgrep
+      - run: pnpm install --frozen-lockfile
+      - name: Bundle (CLI + daemon + MCP + runtime assets + PWA)
+        run: pnpm --filter beamhop run build
+      - name: Pack
+        run: |
+          mkdir -p out
+          npm pack ./apps/cli/dist --pack-destination out
+      - name: Smoke test the tarball (global install into a temp prefix)
+        run: node apps/cli/scripts/smoke.mjs out/beamhop-${{ needs.verify.outputs.version }}.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: out/*.tgz
+          if-no-files-found: error
+      - name: Publish with provenance
+        if: env.DRY_RUN != 'true'
+        run: npm publish ./out/beamhop-${{ needs.verify.outputs.version }}.tgz --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  binaries:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: linux-x64 }
+          - { os: ubuntu-24.04-arm, target: linux-arm64 }
+          - { os: macos-15-intel, target: macos-x64 }
+          - { os: macos-latest, target: macos-arm64 }
+          - { os: windows-latest, target: windows-x64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter beamhop run build
+      - name: Build standalone binary (Node SEA)
+        run: node apps/cli/scripts/sea.mjs --no-archive
+
+      - name: macOS — Developer ID sign + notarize
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir=$(ls -d dist/standalone/beamhop-*-${{ matrix.target }})
+          kc="$RUNNER_TEMP/sign.keychain-db"; kcpass=$(openssl rand -hex 16)
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          security list-keychain -d user -s "$kc"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$kc"
+          ident=$(security find-identity -v -p codesigning "$kc" | awk -F'"' '/Developer ID Application/{print $2; exit}')
+          cat > "$RUNNER_TEMP/entitlements.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.cs.allow-jit</key><true/>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+            <key>com.apple.security.cs.disable-library-validation</key><true/>
+          </dict></plist>
+          EOF
+          # Native addons and bundled executables first, then the SEA binary itself.
+          find "$dir/lib" \( -name '*.node' -o -name '*.dylib' \) -print0 | xargs -0 -I{} codesign --force --timestamp --options runtime --sign "$ident" {}
+          codesign --force --timestamp --options runtime --entitlements "$RUNNER_TEMP/entitlements.plist" --sign "$ident" "$dir/beamhop"
+          ditto -c -k --keepParent "$dir" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          # Bare Mach-O binaries cannot be stapled; Gatekeeper checks the ticket online.
+
+      - name: Windows — Authenticode sign
+        if: runner.os == 'Windows' && env.HAS_WINDOWS_CERT == 'true'
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'cert.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+          $exe = Get-ChildItem dist/standalone -Recurse -Filter beamhop.exe | Select-Object -First 1
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -like '*x64*' | Select-Object -First 1
+          & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $exe.FullName
+
+      - name: Smoke test the binary
+        shell: bash
+        run: |
+          dir=$(ls -d dist/standalone/beamhop-*-${{ matrix.target }})
+          exe="$dir/beamhop"; [[ "$RUNNER_OS" == "Windows" ]] && exe="$dir/beamhop.exe"
+          "$exe" --version
+          "$exe" --help > /dev/null
+      - name: Archive
+        shell: bash
+        run: |
+          cd dist/standalone
+          name=$(ls -d beamhop-*-${{ matrix.target }})
+          if [[ "$RUNNER_OS" == "Windows" ]]; then 7z a -tzip "$name.zip" "$name" > /dev/null; else tar -czf "$name.tar.gz" "$name"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.target }}
+          path: |
+            dist/standalone/*.tar.gz
+            dist/standalone/*.zip
+          if-no-files-found: error
+
+  image:
+    needs: [verify, npm]
+    if: github.event_name == 'push' # the image installs the just-published npm package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign + attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the npm release to be installable
+        run: |
+          for i in $(seq 1 30); do
+            npm view "beamhop@${{ needs.verify.outputs.version }}" version && exit 0
+            sleep 10
+          done
+          echo "::error::beamhop@${{ needs.verify.outputs.version }} not visible on npm"; exit 1
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(needs.verify.outputs.version, '-') }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/deploy
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: BEAMHOP_VERSION=${{ needs.verify.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image (keyless)
+        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    needs: [verify, npm, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum * | tee SHA256SUMS
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign checksums (keyless)
+        working-directory: assets
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "assets/*.tar.gz, assets/*.zip, assets/*.tgz"
+      - name: Render Homebrew / Scoop / winget manifests
+        run: node packaging/render.mjs --version "${{ needs.verify.outputs.version }}" --checksums assets/SHA256SUMS --repo "${{ github.repository }}" --out assets/manifests
+      - name: Create GitHub release
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ needs.verify.outputs.version }}"
+          notes=$(node -e "const s=require('fs').readFileSync('CHANGELOG.md','utf8');const m=s.split(/^## /m).find(x=>x.startsWith('['+process.argv[1]+']')||x.startsWith(process.argv[1]));console.log(m?'## '+m.trim():'See CHANGELOG.md')" "${{ needs.verify.outputs.version }}")
+          prerelease=""; [[ "$tag" == *-* ]] && prerelease="--prerelease"
+          (cd assets/manifests && tar -czf ../packaging-manifests.tar.gz .)
+          gh release create "$tag" --title "beamhop $tag" --notes "$notes" $prerelease \
+            assets/*.tar.gz assets/*.zip assets/*.tgz assets/SHA256SUMS assets/SHA256SUMS.sigstore.json

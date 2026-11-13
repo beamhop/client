@@ -43,7 +43,10 @@ describe('DeployState', () => {
   it('refuses to persist secret-looking values and rejects unknown formats', async () => {
     const s = await tmpState();
     await expect(
-      s.upsert({ ...rec('hetzner:a'), resources: { leaked: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789' } }),
+      s.upsert({
+        ...rec('hetzner:a'),
+        resources: { leaked: ['ghp', 'abcdefghijklmnopqrstuvwxyz0123456789'].join('_') },
+      }),
     ).rejects.toThrow(/secret/);
     await writeFile(s.file, JSON.stringify({ version: 9 }));
     await expect(s.load()).rejects.toThrow(/unsupported/);
