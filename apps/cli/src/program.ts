@@ -663,15 +663,21 @@ export const buildProgram = (deps: CliDeps): Command => {
   program
     .command('approve <id>')
     .option('--always', 'allow this tool for the rest of the session')
+    .option(
+      '--forever [rule]',
+      'save a permanent rule (e.g. "bash:npm test", "*.npmjs.org", "~/code/app/"); without a value, the exact request',
+    )
     .option('--grant-role <role>', 'for access requests: role to grant')
     .action(
-      act(async (c, id: string, o: { always?: boolean; grantRole?: string }) => ({
+      act(async (c, id: string, o: { always?: boolean; forever?: string | boolean; grantRole?: string }) => ({
         data: await c.call('approval.decide', {
           id,
           allow: true,
-          always: !!o.always,
+          always: o.forever !== undefined,
+          ...(o.always ? { session: true } : {}),
+          ...(typeof o.forever === 'string' ? { rule: o.forever } : {}),
           grantRole: o.grantRole,
-        }),
+        } as never),
         human: () => pc.green(`approved ${id}`),
       })),
     );
@@ -1016,17 +1022,19 @@ export const buildProgram = (deps: CliDeps): Command => {
     .command('pair')
     .description('pair a phone: QR code for the hosted app, then confirm the safety phrase here')
     .option('--name <name>', 'device name', 'New device')
-    .option('--no-wait', 'print the QR / link and exit (confirm later with the code)')
+    .option('--no-wait', 'print the QR / link and exit (confirm later with `beamhop device confirm`)')
     .option('--timeout <seconds>', 'how long to wait for the phone', Number, 120)
     .action(async (o: { name: string; wait: boolean; timeout: number }) => {
       try {
         const c = await deps.client();
         if (json() || !o.wait) {
-          const p = await c.call('device.pairStart', { name: o.name });
+          // Always with confirmation (review wave C PAIR-2): whoever sees the QR must not be able to
+          // pair silently; the phone joins only after `beamhop device confirm <pairingId>`.
+          const p = await c.call('device.pairStart', { name: o.name, requireConfirm: true });
           if (json()) io.out(JSON.stringify(p, null, 2));
           else
             io.out(
-              `${await terminalQr(p.uri)}\nOpen on your phone:\n${pc.bold(p.uri)}${p.link ? `\n${pc.dim(p.link)}` : ''}\ncode ${pc.bold(p.code)} ${pc.dim(`(expires ${p.expiresAt})`)}`,
+              `${await terminalQr(p.uri)}\nOpen on your phone:\n${pc.bold(p.uri)}${p.link ? `\n${pc.dim(p.link)}` : ''}\ncode ${pc.bold(p.code)} ${pc.dim(`(expires ${p.expiresAt})`)}\nthen compare the safety phrase: ${pc.bold(`beamhop device confirm ${p.pairingId ?? ''}`)}`,
             );
           return;
         }
@@ -1047,6 +1055,27 @@ export const buildProgram = (deps: CliDeps): Command => {
         if (!(e instanceof InitCancelled)) io.err(`${pc.red('error')} ${(e as Error).message}`);
       }
     });
+  device
+    .command('confirm <pairingId>')
+    .description(
+      'show the safety phrase of a pending pairing; --accept if it matches the phone, else --reject',
+    )
+    .option('--accept', 'the phrase matches the one on the phone: pair it')
+    .option('--reject', 'the phrase does not match: cancel the pairing')
+    .action(
+      act(async (c, pairingId: string, o: { accept?: boolean; reject?: boolean }) => {
+        const st = await c.call('device.pairStatus', { pairingId });
+        const phrase = st.safetyPhrase ? st.safetyPhrase.join(' · ').toUpperCase() : undefined;
+        if (!o.accept && !o.reject)
+          return {
+            data: st,
+            human: () =>
+              `${phrase ? `safety phrase ${pc.bold(phrase)}\n` : ''}pairing ${st.status}${st.status === 'awaiting-confirm' ? `\ncompare it with the phone, then run again with --accept or --reject` : ''}`,
+          };
+        const r = await c.call('device.pairConfirm', { pairingId, accept: !!o.accept && !o.reject });
+        return { data: r, human: () => `pairing ${r.status}` };
+      }),
+    );
   device.command('rm <id>').action(
     act(async (c, id: string) => ({
       data: await c.call('device.remove', { id }),

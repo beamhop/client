@@ -133,11 +133,24 @@ test.describe('session view', () => {
     await expect(sheet.getByRole('button', { name: /src\/schema\.ts/ })).toBeVisible();
     await axe(page);
     await page.keyboard.press('Escape');
+    // session.openPr: the push waits for an approval; the end card links to it in the Inbox.
     await page.getByRole('button', { name: 'Open PR' }).first().click();
     await expect(
-      page.getByRole('region', { name: 'Notifications' }).getByText('Asked reviewer to open a pull request'),
+      page
+        .getByRole('region', { name: 'Notifications' })
+        .getByText('Pushing beamhop/836 needs your approval first'),
     ).toBeVisible();
-    await expect(log.getByText(/open a pull request from beamhop\/836/)).toBeVisible();
+    await expect(page.getByText('Pushing beamhop/836 is waiting for approval.').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open PR' }).first()).toBeDisabled();
+    await page.getByRole('link', { name: 'Review in Inbox' }).first().click();
+    await expect(page).toHaveURL(/\/inbox\/apr_/);
+  });
+
+  test('finished worktree session: merge the branch', async ({ page }) => {
+    await open(page, '/sessions/ses_836');
+    await page.getByRole('button', { name: 'Merge branch' }).first().click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Merge branch' }).click();
+    await expect(page.getByText(/^Merged beamhop\/836 into main \([0-9a-f]{7}\)$/).first()).toBeVisible();
   });
 
   test('prev / next session of the same agent: buttons and [ ]', async ({ page }, info) => {

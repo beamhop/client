@@ -74,6 +74,60 @@ test('sections are routes; overview opens an instruction file', async ({ page })
   await expect(page.getByText('Every weekday at 09:00 Berlin time')).toBeVisible();
 });
 
+test('instruction file in a read-write mount: edit, preview the diff, write', async ({ page }) => {
+  await open(page, '/agents/reviewer');
+  await page.getByRole('button', { name: /CLAUDE\.md/ }).click();
+  const sheet = page.getByRole('dialog', { name: '~/code/app/CLAUDE.md' });
+  await expect(sheet.getByText(/In a read-write mount \(~\/code\/app\)/)).toBeVisible();
+  await sheet.getByRole('button', { name: 'Edit' }).click();
+  const box = sheet.getByRole('textbox', { name: 'Contents of ~/code/app/CLAUDE.md' });
+  await box.press('End');
+  await box.fill(`${await box.inputValue()}- Ask before touching CI.\n`);
+  await sheet.getByRole('button', { name: 'Preview changes' }).click();
+  await expect(sheet.getByRole('button', { name: /^~\/code\/app\/CLAUDE\.md \+1 −0/ })).toBeVisible();
+  await expect(sheet.getByText('- Ask before touching CI.')).toBeVisible();
+  await axe(page);
+  await sheet.getByRole('button', { name: 'Write file' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Saved · ~/code/app/CLAUDE.md'),
+  ).toBeVisible();
+  await expect(sheet.getByText('- Ask before touching CI.')).toBeVisible();
+});
+
+test('instruction file: a change made meanwhile stops the write', async ({ page }) => {
+  await open(page, '/agents/reviewer');
+  await page.getByRole('button', { name: /CLAUDE\.md/ }).click();
+  const sheet = page.getByRole('dialog', { name: '~/code/app/CLAUDE.md' });
+  await sheet.getByRole('button', { name: 'Edit' }).click();
+  const box = sheet.getByRole('textbox', { name: /Contents of/ });
+  await box.fill('# mine\n');
+  // Someone else writes the file before we save.
+  await page.evaluate(() =>
+    (
+      window as unknown as {
+        __beamhop: { runtime: { client: { call: (m: string, p: unknown) => Promise<unknown> } } };
+      }
+    ).__beamhop.runtime.client.call('agent.instructionsWrite', {
+      name: 'reviewer',
+      path: '~/code/app/CLAUDE.md',
+      content: '# theirs\n',
+    }),
+  );
+  await sheet.getByRole('button', { name: 'Preview changes' }).click();
+  await sheet.getByRole('button', { name: 'Write file' }).click();
+  await expect(sheet.getByRole('alert')).toContainText('changed since you started editing');
+  await sheet.getByRole('button', { name: 'Start over from the new version' }).click();
+  await expect(sheet.getByRole('textbox', { name: /Contents of/ })).toHaveValue('# theirs\n');
+});
+
+test('instruction file in a read-only mount cannot be edited', async ({ page }) => {
+  await open(page, '/agents/ci-bot');
+  await page.getByRole('button', { name: /CLAUDE\.md/ }).click();
+  const sheet = page.getByRole('dialog', { name: '~/code/app/CLAUDE.md' });
+  await expect(sheet.getByText(/mounted read-only/)).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+});
+
 test('setup: making a folder read-write is a widening change, reviewed before save', async ({ page }) => {
   await open(page, '/agents/reviewer/setup');
   await page.getByRole('radio', { name: 'Read-write' }).nth(1).click(); // ~/notes RO → RW

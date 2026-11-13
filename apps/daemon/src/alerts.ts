@@ -3,7 +3,7 @@
  * source does not already send one). Categories: approvals, budget (80/100%), agent crash, cloud
  * agent offline (missed heartbeats) and security-event spikes.
  */
-import type { AuditEvent } from '@beamhop/core';
+import { type AlertRules, type AuditEvent, DEFAULT_ALERT_RULES } from '@beamhop/core';
 import type { Daemon } from './daemon.ts';
 import type { PushPayload } from './push.ts';
 import { errMsg } from './util.ts';
@@ -15,6 +15,26 @@ export interface AlertOptions {
   /** At most one crash alert per agent per this many ms (default 10 minutes). */
   crashThrottleMs?: number;
 }
+
+const defined = <T extends object>(o: T): Partial<T> =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+const minutesOf = (hhmm: string): number => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+};
+
+/** Is `at` (daemon local time) inside the quiet window `start`–`end` (may wrap midnight)? */
+export const inQuietHours = (rules: Pick<AlertRules, 'quietStart' | 'quietEnd'>, at: Date): boolean => {
+  const now = at.getHours() * 60 + at.getMinutes();
+  const a = minutesOf(rules.quietStart);
+  const b = minutesOf(rules.quietEnd);
+  if (a === b) return false;
+  return a < b ? now >= a && now < b : now >= a || now < b;
+};
+
+/** Push categories held during quiet hours (approvals and security always come through). */
+const QUIET_HELD = new Set(['budget', 'crash', 'offline']);
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 const seg = (v: string) => encodeURIComponent(v);
@@ -41,8 +61,33 @@ export class Alerts {
     void q.finally(() => this.pending.delete(q));
   }
 
+  /** Effective alert rules: config `alerts` over daemon options over the defaults. */
+  rules(): AlertRules {
+    const fromOpts: Partial<AlertRules> = {};
+    if (this.opts.spikeThreshold !== undefined) fromOpts.spikeEvents = this.opts.spikeThreshold;
+    if (this.opts.spikeWindowMs !== undefined)
+      fromOpts.spikeMinutes = Math.max(1, Math.round(this.opts.spikeWindowMs / 60_000));
+    return { ...DEFAULT_ALERT_RULES, ...fromOpts, ...defined(this.d.global().alerts ?? {}) };
+  }
+
+  /** Spike window in ms (daemon option precision unless config sets minutes). */
+  private spikeWindowMs(): number {
+    const g = this.d.global().alerts?.spikeMinutes;
+    if (g !== undefined) return g * 60_000;
+    return this.opts.spikeWindowMs ?? DEFAULT_ALERT_RULES.spikeMinutes * 60_000;
+  }
+
   push(p: PushPayload): void {
+    const r = this.rules();
+    if (!r.push) return;
+    if (r.quietHours && QUIET_HELD.has(p.category) && inQuietHours(r, new Date(this.d.now()))) return;
     this.track(this.d.push.notify(p));
+  }
+
+  /** DM owners on their channels, when the `nostrDm` rule is on. */
+  dmOwners(markdown: string): void {
+    if (!this.rules().nostrDm) return;
+    this.track(this.d.notifyOwners(markdown));
   }
 
   onAudit(ev: AuditEvent): void {
@@ -91,6 +136,7 @@ export class Alerts {
         break;
       }
       case 'agent.crash': {
+        if (!this.rules().crash) break;
         const now = this.d.now();
         const last = this.lastCrash.get(agent) ?? Number.NEGATIVE_INFINITY;
         if (now - last < (this.opts.crashThrottleMs ?? 10 * 60_000)) break;
@@ -102,7 +148,7 @@ export class Alerts {
           url: `/agents/${seg(agent)}`,
           tag: `crash-${agent}`,
         });
-        this.track(this.d.notifyOwners(`💥 *${agent}* crashed. Check the session log in the PWA.`));
+        this.dmOwners(`💥 *${agent}* crashed. Check the session log in the PWA.`);
         break;
       }
       case 'remote.offline': {
@@ -114,7 +160,7 @@ export class Alerts {
           url: dep ? `/deploy/${seg(dep)}` : '/deploy',
           tag: `offline-${dep}`,
         });
-        this.track(this.d.notifyOwners(`📡 Cloud agent *${agent}* is offline (missed heartbeats).`));
+        this.dmOwners(`📡 Cloud agent *${agent}* is offline (missed heartbeats).`);
         break;
       }
     }
@@ -123,8 +169,8 @@ export class Alerts {
 
   private securityEvent(): void {
     const now = this.d.now();
-    const windowMs = this.opts.spikeWindowMs ?? 10 * 60_000;
-    const threshold = this.opts.spikeThreshold ?? 5;
+    const windowMs = this.spikeWindowMs();
+    const threshold = this.rules().spikeEvents;
     this.security.push(now);
     while (this.security.length && now - this.security[0]! > windowMs) this.security.shift();
     if (this.security.length < threshold || now - this.lastSpike < windowMs) return;
@@ -146,8 +192,6 @@ export class Alerts {
       url: '/audit',
       tag: 'security-spike',
     });
-    this.track(
-      this.d.notifyOwners(`🚨 ${n} security events in the last ${minutes} minutes. Review the audit log.`),
-    );
+    this.dmOwners(`🚨 ${n} security events in the last ${minutes} minutes. Review the audit log.`);
   }
 }

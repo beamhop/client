@@ -1,22 +1,25 @@
 /**
  * Roles — "what can each role do" (SCREENS §7 Roles, JOURNEYS §5.7). Desktop: a real table, rows =
  * actions, columns = roles, cells = shape + word (Auto / Asks owner / Never). Compact: one disclosure per
- * role with the action list inside (no horizontal table scrolling). Read-only here: there's no role
- * edit RPC yet, so the CLI strip shows how.
+ * role with the action list inside (no horizontal table scrolling). Every role but owner and agent can
+ * be edited or created here (RoleEditor → `role.define` / `role.delete`, confirmed with a plain diff).
  */
 import type { RoleDef } from '@beamhop/core';
-import { CaretRight, Check, HandPalm, X } from '@phosphor-icons/react';
+import { CaretRight, Check, HandPalm, LockSimple, PencilSimple, Plus, X } from '@phosphor-icons/react';
+import { useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { Screen } from '../../shell/Screen.tsx';
+import { Button, IconButton } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { Mono, Section } from './parts.tsx';
-import { CELL_WORD, type Cell, cellFor, DLP_WORD, limitsOf, ROLE_ACTIONS } from './roles.ts';
+import { RoleEditor, type RoleEditTarget } from './RoleEditor.tsx';
+import { CELL_WORD, type Cell, cellFor, DLP_WORD, isLockedRole, limitsOf, ROLE_ACTIONS } from './roles.ts';
 
 const CellMark = ({ c }: { c: Cell }) => (
   <span
@@ -36,7 +39,25 @@ const CellMark = ({ c }: { c: Cell }) => (
   </span>
 );
 
-const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
+/** Edit button for a role, or a lock for the two fixed ones. */
+const EditRole = ({ r, onEdit }: { r: RoleDef; onEdit: (r: RoleDef) => void }) =>
+  isLockedRole(r.name) ? (
+    <span
+      className="inline-flex items-center text-ink-3"
+      title={t('policy.roleEdit.locked', { name: r.name })}
+    >
+      <LockSimple size={14} aria-hidden="true" />
+      <span className="sr-only">{t('policy.roleEdit.locked', { name: r.name })}</span>
+    </span>
+  ) : (
+    <IconButton
+      label={t('policy.roleEdit.edit', { name: r.name })}
+      icon={<PencilSimple size={16} aria-hidden="true" />}
+      onPress={() => onEdit(r)}
+    />
+  );
+
+const RoleTable = ({ roles, onEdit }: { roles: RoleDef[]; onEdit: (r: RoleDef) => void }) => (
   <div
     role="region"
     tabIndex={0}
@@ -56,7 +77,10 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
               scope="col"
               className="px-1.5 py-3 text-left font-mono text-[14px] font-medium text-ink"
             >
-              {r.name}
+              <span className="inline-flex items-center gap-1">
+                {r.name}
+                <EditRole r={r} onEdit={onEdit} />
+              </span>
             </th>
           ))}
         </tr>
@@ -116,7 +140,7 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
   </div>
 );
 
-const RoleAccordion = ({ roles }: { roles: RoleDef[] }) => (
+const RoleAccordion = ({ roles, onEdit }: { roles: RoleDef[]; onEdit: (r: RoleDef) => void }) => (
   <div className="flex flex-col rounded-lg border border-line bg-surface">
     {roles.map((r) => (
       <Disclosure key={r.name} className="group border-b border-line last:border-b-0">
@@ -160,6 +184,20 @@ const RoleAccordion = ({ roles }: { roles: RoleDef[] }) => (
               </dd>
             </div>
           </dl>
+          <div className="mx-4 border-t border-line py-3">
+            {isLockedRole(r.name) ? (
+              <p className="type-body-sm text-ink-2">{t('policy.roleEdit.locked', { name: r.name })}</p>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<PencilSimple size={16} aria-hidden="true" />}
+                onPress={() => onEdit(r)}
+              >
+                {t('policy.roleEdit.edit', { name: r.name })}
+              </Button>
+            )}
+          </div>
         </DisclosurePanel>
       </Disclosure>
     ))}
@@ -172,6 +210,9 @@ export const RolesScreen = () => {
   const showSkeleton = useDelayedLoading(roles.isPending);
   const list = roles.data?.roles ?? [];
   const grants = Object.entries(roles.data?.grants ?? {});
+  const [editing, setEditing] = useState<RoleEditTarget | null>(null);
+  const edit = (r: RoleDef) => setEditing({ mode: 'edit', role: r });
+  const viewer = list.find((r) => r.name === 'viewer') ?? list.find((r) => !isLockedRole(r.name));
   return (
     <Screen
       title={t('policy.roles.title')}
@@ -195,14 +236,31 @@ export const RolesScreen = () => {
         ) : null
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1">
+          <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1">
             {(['auto', 'ask', 'deny'] as Cell[]).map((c) => (
               <span key={c} className="inline-flex items-center gap-2 type-body-sm text-ink-2">
                 <CellMark c={c} /> {t(`policy.roles.legend.${c}`)}
               </span>
             ))}
+            {viewer && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="ml-auto"
+                icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+                onPress={() => setEditing({ mode: 'new', base: viewer })}
+              >
+                {t('policy.roleEdit.new')}
+              </Button>
+            )}
           </div>
-          {expanded ? <RoleTable roles={list} /> : <RoleAccordion roles={list} />}
+          {expanded ? <RoleTable roles={list} onEdit={edit} /> : <RoleAccordion roles={list} onEdit={edit} />}
+          <RoleEditor
+            target={editing}
+            roles={list}
+            grants={roles.data?.grants ?? {}}
+            onClose={() => setEditing(null)}
+          />
           <Section id="grants" title={t('policy.roles.grants', { count: grants.length })} className="mt-8">
             {grants.length === 0 ? (
               <p className="type-body-sm text-ink-2">{t('policy.roles.noGrants')}</p>

@@ -12,6 +12,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:e2e": "pnpm --filter @beamhop/pwa run test:e2e",
+    "test:e2e:real": "pnpm --filter @beamhop/pwa run test:e2e:real",
     "check": "node scripts/check-no-secrets.mjs && pnpm run typecheck && pnpm run lint && pnpm run test",
     "dev:daemon": "tsx apps/daemon/src/main.ts",
     "beamhop": "tsx apps/cli/src/main.ts"

@@ -105,6 +105,18 @@ describe('renderCloudInit', () => {
     expect(out).not.toMatch(/(api[_-]?key|password|token)\s*[=:]/i);
   });
 
+  it('PROV-1: carries the one-time binding token in a root-only env file; refuses malformed tokens', () => {
+    const token = 'ab'.repeat(32);
+    const d = doc(renderCloudInit({ ...base, provisioningToken: token }));
+    expect(file(d, '/etc/beamhop/beamhopd.env')).toContain(`BEAMHOP_PROVISIONING_TOKEN=${token}`);
+    const entry = d.write_files.find((f: { path: string }) => f.path === '/etc/beamhop/beamhopd.env');
+    expect(entry.permissions).toBe('0600');
+    expect(() => renderCloudInit({ ...base, provisioningToken: 'short' })).toThrow(/provisioningToken/);
+    expect(() =>
+      renderCloudInit({ ...base, provisioningToken: `${'a'.repeat(50)}\nBEAMHOP_AWAIT_PROVISIONING=0` }),
+    ).toThrow(/provisioningToken/);
+  });
+
   it('refuses secret values and injection attempts', () => {
     const nsec = `nsec1${'qpzry9x8gf2tvdw0s3jn54khce6mua7l'.repeat(2).slice(0, 58)}`;
     expect(() => renderCloudInit({ ...base, daemonNsecRef: nsec })).toThrow(/reference/);

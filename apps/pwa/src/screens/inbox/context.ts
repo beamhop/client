@@ -14,7 +14,8 @@ export interface InboxContextValue {
   groups: SlipGroup[];
   /** Every approval the daemon knows (pending + decided), for detail lookups. */
   all: ApprovalView[];
-  mine: ReadonlySet<string>;
+  /** Your names on this daemon (`system.whoami`), to match votes and `decidedBy`. */
+  me: ReadonlySet<string>;
   now: number;
   act: InboxActions;
 }

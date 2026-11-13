@@ -161,6 +161,10 @@ export interface DeploySpec {
   mode: 'move' | 'new';
   harnesses: string[];
   image?: string;
+  /** Per-mount sync choice (default: the deployer's plan per mount). Paths are the agent's mount paths. */
+  mounts?: { path: string; sync: 'git-clone' | 'rsync' | 'mutagen' | 'skip' }[];
+  /** Harness auth on the cloud host (default: the agent's `harnessAuth`). */
+  harnessAuth?: 'api-key' | 'subscription';
 }
 
 export interface DeployPlan {

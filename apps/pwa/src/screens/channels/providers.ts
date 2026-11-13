@@ -28,21 +28,64 @@ export const STEP_LABEL: Record<string, string> = {
   group: 'Group',
 };
 
-/** `channel.providers` steps are `unknown[]` in the contract: accept strings or `{ id }` objects. */
+/** The wizard frame for channel plugins this app has no bespoke screens for. */
+export const PLUGIN_STEPS: StepId[] = ['credentials', 'validate', 'connect', 'pair', 'join'];
+
+/**
+ * `channel.providers` steps are `unknown[]` in the contract. A list of step-id strings is used as the
+ * order. The real daemon sends each plugin's own `WizardStep` objects (`{ id, title, fields }`, ids
+ * like `token` / `create-app`), which are content for the CLI wizard, not this app's step ids: the
+ * built-in providers then keep their bespoke flow and any other plugin gets the generic frame (its
+ * secret fields are collected on Credentials, see `providerMeta`).
+ */
 export const normalizeSteps = (provider: string, steps?: unknown[]): string[] => {
-  const ids = (steps ?? [])
-    .map((s) => (typeof s === 'string' ? s : (s as { id?: unknown } | null)?.id))
-    .filter((s): s is string => typeof s === 'string' && s.length > 0);
-  return ids.length > 0 ? ids : (DEFAULT_STEPS[provider] ?? ['credentials', 'validate', 'connect', 'join']);
+  const ids = (steps ?? []).filter((s): s is string => typeof s === 'string' && s.length > 0);
+  return ids.length > 0 ? ids : (DEFAULT_STEPS[provider] ?? PLUGIN_STEPS);
+};
+
+/** Secret fields declared by a plugin's wizard steps (`channel.providers`), in order, de-duplicated. */
+export const pluginSecretFields = (steps?: unknown[]): { id: string; label: string; help?: string }[] => {
+  const out: { id: string; label: string; help?: string }[] = [];
+  for (const st of steps ?? []) {
+    const fields = (st as { fields?: unknown } | null)?.fields;
+    if (!Array.isArray(fields)) continue;
+    for (const f of fields as { kind?: unknown; id?: unknown; label?: unknown; help?: unknown }[]) {
+      if (f?.kind !== 'secret' || typeof f.id !== 'string' || out.some((x) => x.id === f.id)) continue;
+      out.push({
+        id: f.id,
+        label: typeof f.label === 'string' ? f.label : f.id,
+        ...(typeof f.help === 'string' ? { help: f.help } : {}),
+      });
+    }
+  }
+  return out;
+};
+
+/**
+ * A successful `channel.validate` whose message is a warning (Discord's Message Content intent off,
+ * …). Plugins phrase success freely ("Connected to @bot.", "Valid"), so only warning words count.
+ */
+export const validationCaution = (message: string): boolean =>
+  /\bwarning\b|\bdisabled\b|\bis off\b|\bintent\b|\bonly see\b/i.test(message);
+
+/** Vault name of a channel secret, exactly as the daemon stores it (`channel.<name>.<field>`). */
+export const channelSecretRef = (channel: string, key: string): string => `channel.${channel}.${key}`;
+
+/** The field id of a channel secret ref (`channel.tg.token` → `token`). */
+export const secretKeyOf = (channel: string, ref: string): string => {
+  const prefix = `channel.${channel}.`;
+  return ref.startsWith(prefix) ? ref.slice(prefix.length) : (ref.split(/[/.]/).pop() ?? ref);
 };
 
 /** Steps the user never "does": they resolve in place on the Credentials screen (SCREENS §5). */
 export const AUTO_STEPS = new Set(['validate', 'connect']);
 
 export interface SecretSpec {
-  /** Vault key suffix: `channel/<name>/<key>`. */
+  /** The plugin's secret field id (`channel.add` `secrets` key; vault `channel.<name>.<key>`). */
   key: string;
   label: string;
+  /** Help line (plugin channels; built-ins use `channels.cred.how.<provider>.<key>`). */
+  help?: string;
   format: RegExp;
   formatLabel: string;
   /** Shape hint shown before anything is typed (never a real-looking token). */
@@ -70,7 +113,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
     transport: 'long-polling',
     secrets: [
       {
-        key: 'bot-token',
+        key: 'token',
         label: 'Bot token',
         format: /^\d{6,12}:[A-Za-z0-9_-]{30,}$/,
         formatLabel: 'Looks like a bot token',
@@ -86,7 +129,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
     transport: 'Socket Mode',
     secrets: [
       {
-        key: 'app-token',
+        key: 'appToken',
         label: 'App-level token',
         format: /^xapp-\d-[A-Za-z0-9]+-\d+-[A-Za-z0-9]{16,}$/,
         formatLabel: 'Looks like an app-level token',
@@ -94,7 +137,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
         prefix: 'xapp-',
       },
       {
-        key: 'bot-token',
+        key: 'botToken',
         label: 'Bot token',
         format: /^xoxb-\d+-\d+-[A-Za-z0-9]{16,}$/,
         formatLabel: 'Looks like a bot token',
@@ -111,7 +154,7 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
     transport: 'gateway',
     secrets: [
       {
-        key: 'bot-token',
+        key: 'botToken',
         label: 'Bot token',
         format: /^[A-Za-z0-9_-]{18,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{20,}$/,
         formatLabel: 'Three dot-separated parts, like a bot token',
@@ -138,8 +181,23 @@ export const PROVIDERS: Record<string, ProviderMeta> = {
   },
 };
 
-export const providerMeta = (id: string): ProviderMeta =>
-  PROVIDERS[id] ?? { id, name: id, how: 'Plugin', minutes: 3, transport: 'plugin', secrets: [] };
+/** Built-in metadata, or for a plugin channel its secret fields from the daemon's wizard steps. */
+export const providerMeta = (id: string, steps?: unknown[]): ProviderMeta =>
+  PROVIDERS[id] ?? {
+    id,
+    name: id,
+    how: 'Plugin',
+    minutes: 3,
+    transport: 'plugin',
+    secrets: pluginSecretFields(steps).map((f) => ({
+      key: f.id,
+      label: f.label,
+      help: f.help ?? '',
+      format: /\S/,
+      formatLabel: 'Filled in',
+      shape: '…',
+    })),
+  };
 
 /** Pasted into the wrong field? Returns the key of the field it belongs to (Slack app vs bot token). */
 export const misplacedSecret = (

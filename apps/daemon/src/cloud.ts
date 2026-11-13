@@ -12,7 +12,17 @@ import { AgentConfig, BeamhopError, ChannelConfig, type RpcRequest, type RpcResp
 import { z } from 'zod';
 import type { Daemon } from './daemon.ts';
 import { loadNostr } from './identity.ts';
-import { HELLO_METHOD, isLocalOnlySecret, PROVISION_VERSION } from './remote.ts';
+import {
+  HELLO_METHOD,
+  isLocalOnlySecret,
+  PROVISION_METHOD,
+  PROVISION_VERSION,
+  provisionProof,
+} from './remote.ts';
+
+/** What the owner daemon's controller key may do on a cloud host (wave C CTRL-1). */
+export const CONTROLLER_METHODS: readonly string[] = ['system.panic', 'system.resume', 'system.status'];
+
 import { errMsg } from './util.ts';
 
 const NS = 'cloud';
@@ -65,6 +75,17 @@ export class CloudSide {
     return this.enabled && !this.provisioned();
   }
 
+  /**
+   * Methods a restricted control-plane key may call (wave C CTRL-1), or undefined for a normal
+   * (owner / paired phone) key. `sender` is the verified hex pubkey.
+   */
+  methodsFor(sender: string): readonly string[] | undefined {
+    if (!this.enabled) return undefined;
+    if (this.provisioningHex && sender === this.provisioningHex) return [PROVISION_METHOD];
+    const controllers = this.d.store.kv.get<string[]>(NS, 'controllers') ?? [];
+    return controllers.includes(sender) ? CONTROLLER_METHODS : undefined;
+  }
+
   /** Extra control-plane senders: the provisioning key, until provisioning is done. */
   allowlistExtra(): string[] {
     return this.awaiting() && this.provisioningHex ? [this.provisioningHex] : [];
@@ -81,6 +102,13 @@ export class CloudSide {
       else this.d.log.warn('BEAMHOP_PROVISIONING_PUBKEY is not a valid pubkey; only the owner can provision');
     }
     if (env.ownerNpub) this.ownerHex = m.tryDecodePubkey(env.ownerNpub);
+    // Keep the binding token out of every child process environment.
+    delete process.env.BEAMHOP_PROVISIONING_TOKEN;
+    if (this.awaiting()) {
+      // UX hook (wave C PROV-1): the owner can compare this with `beamhop deploy status`.
+      const { npub } = await this.d.controlKey();
+      this.d.log.info(`awaiting provisioning; this host's control key is ${npub}`);
+    }
   }
 
   close(): void {
@@ -123,11 +151,14 @@ export class CloudSide {
       });
       await this.hello.ready();
     }
+    const agent = this.d.deployEnv.agent ?? '';
+    const token = this.d.deployEnv.provisioningToken;
     try {
       await this.hello.call(HELLO_METHOD, {
-        agent: this.d.deployEnv.agent ?? '',
+        agent,
         npub,
         provider: this.d.deployEnv.provider ?? '',
+        ...(token ? { proof: provisionProof(token, agent, m.decodePubkey(npub)) } : {}),
       });
     } catch (e) {
       this.d.log.debug('provisioning hello not answered', { error: errMsg(e) });
@@ -218,6 +249,9 @@ export class CloudSide {
     for (const npub of controllers)
       if (!d.store.devices.list().some((dev) => dev.pubkey === npub))
         d.store.devices.add({ name: 'beamhop controller', pubkey: npub });
+    // Union with earlier controllers: a re-provisioning must never lift an old key's restriction.
+    const prev = d.store.kv.get<string[]>(NS, 'controllers') ?? [];
+    d.store.kv.set(NS, 'controllers', [...new Set([...prev, ...controllers.map((c) => m.decodePubkey(c))])]);
     d.store.kv.set(NS, 'provisioned', true);
     d.refreshControlAllowlist();
     this.close();

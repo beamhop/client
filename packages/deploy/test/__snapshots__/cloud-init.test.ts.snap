@@ -60,7 +60,7 @@ write_files:
         include if exists <local/beamhop-bwrap>
       }
   - path: /etc/beamhop/beamhopd.env
-    permissions: "0644"
+    permissions: "0600"
     content: |
       BEAMHOP_HOME=/home/beamhop/.beamhop
       XDG_CONFIG_HOME=/home/beamhop/.beamhop/xdg/config

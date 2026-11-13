@@ -27,6 +27,7 @@ import { mcpReadPaths } from '@beamhop/mcp';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
+import { sandboxGitWritePaths } from './git-ops.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
 import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
@@ -217,6 +218,16 @@ export class SessionManager {
     return out;
   }
 
+  /** Replace an event's text (same seq) and push it again; used for streaming assistant text. */
+  updateEvent(sessionId: string, seq: number, text: string): void {
+    try {
+      const out = this.d.store.sessions.updateEventText(sessionId, seq, text);
+      if (out) this.d.emit({ type: 'session.event', sessionId, event: out });
+    } catch (e) {
+      this.d.log.warn('transcript update failed', { error: errMsg(e) });
+    }
+  }
+
   findForThread(key: ThreadKey): LiveSession | undefined {
     const id = this.byThread.get(threadKeyStr(key));
     const live = id ? this.lives.get(id) : undefined;
@@ -385,7 +396,10 @@ export class SessionManager {
     if (!plugin) throw new BeamhopError('unavailable', `harness "${harnessId}" is not installed`);
     const { mounts, worktrees } = await this.prepareMounts(live, agent);
     const o = (agent.sandbox.policy ?? {}) as NonNullable<Parameters<typeof compilePolicy>[2]>;
-    const extraWrite = profile === 'strict' ? [] : [live.dir, ...worktrees.map((w) => join(w.repo, '.git'))];
+    // Only objects, beamhop/* refs and the worktree's own admin dir: never the repo's config or
+    // hooks, which unsandboxed git (the owner's, or the daemon's merge/PR) would run (wave C GIT-1).
+    const gitWrite = (await Promise.all(worktrees.map((w) => sandboxGitWritePaths(w.path, w.repo)))).flat();
+    const extraWrite = profile === 'strict' ? [] : [live.dir, ...gitWrite];
     const policy = compilePolicy(
       profile,
       mounts.map((m) => ({ path: m.path, mode: m.mode })),
@@ -633,6 +647,7 @@ export class SessionManager {
     let error: string | undefined;
     let watchdog: NodeJS.Timeout | undefined;
     const pendingPerms: Promise<void>[] = [];
+    const transcript = new AssistantStream(this, live.id);
     try {
       const rt = await this.ensureRuntime(live, agent, turn.role);
       for (const m of rt.mounts) {
@@ -671,6 +686,7 @@ export class SessionManager {
           case 'text':
             text += ev.delta;
             streamer?.onText(ev.delta);
+            transcript.add(ev.delta);
             break;
           case 'thinking':
             break;
@@ -679,6 +695,7 @@ export class SessionManager {
             this.event(live.id, { kind: 'progress', text: ev.message });
             break;
           case 'tool_call': {
+            transcript.close();
             const entry: ToolLogEntry = {
               id: ev.id,
               name: ev.name,
@@ -696,6 +713,7 @@ export class SessionManager {
             break;
           }
           case 'tool_result': {
+            transcript.close();
             const entry = live.toolLog.find((t) => t.id === ev.id);
             if (entry) {
               entry.ok = ev.ok;
@@ -714,6 +732,7 @@ export class SessionManager {
             break;
           }
           case 'permission_request': {
+            transcript.close();
             const p = d.approvals
               .requestTool(live, agent, turn, ev)
               .then((decision) => rt.harness.respondPermission(ev.id, decision))
@@ -735,6 +754,7 @@ export class SessionManager {
             });
             break;
           case 'error':
+            transcript.close();
             error = ev.message;
             this.event(live.id, { kind: 'error', text: ev.message });
             break;
@@ -744,6 +764,7 @@ export class SessionManager {
         }
       }
     } catch (e) {
+      transcript.close();
       error = errMsg(e);
       this.event(live.id, { kind: 'error', text: error });
     } finally {
@@ -753,7 +774,7 @@ export class SessionManager {
       const elapsedMin = (d.now() - (live.current?.startedAt ?? d.now())) / 60_000;
       live.current = undefined;
       release();
-      if (text.trim()) this.event(live.id, { kind: 'assistant', text });
+      transcript.close();
       // A turn that failed on its own (not stopped, not the session watchdog) is an agent crash (§9B).
       if (error && !stopped)
         d.audit({
@@ -807,7 +828,14 @@ export class SessionManager {
       minutes,
     });
     const delta = { tokens, usd, minutes };
-    const crossings = d.budgets.record(budgetKey.agent(agent.name), delta, agent.budgets);
+    const agentKey = budgetKey.agent(agent.name);
+    const before = d.budgets.usage(agentKey);
+    d.budgets.record(agentKey, delta, agent.budgets);
+    const rules = d.alerts.rules();
+    const crossings = budgetCrossings(before, d.budgets.usage(agentKey), agent.budgets, [
+      rules.budgetWarn / 100,
+      rules.budgetAlert / 100,
+    ]);
     if (turn) {
       d.budgets.record(
         budgetKey.principal(agent.name, normalizePrincipal(turn.from.principal)),
@@ -835,7 +863,7 @@ export class SessionManager {
         agent: agent.name,
         data: { metric: c.metric, threshold: c.threshold, used: c.used, limit: c.limit },
       });
-      void d.notifyOwners(`💸 *${agent.name}* has used ${pct}% of its daily budget (${what}).`);
+      d.alerts.dmOwners(`💸 *${agent.name}* has used ${pct}% of its daily budget (${what}).`);
     }
     if (tokens || usd) this.emitSession(live.id);
   }
@@ -1076,9 +1104,71 @@ const expand = (p: string): string => {
   return p;
 };
 
+/** Alert thresholds (fractions of the daily limit) crossed between two usage snapshots. */
+export const budgetCrossings = (
+  before: { tokens: number; usd: number },
+  after: { tokens: number; usd: number },
+  budget: { dailyUsd?: number; dailyTokens?: number },
+  thresholds: number[],
+): { metric: 'usd' | 'tokens'; threshold: number; used: number; limit: number }[] => {
+  const out: { metric: 'usd' | 'tokens'; threshold: number; used: number; limit: number }[] = [];
+  const ts = [...new Set(thresholds)].sort((a, b) => a - b);
+  for (const [metric, limit] of [
+    ['usd', budget.dailyUsd],
+    ['tokens', budget.dailyTokens],
+  ] as const) {
+    if (!limit) continue;
+    for (const t of ts)
+      if (before[metric] < limit * t && after[metric] >= limit * t)
+        out.push({ metric, threshold: t, used: after[metric], limit });
+  }
+  return out;
+};
+
 export const stripRecord = (s: SessionRecord) => {
   const { principal: _p, harness: _h, endedAt: _e, ...view } = s;
   return view;
 };
 
 export { newId };
+
+/**
+ * Streams assistant text into the transcript: the first non-blank delta of a segment appends an
+ * `assistant` event, later deltas update that same event (same `seq`, PWA replaces it) at most every
+ * `throttleMs`. A tool call, permission request or error closes the segment, so text before and
+ * after a tool lands in transcript order.
+ */
+export class AssistantStream {
+  private seq: number | undefined;
+  private buf = '';
+  private sent = '';
+  private timer: NodeJS.Timeout | undefined;
+  constructor(
+    private readonly sessions: Pick<SessionManager, 'event' | 'updateEvent'>,
+    private readonly sessionId: string,
+    private readonly throttleMs = 120,
+  ) {}
+  add(delta: string): void {
+    this.buf += delta;
+    if (this.seq === undefined) {
+      if (!this.buf.trim()) return;
+      this.seq = this.sessions.event(this.sessionId, { kind: 'assistant', text: this.buf }).seq;
+      this.sent = this.buf;
+      return;
+    }
+    this.timer ??= setTimeout(() => this.flush(), this.throttleMs);
+  }
+  private flush(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    if (this.seq === undefined || this.buf === this.sent) return;
+    this.sent = this.buf;
+    this.sessions.updateEvent(this.sessionId, this.seq, this.buf);
+  }
+  close(): void {
+    this.flush();
+    this.seq = undefined;
+    this.buf = '';
+    this.sent = '';
+  }
+}

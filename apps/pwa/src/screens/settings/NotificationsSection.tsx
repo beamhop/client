@@ -3,11 +3,11 @@
  * pre-prompt, permission only inside the tap, test notification, denied/iOS explanations), which alerts
  * are sent, thresholds, quiet hours and the Nostr DM fallback.
  *
- * Categories are the daemon's per-device push prefs (`device.pushPrefs`); thresholds, quiet hours and
- * the DM fallback are daemon config without an API yet, so they stay on this device (useLocalPref).
+ * Which categories reach this device: `device.pushPrefs`. Thresholds, crash alerts, quiet hours and
+ * the Nostr DM fallback are daemon-wide alert rules (`alerts.get` / `alerts.set`, the same rules as
+ * Audit → Alert rules).
  */
-
-import type { PushCategory } from '@beamhop/core';
+import type { AlertRulesPatch, PushCategory } from '@beamhop/core';
 import { Bell, BellSlash } from '@phosphor-icons/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -16,24 +16,13 @@ import { t } from '../../i18n/index.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Switch } from '../../ui/Choice.tsx';
-import { CliStrip } from '../../ui/CliStrip.tsx';
 import { NumberField } from '../../ui/Field.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { useAlertRules } from '../audit/alerts.ts';
 import { turnOnPush, usePushDeviceId, usePushEnv, usePushPrefs } from '../pair/push.tsx';
 import { useThisDevice } from './DevicesSection.tsx';
-import { Group, useLocalPref } from './kit.tsx';
-
-export const ALERT_DEFAULTS = {
-  approvals: true,
-  budget: true,
-  budgetPct: 80,
-  crash: true,
-  security: true,
-  securityPerHour: 5,
-  quiet: false,
-  dmFallback: true,
-};
+import { Group } from './kit.tsx';
 
 export const NotificationsSection = () => {
   const [env, refresh] = usePushEnv();
@@ -41,13 +30,21 @@ export const NotificationsSection = () => {
   const { client } = useBeamhop();
   const devices = useApi('device.list');
   const me = useThisDevice(devices.data?.devices);
+  // Paired device id (hosted), "browser" (local daemon), or the demo's device.
   const deviceId = usePushDeviceId();
   const prefs = usePushPrefs(deviceId);
   const toast = useToast();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
-  const [a, set] = useLocalPref('bh.settings.alerts', ALERT_DEFAULTS);
+  const alerts = useAlertRules();
+  const a = alerts.rules;
+  const set = (patch: AlertRulesPatch) =>
+    void alerts.save(patch).catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+  // Categories for THIS device (`device.pushPrefs`); unset = on.
+  const cat = (c: PushCategory) => prefs.isOn(c);
+  const setCat = (c: PushCategory, v: boolean) =>
+    prefs.set(c, v).catch(() => toast.show({ message: t('settings.ntf.prefFailed'), tone: 'error' }));
 
   // On = the browser allows it AND the daemon holds a subscription for this device.
   const on = env.permission === 'granted' && (me?.pushEnabled ?? true);
@@ -55,9 +52,9 @@ export const NotificationsSection = () => {
     if (!deviceId) return;
     setBusy(true);
     try {
+      // device.pushKey → PushManager → device.pushSubscribe (a placeholder subscription in the demo).
       const r = await turnOnPush(client, deviceId, { demo: conn.kind === 'mock' });
       refresh();
-      // The subscription lives on the daemon's device record: re-read it (push on/off).
       await qc.invalidateQueries({ queryKey: methodKey('device.list') });
       if (r === 'granted') {
         haptic('confirm');
@@ -71,9 +68,6 @@ export const NotificationsSection = () => {
     } finally {
       setBusy(false);
     }
-  };
-  const togglePref = (c: PushCategory, v: boolean) => {
-    prefs.set(c, v).catch(() => toast.show({ message: t('settings.ntf.prefFailed'), tone: 'error' }));
   };
   const test = () => {
     try {
@@ -141,87 +135,107 @@ export const NotificationsSection = () => {
         </div>
       </Group>
 
-      <Group title={t('settings.ntf.sendMe')} id="ntf-rules" note={t('settings.ntf.sendMeNote')}>
+      <Group title="Send me" id="ntf-rules" note="Which alerts reach this device.">
         <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
           <Switch
-            isSelected={prefs.isOn('approvals')}
-            onChange={(v) => togglePref('approvals', v)}
-            description={t('settings.ntf.approvals.desc')}
+            isSelected={cat('approvals')}
+            onChange={(v) => void setCat('approvals', v)}
+            description="Always on the lock screen, with Allow / Deny where the platform supports it."
           >
             {t('settings.ntf.approvals')}
           </Switch>
-          <div className="flex flex-col gap-2 py-1">
-            <Switch
-              isSelected={prefs.isOn('budget')}
-              onChange={(v) => togglePref('budget', v)}
-              description={t('settings.ntf.budget.desc')}
-            >
-              {t('settings.ntf.budget')}
-            </Switch>
-            {prefs.isOn('budget') && (
-              <NumberField
-                label={t('settings.ntf.budget.at')}
-                unit={t('settings.ntf.budget.unit')}
-                minValue={10}
-                maxValue={100}
-                step={5}
-                value={a.budgetPct}
-                onChange={(v) => Number.isFinite(v) && set({ budgetPct: v })}
-                className="pb-3"
-              />
-            )}
-          </div>
           <Switch
-            isSelected={prefs.isOn('crash')}
-            onChange={(v) => togglePref('crash', v)}
-            description={t('settings.ntf.crash.desc')}
+            isSelected={cat('budget')}
+            onChange={(v) => void setCat('budget', v)}
+            description="Once per agent per day."
+          >
+            Budget threshold
+          </Switch>
+          <Switch
+            isSelected={cat('crash')}
+            onChange={(v) => void setCat('crash', v)}
+            description="Exit codes and the last log line."
           >
             {t('settings.ntf.crash')}
           </Switch>
           <Switch
-            isSelected={prefs.isOn('offline')}
-            onChange={(v) => togglePref('offline', v)}
-            description={t('settings.ntf.offline.desc')}
+            isSelected={cat('security')}
+            onChange={(v) => void setCat('security', v)}
+            description="Blocked hosts, DLP blocks, unknown senders."
           >
-            {t('settings.ntf.offline')}
+            Security spike
           </Switch>
-          <div className="flex flex-col gap-2 py-1">
-            <Switch
-              isSelected={prefs.isOn('security')}
-              onChange={(v) => togglePref('security', v)}
-              description={t('settings.ntf.security.desc')}
-            >
-              {t('settings.ntf.security')}
-            </Switch>
-            {prefs.isOn('security') && (
-              <NumberField
-                label={t('settings.ntf.security.when')}
-                unit={t('settings.ntf.security.unit')}
-                minValue={1}
-                maxValue={100}
-                value={a.securityPerHour}
-                onChange={(v) => Number.isFinite(v) && set({ securityPerHour: v })}
-                className="pb-3"
-              />
-            )}
+          <Switch
+            isSelected={cat('offline')}
+            onChange={(v) => void setCat('offline', v)}
+            description="A cloud agent stops sending heartbeats."
+          >
+            Cloud agent offline
+          </Switch>
+        </div>
+      </Group>
+
+      <Group
+        title="Alert rules"
+        id="ntf-thresholds"
+        note="Kept by your computer and used for every device and owner."
+      >
+        <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
+          <NumberField
+            label="Budget alert at"
+            unit="% of the daily budget"
+            minValue={1}
+            maxValue={a.budgetAlert}
+            step={5}
+            value={a.budgetWarn}
+            onChange={(v) => Number.isFinite(v) && v !== a.budgetWarn && set({ budgetWarn: Math.round(v) })}
+            className="py-3"
+          />
+          <div className="grid grid-cols-2 gap-3 py-3">
+            <NumberField
+              label="Security spike: more than"
+              unit="events"
+              minValue={1}
+              maxValue={10_000}
+              value={a.spikeEvents}
+              onChange={(v) =>
+                Number.isFinite(v) && v !== a.spikeEvents && set({ spikeEvents: Math.round(v) })
+              }
+            />
+            <NumberField
+              label="Within"
+              unit="min"
+              minValue={1}
+              maxValue={1440}
+              value={a.spikeMinutes}
+              onChange={(v) =>
+                Number.isFinite(v) && v !== a.spikeMinutes && set({ spikeMinutes: Math.round(v) })
+              }
+            />
           </div>
           <Switch
-            isSelected={a.quiet}
-            onChange={(v) => set({ quiet: v })}
-            description={t('settings.ntf.quiet.desc')}
+            isSelected={a.crash}
+            onChange={(v) => set({ crash: v })}
+            description="Sent when an agent exits on its own."
+          >
+            Crash alerts
+          </Switch>
+          <Switch
+            isSelected={a.quietHours}
+            onChange={(v) => set({ quietHours: v })}
+            description={`${a.quietStart}–${a.quietEnd} on your computer's clock. Security alerts still come through.`}
           >
             {t('settings.ntf.quiet')}
           </Switch>
           <Switch
-            isSelected={a.dmFallback}
-            onChange={(v) => set({ dmFallback: v })}
-            description={t('settings.ntf.dm.desc')}
+            isSelected={a.nostrDm}
+            onChange={(v) => set({ nostrDm: v })}
+            description="The daemon also DMs owners over Nostr, so alerts arrive even where push isn't available."
           >
             {t('settings.ntf.dm')}
           </Switch>
         </div>
       </Group>
-      <CliStrip command={`beamhop config set alerts.budgetPct ${a.budgetPct}`} />
     </div>
   );
 };

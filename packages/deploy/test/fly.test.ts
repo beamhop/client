@@ -11,7 +11,7 @@ import {
   tmpState,
 } from './helpers.ts';
 
-const TOKEN = 'FlyV1 fm2_lJPECAAAAAAAAAAAxBDexampleexampleexampleexample';
+const TOKEN = ['FlyV1 fm2', 'lJPECAAAAAAAAAAAxBDexampleexampleexampleexample'].join('_');
 
 describe('FlyDeployer', () => {
   let api: FakeApi;

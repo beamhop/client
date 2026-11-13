@@ -17,9 +17,10 @@ import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
+import { useMe } from './me.ts';
 import { inputOf, quorumOf, reachOf, ruleChoices, ruleLine, type SlipGroup, scopeOptions } from './model.ts';
 import { QuorumRow } from './Slip.tsx';
-import { mineStore, openSheet, sheetStore, useStore } from './store.ts';
+import { openSheet, sheetStore, useStore } from './store.ts';
 import { useDecisions } from './useDecisions.tsx';
 
 type Scope = 'once' | 'session' | 'always';
@@ -43,7 +44,7 @@ const ScopeSheet = ({
   onDone?: () => void;
 }) => {
   const { decide } = useDecisions();
-  const mine = useStore(mineStore);
+  const me = useMe();
   const a = group.lead;
   const options = scopeOptions(a);
   const choices = ruleChoices(a);
@@ -51,7 +52,7 @@ const ScopeSheet = ({
   const [rule, setRule] = useState<'exact' | 'wide'>('exact');
   const [busy, setBusy] = useState(false);
   const chosen = choices.find((c) => c.id === rule) ?? choices[0];
-  const quorum = quorumOf(a, mine);
+  const quorum = quorumOf(a, me);
   const thread = inputOf(a).thread;
 
   const label =
@@ -68,7 +69,8 @@ const ScopeSheet = ({
     const ok = await decide(group, true, {
       always: scope === 'always',
       session: scope === 'session' || undefined,
-      rule: scope === 'always' ? chosen?.value : undefined,
+      // The exact rule is the daemon's default; only a widened scope is sent as `rule`.
+      rule: scope === 'always' && chosen?.id === 'wide' ? chosen.value : undefined,
     });
     setBusy(false);
     if (ok) {

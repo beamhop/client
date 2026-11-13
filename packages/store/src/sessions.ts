@@ -266,6 +266,26 @@ export class SessionRepo {
     });
   }
 
+  /**
+   * Replace the text of an existing event (streaming assistant text keeps its seq while it grows).
+   * Returns the updated event, or undefined when it does not exist.
+   */
+  updateEventText(sessionId: string, seq: number, text: string): SessionEventView | undefined {
+    const n = this.db.run(
+      'UPDATE session_events SET text_enc = ? WHERE session_id = ? AND seq = ?',
+      this.cipher.encryptOpt('session_events.text', text),
+      sessionId,
+      seq,
+    ).changes;
+    if (!n) return undefined;
+    const row = this.db.get<Row>(
+      'SELECT * FROM session_events WHERE session_id = ? AND seq = ?',
+      sessionId,
+      seq,
+    );
+    return row ? this.eventView(row) : undefined;
+  }
+
   events(sessionId: string, opts: { afterSeq?: number; limit?: number } = {}): SessionEventView[] {
     return this.db
       .all(

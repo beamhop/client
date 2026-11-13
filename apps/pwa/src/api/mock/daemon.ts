@@ -7,10 +7,14 @@ import { RpcError } from '@beamhop/client';
 import {
   AgentConfig,
   type AgentView,
+  type ApprovalRule,
   type ApprovalView,
   type AuditEvent,
+  BUILTIN_ROLES,
   ChannelConfig,
   type ChannelView,
+  DEFAULT_ALERT_RULES,
+  DEFAULT_ROLES,
   type DeploymentView,
   isMethod,
   type MethodName,
@@ -19,11 +23,14 @@ import {
   PRESETS,
   type PushCategory,
   type Result,
+  RoleDef,
+  RoleName,
   SandboxPolicy,
   ScheduleConfig,
   type ServerEvent,
   type SessionEventView,
   type SessionView,
+  type WhoamiView,
 } from '@beamhop/core';
 import { MockPairing } from './pairing.ts';
 import { ago, ahead, type MockState, NPUBS, OWNER, seed } from './seed.ts';
@@ -34,8 +41,10 @@ type Handlers = { [M in MethodName]: Handler<M> };
 const ERR = {
   not_found: -32004,
   invalid_input: -32602,
+  forbidden: -32003,
   conflict: -32009,
   unavailable: -32010,
+  sandbox_violation: -32012,
 } as const;
 
 export const fail = (code: keyof typeof ERR, message: string): never => {
@@ -43,6 +52,147 @@ export const fail = (code: keyof typeof ERR, message: string): never => {
 };
 
 const OK = { ok: true as const };
+const LOCAL = 'local:owner';
+
+/** Harness instruction files (relative to a mount), like the daemon's INSTRUCTION_FILES. */
+const INSTRUCTION_FILES: { file: string; harness: string }[] = [
+  { file: 'CLAUDE.md', harness: 'claude' },
+  { file: '.claude/CLAUDE.md', harness: 'claude' },
+  { file: 'AGENTS.md', harness: 'codex' },
+  { file: 'GEMINI.md', harness: 'gemini' },
+  { file: '.codex/config.toml', harness: 'codex' },
+  { file: '.pi/SYSTEM.md', harness: 'pi' },
+  { file: 'opencode.json', harness: 'opencode' },
+];
+
+/** The demo home directory for `fs.list` (hidden and always-denied entries are never listed). */
+const MOCK_FS: Record<string, { name: string; git?: boolean }[]> = {
+  '~': [{ name: 'Downloads' }, { name: 'Library' }, { name: 'code' }, { name: 'docs' }, { name: 'notes' }],
+  '~/code': [{ name: 'app', git: true }, { name: 'scratch' }, { name: 'site', git: true }],
+  '~/code/app': [{ name: 'src' }, { name: 'test' }],
+  '~/code/site': [{ name: 'pages' }],
+  '~/docs': [{ name: 'private' }, { name: 'public' }],
+  '~/notes': [{ name: 'meetings' }],
+  '~/Library': [{ name: 'Fonts' }],
+};
+/** ALWAYS_DENY_READ (home-relative), mirrored for the mock's path checks. */
+const DENIED = [
+  '~/.ssh',
+  '~/.aws',
+  '~/.gnupg',
+  '~/.config/gh',
+  '~/.config/gcloud',
+  '~/.azure',
+  '~/.kube',
+  '~/.docker/config.json',
+  '~/.netrc',
+  '~/.npmrc',
+  '~/.beamhop',
+  '~/.config/beamhop',
+  '~/Library/Keychains',
+  '~/Library/Application Support/Google/Chrome',
+  '~/Library/Application Support/Firefox',
+  '~/.mozilla',
+  '~/.config/google-chrome',
+  '~/.config/chromium',
+];
+const normPath = (p: string) => {
+  const out: string[] = [];
+  for (const seg of p.replace(/\/+$/, '').split('/')) {
+    if (seg === '..') out.pop();
+    else if (seg !== '.' && seg !== '') out.push(seg);
+  }
+  return (p.startsWith('/') ? '/' : '') + out.join('/');
+};
+const inside = (p: string, root: string) => p === root || p.startsWith(`${root}/`);
+const deniedPath = (p: string) => DENIED.some((d) => inside(p, d) || inside(d, p));
+const HOST_RE = /^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+const SHELL_META = /[;&|`$<>\n\r\\]/;
+const INTERPRETERS = new Set([
+  'sh',
+  'bash',
+  'zsh',
+  'fish',
+  'dash',
+  'env',
+  'sudo',
+  'doas',
+  'su',
+  'xargs',
+  'eval',
+  'exec',
+  'python',
+  'python3',
+  'node',
+  'perl',
+  'ruby',
+  'deno',
+  'bun',
+]);
+const hostCovers = (pattern: string, host: string) =>
+  pattern.startsWith('*.') ? host === pattern.slice(2) || host.endsWith(pattern.slice(1)) : host === pattern;
+const checkHost = (raw: string): string => {
+  const h = raw.trim().toLowerCase();
+  if (!HOST_RE.test(h) || (h.startsWith('*.') && h.slice(2).split('.').length < 2) || h === 'localhost')
+    return fail('invalid_input', `"${raw}" is not a host name or *.domain`);
+  return h;
+};
+
+/**
+ * The daemon's "always" rule validation (apps/daemon/src/rules.ts), for the demo: a rule only ever
+ * covers the request it came from (or a narrow widening of it); never denied paths or interpreters.
+ */
+const mockRule = (a: ApprovalView, raw: string | undefined, by: string): ApprovalRule => {
+  const i = (a.input ?? {}) as {
+    command?: string;
+    host?: string;
+    url?: string;
+    path?: string;
+    file_path?: string;
+  };
+  const host = i.host ?? (i.url ? new URL(i.url).hostname : undefined);
+  const path = i.path ?? i.file_path;
+  const base = { tool: a.tool, role: a.requestedBy.role, createdAt: new Date().toISOString(), createdBy: by };
+  if (raw === undefined) {
+    if (i.command !== undefined) return { ...base, kind: 'command', value: i.command, exact: true };
+    if (host) return { ...base, kind: 'host', value: checkHost(host) };
+    if (path) {
+      if (deniedPath(normPath(path))) return fail('invalid_input', 'that path is always denied');
+      return { ...base, kind: 'path', value: normPath(path), exact: true };
+    }
+    return { ...base, kind: 'tool', value: a.tool };
+  }
+  const cmd = /^(bash|sh|shell|cmd):(.*)$/s.exec(raw.trim());
+  if (cmd) {
+    const v = cmd[2]!.trim().replace(/\s+/g, ' ');
+    const req = (i.command ?? '').trim().replace(/\s+/g, ' ');
+    if (!i.command || !v) return fail('invalid_input', 'this request has no command');
+    if (v === req) return { ...base, kind: 'command', value: v, exact: true };
+    const vw = v.split(' ');
+    const rw = req.split(' ');
+    if (SHELL_META.test(v) || vw.length > rw.length || vw.some((w, k) => w !== rw[k]))
+      return fail('invalid_input', 'the command prefix must be a prefix of the requested command');
+    if (INTERPRETERS.has((vw[0] ?? '').replace(/^.*\//, '')))
+      return fail('invalid_input', `"${vw[0]}" runs arbitrary code; allow the exact command instead`);
+    return { ...base, kind: 'command', value: v };
+  }
+  if (raw.startsWith('~') || raw.startsWith('/')) {
+    if (!path) return fail('invalid_input', 'this request has no file path');
+    const p = normPath(raw);
+    const req = normPath(path);
+    if (raw.endsWith('/')) {
+      if (p === '~' || p === '/' || deniedPath(p) || !inside(req, p))
+        return fail('invalid_input', 'the directory must contain the requested path');
+      return { ...base, kind: 'path', value: p };
+    }
+    if (p !== req || deniedPath(p)) return fail('invalid_input', 'a file rule must name the requested file');
+    return { ...base, kind: 'path', value: p, exact: true };
+  }
+  const h = checkHost(raw);
+  if (!host || !hostCovers(h, host.toLowerCase()))
+    return fail('invalid_input', 'the host rule must cover the requested host');
+  return { ...base, kind: 'host', value: h };
+};
 const UNDO_WINDOW_MS = 5000;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** Binaries the mock pretends are on PATH for `harness.add` probes. */
@@ -70,6 +220,10 @@ export class MockDaemon {
   /** Decisions inside their 5 s commit window (JOURNEYS §2.6). */
   private commitTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private pushPrefs = new Map<string, Record<PushCategory, boolean>>();
+  /** Daemon actions (session.openPr pushes) held until their approval is released. */
+  private actions = new Map<string, () => void>();
+  /** Instruction files written through agent.instructionsWrite (path → content). */
+  private instructionFiles = new Map<string, string>();
   /** Hook for the simulator: called when an approval's decision is released to the agent. */
   onDecisionReleased?: (a: ApprovalView) => void;
   /** Hook for the simulator: called after a user message so the agent can answer. */
@@ -170,6 +324,55 @@ export class MockDaemon {
   pending() {
     return [...this.state.approvals.values()].filter((a) => a.status === 'pending');
   }
+  /** Person a principal is linked to (config `people`). */
+  personOf(principal: string): string | undefined {
+    return Object.entries(this.state.people).find(([, ps]) => ps.includes(principal))?.[0];
+  }
+  /** Approver pool: owners (one per person), the local owner and roles with canApprove. */
+  approverPool(): number {
+    const ids = new Set<string>();
+    const add = (p: string) => ids.add(this.personOf(p) ?? p);
+    for (const o of [...this.state.owners, LOCAL]) add(o);
+    for (const [p, r] of Object.entries(this.state.grants))
+      if (this.state.roles.find((x) => x.name === r)?.canApprove) add(p);
+    return ids.size;
+  }
+  /** The demo's instruction files for an agent (before edits through agent.instructionsWrite). */
+  private instructionsBase(name: string): { files: { path: string; harness: string; content: string }[] } {
+    const a = this.agent(name);
+    if (a.config.harness !== 'claude' && a.config.harness !== 'codex') return { files: [] };
+    return {
+      files: [
+        {
+          path: '~/code/app/CLAUDE.md',
+          harness: 'claude',
+          content:
+            '# acme/app\n\n- Run `npm test` before pushing.\n- Never push to main; use beamhop/* branches.\n- Keep diffs small and explain them in the thread.\n',
+        },
+        {
+          path: '~/code/app/AGENTS.md',
+          harness: 'codex',
+          content: '# Agents\n\nUse pnpm. Tests: `pnpm test`. Lint: `pnpm lint`.\n',
+        },
+      ],
+    };
+  }
+
+  /** deploy.plan/apply: mount sync choices must name the agent's own mounts, once each. */
+  private checkDeployMounts(agent: string, mounts?: { path: string }[]) {
+    if (!mounts?.length) return; // a new cloud agent has no mounts yet
+    const known = new Set(this.agent(agent).config.mounts.map((m) => m.path));
+    const seen = new Set<string>();
+    for (const m of mounts ?? []) {
+      if (!known.has(m.path)) fail('invalid_input', `${m.path} is not a mount of ${agent}`);
+      if (seen.has(m.path)) fail('invalid_input', `${m.path} is listed twice`);
+      seen.add(m.path);
+    }
+  }
+
+  alertRules() {
+    return { ...DEFAULT_ALERT_RULES, ...this.state.alerts };
+  }
   /** Expire overdue approvals (called by the simulator every few seconds). */
   expireDue(now = Date.now()) {
     for (const a of this.pending()) {
@@ -243,9 +446,9 @@ export class MockDaemon {
         identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' },
       };
     }
-    if (p.provider === 'slack' && ('app-token' in p.secrets || 'bot-token' in p.secrets)) {
-      const app = p.secrets['app-token'] ?? '';
-      const bot = p.secrets['bot-token'] ?? '';
+    if (p.provider === 'slack' && ('appToken' in p.secrets || 'botToken' in p.secrets)) {
+      const app = p.secrets.appToken ?? '';
+      const bot = p.secrets.botToken ?? '';
       if (!bot.startsWith('xoxb-'))
         return {
           ok: false,
@@ -263,7 +466,7 @@ export class MockDaemon {
         identity: { name: 'beamhop', handle: '@beamhop' },
       };
     }
-    if (p.provider === 'discord' && 'bot-token' in p.secrets) {
+    if (p.provider === 'discord' && 'botToken' in p.secrets) {
       if (token.split('.').length !== 3)
         return {
           ok: false,
@@ -330,6 +533,11 @@ export class MockDaemon {
       home: '~/.beamhop',
     }),
     'system.doctor': () => ({ checks: this.state.doctor }),
+    // The browser is a local client: the local owner, linked to alice in the demo.
+    'system.whoami': (): WhoamiView => {
+      const person = this.personOf(LOCAL);
+      return { principal: LOCAL, role: 'owner', via: 'local', ...(person ? { person } : {}) };
+    },
     'system.panic': (p) => {
       const st = this.state;
       if (st.panic.active) return OK;
@@ -482,24 +690,205 @@ export class MockDaemon {
     'agent.presets': () => ({
       presets: PRESETS.map((p) => ({ ...p, config: p.config as Record<string, unknown> })),
     }),
-    'agent.instructions': (p) => {
+    'agent.instructionsWrite': (p) => {
       const a = this.agent(p.name);
-      if (a.config.harness !== 'claude' && a.config.harness !== 'codex') return { files: [] };
+      const rw = a.config.mounts.filter((m) => m.mode === 'rw').map((m) => normPath(m.path));
+      const target = normPath(
+        p.path.startsWith('~') || p.path.startsWith('/') ? p.path : `${rw[0] ?? ''}/${p.path}`,
+      );
+      if (!rw[0]) return fail('forbidden', 'the agent has no read-write mount');
+      const mount = rw.find((m) => inside(target, m));
+      if (!mount) {
+        const ro = a.config.mounts.some((m) => inside(target, normPath(m.path)));
+        return fail(
+          'forbidden',
+          ro
+            ? 'that mount is read-only; make it read-write to edit instructions'
+            : 'instruction files can only be written inside the agent’s mounts',
+        );
+      }
+      const kind = INSTRUCTION_FILES.find((f) => `${mount}/${f.file}` === target);
+      if (!kind) return fail('forbidden', 'only harness instruction files can be written');
+      this.instructionFiles.set(target, p.content);
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'agent.instructions',
+        severity: 'security',
+        summary: `alice edited ${target}`,
+      });
+      return { path: target, harness: kind.harness, bytes: new TextEncoder().encode(p.content).length };
+    },
+    'agent.instructions': (p) => {
+      const written = [...this.instructionFiles.entries()]
+        .filter(([path]) => this.agent(p.name).config.mounts.some((m) => inside(path, normPath(m.path))))
+        .map(([path, content]) => ({
+          path,
+          content,
+          harness: INSTRUCTION_FILES.find((f) => path.endsWith(`/${f.file}`))?.harness ?? 'claude',
+        }));
+      const base = this.instructionsBase(p.name);
       return {
-        files: [
-          {
-            path: '~/code/app/CLAUDE.md',
-            harness: 'claude',
-            content:
-              '# acme/app\n\n- Run `npm test` before pushing.\n- Never push to main; use beamhop/* branches.\n- Keep diffs small and explain them in the thread.\n',
-          },
-          {
-            path: '~/code/app/AGENTS.md',
-            harness: 'codex',
-            content: '# Agents\n\nUse pnpm. Tests: `pnpm test`. Lint: `pnpm lint`.\n',
-          },
-        ],
+        files: [...base.files.filter((f) => !this.instructionFiles.has(f.path)), ...written],
       };
+    },
+    'channel.connect': (p) => {
+      const c = this.state.channels.get(p.name) ?? fail('not_found', `No channel ${p.name}`);
+      if (this.state.panic.active) return fail('unavailable', 'Everything is stopped. Resume first.');
+      const next = {
+        ...c,
+        config: { ...c.config, enabled: true },
+        status: 'connecting' as const,
+        error: undefined,
+      };
+      this.putChannel(next);
+      setTimeout(() => this.putChannel({ ...next, status: 'connected' }), 900);
+      this.audit({
+        actor: 'alice',
+        type: 'channel.connect',
+        severity: 'info',
+        summary: `alice connected ${p.name}`,
+      });
+      return next;
+    },
+    'channel.disconnect': (p) => {
+      const c = this.state.channels.get(p.name) ?? fail('not_found', `No channel ${p.name}`);
+      const next = this.putChannel({ ...c, config: { ...c.config, enabled: false }, status: 'disabled' });
+      this.audit({
+        actor: 'alice',
+        type: 'channel.disconnect',
+        severity: 'security',
+        summary: `alice disconnected ${p.name}`,
+      });
+      return next;
+    },
+    'fs.list': (p) => {
+      const raw = (p.path ?? '~').trim() || '~';
+      if (!raw.startsWith('~') && !raw.startsWith('/'))
+        return fail('invalid_input', 'paths must be absolute or start with ~/');
+      const path = normPath(raw);
+      if (!inside(path, '~'))
+        return fail('forbidden', 'only directories under your home folder can be listed');
+      if (DENIED.some((d) => inside(path, d))) return fail('forbidden', 'that directory is always denied');
+      const list = MOCK_FS[path];
+      if (!list) return fail('not_found', 'directory not found');
+      const parent = path === '~' ? undefined : path.slice(0, path.lastIndexOf('/'));
+      return {
+        path,
+        ...(parent ? { parent } : {}),
+        roots: ['~'],
+        entries: list
+          .filter((e) => !e.name.startsWith('.') && !DENIED.some((d) => inside(`${path}/${e.name}`, d)))
+          .map((e) => ({ name: e.name, path: `${path}/${e.name}`, git: !!e.git })),
+      };
+    },
+    'alerts.get': () => this.alertRules(),
+    'alerts.set': (p) => {
+      const clean = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined));
+      const next = { ...this.alertRules(), ...clean };
+      if (next.budgetWarn > next.budgetAlert)
+        return fail('invalid_input', 'the budget warning must not be above the budget alert');
+      this.state.alerts = { ...this.state.alerts, ...clean };
+      this.audit({
+        actor: 'alice',
+        type: 'alerts.set',
+        severity: 'info',
+        summary: 'alice changed alert rules',
+      });
+      return this.alertRules();
+    },
+    'updates.get': () => ({ ...this.state.updates }),
+    'updates.set': (p) => {
+      this.state.updates = {
+        catalogAuto: p.catalogAuto ?? this.state.updates.catalogAuto,
+        appPrompt: p.appPrompt ?? this.state.updates.appPrompt,
+      };
+      return { ...this.state.updates };
+    },
+    'approval.quorumGet': () => ({ quorum: this.state.quorum, approvers: this.approverPool() }),
+    'approval.quorumSet': (p) => {
+      this.state.quorum = p.quorum;
+      this.audit({
+        actor: 'alice',
+        type: 'approval.quorum',
+        severity: 'security',
+        summary: `alice set the approval quorum to ${p.quorum}`,
+      });
+      return { quorum: this.state.quorum, approvers: this.approverPool() };
+    },
+    'session.merge': (p) => {
+      const s = this.session(p.id);
+      if (!s.worktree) return fail('invalid_input', 'this session has no git worktree');
+      if (s.status === 'running') return fail('conflict', 'the session is running; wait or stop it first');
+      const base = p.base ?? 'main';
+      if (base.startsWith('-') || /\s/.test(base)) return fail('invalid_input', 'invalid branch name');
+      const commit = Array.from(
+        { length: 40 },
+        () => '0123456789abcdef'[Math.floor(Math.random() * 16)],
+      ).join('');
+      this.pushEvent(p.id, {
+        kind: 'system',
+        text: `Merged ${s.worktree.branch} into ${base} (${commit.slice(0, 10)}).`,
+      });
+      this.audit({
+        agent: s.agent,
+        actor: 'alice',
+        type: 'session.merged',
+        severity: 'security',
+        summary: `Merged ${s.worktree.branch} into ${base} for session ${s.id}`,
+      });
+      return { branch: s.worktree.branch, base, commit, fastForward: false };
+    },
+    'session.openPr': (p) => {
+      const s = this.session(p.id);
+      if (!s.worktree) return fail('invalid_input', 'this session has no git worktree');
+      if (s.status === 'running') return fail('conflict', 'the session is running; wait or stop it first');
+      if (!/^[A-Za-z0-9._-]{1,64}$/.test(p.remote) || p.remote.startsWith('-'))
+        return fail('invalid_input', 'invalid remote name');
+      if (p.remote !== 'origin') return fail('not_found', `no git remote named ${p.remote}`);
+      const branch = s.worktree.branch;
+      const base = p.base ?? 'main';
+      const url = 'git@github.com:acme/app.git';
+      const compareUrl = `https://github.com/acme/app/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}?expand=1`;
+      const now = Date.now();
+      const approval = this.putApproval(
+        {
+          id: `apr_${now.toString(36)}`,
+          agent: s.agent,
+          sessionId: s.id,
+          requestedBy: { principal: LOCAL, displayName: 'owner', role: 'owner' },
+          tool: 'git.push',
+          title: `Push ${branch} to ${p.remote}`,
+          input: {
+            command: `git push ${p.remote} ${branch}`,
+            remote: p.remote,
+            url,
+            branch,
+            base,
+            compareUrl,
+          },
+          risk: 'medium',
+          createdAt: new Date(now).toISOString(),
+          expiresAt: ahead(now, 15),
+          status: 'pending',
+          kind: 'tool',
+        },
+        true,
+      );
+      this.actions.set(approval.id, () => {
+        this.pushEvent(s.id, {
+          kind: 'system',
+          text: `Pushed ${branch} to ${p.remote}. Open a pull request: ${compareUrl}`,
+        });
+        this.audit({
+          agent: s.agent,
+          actor: 'alice',
+          type: 'session.pushed',
+          severity: 'security',
+          summary: `Pushed ${branch} to ${p.remote}`,
+        });
+      });
+      return { branch, base, remote: p.remote, compareUrl, approval };
     },
 
     // ── harnesses
@@ -565,7 +954,8 @@ export class MockDaemon {
           name: p.name,
           provider: p.provider,
           settings: p.values,
-          secretRefs: Object.keys(p.secrets).map((k) => `channel/${p.name}/${k}`),
+          // Same vault naming as the daemon (`channel.<name>.<field>`, apps/daemon channels.ts).
+          secretRefs: Object.keys(p.secrets).map((k) => `channel.${p.name}.${k}`),
           createdAt: new Date().toISOString(),
         }),
         status: 'connecting',
@@ -696,6 +1086,11 @@ export class MockDaemon {
       const a = this.state.approvals.get(p.id) ?? fail('not_found', `No approval ${p.id}`);
       if (a.status !== 'pending')
         return fail('conflict', `Already ${a.status}${a.decidedBy ? ` by ${a.decidedBy}` : ''}`);
+      if (p.rule !== undefined && !p.always) return fail('invalid_input', '`rule` needs `always: true`');
+      const plainTool = a.kind === 'tool' && !this.actions.has(a.id);
+      if (p.allow && (p.always || p.session) && !plainTool)
+        return fail('invalid_input', 'only tool requests can be allowed always or for the session');
+      const rule = p.allow && p.always ? mockRule(a, p.rule, 'alice') : undefined;
       const at = new Date().toISOString();
       const how = p.allow
         ? p.always
@@ -741,6 +1136,20 @@ export class MockDaemon {
         a.id,
         setTimeout(() => {
           this.commitTimers.delete(a.id);
+          const action = this.actions.get(a.id);
+          this.actions.delete(a.id);
+          if (action && p.allow) action();
+          if (rule) {
+            const ag = this.state.agents.get(a.agent);
+            if (ag)
+              this.putAgent({
+                ...ag,
+                config: { ...ag.config, approvalRules: [...(ag.config.approvalRules ?? []), rule] },
+              });
+            const pol = this.state.policies.get(a.agent);
+            if (pol && rule.kind === 'host' && !pol.effective.net.allow.includes(rule.value))
+              pol.effective.net.allow.push(rule.value);
+          }
           this.audit({
             agent: a.agent,
             actor: 'alice',
@@ -800,7 +1209,88 @@ export class MockDaemon {
       });
       return OK;
     },
-    'principal.link': () => OK,
+    'principal.link': (p) => {
+      const list = this.state.people[p.person] ?? [];
+      if (!list.includes(p.principal)) this.state.people[p.person] = [...list, p.principal];
+      return OK;
+    },
+    'principal.unlink': (p) => {
+      const list = this.state.people[p.person] ?? [];
+      if (!list.includes(p.principal))
+        return fail('not_found', `${p.principal} is not linked to ${p.person}`);
+      const rest = list.filter((x) => x !== p.principal);
+      if (rest.length) this.state.people[p.person] = rest;
+      else delete this.state.people[p.person];
+      return OK;
+    },
+    'principal.list': () => ({ people: { ...this.state.people } }),
+    'owner.list': () => ({
+      owners: this.state.owners.map((principal) => {
+        const person = this.personOf(principal);
+        const linked = person ? (this.state.people[person] ?? []).filter((x) => x !== principal) : [];
+        return { principal, ...(person ? { person } : {}), linked };
+      }),
+    }),
+    'role.define': (p) => {
+      const name = RoleName.safeParse(p.role.name);
+      if (!name.success) return fail('invalid_input', 'role name: lowercase letters, digits and -');
+      if (name.data === 'owner' || name.data === 'agent')
+        return fail('forbidden', 'the owner and agent roles cannot be changed');
+      const shape = RoleDef.shape as Record<
+        string,
+        { safeParse(v: unknown): { success: boolean; data?: unknown } }
+      >;
+      const patch: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(p.role)) {
+        if (k === 'name' || v === undefined) continue;
+        if (!shape[k]) return fail('invalid_input', `unknown role field ${k}`);
+        const r = shape[k]!.safeParse(v);
+        if (!r.success) return fail('invalid_input', `invalid role field ${k}`);
+        patch[k] = k === 'tools' || k === 'budget' ? v : r.data;
+      }
+      const cur = this.state.roles.find((r) => r.name === name.data);
+      const viewer = DEFAULT_ROLES.find((r) => r.name === 'viewer')!;
+      const baseRole = cur ?? { ...viewer, description: '' };
+      const def = RoleDef.parse({
+        ...baseRole,
+        ...patch,
+        name: name.data,
+        tools: { ...baseRole.tools, ...((patch.tools as object) ?? {}) },
+        budget: { ...baseRole.budget, ...((patch.budget as object) ?? {}) },
+      });
+      this.state.roles = [...this.state.roles.filter((r) => r.name !== def.name), def];
+      this.audit({
+        actor: 'alice',
+        type: 'role.define',
+        severity: 'security',
+        summary: `alice defined role ${def.name}`,
+      });
+      return def;
+    },
+    'role.delete': (p) => {
+      if (p.name === 'owner' || p.name === 'agent')
+        return fail('forbidden', 'the owner and agent roles cannot be changed');
+      const builtin = (BUILTIN_ROLES as readonly string[]).includes(p.name);
+      const cur = this.state.roles.find((r) => r.name === p.name);
+      if (!cur) return fail('not_found', `no role ${p.name}`);
+      if (builtin) {
+        const def = DEFAULT_ROLES.find((r) => r.name === p.name)!;
+        if (JSON.stringify(def) === JSON.stringify(cur))
+          return fail('invalid_input', 'built-in roles cannot be deleted');
+        this.state.roles = this.state.roles.map((r) => (r.name === p.name ? def : r));
+        return OK;
+      }
+      const used = Object.entries(this.state.grants).find(([, r]) => r === p.name);
+      if (used) return fail('conflict', `role ${p.name} is still in use (${used[0]})`);
+      this.state.roles = this.state.roles.filter((r) => r.name !== p.name);
+      this.audit({
+        actor: 'alice',
+        type: 'role.delete',
+        severity: 'security',
+        summary: `alice deleted role ${p.name}`,
+      });
+      return OK;
+    },
     'owner.add': (p) => {
       if (!this.state.owners.includes(p.principal)) this.state.owners.push(p.principal);
       return OK;
@@ -845,6 +1335,22 @@ export class MockDaemon {
     'policy.applySuggestion': (p) => {
       const s =
         this.state.suggestions.find((x) => x.id === p.id) ?? fail('not_found', `No suggestion ${p.id}`);
+      if (p.value !== undefined && !p.accept)
+        return fail('invalid_input', '`value` only applies when accepting');
+      // The daemon's checks: a host may widen to a covering *.domain, a path to a parent dir.
+      if (p.accept && p.value !== undefined) {
+        if (s.kind === 'net.allow') {
+          const v = checkHost(p.value);
+          if (!hostCovers(v, s.value.toLowerCase()))
+            return fail('invalid_input', 'the value must cover the suggested host');
+        } else {
+          const v = normPath(p.value);
+          if (!inside(normPath(s.value), v) || v === '~' || v === '/' || deniedPath(v))
+            return fail('invalid_input', 'the value must be the suggested path or a parent directory');
+        }
+      }
+      if (p.accept && s.kind !== 'net.allow' && deniedPath(normPath(s.value)))
+        return fail('invalid_input', 'that path is always denied');
       this.state.suggestions = this.state.suggestions.filter((x) => x.id !== p.id);
       if (p.accept) {
         const pol = this.state.policies.get(s.agent);
@@ -871,7 +1377,7 @@ export class MockDaemon {
         { name: p.name, updatedAt: now },
       ];
       // Replacing a channel's token reconnects it (JOURNEYS §4 "Replace token").
-      const ch = /^channel\/([^/]+)\//.exec(p.name)?.[1];
+      const ch = /^channel\.([^.]+)\./.exec(p.name)?.[1];
       const c = ch ? this.state.channels.get(ch) : undefined;
       if (c && c.status === 'error') {
         const next = { ...c, status: 'connecting' as const, error: undefined };
@@ -984,6 +1490,7 @@ export class MockDaemon {
       );
     },
     'deploy.plan': (p) => {
+      this.checkDeployMounts(p.agent, p.mounts);
       const isVps = p.provider === 'hetzner' || p.provider === 'digitalocean';
       const cost = p.provider === 'hetzner' ? 4.9 : p.provider === 'fly' ? 5.7 : 7;
       const actions = [
@@ -1011,6 +1518,7 @@ export class MockDaemon {
       };
     },
     'deploy.apply': (p) => {
+      this.checkDeployMounts(p.agent, p.mounts);
       const d: DeploymentView = {
         id: `dep_${p.provider}_${Date.now().toString(36)}`,
         provider: p.provider,

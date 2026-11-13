@@ -1,9 +1,9 @@
 /**
  * Small building blocks shared by the Settings sections: grouped list, row, section header,
- * a row overflow menu, and `useLocalPref` for per-device preferences.
+ * a row overflow menu and type-to-confirm.
  */
 import { DotsThree } from '@phosphor-icons/react';
-import { type ReactNode, useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
 import { Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
@@ -112,54 +112,6 @@ export const RowMenu = ({ label, items }: { label: string; items: RowMenuItem[] 
     </Popover>
   </MenuTrigger>
 );
-
-// ─────────── per-device preferences (localStorage, never secrets) ───────────
-const listeners = new Set<() => void>();
-const read = <T,>(key: string, fallback: T): T => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? ({ ...fallback, ...JSON.parse(raw) } as T) : fallback;
-  } catch {
-    return fallback;
-  }
-};
-const cache = new Map<string, { raw: string | null; value: unknown }>();
-
-/**
- * A small object persisted in localStorage for this device. Used for settings the daemon API doesn't
- * expose yet (each use is marked TODO(core) with the CLI equivalent shown next to it).
- */
-export const useLocalPref = <T extends Record<string, unknown>>(key: string, fallback: T) => {
-  const value = useSyncExternalStore(
-    (fn) => {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    () => {
-      let raw: string | null = null;
-      try {
-        raw = localStorage.getItem(key);
-      } catch {
-        /* ignore */
-      }
-      const hit = cache.get(key);
-      if (hit && hit.raw === raw) return hit.value as T;
-      const v = read(key, fallback);
-      cache.set(key, { raw, value: v });
-      return v;
-    },
-    () => fallback,
-  );
-  const set = (patch: Partial<T>) => {
-    try {
-      localStorage.setItem(key, JSON.stringify({ ...value, ...patch }));
-    } catch {
-      /* ignore */
-    }
-    for (const l of listeners) l();
-  };
-  return [value, set] as const;
-};
 
 // ─────────── type-to-confirm (irreversible, costly actions) ───────────
 /**

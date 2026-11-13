@@ -340,3 +340,25 @@ describe('beamhop init (headless)', () => {
     expect(err.join('\n')).toContain('daemon is not running');
   });
 });
+
+describe('review wave C PAIR-2: `device pair --no-wait` / `--json` never pair without confirmation', () => {
+  it('starts the pairing with requireConfirm and confirms only with --accept', async () => {
+    for (const args of [
+      ['device', 'pair', '--no-wait'],
+      ['--json', 'device', 'pair'],
+    ]) {
+      const d = fakeDaemon();
+      await cli(d).run(...args);
+      expect(d.calls.find((c) => c[0] === 'device.pairStart')![1]).toMatchObject({ requireConfirm: true });
+    }
+    const d = fakeDaemon();
+    const t = cli(d);
+    await t.run('device', 'confirm', 'pair_1');
+    expect(d.methods()).not.toContain('device.pairConfirm');
+    await t.run('device', 'confirm', 'pair_1', '--accept');
+    expect(d.calls.find((c) => c[0] === 'device.pairConfirm')![1]).toEqual({
+      pairingId: 'pair_1',
+      accept: true,
+    });
+  });
+});

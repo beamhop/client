@@ -130,6 +130,7 @@ Commands:
 - [`beamhop device`](#beamhop-device)
   - [`beamhop device ls`](#beamhop-device-ls)
   - [`beamhop device pair`](#beamhop-device-pair)
+  - [`beamhop device confirm`](#beamhop-device-confirm)
   - [`beamhop device rm`](#beamhop-device-rm)
 - [`beamhop identity`](#beamhop-identity)
   - [`beamhop identity show`](#beamhop-identity-show)
@@ -587,6 +588,8 @@ Usage: beamhop approve [options] <id>
 
 Options:
   --always             allow this tool for the rest of the session
+  --forever [rule]     save a permanent rule (e.g. "bash:npm test", "*.npmjs.org", "~/code/app/");
+                       without a value, the exact request
   --grant-role <role>  for access requests: role to grant
   -h, --help           display help for command
 ```
@@ -971,13 +974,16 @@ Usage: beamhop device [options] [command]
 paired devices (phones, browsers)
 
 Options:
-  -h, --help      display help for command
+  -h, --help                     display help for command
 
 Commands:
   ls
-  pair [options]  pair a phone: QR code for the hosted app, then confirm the safety phrase here
+  pair [options]                 pair a phone: QR code for the hosted app, then confirm the safety
+                                 phrase here
+  confirm [options] <pairingId>  show the safety phrase of a pending pairing; --accept if it matches
+                                 the phone, else --reject
   rm <id>
-  help [command]  display help for command
+  help [command]                 display help for command
 ```
 
 ### beamhop device ls
@@ -998,9 +1004,22 @@ pair a phone: QR code for the hosted app, then confirm the safety phrase here
 
 Options:
   --name <name>        device name (default: "New device")
-  --no-wait            print the QR / link and exit (confirm later with the code)
+  --no-wait            print the QR / link and exit (confirm later with `beamhop device confirm`)
   --timeout <seconds>  how long to wait for the phone (default: 120)
   -h, --help           display help for command
+```
+
+### beamhop device confirm
+
+```text
+Usage: beamhop device confirm [options] <pairingId>
+
+show the safety phrase of a pending pairing; --accept if it matches the phone, else --reject
+
+Options:
+  --accept    the phrase matches the one on the phone: pair it
+  --reject    the phrase does not match: cancel the pairing
+  -h, --help  display help for command
 ```
 
 ### beamhop device rm

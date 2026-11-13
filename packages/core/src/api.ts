@@ -7,7 +7,16 @@
  * Every method has `params` and `result` schemas. Servers validate params; clients may validate results.
  */
 import { z } from 'zod';
-import { AgentConfig, ChannelConfig, Membership, RoleDef, SandboxPolicy, ScheduleConfig } from './config.ts';
+import {
+  AgentConfig,
+  AlertRules,
+  AlertRulesPatch,
+  ChannelConfig,
+  Membership,
+  RoleDef,
+  SandboxPolicy,
+  ScheduleConfig,
+} from './config.ts';
 
 // ───────────────────────────── Entities ─────────────────────────────
 
@@ -237,6 +246,36 @@ export const PolicySuggestion = z.object({
 });
 export type PolicySuggestion = z.infer<typeof PolicySuggestion>;
 
+/** Who the caller of an API request is (`system.whoami`). */
+export const WhoamiView = z.object({
+  /** The principal the daemon acts for (`local:owner` for local clients and paired devices). */
+  principal: z.string(),
+  /** Effective global role: `owner` for local clients, paired devices and owner npubs. */
+  role: z.string(),
+  displayName: z.string().optional(),
+  /** Linked person (`BeamhopConfig.people`) the principal belongs to. */
+  person: z.string().optional(),
+  via: z.enum(['local', 'device', 'nostr']),
+  /** The paired device the request came from (Nostr control plane). */
+  device: z.object({ id: z.string(), name: z.string() }).optional(),
+});
+export type WhoamiView = z.infer<typeof WhoamiView>;
+
+/** One directory in `fs.list` (never file contents). `path` uses `~` for the home directory. */
+export const FsEntry = z.object({
+  name: z.string(),
+  path: z.string(),
+  /** The directory is the top of a git work tree. */
+  git: z.boolean(),
+});
+export type FsEntry = z.infer<typeof FsEntry>;
+
+const DeployMountChoice = z.object({
+  path: z.string(),
+  sync: z.enum(['git-clone', 'rsync', 'mutagen', 'skip']),
+});
+const HarnessAuth = z.enum(['api-key', 'subscription']);
+
 export const WizardView = z.object({
   provider: z.string(),
   displayName: z.string(),
@@ -266,6 +305,8 @@ export const methods = {
     }),
   },
   'system.doctor': { params: empty, result: z.object({ checks: z.array(DoctorCheck) }) },
+  /** Who "you" are for this connection (local → owner; a paired device → its owner link). */
+  'system.whoami': { params: empty, result: WhoamiView },
   'system.panic': { params: z.object({ reason: z.string().optional() }).default({}), result: ok },
   'system.resume': { params: empty, result: ok },
 
@@ -307,6 +348,19 @@ export const methods = {
     }),
   },
 
+  /**
+   * Write a harness instruction file (CLAUDE.md, AGENTS.md, ...) inside one of the agent's rw mounts.
+   * `path` is absolute (as returned by `agent.instructions`) or relative to the first rw mount.
+   */
+  'agent.instructionsWrite': {
+    params: z.object({
+      name: z.string(),
+      path: z.string().min(1),
+      content: z.string().max(256 * 1024),
+    }),
+    result: z.object({ path: z.string(), harness: z.string(), bytes: z.number().int() }),
+  },
+
   'harness.scan': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
   'harness.list': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
   'harness.add': {
@@ -345,6 +399,11 @@ export const methods = {
     result: z.object({ code: z.string(), expiresAt: z.string(), instructions: z.string() }),
   },
 
+  /** Reconnect a channel and mark it enabled. */
+  'channel.connect': { params: byName, result: ChannelView },
+  /** Disconnect a channel and keep it disabled (across restarts) until `channel.connect`. */
+  'channel.disconnect': { params: byName, result: ChannelView },
+
   'membership.join': { params: z.object({ agent: z.string(), membership: Membership }), result: AgentView },
   'membership.leave': { params: z.object({ agent: z.string(), target: z.string() }), result: AgentView },
 
@@ -362,6 +421,37 @@ export const methods = {
     result: SessionView,
   },
   'session.stop': { params: z.object({ id: z.string() }), result: ok },
+  /**
+   * Merge a session's worktree branch into `base` (default: the repo's checked-out branch). Uncommitted
+   * worktree changes are committed first. Owner only; the session must not be running.
+   */
+  'session.merge': {
+    params: z.object({
+      id: z.string(),
+      base: z.string().optional(),
+      deleteBranch: z.boolean().default(false),
+    }),
+    result: z.object({
+      branch: z.string(),
+      base: z.string(),
+      commit: z.string(),
+      fastForward: z.boolean(),
+    }),
+  },
+  /**
+   * Push a session's worktree branch to `remote` after an owner approval (the push runs when the
+   * returned approval settles) and return the provider compare URL to open a PR. Owner only.
+   */
+  'session.openPr': {
+    params: z.object({ id: z.string(), remote: z.string().default('origin'), base: z.string().optional() }),
+    result: z.object({
+      branch: z.string(),
+      base: z.string(),
+      remote: z.string(),
+      compareUrl: z.string().optional(),
+      approval: ApprovalView,
+    }),
+  },
 
   'approval.list': {
     params: z
@@ -386,6 +476,16 @@ export const methods = {
   },
   'approval.undo': { params: z.object({ id: z.string() }), result: ApprovalView },
 
+  /** Current approval quorum (N of M owners) and the size of the approver pool. */
+  'approval.quorumGet': {
+    params: empty,
+    result: z.object({ quorum: z.number().int(), approvers: z.number().int() }),
+  },
+  'approval.quorumSet': {
+    params: z.object({ quorum: z.number().int().min(1).max(20) }),
+    result: z.object({ quorum: z.number().int(), approvers: z.number().int() }),
+  },
+
   'role.list': {
     params: empty,
     result: z.object({ roles: z.array(RoleDef), grants: z.record(z.string(), z.string()) }),
@@ -394,8 +494,35 @@ export const methods = {
     params: z.object({ principal: z.string(), role: z.string(), agent: z.string().optional() }),
     result: ok,
   },
+  /**
+   * Create or replace a custom role, or override fields of a built-in one. `role` is any subset of
+   * RoleDef fields plus `name` (validated server-side; unset fields keep the built-in / viewer base).
+   * The owner and agent roles cannot be changed.
+   */
+  'role.define': {
+    params: z.object({ role: z.record(z.string(), z.unknown()) }),
+    result: RoleDef,
+  },
+  /** Delete a custom role (built-ins cannot be deleted; an override of one is reset). Fails while granted. */
+  'role.delete': { params: byName, result: ok },
   'role.revoke': { params: z.object({ principal: z.string(), agent: z.string().optional() }), result: ok },
   'principal.link': { params: z.object({ person: z.string(), principal: z.string() }), result: ok },
+  /** Unlink a principal from a person. */
+  'principal.unlink': { params: z.object({ person: z.string(), principal: z.string() }), result: ok },
+  /** Linked identities: person → principals. */
+  'principal.list': {
+    params: empty,
+    result: z.object({ people: z.record(z.string(), z.array(z.string())) }),
+  },
+  /** Configured owners with their linked people and identities (the local owner is implicit). */
+  'owner.list': {
+    params: empty,
+    result: z.object({
+      owners: z.array(
+        z.object({ principal: z.string(), person: z.string().optional(), linked: z.array(z.string()) }),
+      ),
+    }),
+  },
   'owner.add': { params: z.object({ principal: z.string() }), result: ok },
   'owner.remove': { params: z.object({ principal: z.string() }), result: ok },
 
@@ -412,6 +539,35 @@ export const methods = {
     /** `value` overrides the suggested value when accepting (e.g. `*.npmjs.org` for a host). */
     params: z.object({ id: z.string(), accept: z.boolean(), value: z.string().optional() }),
     result: ok,
+  },
+
+  /** Effective alert thresholds (config `alerts` over the defaults). */
+  'alerts.get': { params: empty, result: AlertRules },
+  /** Merge alert thresholds into config; returns the effective rules. */
+  'alerts.set': { params: AlertRulesPatch, result: AlertRules },
+
+  /** Update toggles (config `updates`). */
+  'updates.get': {
+    params: empty,
+    result: z.object({ catalogAuto: z.boolean(), appPrompt: z.boolean() }),
+  },
+  'updates.set': {
+    params: z.object({ catalogAuto: z.boolean().optional(), appPrompt: z.boolean().optional() }),
+    result: z.object({ catalogAuto: z.boolean(), appPrompt: z.boolean() }),
+  },
+
+  /**
+   * Directory listing for the path picker (owner only): directories under the home directory (or
+   * another allowed root), git repos marked, hidden and always-denied paths left out. No file contents.
+   */
+  'fs.list': {
+    params: z.object({ path: z.string().optional() }).default({}),
+    result: z.object({
+      path: z.string(),
+      parent: z.string().optional(),
+      roots: z.array(z.string()),
+      entries: z.array(FsEntry),
+    }),
   },
 
   'secret.list': {
@@ -467,6 +623,9 @@ export const methods = {
       region: z.string().optional(),
       size: z.string().optional(),
       mode: z.enum(['move', 'new']),
+      /** Per-mount sync choices (paths must be the agent's mounts). */
+      mounts: z.array(DeployMountChoice).optional(),
+      harnessAuth: HarnessAuth.optional(),
     }),
     result: z.object({
       provider: z.string(),
@@ -482,6 +641,8 @@ export const methods = {
       region: z.string().optional(),
       size: z.string().optional(),
       mode: z.enum(['move', 'new']),
+      mounts: z.array(DeployMountChoice).optional(),
+      harnessAuth: HarnessAuth.optional(),
     }),
     result: DeploymentView,
   },

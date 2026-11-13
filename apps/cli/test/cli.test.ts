@@ -117,7 +117,16 @@ describe('cli', () => {
     await t.run('approve', 'a1', '--always');
     expect(t.calls[0]).toEqual([
       'approval.decide',
-      { id: 'a1', allow: true, always: true, grantRole: undefined },
+      { id: 'a1', allow: true, always: false, session: true, grantRole: undefined },
+    ]);
+  });
+
+  it('approves forever with a rule', async () => {
+    const t = setup(async () => ({ id: 'a1' }));
+    await t.run('approve', 'a1', '--forever', '*.npmjs.org');
+    expect(t.calls[0]).toEqual([
+      'approval.decide',
+      { id: 'a1', allow: true, always: true, rule: '*.npmjs.org', grantRole: undefined },
     ]);
   });
 

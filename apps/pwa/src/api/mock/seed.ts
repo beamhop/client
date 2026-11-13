@@ -8,6 +8,7 @@ import {
   AgentConfig,
   type AgentConfigInput,
   type AgentView,
+  type AlertRulesPatch,
   type ApprovalView,
   type AuditEvent,
   ChannelConfig,
@@ -97,6 +98,13 @@ export interface MockState {
   roles: RoleDef[];
   grants: Record<string, string>;
   owners: string[];
+  /** Linked identities (person → principals), like config `people`. */
+  people: Record<string, string[]>;
+  updates: { catalogAuto: boolean; appPrompt: boolean };
+  /** Config `approvals.quorum`. */
+  quorum: number;
+  /** Config `alerts` (a patch over the defaults). */
+  alerts: AlertRulesPatch;
   policies: Map<string, { profile: string; effective: SandboxPolicy }>;
   doctor: DoctorCheck[];
 }
@@ -319,7 +327,7 @@ export const seed = (now = Date.now()): MockState => {
           },
         ],
       },
-      secretRefs: ['channel/tg/bot-token'],
+      secretRefs: ['channel.tg.token'],
       createdAt: ago(now, 60 * 24 * 9),
     }),
     status: 'connected',
@@ -330,7 +338,7 @@ export const seed = (now = Date.now()): MockState => {
       name: 'acme',
       provider: 'slack',
       settings: { workspace: 'acme', team: 'T01ACME', mode: 'socket', channels: ['#deploys', '#eng'] },
-      secretRefs: ['channel/acme/app-token', 'channel/acme/bot-token'],
+      secretRefs: ['channel.acme.appToken', 'channel.acme.botToken'],
       createdAt: ago(now, 60 * 24 * 6),
     }),
     status: 'connected',
@@ -341,7 +349,7 @@ export const seed = (now = Date.now()): MockState => {
       name: 'ops',
       provider: 'discord',
       settings: { guild: 'acme-ops', applicationId: '1301928374655' },
-      secretRefs: ['channel/ops/bot-token'],
+      secretRefs: ['channel.ops.botToken'],
       createdAt: ago(now, 60 * 24 * 3),
     }),
     status: 'error',
@@ -1352,14 +1360,19 @@ export const seed = (now = Date.now()): MockState => {
       { name: 'OPENAI_API_KEY', updatedAt: ago(now, 60 * 24 * 9) },
       { name: 'GEMINI_API_KEY', updatedAt: ago(now, 60 * 24 * 7) },
       { name: 'FLY_API_TOKEN', updatedAt: ago(now, 60 * 30) },
-      { name: 'channel/tg/bot-token', updatedAt: ago(now, 60 * 24 * 9) },
-      { name: 'channel/acme/app-token', updatedAt: ago(now, 60 * 24 * 6) },
-      { name: 'channel/acme/bot-token', updatedAt: ago(now, 60 * 24 * 6) },
-      { name: 'channel/ops/bot-token', updatedAt: ago(now, 60 * 24 * 3) },
+      { name: 'channel.tg.token', updatedAt: ago(now, 60 * 24 * 9) },
+      { name: 'channel.acme.appToken', updatedAt: ago(now, 60 * 24 * 6) },
+      { name: 'channel.acme.botToken', updatedAt: ago(now, 60 * 24 * 6) },
+      { name: 'channel.ops.botToken', updatedAt: ago(now, 60 * 24 * 3) },
     ],
     roles: DEFAULT_ROLES,
     grants: { [BOB.principal]: 'admin', 'telegram:5551': 'user', 'slack:T01ACME/U02BOB': 'user' },
     owners: [OWNER.principal],
+    // The local client (this browser) is alice: whoami → person "alice", votes show "alice".
+    people: { alice: ['local:owner', OWNER.principal, 'telegram:5551'] },
+    updates: { catalogAuto: true, appPrompt: true },
+    quorum: 1,
+    alerts: {},
     policies,
     doctor,
   };

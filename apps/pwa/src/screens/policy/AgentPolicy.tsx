@@ -29,7 +29,7 @@ import { CliStrip } from '../../ui/CliStrip.tsx';
 import { DiffView } from '../../ui/CodeBlock.tsx';
 import { NumberField } from '../../ui/Field.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
-import { demoListDir, PathPicker } from '../../ui/PathPicker.tsx';
+import { PathPicker, useFsListDir } from '../../ui/PathPicker.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
 import { Banner, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { useToast } from '../../ui/Toast.tsx';
@@ -184,12 +184,20 @@ const Editor = ({
   }, [search.allowHost]);
 
   const folders = foldersOf(draft.policy);
+  const listDir = useFsListDir();
   const folderKey = folders.map((f) => f.path).join('|');
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed by the folder list
   useEffect(() => {
     let live = true;
     const parents = [...new Set(folders.map((f) => f.path.slice(0, f.path.lastIndexOf('/')) || '~'))];
-    void Promise.all(parents.map((p) => demoListDir(p))).then((lists) => {
+    void Promise.all(
+      parents.map((p) =>
+        listDir(p).then(
+          (l) => l.entries,
+          () => [],
+        ),
+      ),
+    ).then((lists) => {
       if (live)
         setGitPaths(
           new Set(
@@ -393,7 +401,7 @@ const Editor = ({
             policy={draft.policy}
             available={(secrets.data?.secrets ?? [])
               .map((s) => s.name)
-              .filter((n) => !n.startsWith('channel/'))}
+              .filter((n) => !n.startsWith('channel.') && !n.startsWith('channel/'))}
             backend={secrets.data?.backend}
             onChange={(s) => update((p) => ({ ...p, secrets: s }))}
           />

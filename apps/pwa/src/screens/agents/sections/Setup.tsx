@@ -21,9 +21,9 @@ import { Button } from '../../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl, Select } from '../../../ui/Choice.tsx';
 import { CopyButton } from '../../../ui/CliStrip.tsx';
 import { NumberField, TextField } from '../../../ui/Field.tsx';
-import { PathPicker } from '../../../ui/PathPicker.tsx';
+import { PathPicker, useIsGitRepo } from '../../../ui/PathPicker.tsx';
 import { StatusDot } from '../../../ui/Status.tsx';
-import { looksGit, validateMountPath } from '../model.ts';
+import { validateMountPath } from '../model.ts';
 import { Block, OverflowMenu, Rows, SaveBar, useAgentDraft } from '../parts.tsx';
 
 const harnessDescription = (h: HarnessView) =>
@@ -51,7 +51,7 @@ export const MountRow = ({
   onRemove: () => void;
   lockRo?: string;
 }) => {
-  const git = looksGit(m.path);
+  const git = useIsGitRepo(m.path);
   const note =
     m.mode === 'rw'
       ? git
@@ -156,6 +156,7 @@ export const AddMount = ({
   const [path, setPath] = useState('');
   const [mode, setMode] = useState<'ro' | 'rw'>('ro');
   const [err, setErr] = useState<string>();
+  const pathGit = useIsGitRepo(path);
   if (!open)
     return (
       <Button
@@ -205,9 +206,7 @@ export const AddMount = ({
             { id: 'rw', label: t('agents.mount.readWrite') },
           ]}
         />
-        {mode === 'rw' && looksGit(path) && (
-          <span className="type-meta text-ink-2">{t('agents.mount.branch')}</span>
-        )}
+        {mode === 'rw' && pathGit && <span className="type-meta text-ink-2">{t('agents.mount.branch')}</span>}
       </div>
       <div className="flex gap-2">
         <Button variant="secondary" onPress={submit}>

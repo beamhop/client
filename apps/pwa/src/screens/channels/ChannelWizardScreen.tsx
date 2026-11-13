@@ -73,6 +73,7 @@ import {
   telegramGroupLink,
   toSlug,
   uniqueName,
+  validationCaution,
 } from './providers.ts';
 
 /** Kept for the router/kitchen: the common 6-step frame (JOURNEYS §4). */
@@ -280,7 +281,11 @@ const CreateStep = ({ ctx }: { ctx: Ctx }) => {
 
 // ─────────── 02 Credentials (+ 03 Validate, 04 Connect in place) ───────────
 
-const hint = (v: string) => `${v.slice(0, 5)}…${v.slice(-4)}`;
+/**
+ * "Saved" hint kept in the draft (localStorage): a few characters of a LONG token only. A short
+ * secret (plugin channels) would be fully revealed by prefix + suffix, so it gets no characters.
+ */
+const hint = (v: string) => (v.length >= 20 ? `${v.slice(0, 5)}…${v.slice(-4)}` : '•••');
 
 const useChannelName = (ctx: Ctx, identityHandle?: string) => {
   const taken = ctx.channels.map((c) => c.config.name);
@@ -380,7 +385,7 @@ const CredentialsStep = ({ ctx }: { ctx: Ctx }) => {
           );
           patch({
             identity: r.identity,
-            clientId: meta.id === 'discord' ? discordClientId(s['bot-token'] ?? '') : undefined,
+            clientId: meta.id === 'discord' ? discordClientId(s.botToken ?? '') : undefined,
           });
         } else {
           haptic('error');
@@ -456,7 +461,7 @@ const CredentialsStep = ({ ctx }: { ctx: Ctx }) => {
   const saved = !!draft.channel;
   const hints = (draft.values.hints as Record<string, string> | undefined) ?? {};
   const busy = phase === 'validating' || phase === 'adding' || phase === 'connecting';
-  const caution = result?.ok && result.message !== 'Valid' && !result.message.startsWith('Valid');
+  const caution = !!result?.ok && validationCaution(result.message);
   const canPaste = typeof navigator !== 'undefined' && !!navigator.clipboard?.readText;
   const firstEmpty = meta.secrets.find((s) => !(secrets[s.key] ?? '').trim());
 
@@ -474,7 +479,7 @@ const CredentialsStep = ({ ctx }: { ctx: Ctx }) => {
         }
       >
         {saved
-          ? t('channels.cred.savedTitle', { bot: identity?.handle ?? name })
+          ? t('channels.cred.savedTitle', { bot: identity?.handle ?? draft.channel ?? name })
           : t(`channels.cred.title.${meta.id === 'slack' ? 'slack' : 'one'}`, { provider: meta.name })}
       </StepHeading>
 
@@ -499,9 +504,11 @@ const CredentialsStep = ({ ctx }: { ctx: Ctx }) => {
               <SecretField
                 label={s.label}
                 savedHint={saved ? (hints[s.key] ?? s.shape) : undefined}
-                description={t(
-                  `channels.cred.how.${meta.id}.${s.key}` as 'channels.cred.how.telegram.bot-token',
-                )}
+                description={
+                  s.help !== undefined
+                    ? s.help || undefined
+                    : t(`channels.cred.how.${meta.id}.${s.key}` as 'channels.cred.how.telegram.token')
+                }
                 format={s.format}
                 formatLabel={s.formatLabel}
                 value={v}
@@ -1235,7 +1242,7 @@ export const ChannelWizardScreen = () => {
   const channelsQ = useApi('channel.list');
   const wv = providers.data?.providers.find((p) => p.provider === provider);
   const steps = normalizeSteps(provider, wv?.steps);
-  const meta = providerMeta(provider);
+  const meta = providerMeta(provider, wv?.steps);
   const name = wv?.displayName && provider !== 'nostr' ? wv.displayName : meta.name;
   const index = Math.min(steps.length - 1, Math.max(0, Number(step) - 1 || 0));
   const { draft, patch, reset } = useDraft(provider);

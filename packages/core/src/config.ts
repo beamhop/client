@@ -157,6 +157,25 @@ export const MeshConfig = z.object({
 });
 export type MeshConfig = z.infer<typeof MeshConfig>;
 
+/**
+ * A persisted "always allow" rule from an approval card (approval.decide `always`). Matching tool
+ * requests from this agent skip the approval. `host` rules are also added to the sandbox net allowlist.
+ */
+export const ApprovalRule = z.object({
+  /** tool: any call of this tool; command: shell command prefix (token boundary); host: network host or `*.domain`; path: file path or directory. */
+  kind: z.enum(['tool', 'command', 'host', 'path']),
+  /** Tool name the rule applies to (e.g. "Bash", "WebFetch"); `*` only for host rules. */
+  tool: z.string().min(1),
+  value: z.string().min(1),
+  /** command/path: match the value exactly (default: command prefix at a word boundary / directory with a trailing `/`). */
+  exact: z.boolean().optional(),
+  /** Only for requests from this role (the approval's requester role). */
+  role: RoleName.optional(),
+  createdAt: z.string(),
+  createdBy: z.string().optional(),
+});
+export type ApprovalRule = z.infer<typeof ApprovalRule>;
+
 export const AgentConfig = z.object({
   name: Slug,
   displayName: z.string().optional(),
@@ -203,6 +222,8 @@ export const AgentConfig = z.object({
   preset: z.string().optional(),
   /** Cloud harness auth choice (§7). */
   harnessAuth: z.enum(['api-key', 'subscription']).default('api-key'),
+  /** Persisted "always allow" approval rules (approval.decide `always`). */
+  approvalRules: z.array(ApprovalRule).default([]),
 });
 export type AgentConfig = z.infer<typeof AgentConfig>;
 export type AgentConfigInput = z.input<typeof AgentConfig>;
@@ -239,6 +260,49 @@ export const ScheduleConfig = z.object({
 });
 export type ScheduleConfig = z.infer<typeof ScheduleConfig>;
 
+// ───────────────────────────── Alerts (§9B) ─────────────────────────────
+
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'use HH:MM');
+/** Alert threshold fields (all optional: a patch, or what config stores). */
+export const AlertRulesPatch = z.object({
+  /** Budget warning / alert at this % of an agent's daily budget. */
+  budgetWarn: z.number().int().min(1).max(1000).optional(),
+  budgetAlert: z.number().int().min(1).max(1000).optional(),
+  /** Security spike: this many security events within `spikeMinutes`. */
+  spikeEvents: z.number().int().min(1).max(10_000).optional(),
+  spikeMinutes: z.number().int().min(1).max(1440).optional(),
+  /** A cloud agent is offline after this many minutes without a heartbeat. */
+  heartbeatMinutes: z.number().int().min(1).max(1440).optional(),
+  /** Notify when an agent crashes. */
+  crash: z.boolean().optional(),
+  /** Deliver alerts as Web Push. */
+  push: z.boolean().optional(),
+  /** Also DM owners on their channels (Nostr DM etc.) for budget/crash/offline/spike alerts (default on). */
+  nostrDm: z.boolean().optional(),
+  /** Hold non-security pushes during quiet hours (daemon local time). */
+  quietHours: z.boolean().optional(),
+  quietStart: HHMM.optional(),
+  quietEnd: HHMM.optional(),
+});
+export type AlertRulesPatch = z.infer<typeof AlertRulesPatch>;
+
+/** Effective alert thresholds (`alerts.get`). Same shape the PWA's alert sheet edits. */
+export const AlertRules = AlertRulesPatch.required();
+export const DEFAULT_ALERT_RULES: z.infer<typeof AlertRules> = {
+  budgetWarn: 80,
+  budgetAlert: 100,
+  spikeEvents: 5,
+  spikeMinutes: 10,
+  heartbeatMinutes: 3,
+  crash: true,
+  push: true,
+  nostrDm: true,
+  quietHours: false,
+  quietStart: '22:00',
+  quietEnd: '07:00',
+};
+export type AlertRules = z.infer<typeof AlertRules>;
+
 // ───────────────────────────── Global config ─────────────────────────────
 
 export const BeamhopConfig = z.object({
@@ -271,5 +335,7 @@ export const BeamhopConfig = z.object({
       catalogAuto: true,
       appPrompt: true,
     }),
+  /** Alert thresholds; unset fields fall back to the daemon's defaults. */
+  alerts: AlertRulesPatch.optional(),
 });
 export type BeamhopConfig = z.infer<typeof BeamhopConfig>;

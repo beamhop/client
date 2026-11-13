@@ -8,6 +8,8 @@ import {
   groupApprovals,
   isCredentialFile,
   isLockedPath,
+  isMe,
+  meNames,
   quorumOf,
   reachOf,
   ruleChoices,
@@ -18,6 +20,7 @@ import {
   suggestionChoices,
   swipeMode,
   waitingOnOthers,
+  whoDecided,
   wildcardFor,
 } from './model.ts';
 
@@ -74,18 +77,44 @@ describe('grouping identical requests', () => {
 });
 
 describe('N-of-M', () => {
-  it('counts yes votes, seats you, and moves to waiting once you voted', () => {
+  const me = meNames({ principal: 'local:owner', role: 'owner', via: 'local', person: 'alice' });
+
+  it('derives "you" from whoami: principal, display name and linked person', () => {
+    expect([...me]).toEqual(['local:owner', 'alice']);
+    expect(isMe(me, 'alice')).toBe(true);
+    expect(isMe(me, 'bob')).toBe(false);
+    expect(isMe(me, undefined)).toBe(false);
+    expect(meNames(undefined).size).toBe(0);
+    expect(whoDecided(me, 'alice', 'an owner')).toBe('you');
+    expect(whoDecided(me, 'bob', 'an owner')).toBe('bob');
+    expect(whoDecided(me, undefined, 'an owner')).toBe('an owner');
+  });
+
+  it('counts yes votes from the server, seats you, and moves to waiting once you voted', () => {
     const a = apr({
       quorum: { needed: 3, pool: 3 },
       votes: [{ by: 'bob', allow: true, at: '' }],
     });
-    const q = quorumOf(a, new Set());
+    const q = quorumOf(a, me);
     expect(q).toMatchObject({ needed: 3, yes: 1, remaining: 2, youVoted: false });
     expect(q?.seats.map((s) => s.name)).toEqual(['bob', 'you', 'another owner']);
+    expect(waitingOnOthers(a, me)).toBe(false);
     const voted = { ...a, votes: [...(a.votes ?? []), { by: 'alice', allow: true, at: '' }] };
-    expect(waitingOnOthers(voted, new Set([a.id]))).toBe(true);
-    expect(quorumOf(voted, new Set([a.id]))?.remaining).toBe(1);
-    expect(quorumOf(apr({}), new Set())).toBeNull();
+    // Your vote is recognised from the server's votes alone (no device memory).
+    expect(waitingOnOthers(voted, me)).toBe(true);
+    expect(quorumOf(voted, me)?.seats).toEqual([
+      { name: 'bob', done: true },
+      { name: 'you', done: true, you: true },
+      { name: 'another owner', done: false, you: false },
+    ]);
+    expect(quorumOf(voted, me)?.remaining).toBe(1);
+    // Someone else's view of the same request: alice is just a name.
+    expect(waitingOnOthers(voted, meNames({ principal: 'nostr:npub1x', role: 'owner', via: 'nostr' }))).toBe(
+      false,
+    );
+    // A deny vote doesn't count as waiting.
+    expect(waitingOnOthers({ ...a, votes: [{ by: 'alice', allow: false, at: '' }] }, me)).toBe(false);
+    expect(quorumOf(apr({}), me)).toBeNull();
   });
 });
 
@@ -112,6 +141,18 @@ describe('scope sheet rules', () => {
     const a = apr({ tool: 'Read', input: { path: '~/docs/faq/keys.md' } });
     expect(ruleChoices(a).map((x) => x.value)).toEqual(['~/docs/faq/keys.md', '~/docs/faq/']);
     expect(ruleLine(a, '~/docs/faq/')).toBe('+ fs.read: ~/docs/faq/');
+  });
+
+  it('never offers a widening the daemon would refuse', () => {
+    // Relative paths would be read as host names; ~ itself is never a rule.
+    expect(ruleChoices(apr({ tool: 'Read', input: { path: 'src/auth.ts' } }))).toHaveLength(1);
+    expect(ruleChoices(apr({ tool: 'Read', input: { path: '~/notes.md' } }))).toHaveLength(1);
+    // Interpreters and shell metacharacters only get the exact command.
+    expect(ruleChoices(apr({ input: { command: 'bash -c "rm -rf x"' } }))).toHaveLength(1);
+    expect(ruleChoices(apr({ input: { command: 'npm test && npm run deploy' } }))).toHaveLength(1);
+    // URLs scope by host name (no port).
+    const u = apr({ tool: 'Fetch', input: { url: 'https://api.github.com:443/repos' } });
+    expect(ruleChoices(u).map((x) => x.value)).toEqual(['api.github.com', '*.github.com']);
   });
 
   it('never offers session/always for deploys, access requests or N-of-M', () => {

@@ -137,6 +137,58 @@ test('roles: what each role can do', async ({ page }, info) => {
   await axe(page);
 });
 
+test('roles: edit a role with a plain-language confirm; owner and agent are locked', async ({
+  page,
+}, info) => {
+  await open(page, '/policy/roles');
+  if (info.project.name !== 'desktop') await page.getByRole('button', { name: /^user/ }).click();
+  await expect(page.getByRole('button', { name: 'Edit owner' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit agent' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Edit user' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Edit user' });
+  const review = sheet.getByRole('button', { name: 'Review changes' });
+  await expect(review).toBeDisabled();
+  await sheet.getByRole('switch', { name: /Can approve other people/ }).click({ force: true });
+  await review.click();
+  const confirm = page.getByRole('alertdialog', { name: 'Change the user role?' });
+  await expect(confirm.getByText('· Can approve other people’s requests: no → yes')).toBeVisible();
+  await axe(page);
+  await confirm.getByRole('button', { name: 'Save role' }).click();
+  await expect(page.getByRole('region', { name: 'Notifications' }).getByText('Saved · user')).toBeVisible();
+  if (info.project.name === 'desktop') {
+    const table = page.getByRole('table', { name: 'What each role can do' });
+    const row = table.getByRole('row', { name: /Approve other people’s requests/ });
+    // owner, admin, user now approve.
+    await expect(row.getByText('Auto')).toHaveCount(3);
+  }
+});
+
+test('roles: create a custom role, then delete it', async ({ page }, info) => {
+  await open(page, '/policy/roles');
+  await page.getByRole('button', { name: 'New role' }).click();
+  const sheet = page.getByRole('dialog', { name: 'New role' });
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('Guest');
+  await expect(sheet.getByText(/Use lowercase letters/)).toBeVisible();
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('guest');
+  await sheet.getByRole('button', { name: 'Create role' }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Create the guest role?' });
+  await confirm.getByRole('button', { name: 'Create role' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Created · guest'),
+  ).toBeVisible();
+  if (info.project.name !== 'desktop') await page.getByRole('button', { name: /^guest/ }).click();
+  await page.getByRole('button', { name: 'Edit guest' }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit guest' });
+  await edit.getByRole('button', { name: 'Delete role' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Delete the guest role?' })
+    .getByRole('button', { name: 'Delete role' })
+    .click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Deleted · guest'),
+  ).toBeVisible();
+});
+
 test('profiles: list → explainer page', async ({ page }) => {
   await open(page, '/policy');
   await page.getByRole('link', { name: /^strict Read-only/ }).click();
