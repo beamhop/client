@@ -279,6 +279,76 @@ export const seed = (now = Date.now()): MockState => {
       install: { npm: 'npm i -g @mariozechner/pi-coding-agent@latest' },
     },
   ];
+  /** Login methods as the daemon reports them (catalog `auth.methods`). */
+  const m = (
+    id: string,
+    label: string,
+    kind: 'broker' | 'env',
+    secret: string,
+    set = false,
+    hint?: string,
+  ) => ({
+    id,
+    label,
+    kind,
+    secret,
+    set,
+    ...(hint ? { hint } : {}),
+  });
+  const LOGINS: Record<string, NonNullable<HarnessView['login']>> = {
+    claude: {
+      status: 'logged-in',
+      method: 'anthropic-key',
+      checkedAt: new Date(now - 3 * 3600_000).toISOString(),
+      message: 'Anthropic API key accepted',
+      methods: [
+        m('anthropic-key', 'Anthropic API key', 'broker', 'ANTHROPIC_API_KEY', true),
+        m(
+          'claude-subscription',
+          'Claude subscription (Pro / Max)',
+          'broker',
+          'CLAUDE_CODE_OAUTH_TOKEN',
+          false,
+          'Run `claude setup-token` and paste the token it prints.',
+        ),
+      ],
+    },
+    codex: {
+      status: 'logged-out',
+      message: 'Not logged in. Run: beamhop harness login codex',
+      methods: [m('openai-key', 'OpenAI API key', 'broker', 'OPENAI_API_KEY')],
+    },
+    gemini: {
+      status: 'logged-in',
+      method: 'gemini-key',
+      checkedAt: new Date(now - 26 * 3600_000).toISOString(),
+      message: 'Gemini API key accepted',
+      methods: [m('gemini-key', 'Gemini API key', 'env', 'GEMINI_API_KEY', true)],
+    },
+    opencode: {
+      status: 'unchecked',
+      method: 'openrouter-key',
+      methods: [
+        m('openrouter-key', 'OpenRouter API key', 'broker', 'OPENROUTER_API_KEY', true),
+        m('anthropic-key', 'Anthropic API key', 'broker', 'ANTHROPIC_API_KEY', true),
+        m('openai-key', 'OpenAI API key', 'broker', 'OPENAI_API_KEY'),
+      ],
+    },
+    copilot: {
+      status: 'logged-out',
+      methods: [
+        m(
+          'github-token',
+          'GitHub token',
+          'env',
+          'COPILOT_GITHUB_TOKEN',
+          false,
+          'A fine-grained token with "Copilot Requests", or `gh auth token`.',
+        ),
+      ],
+    },
+  };
+  for (const h of harnesses) if (LOGINS[h.id]) h.login = LOGINS[h.id];
 
   // ─────────── Channels ───────────
   const channels = new Map<string, ChannelView>();

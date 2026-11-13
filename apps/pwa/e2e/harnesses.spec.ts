@@ -25,18 +25,50 @@ const shot = async (page: Page, name: string, project: string) => {
   await page.screenshot({ path: `screenshots/${project}/${name}.png` });
 };
 
-test('groups results and shows the exact login command', async ({ page }, info) => {
+test('groups results; a harness without a login for agents gets Log in, checked for real', async ({
+  page,
+}, info) => {
   await open(page, '/harnesses');
   await expect(page.getByRole('heading', { name: /Needs you · 2/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Ready · 3/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Not installed · 1/ })).toBeVisible();
-  await expect(page.locator('code', { hasText: 'codex login' }).first()).toBeVisible();
+  await expect(page.getByText(/is not logged in for agents/).first()).toBeVisible();
   await expect(page.getByText(/3\/6 ready/)).toBeVisible();
   await axe(page);
   await shot(page, 'harnesses', info.project.name);
-  await page.getByRole('button', { name: 'Check again: Codex' }).click();
-  await expect(page.getByText(/Still not logged in at/)).toBeVisible();
-  await expect(page.getByText(/scanned \d\d:\d\d/)).toBeVisible();
+
+  await page
+    .getByRole('button', { name: /^Log in: Codex/ })
+    .first()
+    .click();
+  const sheet = page.getByRole('dialog', { name: /^Log Codex.* in$/ });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByText(/Agents never see it/)).toBeVisible();
+  await sheet.getByLabel('OpenAI API key', { exact: true }).fill('bad-key-value');
+  await sheet.getByRole('button', { name: 'Save and check' }).click();
+  await expect(sheet.getByRole('alert')).toContainText('rejected');
+  // Let the sheet finish its entrance: axe measures contrast mid-fade otherwise.
+  await page.waitForTimeout(800);
+  await axe(page);
+  await sheet.getByLabel('OpenAI API key', { exact: true }).fill('sk-proj-good-key');
+  await sheet.getByRole('button', { name: 'Save and check' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole('heading', { name: /Ready · 4/ })).toBeVisible();
+});
+
+test('details: login status, check and log out', async ({ page }) => {
+  await open(page, '/harnesses');
+  await page.getByRole('button', { name: /^OpenCode/ }).click();
+  const login = page.getByRole('region', { name: 'Login for agents' }).last();
+  await expect(login.getByText('not checked yet')).toBeVisible();
+  await login.getByRole('button', { name: 'Check', exact: true }).click();
+  await expect(login.getByText('logged in', { exact: true })).toBeVisible();
+  await login.getByRole('button', { name: 'Log out', exact: true }).click();
+  await page
+    .getByRole('alertdialog', { name: /Log OpenCode out\?/ })
+    .getByRole('button', { name: 'Log out' })
+    .click();
+  await expect(login.getByText('not logged in', { exact: true })).toBeVisible();
 });
 
 test('install sheet offers per-OS package manager commands', async ({ page }, info) => {

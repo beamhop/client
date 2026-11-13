@@ -230,12 +230,19 @@ export const AgentConfig = z.object({
   /** Cloud harness auth choice (§7). */
   harnessAuth: z.enum(['api-key', 'subscription']).default('api-key'),
   /**
-   * beamhop secrets handed to the harness as environment variables of the same name, for harnesses
-   * the LLM broker cannot front (GitHub Copilot: `COPILOT_GITHUB_TOKEN`). Unlike broker keys, the
-   * agent CAN read these values; outbound DLP still redacts them from messages. Opt-in per agent.
+   * beamhop secrets handed to the harness as environment variables: `ENV` (the secret of the same name)
+   * or `ENV=SECRET`. Overrides the harness login (`beamhop harness login`) for this agent, e.g. a team
+   * token. The agent CAN read these values; outbound DLP still redacts them from messages.
    */
   secretEnv: z
-    .array(z.string().regex(/^[A-Z_][A-Z0-9_]*$/, 'an environment variable name, e.g. COPILOT_GITHUB_TOKEN'))
+    .array(
+      z
+        .string()
+        .regex(
+          /^[A-Z_][A-Z0-9_]*(=[A-Za-z0-9_.:@/-]{1,200})?$/,
+          'ENV (secret of the same name) or ENV=SECRET, e.g. COPILOT_GITHUB_TOKEN=TEAM_TOKEN',
+        ),
+    )
     .default([]),
   /** Persisted "always allow" approval rules (approval.decide `always`). */
   approvalRules: z.array(ApprovalRule).default([]),

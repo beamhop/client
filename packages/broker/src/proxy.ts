@@ -22,6 +22,11 @@ export interface LlmRoute {
   /** Vault secret holding the real key. */
   secretName: string;
   auth: 'x-api-key' | 'bearer';
+  /**
+   * Used when `secretName` is not set: another credential for the same upstream, e.g. a Claude
+   * subscription token (Bearer + the OAuth beta flag) instead of an API key.
+   */
+  fallback?: { secretName: string; auth: 'x-api-key' | 'bearer'; beta?: string };
   /** Ask OpenAI-compatible streams for a final usage chunk (stream_options.include_usage). */
   injectStreamUsage?: boolean;
 }
@@ -33,6 +38,8 @@ export const DEFAULT_ROUTES: LlmRoute[] = [
     upstream: 'https://api.anthropic.com',
     secretName: 'ANTHROPIC_API_KEY',
     auth: 'x-api-key',
+    // `claude setup-token`: a Claude Pro/Max subscription token, for when there is no API key.
+    fallback: { secretName: 'CLAUDE_CODE_OAUTH_TOKEN', auth: 'bearer', beta: 'oauth-2025-04-20' },
   },
   {
     id: 'openai',
@@ -300,14 +307,20 @@ export const createLlmProxy = async (opts: LlmProxyOptions): Promise<LlmProxy> =
 
     // The key comes first: a missing key must not burn budget reservations (and then surface as a
     // misleading "budget exceeded" once the harness has retried a few times).
-    const key = await opts.secrets.get(route.secretName);
+    let key = await opts.secrets.get(route.secretName);
+    let auth = route.auth;
+    let beta: string | undefined;
+    if (!key && route.fallback) {
+      key = await opts.secrets.get(route.fallback.secretName);
+      if (key) ({ auth, beta } = route.fallback);
+    }
     if (!key) {
       return json(
         res,
         503,
         errorBody(
           'api_error',
-          `no secret "${route.secretName}" configured in beamhop; set it with \`beamhop secret set ${route.secretName}\``,
+          `no secret "${route.secretName}"${route.fallback ? ` or "${route.fallback.secretName}"` : ''} configured in beamhop; log the harness in with \`beamhop harness login <harness>\` (or \`beamhop secret set ${route.secretName}\`)`,
         ),
       );
     }
@@ -362,8 +375,18 @@ export const createLlmProxy = async (opts: LlmProxyOptions): Promise<LlmProxy> =
     }
     headers['accept-encoding'] = 'identity'; // we parse usage from the body
     headers['content-length'] = String(body.length);
-    if (route.auth === 'x-api-key') headers['x-api-key'] = key;
+    if (auth === 'x-api-key') headers['x-api-key'] = key;
     else headers.authorization = `Bearer ${key}`;
+    if (beta) {
+      const prev = String(headers['anthropic-beta'] ?? '');
+      if (
+        !prev
+          .split(',')
+          .map((x) => x.trim())
+          .includes(beta)
+      )
+        headers['anthropic-beta'] = prev ? `${prev},${beta}` : beta;
+    }
 
     const doRequest = up.protocol === 'https:' ? httpsRequest : httpRequest;
     const upReq = doRequest(

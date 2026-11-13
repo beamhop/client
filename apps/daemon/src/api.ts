@@ -29,6 +29,7 @@ import { compilePolicy, probeSandbox } from '@beamhop/sandbox';
 import { INSTRUCTION_FILES, type MoreMethod, moreHandlers } from './api-more.ts';
 import { channelSecretName } from './channels.ts';
 import { type Daemon, LOCAL_OWNER, VERSION } from './daemon.ts';
+import { checkLogin, harnessLogin, loginMethods, resolveMethod } from './harness-auth.ts';
 import { isInternalSecret } from './home.ts';
 import { type CallContext, createDispatcher, type Handler, type Handlers } from './rpc-server.ts';
 import { suggestionValue, withPolicyValue } from './rules.ts';
@@ -135,6 +136,37 @@ export class ApiHandlers {
     const a = this.d.config.agents.save(input);
     this.d.emitAgent(a.name);
     return this.d.agentView(a);
+  }
+
+  /**
+   * Attach login status. For harnesses beamhop logs in, "ready" also means agents can authenticate:
+   * installed but logged out (or rejected) is `needs-login`, whatever the harness's own login says,
+   * since that one is not usable inside the sandbox.
+   */
+  private async withLogins(views: HarnessView[]): Promise<HarnessView[]> {
+    return Promise.all(
+      views.map(async (h) => {
+        const login = await harnessLogin(this.d, h.id);
+        if (login.status === 'unmanaged' || (h.status !== 'ready' && h.status !== 'needs-login'))
+          return { ...h, login };
+        const ok = login.status === 'logged-in' || login.status === 'unchecked';
+        const message = ok
+          ? h.status === 'needs-login'
+            ? undefined
+            : h.message
+          : login.status === 'invalid'
+            ? `Login rejected: ${login.message}. Run: beamhop harness login ${h.id}`
+            : login.message;
+        const { message: _old, ...rest } = h;
+        return { ...rest, status: ok ? 'ready' : 'needs-login', ...(message ? { message } : {}), login };
+      }),
+    );
+  }
+
+  private async harnessView(id: string): Promise<HarnessView> {
+    const v = (await this.withLogins(this.harnessViews())).find((h) => h.id === id);
+    if (!v) throw new BeamhopError('not_found', `no harness ${id}`);
+    return v;
   }
 
   private harnessViews(): HarnessView[] {
@@ -278,26 +310,23 @@ export class ApiHandlers {
           .filter((n) => llmKeys.includes(n));
         const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
         checks.push(harnessCheck(hs, haveKeys.length > 0));
-        // Harnesses with their own service (GitHub Copilot) cannot use your login inside the sandbox
-        // (it lives in the OS keychain) and the broker cannot front them: they need a token secret.
-        const secretNames = new Set((await d.secrets.list().catch(() => [])).map((s) => s.name));
+        // Agents on a harness with no working login (your own login is not usable inside the sandbox).
+        const seen = new Set<string>();
         for (const a of d.config.agents.list()) {
-          const plugin = d.registry.harness(a.harness);
-          if (!plugin?.network?.length) continue;
-          const missing = a.secretEnv.filter((n) => !secretNames.has(n));
-          if (a.secretEnv.length && !missing.length) continue;
-          const tokenVar = a.harness === 'copilot' ? 'COPILOT_GITHUB_TOKEN' : (missing[0] ?? 'TOKEN');
+          if (seen.has(a.harness)) continue;
+          seen.add(a.harness);
+          const login = await harnessLogin(d, a.harness);
+          if (login.status !== 'logged-out' && login.status !== 'invalid') continue;
+          const users = d.config.agents
+            .list()
+            .filter((x) => x.harness === a.harness)
+            .map((x) => x.name);
           checks.push({
-            id: `agent.${a.name}.token`,
-            title: `Agent ${a.name} (${plugin.displayName})`,
-            status: 'warn',
-            message: a.secretEnv.length
-              ? `secret ${missing.join(', ')} is not set`
-              : `no token: ${plugin.displayName} cannot use your login inside the sandbox`,
-            fix: [
-              ...(missing.length || !a.secretEnv.length ? [`beamhop secret set ${tokenVar}`] : []),
-              ...(a.secretEnv.length ? [] : [`beamhop agent set ${a.name} 'secretEnv=["${tokenVar}"]'`]),
-            ].join(' && '),
+            id: `harness.${a.harness}.login`,
+            title: `${d.registry.harness(a.harness)?.displayName ?? a.harness} login (${users.join(', ')})`,
+            status: 'fail',
+            message: login.status === 'invalid' ? `login rejected: ${login.message}` : 'not logged in',
+            fix: `beamhop harness login ${a.harness}`,
           });
         }
         for (const c of d.config.channels.list()) {
@@ -522,10 +551,47 @@ export class ApiHandlers {
       },
 
       // ── harnesses ──
-      'harness.scan': async () => ({ harnesses: await this.scan() }),
+      'harness.scan': async () => ({ harnesses: await this.withLogins(await this.scan()) }),
       'harness.list': async () => {
         if (!d.store.kv.get('harness', 'scan')) await this.scan();
-        return { harnesses: this.harnessViews() };
+        return { harnesses: await this.withLogins(this.harnessViews()) };
+      },
+      'harness.login': async ({ id, method, value }, ctx) => {
+        const m = resolveMethod(id, method);
+        await d.secrets.set(m.secret, value.trim());
+        d.invalidateSecretCache();
+        d.audit({
+          type: 'harness.login',
+          severity: 'security',
+          summary: `${id} logged in with ${m.label}`,
+          actor: this.principal(ctx),
+          data: { harness: id, method: m.id, secret: m.secret },
+        });
+        // Verify right away; a failed check is shown in the returned status, not thrown.
+        const login = await checkLogin(d, id).catch(() => undefined);
+        const v = await this.harnessView(id);
+        return login ? { ...v, login: { ...v.login!, ...login } } : v;
+      },
+      'harness.logout': async ({ id, method }, ctx) => {
+        const methods = method ? [resolveMethod(id, method)] : loginMethods(id);
+        for (const m of methods) await d.secrets.delete(m.secret);
+        d.invalidateSecretCache();
+        d.store.kv.delete('harness-login', id);
+        d.audit({
+          type: 'harness.logout',
+          severity: 'security',
+          summary: `${id} logged out (${methods.map((m) => m.secret).join(', ')})`,
+          actor: this.principal(ctx),
+          data: { harness: id, secrets: methods.map((m) => m.secret) },
+        });
+        return this.harnessView(id);
+      },
+      'harness.checkLogin': async ({ id }) => {
+        if (!loginMethods(id).length) resolveMethod(id);
+        const login = await checkLogin(d, id);
+        const v = await this.harnessView(id);
+        // Keep the check's own message (e.g. why it could not run), not just the stored state.
+        return { ...v, login };
       },
       'harness.add': async ({ id, command, args }, ctx) => {
         const hid = id.startsWith('acp:') ? id : `acp:${id}`;

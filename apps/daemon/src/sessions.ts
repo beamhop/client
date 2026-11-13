@@ -28,6 +28,7 @@ import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { sandboxGitWritePaths } from './git-ops.ts';
+import { sessionCredentials } from './harness-auth.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
 import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
@@ -437,22 +438,16 @@ export class SessionManager {
       mkdirSync(harnessHome, { recursive: true, mode: 0o700 });
       env[plugin.homeEnv] = harnessHome;
     }
-    // Opt-in secrets the harness reads from its env (it can see these values; DLP still redacts them).
-    for (const name of agent.secretEnv ?? []) {
-      const value = await d.secrets.get(name);
-      if (!value)
-        throw new BeamhopError(
-          'unavailable',
-          `secret ${name} is not set (agent ${agent.name} passes it to ${plugin.displayName}). Set it with: beamhop secret set ${name}`,
-        );
-      env[name] = value;
-    }
+    // Env-kind harness login (Copilot's token) or the agent's own secretEnv override. The harness can
+    // read these values (DLP still redacts them from messages); broker-kind logins never reach it.
+    const credentials = await sessionCredentials(d.secrets, agent, harnessId, plugin.displayName);
     let proxyToken: string | undefined;
     if (d.llmProxy) {
       proxyToken = d.llmProxy.createSession(live.id);
       this.tokenToSession.set(proxyToken, live.id);
       Object.assign(env, envForHarness(harnessId, d.llmProxy.url, proxyToken));
     }
+    Object.assign(env, credentials);
     const mcpToken = d.mcpBridge.addSession({ sessionId: live.id });
     const mcp = d.mcpBridge.spec(mcpToken);
     let sandbox: DaemonSandbox | undefined;
@@ -461,6 +456,7 @@ export class SessionManager {
         env,
         ...(d.llmProxy ? { brokerPort: d.llmProxy.port } : {}),
         localAllow: [`127.0.0.1:${d.mcpBridge.port}`],
+        ...(plugin.macosTrustd ? { macosTrustd: true } : {}),
         log: d.log.child({ session: live.id }),
       });
       for (const w of sandbox.warnings ?? []) this.event(live.id, { kind: 'system', text: w });

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   createLlmProxy,
   createSseParser,
+  DEFAULT_ROUTES,
   envForHarness,
   foldUsage,
   type LlmProxy,
@@ -36,6 +37,7 @@ describe('createLlmProxy', () => {
     ANTHROPIC_API_KEY: ANTHROPIC_KEY,
     OPENAI_API_KEY: OPENAI_KEY,
     OPENROUTER_API_KEY: OPENROUTER_KEY,
+    SUB_TOKEN: 'sk-ant-oat01-subscription-token-for-tests',
   });
 
   beforeAll(async () => {
@@ -77,6 +79,14 @@ describe('createLlmProxy', () => {
         injectStreamUsage: true,
       },
       { id: 'nokey', prefix: '/nokey', upstream: upstreamUrl, secretName: 'MISSING', auth: 'bearer' },
+      {
+        id: 'sub',
+        prefix: '/sub',
+        upstream: upstreamUrl,
+        secretName: 'NO_API_KEY',
+        auth: 'x-api-key',
+        fallback: { secretName: 'SUB_TOKEN', auth: 'bearer', beta: 'oauth-2025-04-20' },
+      },
     ];
     proxy = await createLlmProxy({
       secrets,
@@ -280,6 +290,30 @@ describe('createLlmProxy', () => {
     expect(await raw('//evil.example/x')).toBe(400);
     expect((await fetch(`${proxy.url}/nokey/v1`, { headers: h })).status).toBe(503);
     expect(seen).toHaveLength(0);
+  });
+
+  it('falls back to a subscription token: Bearer auth plus the OAuth beta flag, merged', async () => {
+    const t = proxy.createSession();
+    const r = await fetch(`${proxy.url}/sub/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': t,
+        'anthropic-beta': 'prompt-caching-2024-07-31',
+      },
+      body: '{}',
+    });
+    expect(r.status).toBe(200);
+    const h = seen[0]!.headers;
+    expect(h.authorization).toBe('Bearer sk-ant-oat01-subscription-token-for-tests');
+    expect(h['x-api-key']).toBeUndefined();
+    expect(h['anthropic-beta']).toBe('prompt-caching-2024-07-31,oauth-2025-04-20');
+  });
+
+  it('the Anthropic route prefers an API key and falls back to CLAUDE_CODE_OAUTH_TOKEN', () => {
+    const anthropic = DEFAULT_ROUTES.find((r) => r.id === 'anthropic')!;
+    expect(anthropic.secretName).toBe('ANTHROPIC_API_KEY');
+    expect(anthropic.fallback).toMatchObject({ secretName: 'CLAUDE_CODE_OAUTH_TOKEN', auth: 'bearer' });
   });
 
   it('a missing key is reported as such, not as an exhausted budget', async () => {

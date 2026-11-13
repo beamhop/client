@@ -22,6 +22,13 @@ export interface SrtConfigOptions {
   localAllow?: string[];
   /** Upstream proxy for srt's own outbound connections (e.g. a corporate proxy). */
   parentProxy?: { http?: string; https?: string; noProxy?: string };
+  /**
+   * macOS: let the sandbox reach `com.apple.trustd.agent`, which native binaries that verify TLS through
+   * the system (GitHub Copilot CLI, Go tools) need, or every HTTPS request fails (OSStatus -26276).
+   * srt's caveat: trustd's own certificate fetches are a possible exfiltration path outside the proxy.
+   * Only for harnesses that declare they need it (catalog `macosTrustd`).
+   */
+  macosTrustd?: boolean;
 }
 
 const LOOPBACK_NO_PROXY = 'localhost,127.0.0.1,::1';
@@ -67,6 +74,8 @@ export const toSrtConfig = (policy: SandboxPolicy, opts: SrtConfigOptions = {}):
       }
     : undefined;
 
+  const trustd =
+    opts.macosTrustd && process.platform === 'darwin' ? { enableWeakerNetworkIsolation: true } : {};
   return {
     network: {
       allowedDomains,
@@ -80,5 +89,6 @@ export const toSrtConfig = (policy: SandboxPolicy, opts: SrtConfigOptions = {}):
       allowWrite,
       denyWrite,
     },
+    ...trustd,
   };
 };

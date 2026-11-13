@@ -91,7 +91,13 @@ export interface DaemonSandbox extends SandboxHandle {
 
 export type SandboxFactory = (
   policy: SandboxPolicy,
-  opts: { env: Record<string, string>; brokerPort?: number; localAllow: string[]; log: Logger },
+  opts: {
+    env: Record<string, string>;
+    brokerPort?: number;
+    localAllow: string[];
+    log: Logger;
+    macosTrustd?: boolean;
+  },
 ) => Promise<DaemonSandbox>;
 
 export interface DaemonOptions {
@@ -251,6 +257,7 @@ export class Daemon {
           ...(o.brokerPort ? { brokerPort: o.brokerPort } : {}),
           localAllow: o.localAllow,
           log: o.log,
+          ...(o.macosTrustd ? { macosTrustd: true } : {}),
           ...(process.env.HTTPS_PROXY
             ? {
                 parentProxy: {

@@ -51,24 +51,46 @@ ACP harnesses use `session/request_permission`, which beamhop answers. The npm p
 Agent SDK (it includes its own Claude Code binary for your platform), so the `claude` adapter works even
 without a separate install as long as you are logged in or have an API key.
 
-### GitHub Copilot CLI: give it a token
+### Logging harnesses in
 
-Copilot talks to GitHub's own service, which beamhop's key broker cannot stand in for, and your `copilot
-login` lives in the OS keychain, which the sandbox never lets an agent read. So a Copilot agent needs a
-token of its own, passed in its environment:
+Agents run their harness in a sandbox that can never read your own login: the macOS keychain, `~/.config`
+and friends are always denied. So beamhop keeps one login per harness in its encrypted vault, and every
+agent on that harness uses it. **Harnesses → (harness) → Log in…** in the app, or:
 
 ```bash
-gh auth token | beamhop secret set COPILOT_GITHUB_TOKEN          # or a fine-grained token with "Copilot Requests"
-beamhop agent set myagent 'secretEnv=["COPILOT_GITHUB_TOKEN"]'
+beamhop harness status                     # login state of every installed harness
+printenv ANTHROPIC_API_KEY | beamhop harness login claude
+beamhop harness login claude --method claude-subscription   # paste the `claude setup-token` token
+beamhop harness login copilot --from gh                      # imports `gh auth token`
+beamhop harness status copilot --check     # verify for real
+beamhop harness logout copilot
 ```
 
-`secretEnv` is per agent and off by default. Unlike broker keys, **the agent can read this value**, so
-prefer a fine-grained personal access token that only has the *Copilot Requests* permission over `gh`'s
-token (which carries your repo scopes). beamhop starts Copilot with `--secret-env-vars`, so the token is
-kept out of the shells and MCP servers Copilot runs and redacted from its output, and outbound DLP redacts
-it from messages. Copilot keeps its config and state in the session directory (`COPILOT_HOME`), never in
-your own `~/.copilot`, and the sandbox allows `api.githubcopilot.com` / `*.githubcopilot.com` for it.
-`beamhop doctor` flags Copilot agents without a token.
+| Harness  | Login methods (first one set wins)                                   | Agent sees it? |
+| -------- | -------------------------------------------------------------------- | -------------- |
+| claude   | Anthropic API key · Claude subscription token (`claude setup-token`) | no (broker)    |
+| codex    | OpenAI API key                                                       | no (broker)    |
+| opencode | OpenRouter · Anthropic · OpenAI API key                              | no (broker)    |
+| pi       | OpenRouter · Anthropic · OpenAI API key                              | no (broker)    |
+| copilot  | GitHub token (fine-grained, "Copilot Requests", or `gh auth token`)  | **yes**        |
+| gemini   | Gemini API key                                                       | **yes**        |
+
+*Broker* methods never reach the agent: beamhop's LLM broker adds the key (or the subscription token, as
+Bearer with Anthropic's OAuth flag) to the harness's requests. GitHub Copilot and Gemini talk to services
+the broker cannot stand in for, so their token is handed to the harness and **the agent can read it**:
+prefer a narrowly scoped token. Copilot is started with `--secret-env-vars` (the token stays out of the
+shells and MCP servers it runs) and keeps its state in the session directory (`COPILOT_HOME`), never in
+your `~/.copilot`; outbound DLP redacts stored secrets from messages.
+
+**Status.** A harness is *ready* only when agents can authenticate: installed but not logged in (or
+rejected) shows *needs login*, whatever your own login says. `Check` (or `--check`) verifies the stored
+login for real: provider keys against the provider's free key/models endpoint, Copilot by starting it in
+the sandbox and closing it before any prompt. The result is kept until the login changes.
+`beamhop doctor` fails for harnesses your agents use but that are not logged in.
+
+**Per agent.** An agent can use its own credential instead: `secretEnv: ["COPILOT_GITHUB_TOKEN=TEAM_TOKEN"]`
+(`beamhop agent set <agent> 'secretEnv=["COPILOT_GITHUB_TOKEN=TEAM_TOKEN"]'`, with `TEAM_TOKEN` stored via
+`beamhop secret set TEAM_TOKEN`).
 
 ### Any other ACP agent
 

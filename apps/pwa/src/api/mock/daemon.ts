@@ -898,6 +898,50 @@ export class MockDaemon {
       return { harnesses: this.state.harnesses };
     },
     'harness.list': () => ({ harnesses: this.state.harnesses }),
+    // Logins: `bad…` values are rejected like a real check would; anything else is accepted.
+    'harness.login': async (p) => {
+      await sleep(600);
+      const h = this.state.harnesses.find((x) => x.id === p.id) ?? fail('not_found', `No harness ${p.id}`);
+      const login = h.login ?? fail('unavailable', `beamhop does not manage ${p.id}'s login`);
+      const method =
+        login.methods.find((x) => x.id === (p.method ?? login.methods[0]?.id)) ??
+        fail('invalid_input', `unknown login method ${p.method}`);
+      method.set = true;
+      const ok = !p.value.startsWith('bad');
+      h.login = {
+        ...login,
+        status: ok ? 'logged-in' : 'invalid',
+        method: method.id,
+        checkedAt: new Date().toISOString(),
+        message: ok ? `${method.label} accepted` : `${method.label} rejected (HTTP 401)`,
+      };
+      if (h.status === 'ready' || h.status === 'needs-login') h.status = ok ? 'ready' : 'needs-login';
+      if (ok) delete h.message;
+      return h;
+    },
+    'harness.logout': (p) => {
+      const h = this.state.harnesses.find((x) => x.id === p.id) ?? fail('not_found', `No harness ${p.id}`);
+      const login = h.login ?? fail('unavailable', `beamhop does not manage ${p.id}'s login`);
+      for (const x of login.methods) if (!p.method || x.id === p.method) x.set = false;
+      const any = login.methods.find((x) => x.set);
+      h.login = any
+        ? { methods: login.methods, status: 'unchecked', method: any.id }
+        : {
+            methods: login.methods,
+            status: 'logged-out',
+            message: `Not logged in. Run: beamhop harness login ${h.id}`,
+          };
+      if (!any && h.status === 'ready') h.status = 'needs-login';
+      return h;
+    },
+    'harness.checkLogin': async (p) => {
+      await sleep(500);
+      const h = this.state.harnesses.find((x) => x.id === p.id) ?? fail('not_found', `No harness ${p.id}`);
+      const login = h.login ?? fail('unavailable', `beamhop does not manage ${p.id}'s login`);
+      if (login.status === 'unchecked')
+        h.login = { ...login, status: 'logged-in', checkedAt: new Date().toISOString(), message: 'accepted' };
+      return h;
+    },
     // Probes the command with an ACP `initialize` handshake. Unknown binaries fail like a real spawn would.
     'harness.add': async (p) => {
       await sleep(700);

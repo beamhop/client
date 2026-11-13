@@ -151,6 +151,8 @@ export interface HarnessPlugin {
   network?: string[];
   /** Env var that relocates the harness's config/state dir; the daemon points it into the session dir. */
   homeEnv?: string;
+  /** macOS: the harness verifies TLS through the system and needs `trustd` in the sandbox. */
+  macosTrustd?: boolean;
   detect(): Promise<HarnessDetection | null>;
   start(spec: SessionSpec, sandbox: SandboxHandle): Promise<HarnessSession>;
 }

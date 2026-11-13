@@ -46,6 +46,7 @@ export const acpHarnessFromCatalog = (entry: CatalogEntry, opts: CatalogAcpOptio
     ...plugin,
     ...(entry.network.length ? { network: [...entry.network] } : {}),
     ...(entry.homeEnv ? { homeEnv: entry.homeEnv } : {}),
+    ...(entry.macosTrustd ? { macosTrustd: true } : {}),
   };
 };
 

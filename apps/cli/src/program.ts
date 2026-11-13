@@ -495,19 +495,57 @@ export const buildProgram = (deps: CliDeps): Command => {
 
   // ── harnesses ─────────────────────────────────────────────
   const harness = program.command('harness').description('discover and manage agent harnesses');
-  const harnessTable = (
-    hs: { id: string; displayName: string; status: string; version?: string; protocol: string }[],
-  ) =>
+  type HarnessRow = {
+    id: string;
+    displayName: string;
+    status: string;
+    version?: string;
+    protocol: string;
+    message?: string;
+    login?: {
+      status: string;
+      method?: string;
+      checkedAt?: string;
+      message?: string;
+      methods: { id: string; label: string; kind: string; secret: string; set: boolean; hint?: string }[];
+    };
+  };
+  const loginWord = (h: HarnessRow) => {
+    const l = h.login;
+    if (!l || l.status === 'unmanaged') return pc.dim('own login');
+    const via = l.methods.find((m) => m.id === l.method)?.label;
+    if (l.status === 'logged-in') return `${pc.green('logged in')}${via ? pc.dim(` · ${via}`) : ''}`;
+    if (l.status === 'unchecked') return `${pc.yellow('not checked')}${via ? pc.dim(` · ${via}`) : ''}`;
+    if (l.status === 'invalid') return pc.red('rejected');
+    return pc.red('logged out');
+  };
+  const harnessTable = (hs: HarnessRow[]) =>
     table(
       hs.map((h) => ({
         id: h.id,
         name: h.displayName,
         status: h.status,
+        login: h.status === 'not-installed' ? '' : loginWord(h),
         version: h.version ?? '',
-        protocol: h.protocol,
       })),
-      ['id', 'name', 'status', 'version', 'protocol'],
+      ['id', 'name', 'status', 'login', 'version'],
     );
+  const loginDetail = (h: HarnessRow) => {
+    const l = h.login;
+    if (!l || l.status === 'unmanaged')
+      return `${h.displayName}: beamhop does not manage this harness's login; it uses its own configuration.`;
+    const lines = [`${pc.bold(h.displayName)}  ${loginWord(h)}`];
+    if (l.message) lines.push(`  ${l.status === 'invalid' ? pc.red(l.message) : pc.dim(l.message)}`);
+    if (l.checkedAt) lines.push(pc.dim(`  checked ${l.checkedAt}`));
+    lines.push('', '  methods (the first one that is set is used):');
+    for (const m of l.methods)
+      lines.push(
+        `   ${m.set ? pc.green('●') : pc.dim('○')} ${m.id.padEnd(20)} ${m.label}  ${pc.dim(
+          m.kind === 'env' ? '(the agent can read it)' : '(the agent never sees it)',
+        )}`,
+      );
+    return lines.join('\n');
+  };
   harness
     .command('scan')
     .description('look for installed harnesses')
@@ -525,6 +563,88 @@ export const buildProgram = (deps: CliDeps): Command => {
       act(async (c) => {
         const { harnesses } = await c.call('harness.list');
         return { data: harnesses, human: () => harnessTable(harnesses) };
+      }),
+    );
+  harness
+    .command('status [id]')
+    .description('login status of harnesses for sandboxed agents; --check verifies it for real')
+    .option('--check', 'verify the stored login (provider key endpoint, or start the harness in the sandbox)')
+    .action(
+      act(async (c, id: string | undefined, o: { check?: boolean }) => {
+        if (id) {
+          const h = (o.check ? await c.call('harness.checkLogin', { id }) : undefined) as
+            | HarnessRow
+            | undefined;
+          const view =
+            h ?? ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
+          if (!view) throw new Error(`no harness ${id}`);
+          return { data: view, human: () => loginDetail(view) };
+        }
+        let { harnesses } = (await c.call('harness.list')) as { harnesses: HarnessRow[] };
+        if (o.check)
+          harnesses = await Promise.all(
+            harnesses.map(async (h) =>
+              h.status !== 'not-installed' && h.login?.methods.some((m) => m.set)
+                ? ((await c.call('harness.checkLogin', { id: h.id })) as HarnessRow)
+                : h,
+            ),
+          );
+        const installed = harnesses.filter((h) => h.status !== 'not-installed');
+        return { data: installed, human: () => harnessTable(installed) };
+      }),
+    );
+  harness
+    .command('login <id>')
+    .description(
+      'log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh',
+    )
+    .option('--method <method>', 'which login method (default: the first; see `beamhop harness status <id>`)')
+    .option('--from-env <var>', 'read the value from this environment variable')
+    .option('--from <tool>', 'import it from another tool: gh (`gh auth token`)')
+    .action(
+      act(async (c, id: string, o: { method?: string; fromEnv?: string; from?: string }) => {
+        let value: string | undefined;
+        if (o.from) {
+          if (o.from !== 'gh') throw new Error('--from supports: gh');
+          const { spawnSync } = await import('node:child_process');
+          const r = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8', env: io.env });
+          if (r.status !== 0 || !r.stdout.trim())
+            throw new Error(
+              `\`gh auth token\` failed${r.stderr ? `: ${r.stderr.trim()}` : ''}. Log in with \`gh auth login\` first.`,
+            );
+          value = r.stdout.trim();
+        } else if (o.fromEnv) value = io.env[o.fromEnv];
+        else {
+          const view = ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
+          const m = view?.login?.methods.find((x) => (o.method ? x.id === o.method : true));
+          if (io.interactive && m) io.err(pc.dim(`${m.label}${m.hint ? ` — ${m.hint}` : ''}`));
+          value = (await io.readStdin()).trim();
+        }
+        if (!value)
+          throw new Error(
+            o.fromEnv
+              ? `environment variable ${o.fromEnv} is empty or not set`
+              : 'empty value (pipe it in, e.g. `printenv ANTHROPIC_API_KEY | beamhop harness login claude`)',
+          );
+        const h = (await c.call('harness.login', {
+          id,
+          value,
+          ...(o.method ? { method: o.method } : {}),
+        })) as HarnessRow;
+        return { data: h, human: () => loginDetail(h) };
+      }),
+    );
+  harness
+    .command('logout <id>')
+    .description('remove a harness login (other harnesses using the same key lose it too)')
+    .option('--method <method>', 'only this login method')
+    .action(
+      act(async (c, id: string, o: { method?: string }) => {
+        const h = (await c.call('harness.logout', {
+          id,
+          ...(o.method ? { method: o.method } : {}),
+        })) as HarnessRow;
+        return { data: h, human: () => loginDetail(h) };
       }),
     );
   harness

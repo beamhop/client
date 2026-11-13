@@ -17,6 +17,24 @@
       "installDirs": ["~/.claude/local", "~/.local/bin"],
       "configDirs": ["~/.claude"],
       "auth": {
+        "methods": [
+          {
+            "id": "anthropic-key",
+            "label": "Anthropic API key",
+            "kind": "broker",
+            "secret": "ANTHROPIC_API_KEY",
+            "check": "anthropic",
+            "hint": "Create one at https://console.anthropic.com/settings/keys"
+          },
+          {
+            "id": "claude-subscription",
+            "label": "Claude subscription (Pro / Max)",
+            "kind": "broker",
+            "secret": "CLAUDE_CODE_OAUTH_TOKEN",
+            "check": "anthropic-oauth",
+            "hint": "Run `claude setup-token` and paste the token it prints (valid for one year)."
+          }
+        ],
         "env": [
           "ANTHROPIC_API_KEY",
           "ANTHROPIC_AUTH_TOKEN",
@@ -71,6 +89,16 @@
       },
       "configDirs": ["~/.codex"],
       "auth": {
+        "methods": [
+          {
+            "id": "openai-key",
+            "label": "OpenAI API key",
+            "kind": "broker",
+            "secret": "OPENAI_API_KEY",
+            "check": "openai",
+            "hint": "Create one at https://platform.openai.com/api-keys"
+          }
+        ],
         "env": ["OPENAI_API_KEY", "CODEX_API_KEY"],
         "files": ["~/.codex/auth.json"],
         "login": "codex login"
@@ -104,8 +132,20 @@
       },
       "configDirs": ["~/.copilot"],
       "homeEnv": "COPILOT_HOME",
+      "macosTrustd": true,
       "network": ["api.githubcopilot.com", "*.githubcopilot.com"],
       "auth": {
+        "methods": [
+          {
+            "id": "github-token",
+            "label": "GitHub token",
+            "kind": "env",
+            "secret": "COPILOT_GITHUB_TOKEN",
+            "check": "harness",
+            "importFrom": "gh",
+            "hint": "A fine-grained token with the \"Copilot Requests\" permission (https://github.com/settings/personal-access-tokens), or `gh auth token`. The agent can read it."
+          }
+        ],
         "env": ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
         "files": ["~/.copilot/config.json"],
         "keychain": ["darwin", "linux", "win32"],
@@ -134,7 +174,18 @@
       "binaries": ["gemini"],
       "install": { "npm": "@google/gemini-cli", "brew": "gemini-cli" },
       "configDirs": ["~/.gemini"],
+      "network": ["generativelanguage.googleapis.com"],
       "auth": {
+        "methods": [
+          {
+            "id": "gemini-key",
+            "label": "Gemini API key",
+            "kind": "env",
+            "secret": "GEMINI_API_KEY",
+            "check": "gemini",
+            "hint": "Create one at https://aistudio.google.com/apikey. The agent can read it."
+          }
+        ],
         "env": [
           "GEMINI_API_KEY",
           "GOOGLE_API_KEY",
@@ -164,6 +215,32 @@
       "installDirs": ["~/.opencode/bin"],
       "configDirs": ["$XDG_CONFIG_HOME/opencode", "$XDG_DATA_HOME/opencode"],
       "auth": {
+        "methods": [
+          {
+            "id": "openrouter-key",
+            "label": "OpenRouter API key",
+            "kind": "broker",
+            "secret": "OPENROUTER_API_KEY",
+            "check": "openrouter",
+            "hint": "Create one at https://openrouter.ai/keys"
+          },
+          {
+            "id": "anthropic-key",
+            "label": "Anthropic API key",
+            "kind": "broker",
+            "secret": "ANTHROPIC_API_KEY",
+            "check": "anthropic",
+            "hint": "Create one at https://console.anthropic.com/settings/keys"
+          },
+          {
+            "id": "openai-key",
+            "label": "OpenAI API key",
+            "kind": "broker",
+            "secret": "OPENAI_API_KEY",
+            "check": "openai",
+            "hint": "Create one at https://platform.openai.com/api-keys"
+          }
+        ],
         "env": [
           "OPENROUTER_API_KEY",
           "ANTHROPIC_API_KEY",
@@ -195,6 +272,32 @@
       "install": { "npm": "@mariozechner/pi-coding-agent" },
       "configDirs": ["~/.pi/agent"],
       "auth": {
+        "methods": [
+          {
+            "id": "openrouter-key",
+            "label": "OpenRouter API key",
+            "kind": "broker",
+            "secret": "OPENROUTER_API_KEY",
+            "check": "openrouter",
+            "hint": "Create one at https://openrouter.ai/keys"
+          },
+          {
+            "id": "anthropic-key",
+            "label": "Anthropic API key",
+            "kind": "broker",
+            "secret": "ANTHROPIC_API_KEY",
+            "check": "anthropic",
+            "hint": "Create one at https://console.anthropic.com/settings/keys"
+          },
+          {
+            "id": "openai-key",
+            "label": "OpenAI API key",
+            "kind": "broker",
+            "secret": "OPENAI_API_KEY",
+            "check": "openai",
+            "hint": "Create one at https://platform.openai.com/api-keys"
+          }
+        ],
         "env": [
           "OPENROUTER_API_KEY",
           "ANTHROPIC_API_KEY",

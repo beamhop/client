@@ -155,6 +155,13 @@ describe('toSrtConfig', () => {
     expect(c.filesystem.denyRead).not.toContain(home);
   });
 
+  it('trustd only when a harness declares it, and only on macOS', () => {
+    expect(toSrtConfig(p, { home })).not.toHaveProperty('enableWeakerNetworkIsolation');
+    const c = toSrtConfig(p, { home, macosTrustd: true });
+    if (process.platform === 'darwin') expect(c).toMatchObject({ enableWeakerNetworkIsolation: true });
+    else expect(c).not.toHaveProperty('enableWeakerNetworkIsolation');
+  });
+
   it('localAllow and parentProxy', () => {
     const c = toSrtConfig(p, { localAllow: ['127.0.0.1:4000'], parentProxy: { https: 'http://proxy:8080' } });
     expect(c.network.allowedDomains).toContain('127.0.0.1:4000');

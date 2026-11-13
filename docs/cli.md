@@ -79,6 +79,9 @@ Commands:
 - [`beamhop harness`](#beamhop-harness)
   - [`beamhop harness scan`](#beamhop-harness-scan)
   - [`beamhop harness ls`](#beamhop-harness-ls)
+  - [`beamhop harness status`](#beamhop-harness-status)
+  - [`beamhop harness login`](#beamhop-harness-login)
+  - [`beamhop harness logout`](#beamhop-harness-logout)
   - [`beamhop harness add`](#beamhop-harness-add)
 - [`beamhop channel`](#beamhop-channel)
   - [`beamhop channel providers`](#beamhop-channel-providers)
@@ -383,14 +386,19 @@ Usage: beamhop harness [options] [command]
 discover and manage agent harnesses
 
 Options:
-  -h, --help          display help for command
+  -h, --help             display help for command
 
 Commands:
-  scan                look for installed harnesses
-  ls|list             list known harnesses and their status (from the last scan)
-  add [options] <id>  register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
-                      "my-agent --acp"`
-  help [command]      display help for command
+  scan                   look for installed harnesses
+  ls|list                list known harnesses and their status (from the last scan)
+  status [options] [id]  login status of harnesses for sandboxed agents; --check verifies it for
+                         real
+  login [options] <id>   log a harness in for sandboxed agents; reads the key or token from stdin,
+                         --from-env, or --from gh
+  logout [options] <id>  remove a harness login (other harnesses using the same key lose it too)
+  add [options] <id>     register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
+                         "my-agent --acp"`
+  help [command]         display help for command
 ```
 
 ### beamhop harness scan
@@ -413,6 +421,44 @@ list known harnesses and their status (from the last scan)
 
 Options:
   -h, --help  display help for command
+```
+
+### beamhop harness status
+
+```text
+Usage: beamhop harness status [options] [id]
+
+login status of harnesses for sandboxed agents; --check verifies it for real
+
+Options:
+  --check     verify the stored login (provider key endpoint, or start the harness in the sandbox)
+  -h, --help  display help for command
+```
+
+### beamhop harness login
+
+```text
+Usage: beamhop harness login [options] <id>
+
+log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh
+
+Options:
+  --method <method>  which login method (default: the first; see `beamhop harness status <id>`)
+  --from-env <var>   read the value from this environment variable
+  --from <tool>      import it from another tool: gh (`gh auth token`)
+  -h, --help         display help for command
+```
+
+### beamhop harness logout
+
+```text
+Usage: beamhop harness logout [options] <id>
+
+remove a harness login (other harnesses using the same key lose it too)
+
+Options:
+  --method <method>  only this login method
+  -h, --help         display help for command
 ```
 
 ### beamhop harness add

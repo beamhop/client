@@ -49,6 +49,31 @@ export const HarnessView = z.object({
       url: z.string().optional(),
     })
     .optional(),
+  /**
+   * Login for sandboxed agents (your own login is not usable inside the sandbox). `unchecked`: a
+   * credential is stored but not verified yet; `unmanaged`: beamhop does not manage this harness's login.
+   */
+  login: z
+    .object({
+      status: z.enum(['logged-in', 'logged-out', 'invalid', 'unchecked', 'unmanaged']),
+      /** The method in use (first one whose secret is set). */
+      method: z.string().optional(),
+      checkedAt: z.string().optional(),
+      message: z.string().optional(),
+      methods: z.array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          /** broker: the agent never sees it. env: the agent can read it. */
+          kind: z.enum(['broker', 'env']),
+          secret: z.string(),
+          set: z.boolean(),
+          hint: z.string().optional(),
+          importFrom: z.string().optional(),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type HarnessView = z.infer<typeof HarnessView>;
 
@@ -363,6 +388,18 @@ export const methods = {
 
   'harness.scan': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
   'harness.list': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
+  /** Store a credential for a harness login method (default: its first method), then check it. */
+  'harness.login': {
+    params: z.object({ id: z.string(), method: z.string().optional(), value: z.string().min(1) }),
+    result: HarnessView,
+  },
+  /** Remove a harness's stored login (one method, or all of them). */
+  'harness.logout': {
+    params: z.object({ id: z.string(), method: z.string().optional() }),
+    result: HarnessView,
+  },
+  /** Verify the harness's login for real (provider key endpoint, or a sandboxed start). */
+  'harness.checkLogin': { params: z.object({ id: z.string() }), result: HarnessView },
   'harness.add': {
     params: z.object({ id: z.string(), command: z.string(), args: z.array(z.string()).default([]) }),
     result: HarnessView,

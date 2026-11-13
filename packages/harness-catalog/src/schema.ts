@@ -16,6 +16,35 @@ export type LaunchSpec = z.infer<typeof LaunchSpec>;
 export const HarnessProtocol = z.enum(['acp', 'claude-sdk', 'codex-app-server', 'pi-rpc', 'opencode']);
 export type HarnessProtocol = z.infer<typeof HarnessProtocol>;
 
+const EnvName = z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
+
+/** One way to log a harness in for sandboxed agents. The credential is a beamhop vault secret. */
+export const LoginMethod = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  label: z.string(),
+  /**
+   * `broker`: a provider key that beamhop's LLM broker adds to the harness's requests; the agent never
+   * sees it. `env`: handed to the harness as an environment variable; the agent CAN read it.
+   */
+  kind: z.enum(['broker', 'env']),
+  /** Vault secret holding the credential. Harnesses listing the same name share it. */
+  secret: EnvName,
+  /** `env` kind: the variable the harness reads (default: the secret's name). */
+  env: EnvName.optional(),
+  /**
+   * How `beamhop harness check` verifies it: against the provider's (free) key-info endpoint, or by
+   * starting the harness in the sandbox with it (`harness`).
+   */
+  check: z
+    .enum(['anthropic', 'anthropic-oauth', 'openai', 'openrouter', 'gemini', 'harness'])
+    .default('harness'),
+  /** Where to get one, shown in the CLI and the UI. */
+  hint: z.string().optional(),
+  /** `beamhop harness login --from <tool>` can import it (e.g. `gh auth token`). */
+  importFrom: z.enum(['gh']).optional(),
+});
+export type LoginMethod = z.infer<typeof LoginMethod>;
+
 export const CatalogEntry = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   displayName: z.string().min(1),
@@ -48,6 +77,11 @@ export const CatalogEntry = z.object({
    * Env var that relocates the harness's config/state directory (e.g. COPILOT_HOME). beamhop points it
    * into the session dir: the sandbox can write there, and the user's own config is never touched.
    */
+  /**
+   * macOS: the harness is a native binary that verifies TLS through the system (trustd), so its sandbox
+   * must allow trustd or every HTTPS request fails. Weakens network isolation a little (see srt).
+   */
+  macosTrustd: z.boolean().default(false),
   homeEnv: z
     .string()
     .regex(/^[A-Z_][A-Z0-9_]*$/)
@@ -63,8 +97,14 @@ export const CatalogEntry = z.object({
       /** Command the user runs to log in. */
       login: z.string().optional(),
       note: z.string().optional(),
+      /**
+       * How beamhop logs this harness in for sandboxed agents (`beamhop harness login`, Harnesses screen).
+       * Your own login (keychain, ~/.config) is never readable inside the sandbox, so only these count.
+       * The first method whose secret is set is used. Empty: beamhop does not manage this harness's login.
+       */
+      methods: z.array(LoginMethod).default([]),
     })
-    .default({ env: [], files: [], keychain: [] }),
+    .default({ env: [], files: [], keychain: [], methods: [] }),
   versionArgs: z.array(z.string()).default(['--version']),
   /** Supported version range: space-separated comparators, e.g. ">=1.0.0 <2.0.0". */
   versionRange: z.string().optional(),

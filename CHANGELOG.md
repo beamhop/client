@@ -14,15 +14,17 @@ All notable changes to beamhop are documented here. The format follows
   everything from the tray. Signed and notarized on macOS, Authenticode-signed on Windows when the
   certificate is configured. See [docs/desktop.md](docs/desktop.md).
 
-- **Copilot agents can authenticate:** per-agent `secretEnv` passes named beamhop secrets to the harness
-  as env vars (opt-in; the agent can read them). Copilot gets `COPILOT_GITHUB_TOKEN`, its own API hosts in
-  the sandbox (catalog `network`), its state in the session dir (catalog `homeEnv` → `COPILOT_HOME`), and
-  `--secret-env-vars`. `beamhop doctor` flags Copilot agents without a token.
-
+- **Harness logins for sandboxed agents** (`beamhop harness status|login|logout`, Harnesses → Log in…).
+  One login per harness in the vault, used by every agent on it: Anthropic / OpenAI / OpenRouter keys and
+  Claude subscription tokens go through the broker (agents never see them); GitHub Copilot and Gemini get
+  a token in their env (`--from gh` imports `gh auth token`). Status is real: "ready" now requires a
+  working login, and Check verifies it against the provider or by starting the harness in the sandbox.
+  Agents can override with `secretEnv: ["ENV=SECRET"]`. Copilot gets its API hosts in the sandbox, its
+  state in the session dir (`COPILOT_HOME`) and `--secret-env-vars`.
 - **Secrets in one encrypted file; the system keychain is opt-in.** Every secret (LLM keys, channel tokens,
   agent Nostr keys, the database key) lives in `~/.beamhop/vault.enc.json` (AES-256-GCM). Its key is a random
   256-bit key in `~/.beamhop/vault.key` (0600) by default, so macOS no longer prompts once per secret.
-  `beamhop secret keychain on|off` or *Settings → Secrets → Vault key* moves just that key into the system
+  `beamhop secret keychain on|off` or _Settings → Secrets → Vault key_ moves just that key into the system
   keychain (one item per beamhop home) and back; the vault is not re-encrypted. `BEAMHOP_VAULT_PASSPHRASE`
   still locks it with a passphrase on servers. `BEAMHOP_NO_KEYCHAIN` is gone, and secrets stored in the
   keychain by earlier builds are not migrated.

@@ -42,6 +42,7 @@ import { Badge, Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
 import { Banner, EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
+import { LoginPanel, LoginSheet, loginWord, managesLogin } from './HarnessLogin.tsx';
 import {
   detectOs,
   groupOf,
@@ -349,6 +350,7 @@ const HarnessRow = ({
   onOpen,
   onInstall,
   onCheck,
+  onLogin,
   checking,
   lastCheck,
 }: {
@@ -359,6 +361,7 @@ const HarnessRow = ({
   onOpen: () => void;
   onInstall: () => void;
   onCheck: () => void;
+  onLogin: () => void;
   checking: boolean;
 }) => {
   const users = usedBy(h.id, agents);
@@ -366,13 +369,17 @@ const HarnessRow = ({
     h.status === 'ready'
       ? [
           h.protocol === 'acp' ? t('harnesses.harnesses.acp') : h.protocol,
-          h.message?.replace(/^ACP ✓ · /, ''),
+          managesLogin(h) ? loginWord(h.login) : h.message?.replace(/^ACP ✓ · /, ''),
           users.length > 0 && t('harnesses.usedBy', { count: users.length }),
         ]
       : h.status === 'not-installed'
         ? [h.command, t('harnesses.notOnPath')]
         : [
-            h.status === 'needs-login' ? h.path : (h.message ?? STATUS_WORD[h.status]),
+            h.status === 'needs-login' && managesLogin(h)
+              ? loginWord(h.login)
+              : h.status === 'needs-login'
+                ? h.path
+                : (h.message ?? STATUS_WORD[h.status]),
             users.length > 0 && t('harnesses.usedBy', { count: users.length }),
           ];
   return (
@@ -393,7 +400,26 @@ const HarnessRow = ({
         </span>
         <CaretRight size={16} className="shrink-0 text-ink-3" aria-hidden="true" />
       </RACButton>
-      {h.status === 'needs-login' && (
+      {h.status === 'needs-login' && managesLogin(h) && (
+        <div className="flex flex-col gap-2 px-4 pb-3 pl-[3.75rem]">
+          <p className="type-body-sm text-ink-2">
+            {h.login.status === 'invalid' && h.login.message
+              ? h.login.message
+              : t('harnesses.loginHintManaged', { name: h.displayName })}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={onLogin}
+              aria-label={t('harnesses.login.logInFor', { name: h.displayName })}
+            >
+              {t('harnesses.login.logIn')}
+            </Button>
+          </div>
+        </div>
+      )}
+      {h.status === 'needs-login' && !managesLogin(h) && (
         <div className="flex flex-col gap-2 px-4 pb-3 pl-[3.75rem]">
           <p className="type-body-sm text-ink-2">
             {t('harnesses.loginHint', { name: h.displayName })}
@@ -510,7 +536,8 @@ const Details = ({
           </ul>
         )}
       </section>
-      {h.status === 'needs-login' && (
+      {managesLogin(h) && h.status !== 'not-installed' && <LoginPanel h={h} />}
+      {h.status === 'needs-login' && !managesLogin(h) && (
         <CommandLine command={loginCommand(h)} label={t('harnesses.copyLogin', { name: h.displayName })} />
       )}
       {(h.status === 'not-installed' || h.status === 'unsupported-version' || h.install) &&
@@ -542,6 +569,7 @@ export const HarnessesScreen = () => {
   const [sheetId, setSheetId] = useState<string>();
   const [installId, setInstallId] = useState<string>();
   const [acpOpen, setAcpOpen] = useState(false);
+  const [loginId, setLoginId] = useState<string>();
   const harnesses = q.data?.harnesses ?? [];
 
   const scan = async () => {
@@ -589,6 +617,7 @@ export const HarnessesScreen = () => {
               onOpen={() => open(h)}
               onInstall={() => setInstallId(h.id)}
               onCheck={() => void scan()}
+              onLogin={() => setLoginId(h.id)}
               checking={scanning}
               lastCheck={lastScan}
             />
@@ -779,6 +808,12 @@ export const HarnessesScreen = () => {
         }}
       />
       <AddAcpSheet isOpen={acpOpen} onOpenChange={setAcpOpen} taken={harnesses.map((h) => h.id)} />
+      {(() => {
+        const lh = harnesses.find((h) => h.id === loginId);
+        return lh && managesLogin(lh) ? (
+          <LoginSheet h={lh} isOpen onOpenChange={(o) => !o && setLoginId(undefined)} />
+        ) : null;
+      })()}
     </Screen>
   );
 };
