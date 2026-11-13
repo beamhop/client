@@ -37,7 +37,7 @@ export const npubFromBunker = (url: string): string | null => {
 
 const WhatsThisKey = () => (
   <Disclosure className="rounded-md border border-line">
-    <Heading level={3}>
+    <Heading level={2}>
       <RACButton
         slot="trigger"
         className="flex min-h-11 w-full items-center px-3 text-left type-label text-ink outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"

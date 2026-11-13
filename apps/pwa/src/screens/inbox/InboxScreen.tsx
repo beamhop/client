@@ -293,7 +293,10 @@ const Stack = ({
   if (!top) return null;
   const keys = groups.map((g) => g.key);
   return (
-    <section aria-label={t('inbox.stack.label')} className="flex flex-col">
+    <section aria-labelledby="inbox-stack" className="flex flex-col">
+      <h2 id="inbox-stack" className="sr-only">
+        {t('inbox.stack.label')}
+      </h2>
       <div className="mb-2 flex min-h-11 items-center justify-between gap-2">
         <p className="type-meta text-ink-2" aria-live="off">
           {t('inbox.stack.position', { n: i + 1, total: groups.length })}

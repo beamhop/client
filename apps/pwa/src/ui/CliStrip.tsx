@@ -81,7 +81,7 @@ export const CliStrip = ({
       }}
       className={cx('rounded-md border border-line', className)}
     >
-      <Heading level={3} className="m-0">
+      <Heading level={2} className="m-0">
         <RACButton
           slot="trigger"
           className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 text-left text-ink-2 outline-none data-[hovered]:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"

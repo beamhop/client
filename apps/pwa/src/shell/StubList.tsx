@@ -44,7 +44,7 @@ export const StubList = ({
               to={it.href}
               aria-current={active ? 'page' : undefined}
               className={cx(
-                'flex min-h-14 items-center gap-3 rounded-md px-2 py-2.5 outline-none',
+                'flex min-h-14 items-center gap-3 rounded-md px-2 py-2.5 outline-none bh-focus-inset',
                 active ? 'bg-flare-wash' : 'hover:bg-sunken',
               )}
             >

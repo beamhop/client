@@ -600,6 +600,8 @@ export const Transcript = ({
   let prevMinute = '';
   return (
     <div role="log" aria-live="off" aria-label={t('session.transcript', { agent: ctx.agent })}>
+      {/* Messages carry h3s; this keeps the outline h1 → h2 → h3 for heading navigation. */}
+      <h2 className="sr-only">{t('session.transcript', { agent: ctx.agent })}</h2>
       <ol className="relative before:absolute before:top-0 before:bottom-0 before:left-[44px] before:w-px before:bg-line expanded:before:left-[52px]">
         {blocks.map((b) => {
           const at = blockAt(b);

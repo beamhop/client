@@ -30,7 +30,7 @@ export const TabBar = () => {
                 to={item.to}
                 aria-current={active ? 'page' : undefined}
                 className={cx(
-                  'relative flex h-full flex-col items-center justify-center gap-0.5 rounded-md outline-none',
+                  'relative flex h-full flex-col items-center justify-center gap-0.5 rounded-md outline-none bh-focus-inset',
                   active ? 'text-ink' : 'text-ink-2',
                 )}
               >

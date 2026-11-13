@@ -1807,6 +1807,7 @@
   "conn.banner.noAnswer": "{name} isn't answering. Requests wait here until it's back.",
   "demo.run": "Run {cmd} to connect yours.",
   "common.dismiss": "Dismiss",
+  "strip.region": "Daemon status",
   "strip.via.demo": "demo",
   "strip.via.hosted": "{name} via nostr",
   "strip.via.local": "local",

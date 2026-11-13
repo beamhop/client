@@ -155,3 +155,21 @@
     );
   }
 }
+
+/*
+ * Focus rings under `outline-none` (WCAG 2.4.7). In Tailwind v4 `outline-none` also sets
+ * `--tw-outline-style: none`, and `outline-2` / `outline-[3px]` only set `outline-style: var(--tw-outline-style)`,
+ * so `outline-none … data-[focus-visible]:outline-2` rendered NO ring on ~60 controls (filter chips, segmented
+ * controls, list rows, menus…). Unlayered on purpose: it must beat the utilities layer. Elements that only say
+ * `outline-none` keep `outline-style: none` (the property itself, not the variable) and stay ring-less.
+ */
+.outline-none:focus-visible,
+.outline-none[data-focus-visible] {
+  --tw-outline-style: solid;
+}
+
+/* Plain router links (sidebar, tab bar, wordmark) get the global ring back; it sits inside the row. */
+.bh-focus-inset:focus-visible {
+  outline: var(--bh-focus-width) solid var(--bh-focus);
+  outline-offset: calc(-1 * var(--bh-focus-width));
+}

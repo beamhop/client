@@ -60,7 +60,7 @@ export const FilterRail = ({
           className={cx(
             'bh-chip inline-flex h-11 shrink-0 items-center gap-2 rounded-md border pr-3 type-label outline-none pointer-fine:h-9',
             o.lead ? 'pl-1.5' : 'pl-3',
-            'data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus',
+            'data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus',
             'border-line-strong bg-surface text-ink data-[hovered]:bg-sunken',
             'data-[selected]:border-ink data-[selected]:bg-ink data-[selected]:text-bg',
           )}

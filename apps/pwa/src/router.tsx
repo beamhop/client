@@ -170,7 +170,7 @@ const setupIndex = createRoute({
 const setup = createRoute({
   getParentRoute: () => rootRoute,
   path: 'setup/$step',
-  staticData: { chrome: 'bare' },
+  staticData: { chrome: 'bare', ownMain: true },
   component: lazy(() => import('./screens/onboarding/OnboardingScreen.tsx'), 'OnboardingScreen'),
 });
 const pair = createRoute({
