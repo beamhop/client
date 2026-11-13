@@ -230,7 +230,10 @@ export const RouteLine = ({
           // biome-ignore lint/suspicious/noArrayIndexKey: labels may repeat; position is identity
           <Fragment key={`${n.label}-${i}`}>
             {i > 0 && (
-              <span className="relative flex h-3 min-w-6 flex-1 items-center" aria-hidden="true">
+              <span
+                className="relative flex h-3 min-w-6 flex-1 items-center overflow-hidden"
+                aria-hidden="true"
+              >
                 <span
                   className={cx(
                     'h-px w-full',

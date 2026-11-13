@@ -502,7 +502,7 @@ export const SessionScreen = () => {
           {...swipe.bind}
           className={cx(
             'min-h-[50dvh] touch-pan-y',
-            !swipe.state.dragging && 'transition-transform duration-200',
+            !swipe.state.dragging && 'transition-transform duration-[var(--dur-base)] ease-[var(--ease-out)]',
           )}
           style={{ transform: swipe.state.dx ? `translateX(${swipe.state.dx}px)` : undefined }}
           data-testid="transcript-swipe"

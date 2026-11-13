@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { __resetHaptics, haptic } from '../lib/haptics.ts';
 import { Button } from './Button.tsx';
 import { parseHostInput } from './Chip.tsx';
+import { Select } from './Choice.tsx';
 import { parseDiff } from './CodeBlock.tsx';
 import { Sheet } from './Sheet.tsx';
 import { LAMP_WORD, SegmentedMeter, StatusDot } from './Status.tsx';
@@ -223,5 +224,29 @@ describe('helpers', () => {
     expect(haptic('tick')).toBe(true);
     expect(haptic('tick')).toBe(false);
     expect(vibrate).toHaveBeenCalledWith(8);
+  });
+});
+
+describe('Select (compact: list in a bottom sheet)', () => {
+  const options = [
+    { id: 'claude', label: 'Claude Code 2.1.4' },
+    { id: 'gemini', label: 'Gemini CLI 1.3.0' },
+  ];
+  const Controlled = () => {
+    const [v, setV] = useState<string>('claude');
+    return (
+      <Select label="Harness" options={options} selectedKey={v} onSelectionChange={(k) => setV(String(k))} />
+    );
+  };
+
+  it('shows the selected value on the trigger while the sheet is closed, and after picking', async () => {
+    render(<Controlled />);
+    const trigger = screen.getByRole('button', { name: /Harness/ });
+    expect(trigger).toHaveTextContent('Claude Code 2.1.4');
+    await userEvent.click(trigger);
+    const sheet = await screen.findByRole('dialog', { name: 'Harness' });
+    await userEvent.click(within(sheet).getByRole('option', { name: 'Gemini CLI 1.3.0' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('button', { name: /Harness/ })).toHaveTextContent('Gemini CLI 1.3.0');
   });
 });

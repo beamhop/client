@@ -59,7 +59,7 @@ const VerticalBeam = ({
           className="absolute left-[12px] h-4 w-[3px] bg-flare"
           initial={{ top: phase === 'done' ? '90%' : '6%', opacity: 1 }}
           animate={{ top: phase === 'done' ? '6%' : '90%', opacity: [1, 1, 0] }}
-          transition={{ duration: 0.9, ease: 'linear' }}
+          transition={{ duration: 0.6, ease: 'linear' }} // --dur-beam
         />
       )}
       <ol aria-hidden="true" className="relative flex flex-col gap-3">
