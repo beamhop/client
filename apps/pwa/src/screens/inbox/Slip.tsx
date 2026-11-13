@@ -102,6 +102,7 @@ export const WhatBlock = ({ a, full }: { a: ApprovalView; full?: boolean }) => {
       >
         {i.command ?? i.path ?? approvalTarget(a)}
       </code>
+      {full && i.remoteUrl && <p className="mt-1.5 type-meta break-all text-ink-2">{i.remoteUrl}</p>}
       {i.diff && <MiniDiff diff={i.diff} />}
     </>
   );

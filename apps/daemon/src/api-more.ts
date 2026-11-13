@@ -246,7 +246,8 @@ export const moreHandlers = (d: Daemon, deps: MoreDeps) => {
         input: {
           command: `git push ${remote} ${branch}`,
           remote,
-          url,
+          // Not `url`: that key means "a web request" to approval UIs (a remote may be a path).
+          remoteUrl: url,
           branch,
           base: b,
           ...(compare ? { compareUrl: compare } : {}),

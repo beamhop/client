@@ -1,7 +1,10 @@
 /**
- * Audit (usage / security / log tabs), Settings → Devices and secrets against the real daemon.
- * Real events come from a real turn (harness usage, $0.02) and the seed (channel added, agent created).
+ * Audit (usage / security / log tabs, alert rules), Settings → Devices, secrets and About against the
+ * real daemon. Real events come from a real turn (harness usage, $0.02) and the seed (channel added,
+ * agent created).
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { generateSecretKey, getPublicKey } from 'nostr-tools';
 import { axe, expect, test } from './fixtures.ts';
 
@@ -156,4 +159,73 @@ test('replace a channel token: saved under the daemon’s name, value never echo
   // The reconnected channel still delivers.
   await bh.inject({ text: 'still there?' });
   await expect.poll(async () => (await bh.sentTo('alice')).join('\n')).toContain('reply: still there?');
+});
+
+test('audit → alert rules are read from and saved to the daemon (alerts.get / alerts.set)', async ({
+  page,
+  bh,
+}) => {
+  const before = await bh.rpc<{ spikeEvents: number; budgetWarn: number; quietHours: boolean }>('alerts.get');
+  expect(before).toMatchObject({ spikeEvents: 5, budgetWarn: 80, quietHours: false });
+  await bh.open(page, '/audit');
+  await page.getByRole('button', { name: 'Alert rules' }).first().click();
+  const sheet = page.getByRole('dialog', { name: 'Alert rules' });
+  await expect(sheet.getByRole('textbox', { name: 'More than' })).toHaveValue('5');
+  await axe(page);
+  await sheet.getByRole('textbox', { name: 'More than' }).fill('9');
+  await sheet.getByRole('textbox', { name: 'More than' }).press('Tab');
+  await sheet.getByText('Quiet hours 22:00–07:00', { exact: true }).click();
+  await expect(sheet.getByRole('switch', { name: /Quiet hours/ })).toBeChecked();
+  await expect(sheet.getByText('Alert when more than 9 security events happen within 10 min.')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Save rules' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Alert rules saved'),
+  ).toBeVisible();
+
+  // On the daemon (effective rules) and in its config file on disk.
+  await expect
+    .poll(async () => bh.rpc<{ spikeEvents: number; quietHours: boolean }>('alerts.get'))
+    .toMatchObject({ spikeEvents: 9, quietHours: true, budgetWarn: 80 });
+  const config = readFileSync(join(bh.home, 'config.yaml'), 'utf8');
+  expect(config).toMatch(/alerts:[\s\S]*spikeEvents: 9/);
+  const { events } = await bh.rpc<{ events: { type: string }[] }>('audit.query', { limit: 20 });
+  expect(events.map((e) => e.type)).toContain('alerts.set');
+
+  // A fresh load reads the rules back from the daemon, not from this browser.
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await bh.open(page, '/audit');
+  await page.getByRole('button', { name: 'Alert rules' }).first().click();
+  await expect(sheet.getByRole('textbox', { name: 'More than' })).toHaveValue('9');
+  await expect(sheet.getByRole('switch', { name: /Quiet hours/ })).toBeChecked();
+  await axe(page);
+});
+
+test('settings → about shows who the daemon thinks you are (system.whoami)', async ({ page, bh }) => {
+  const me = await bh.rpc<{ principal: string; role: string; via: string }>('system.whoami');
+  expect(me).toEqual({ principal: 'local:owner', role: 'owner', via: 'local' });
+  await bh.open(page, '/settings');
+  // The section row carries the live answer.
+  await expect(page.getByRole('link', { name: 'About local:owner · owner · via local' })).toBeVisible();
+  await bh.open(page, '/settings/about');
+  const you = main(page).getByRole('region', { name: 'You, as the daemon sees you' });
+  await expect(you.getByText('local:owner').first()).toBeVisible();
+  await expect(you.getByText('owner', { exact: true }).first()).toBeVisible();
+  await expect(you.getByText('Local WebSocket')).toBeVisible();
+  await expect(you.getByText(/connected/)).toBeVisible();
+  const status = await bh.rpc<{ version: string }>('system.status');
+  await expect(main(page).getByText(`beamhopd ${status.version}`)).toBeVisible();
+  await axe(page);
+
+  // Linking the local owner to a person is reflected (whoami.person), and Owners lists you.
+  await bh.rpc('principal.link', { person: 'sam', principal: 'local:owner' });
+  await bh.open(page, '/settings/about');
+  await expect(you.getByText('linked to sam')).toBeVisible();
+  await bh.open(page, '/settings/owners');
+  const owners = main(page).getByRole('region', { name: 'Owners' });
+  await expect(owners.getByText('You', { exact: true })).toBeVisible();
+  await expect(owners.getByText('fake:alice').first()).toBeVisible();
+  await axe(page);
 });

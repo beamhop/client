@@ -140,7 +140,13 @@ export const OwnersSection = () => {
   const you = whoami.data;
   const isYou = (o: { principal: string; person?: string }) =>
     !!you && (o.principal === you.principal || (!!you.person && o.person === you.person));
-  const owners = ownersQ.data.owners;
+  // The daemon's `owner.list` leaves out the implicit local owner (`local:owner`): when that is
+  // you, show it, so "You" and "the only owner" read the same as on a daemon that lists you.
+  const listed = ownersQ.data.owners;
+  const owners =
+    you?.role === 'owner' && !listed.some(isYou)
+      ? [{ principal: you.principal, ...(you.person ? { person: you.person } : {}), linked: [] }, ...listed]
+      : listed;
   const { quorum, approvers } = quorumQ.data;
   const seats = Math.max(approvers, quorum, 1);
   const people = Object.entries(peopleQ.data.people).sort(([a], [b]) => a.localeCompare(b));

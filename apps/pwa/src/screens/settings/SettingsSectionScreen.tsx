@@ -12,6 +12,8 @@ import { SegmentedControl, Switch } from '../../ui/Choice.tsx';
 import { Perforation } from '../../ui/glyphs/index.tsx';
 import { Readout } from '../../ui/Meta.tsx';
 import { EmptyState } from '../../ui/States.tsx';
+
+import { AboutSection } from './AboutSection.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { DangerSection } from './DangerSection.tsx';
 import { DevicesSection } from './DevicesSection.tsx';
@@ -32,6 +34,7 @@ const BODY: Record<string, () => ReactNode> = {
   notifications: NotificationsSection,
   updates: UpdatesSection,
   appearance: () => <AppearanceSettings />,
+  about: AboutSection,
   stop: DangerSection,
 };
 

@@ -3,17 +3,44 @@
  * (test-daemon.ts) on BH_E2E_PORT and a small JSON control API on BH_E2E_CONTROL_PORT (loopback
  * only) that Playwright workers use to reset state and drive the fakes:
  *
- *   GET  /info                         → { url, token, home }
- *   POST /reset    { seed?, undoMs? }  → fresh home + daemon on the same port → { url, token, home }
+ *   GET  /info                         → { url, token, home, userHome }
+ *   POST /reset    { seed?, undoMs? }  → fresh home + daemon on the same port (and an empty fake
+ *                                        user home) → { url, token, home, userHome }
  *   POST /inject   { text, channel?, from?, conversation?, mentionsAgent? } → { id }
  *   GET  /snapshot                     → what the fake channel sent / the fake harness received
  *   POST /advance  { ms }              → move the daemon clock forward and run housekeeping
  *   POST /violation { kind, value }    → a sandbox violation from every live session sandbox
+ *   POST /git                          → agent `bot` gets a rw git mount `~/code/app` with a bare
+ *                                        remote `~/remotes/app.git` → { repo, remote, mount }
  *
+ * The process runs with a throwaway HOME (`userHome`, also USERPROFILE on Windows) so `~`, the
+ * path picker (`fs.list`) and seeded repositories never touch the real home directory; set
+ * BH_E2E_KEEP_HOME=1 to keep the real one.
  * Prints one line `BH_E2E_READY {json}` to stdout when listening. Stops on SIGTERM / SIGINT.
  */
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { createServer, type IncomingMessage } from 'node:http';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { startTestDaemon, type TestDaemon } from './test-daemon.ts';
+
+// Before anything resolves `~`: every homedir() call below sees the fake home.
+const fakeHome =
+  process.env.BH_E2E_KEEP_HOME === '1'
+    ? undefined
+    : realpathSync(mkdtempSync(join(tmpdir(), 'bh-e2e-user-')));
+if (fakeHome) {
+  process.env.HOME = fakeHome;
+  process.env.USERPROFILE = fakeHome;
+}
+const userHome = homedir();
+
+/** Empty the fake home between tests (never the real one). */
+const wipeUserHome = () => {
+  if (!fakeHome) return;
+  mkdirSync(fakeHome, { recursive: true });
+  for (const e of readdirSync(fakeHome)) rmSync(join(fakeHome, e), { recursive: true, force: true });
+};
 
 const port = Number(process.env.BH_E2E_PORT ?? 4600);
 const controlPort = Number(process.env.BH_E2E_CONTROL_PORT ?? port + 1);
@@ -25,6 +52,7 @@ let busy: Promise<unknown> = Promise.resolve();
 const start = async (o: { seed?: boolean; undoMs?: number } = {}) => {
   if (td) await td.stop();
   td = undefined;
+  wipeUserHome();
   td = await startTestDaemon({
     port,
     ...(staticDir ? { staticDir } : {}),
@@ -36,7 +64,7 @@ const start = async (o: { seed?: boolean; undoMs?: number } = {}) => {
 
 const info = () => {
   if (!td) throw new Error('daemon not running');
-  return { url: td.url, token: td.token, home: td.home };
+  return { url: td.url, token: td.token, home: td.home, userHome };
 };
 
 const readJson = async (req: IncomingMessage): Promise<Record<string, unknown>> => {
@@ -75,6 +103,10 @@ const control = createServer((req, res) => {
       case 'POST /violation':
         if (!td) throw new Error('daemon not running');
         return { sinks: td.violate(body as never) };
+      case 'POST /git':
+        if (!td) throw new Error('daemon not running');
+        if (!fakeHome) throw new Error('POST /git needs the fake home (BH_E2E_KEEP_HOME is set)');
+        return td.seedGit();
       case 'POST /advance':
         if (!td) throw new Error('daemon not running');
         await td.advance(Number(body.ms ?? 0));
@@ -92,6 +124,7 @@ const shutdown = async () => {
   setTimeout(() => process.exit(1), 5000).unref();
   control.close();
   await td?.stop().catch(() => undefined);
+  if (fakeHome) rmSync(fakeHome, { recursive: true, force: true });
   process.exit(0);
 };
 process.once('SIGTERM', () => void shutdown());

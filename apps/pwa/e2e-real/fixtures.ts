@@ -1,9 +1,12 @@
 /**
  * Shared fixtures for the real-backend suite. `bh` resets the daemon to a fresh, seeded home before
  * every test (fake channel `fk`, agent `bot` on `fk:dm`, owner `fake:alice`) and gives the test:
- *   - `open(page, path)`  → the PWA at `<daemon>/<path>#token=<api token>` (real WebSocket transport)
+ *   - `open(page, path)`  → the PWA at `<daemon>/<path>#token=<api token>` (real WebSocket transport),
+ *                           always a fresh load (also when the page already shows `path`)
  *   - `rpc(method, params)` → the daemon's own JSON-RPC over HTTP (verification from the outside)
  *   - `inject`, `snapshot`, `advance` → drive the fake channel / harness / clock (control API)
+ *   - `seedGit()` → agent `bot` gets a rw git mount `~/code/app` with a bare remote (control API)
+ * The daemon runs with a throwaway HOME (`userHome`), emptied on every reset.
  */
 import AxeBuilder from '@axe-core/playwright';
 import { test as base, expect, type Page } from '@playwright/test';
@@ -13,6 +16,17 @@ export interface DaemonInfo {
   url: string;
   token: string;
   home: string;
+  /** The daemon's (fake) home directory: what `~` means to it. */
+  userHome: string;
+}
+
+export interface GitSeed {
+  /** Absolute path of the repository mounted read-write by `bot` (checked out on `main`). */
+  repo: string;
+  /** Absolute path of the bare repository that is the repo's `origin`. */
+  remote: string;
+  /** The mount path as configured (`~/code/app`). */
+  mount: string;
 }
 
 export interface Snapshot {
@@ -68,6 +82,8 @@ export interface Bh extends DaemonInfo {
   violate(v: { kind: 'net.allow' | 'fs.read' | 'fs.write'; value: string }): Promise<number>;
   /** Fake-channel messages the daemon sent to one conversation (final text). */
   sentTo(conversation: string, channel?: string): Promise<string[]>;
+  /** Give `bot` a rw git mount with a bare `origin` (sessions then run on a worktree). */
+  seedGit(): Promise<GitSeed>;
 }
 
 export const test = base.extend<{ bh: Bh }>({
@@ -91,6 +107,9 @@ export const test = base.extend<{ bh: Bh }>({
     await use({
       ...info,
       open: async (page, path = '/') => {
+        // Same path and query: a hash-only change would not reload the app (and its caches).
+        const now = page.url().startsWith('http') ? new URL(page.url()) : undefined;
+        if (now && `${now.pathname}${now.search}` === path) await page.goto('about:blank');
         await page.goto(`${path}#token=${info.token}`);
         await expect(page.locator('#bh-main-content').first()).toBeVisible();
       },
@@ -100,6 +119,7 @@ export const test = base.extend<{ bh: Bh }>({
       advance: async (ms) => {
         await ctl('/advance', { ms });
       },
+      seedGit: () => ctl<GitSeed>('/git', {}),
       violate: async (v) => (await ctl<{ sinks: number }>('/violation', v)).sinks,
       sentTo: async (conversation, channel = 'fk') =>
         ((await snapshot()).sent[channel] ?? [])

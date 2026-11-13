@@ -5,14 +5,14 @@
  */
 import { BUILTIN_ROLES, DEFAULT_ROLES, type RoleDef, RoleName } from '@beamhop/core';
 import { useEffect, useState } from 'react';
-import { useMutationApi } from '../../api/index.ts';
+import { useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Select, Switch } from '../../ui/Choice.tsx';
 import { NumberField, TextField } from '../../ui/Field.tsx';
 import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { useToast } from '../../ui/Toast.tsx';
-import { DLP_WORD, definePayload, MODE_WORD, roleDiff } from './roles.ts';
+import { DLP_WORD, definePayload, MODE_WORD, roleDiff, roleUses } from './roles.ts';
 
 export type RoleEditTarget = { mode: 'edit'; role: RoleDef } | { mode: 'new'; base: RoleDef };
 
@@ -31,6 +31,7 @@ export const RoleEditor = ({
   grants: Record<string, string>;
   onClose: () => void;
 }) => {
+  const agents = useApi('agent.list');
   const define = useMutationApi('role.define');
   const remove = useMutationApi('role.delete');
   const toast = useToast();
@@ -66,6 +67,8 @@ export const RoleEditor = ({
   const changes = roleDiff(before, draft);
   const canSave = isNew ? !nameError : changes.length > 0;
   const usedBy = Object.entries(grants).filter(([, r]) => r === before.name).length;
+  // The daemon refuses to delete a role that any grant or channel membership still uses.
+  const uses = roleUses(before.name, grants, agents.data?.agents ?? []);
   const builtin = !isNew && isBuiltin(before.name);
   const stock = DEFAULT_ROLES.find((r) => r.name === before.name);
   // A built-in role can only be reset once it differs from the stock definition.
@@ -196,11 +199,11 @@ export const RoleEditor = ({
                   ? overridden
                     ? t('policy.roleEdit.resetHint')
                     : t('policy.roleEdit.builtinHint')
-                  : usedBy > 0
-                    ? t('policy.roleEdit.inUse', { count: usedBy })
+                  : uses.length > 0
+                    ? t('policy.roleEdit.inUseBy', { count: uses.length, list: uses.slice(0, 3).join(', ') })
                     : t('policy.roleEdit.deleteHint')}
               </p>
-              {(builtin ? overridden : usedBy === 0) && (
+              {(builtin ? overridden : uses.length === 0 && !!agents.data) && (
                 <Button
                   variant="destructive-outline"
                   size="sm"

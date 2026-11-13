@@ -15,6 +15,7 @@ import {
   DeviceMobile,
   type Icon,
   IdentificationBadge,
+  Info,
   Key,
   Palette,
   Stop,
@@ -97,6 +98,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     group: 'app',
     icon: Palette,
   },
+  { id: 'about', title: t('settings.section.about'), slug: t('settings.settings.aboutSlug'), group: 'app', icon: Info },
   {
     id: 'stop',
     title: t('settings.section.stop'),
@@ -115,6 +117,7 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
   const identity = useApi('identity.get');
   const secrets = useApi('secret.list');
   const status = useApi('system.status');
+  const whoami = useApi('system.whoami');
   const [prefs] = useAppearance();
   const { panic } = usePanicState();
   const now = Date.now();
@@ -148,6 +151,8 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
     };
   }
   if (status.data) out.updates = { text: t('settings.live.updates', { version: status.data.version }) };
+  if (whoami.data)
+    out.about = { text: `${whoami.data.principal} · ${whoami.data.role} · via ${whoami.data.via}` };
   out.appearance = {
     text: t('settings.live.appearance', {
       theme: THEME_WORD[prefs.theme],
