@@ -7,9 +7,12 @@ import {
   expandPath,
   isWithin,
   LLM_PROVIDER_HOSTS,
+  linuxPackageManager,
   METADATA_HOSTS,
+  packageInstallArgv,
   parseViolationLine,
   probeSandbox,
+  sandboxActions,
   scrubEnv,
   toSrtConfig,
   toWslPath,
@@ -323,6 +326,58 @@ describe('probeSandbox (fake deps)', () => {
     expect(byId(cs, 'sandbox.userns')?.status).toBe('fail');
     expect(byId(cs, 'sandbox.userns')?.fix).toMatch(/apparmor_restrict_unprivileged_userns=0/);
     expect(byId(cs, 'sandbox.apparmor-userns')?.status).toBe('fail');
+  });
+
+  it('offers fixes from a fixed table, using the distribution’s package manager', async () => {
+    const cs = await probeSandbox({
+      ...base,
+      which: (c) => c === 'bwrap' || c === 'apt-get',
+      run: () => ({ status: 1, stderr: 'Permission denied' }),
+      readFile: () => '1\n',
+    });
+    expect(byId(cs, 'sandbox.bwrap')?.action).toBeUndefined();
+    expect(byId(cs, 'sandbox.socat')?.action).toEqual({
+      id: 'linux.pkg.socat',
+      label: 'Install socat',
+      summary: expect.stringContaining('Installs socat'),
+      admin: true,
+      command: ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', 'install', '-y', '-q', 'socat'],
+    });
+    expect(byId(cs, 'sandbox.apparmor-userns')?.action).toMatchObject({
+      id: 'linux.apparmor-userns',
+      admin: true,
+      command: ['sh', '-c', expect.stringContaining('/etc/sysctl.d/60-beamhop.conf')],
+    });
+    // No package manager: the check still explains, but there is nothing to run.
+    const none = await probeSandbox({ ...base, which: () => false });
+    expect(byId(none, 'sandbox.socat')?.action).toBeUndefined();
+    expect(byId(none, 'sandbox.socat')?.fix).toMatch(/socat/);
+    expect(sandboxActions({ platform: 'darwin' })).toEqual({});
+    expect(Object.keys(sandboxActions({ platform: 'linux', which: (c) => c === 'pacman' }))).toEqual([
+      'linux.pkg.bubblewrap',
+      'linux.pkg.socat',
+      'linux.pkg.ripgrep',
+      'linux.apparmor-userns',
+    ]);
+  });
+
+  it('install commands are non-interactive for each package manager', () => {
+    expect(packageInstallArgv('dnf', ['socat'])).toEqual(['dnf', 'install', '-y', 'socat']);
+    expect(packageInstallArgv('pacman', ['socat'])).toEqual([
+      'pacman',
+      '-S',
+      '--noconfirm',
+      '--needed',
+      'socat',
+    ]);
+    expect(packageInstallArgv('zypper', ['socat'])).toEqual([
+      'zypper',
+      '--non-interactive',
+      'install',
+      'socat',
+    ]);
+    expect(linuxPackageManager((c) => c === 'zypper')).toBe('zypper');
+    expect(linuxPackageManager(() => false)).toBeUndefined();
   });
 
   it('warns on windows and on the unsafe flag', async () => {

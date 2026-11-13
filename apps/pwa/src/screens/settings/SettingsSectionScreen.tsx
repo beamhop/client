@@ -14,6 +14,7 @@ import { Readout } from '../../ui/Meta.tsx';
 import { EmptyState } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { AboutSection } from './AboutSection.tsx';
+import { AdvancedSection } from './AdvancedSection.tsx';
 import { DangerSection } from './DangerSection.tsx';
 import { DevicesSection } from './DevicesSection.tsx';
 import { IdentitySection } from './IdentitySection.tsx';
@@ -33,6 +34,7 @@ const BODY: Record<string, () => ReactNode> = {
   notifications: NotificationsSection,
   updates: UpdatesSection,
   appearance: () => <AppearanceSettings />,
+  advanced: AdvancedSection,
   about: AboutSection,
   stop: DangerSection,
 };

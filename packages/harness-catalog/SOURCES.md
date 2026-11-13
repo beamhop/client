@@ -8,7 +8,7 @@ Checked on 2026-11-13 for catalog revision `2026.11.13`. "Verified locally" mean
 - ACP registry (machine-readable; distribution commands per agent): https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json
   - gemini `@google/gemini-cli@0.68.0 --acp`; github-copilot-cli `@github/copilot@1.0.109 --acp`; opencode `opencode acp`;
     claude-acp `@agentclientprotocol/claude-agent-acp@0.106.0`; codex-acp `@agentclientprotocol/codex-acp@2.6.0`;
-    pi-acp `pi-acp@0.0.34`; cursor `cursor-agent acp`; goose `goose acp`; qwen-code `--acp`;
+    pi-acp `pi-acp@0.0.34`; cursor `cursor-agent acp`;
     auggie `--acp` (+ `AUGMENT_DISABLE_AUTO_UPDATE=1`); kimi-code `kimi acp`; cline `--acp`.
 - ACP TypeScript SDK: https://www.npmjs.com/package/@agentclientprotocol/sdk (v2.6.0; typings read from `dist/v1/stable/acp.d.ts`
   and `dist/v1/schema/types.gen.d.ts`. The legacy `ClientSideConnection` class was removed, and the app API `client().connect()` replaces it.)
@@ -32,11 +32,32 @@ Checked on 2026-11-13 for catalog revision `2026.11.13`. "Verified locally" mean
 | pi           | `tool_call` extension hook can block; `ctx.ui.confirm` maps to RPC `extension_ui_request`                                                                                                                                                                                                                                                                                                       | same package, `docs/extensions.md`, `examples/extensions/permission-gate.ts`                                                                                                 |
 | pi           | `--model provider/id`, `--session <path\|id>`, `--tools`, `--extension`, `PI_CODING_AGENT_DIR`, `PI_SKIP_VERSION_CHECK`                                                                                                                                                                                                                                                                         | `pi --help`, README (verified locally)                                                                                                                                       |
 | cursor-agent | `agent acp` / `cursor-agent acp` (hidden command), auth method `cursor_login`, `CURSOR_API_KEY`                                                                                                                                                                                                                                                                                                 | https://cursor.com/docs/cli/acp                                                                                                                                              |
-| goose        | `goose acp` (>= 1.8.0)                                                                                                                                                                                                                                                                                                                                                                          | https://block.github.io/goose/docs/guides/acp-clients, https://www.mankier.com/1/goose-acp                                                                                   |
-| qwen-code    | `qwen --acp`                                                                                                                                                                                                                                                                                                                                                                                    | https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed                                                                                                             |
 | auggie       | `auggie --acp` (GA in 0.8.0)                                                                                                                                                                                                                                                                                                                                                                    | https://docs.augmentcode.com/cli/acp, https://www.augmentcode.com/changelog/auggie-cli-0-8-0-release-notes                                                                   |
+
+## Installers and login flows (revision `2026.11.13.1`)
+
+- claude: native installer script `https://claude.ai/install.sh` (macOS, Linux; installs to `~/.local/bin`) and
+  `claude setup-token` (browser sign-in, prints a one-year `sk-ant-oat01-…` token, captured into the
+  `claude-subscription` vault method). Source: https://code.claude.com/docs/en/setup
+- cursor-agent: installer script `https://cursor.com/install` (macOS, Linux; installs to `~/.local/bin`) and
+  `cursor-agent login` (opens the browser). Source: https://cursor.com/docs/cli/installation
+- auggie: `auggie login` (opens the browser, session saved to `~/.augment/session.json`). Source:
+  https://docs.augmentcode.com/cli/overview
+- No pinned `archive` installers yet: none has a sha256 checked here.
+
+## Subscription sign-ins (revision `2026.11.13.3`)
+
+- codex: `codex login` / `--device-auth`, `CODEX_HOME/auth.json`, `cli_auth_credentials_store="file"` (codex-rs `config/src/types.rs`, `login/src/auth/storage.rs`).
+- gemini: ACP `authenticate {methodId:"oauth-personal"}`, `GEMINI_CLI_HOME/.gemini/oauth_creds.json` (gemini-cli 0.68.0 source).
+- cline: `cline auth cline|openai-codex`, `CLINE_DATA_DIR/settings/providers.json` (cline 3.0.74 source).
+- kimi-code: `kimi login --region global`, `KIMI_CODE_HOME/credentials/kimi-code.json` + `config.toml` + `device_id` (kimi-code 2.6.1 source).
+- auggie: `auggie login --headless --augment-cache-dir`, `session.json` → `AUGMENT_SESSION_AUTH` (auggie 0.37.1 source).
+- cursor-agent: `cursor-agent login` with `HOME` moved and `AGENT_CLI_CREDENTIAL_STORE=file`, `.cursor/auth.json` (macOS) / `cursor/auth.json` (Linux) (cursor docs, CLI 2026.11.11 source).
+- pi: pi-ai `dist/auth/oauth/load.js` loaders (`openai-codex`, `github-copilot`, `kimi-coding`), `PI_CODING_AGENT_DIR/auth.json` keyed by provider (pi 1.4.0, `@earendil-works/pi-coding-agent`).
+- opencode: `opencode auth login <target> --method chatgpt-browser|chatgpt-headless|device --standalone`, `auth export` / `auth import` (opencode 2.1.4; methods listed by the CLI itself).
+- Dropped: goose (sign-in needs a terminal) and qwen-code (only a paid plan remains, signed in through a local server API).
 
 ## Not verified here
 
-- Auth file locations for cursor-agent, kimi-code, cline, auggie and goose come from docs and community sources and were not checked against an install.
+- Auth file locations for cursor-agent, kimi-code, cline and auggie come from their published source (read, not run); codex, pi and opencode sign-ins were started against the installed CLIs (device and browser pages reached, no login completed).
 - Version ranges are conservative lower bounds (the first release with the protocol used), not tested matrices.

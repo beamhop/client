@@ -1,12 +1,13 @@
 /**
  * CliStrip (DESIGN §2 Always, §9.2): the CLI equivalent of a configuration screen, collapsed by default,
- * open/closed state remembered per user. CopyButton is shared by code blocks and copy fields.
+ * open/closed state remembered per user. Renders nothing when `useShowCli()` is false (desktop app). CopyButton is shared by code blocks and copy fields.
  */
 import { CaretRight, Check, Copy, TerminalWindow } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
+import { useShowCli } from '../lib/desktop.ts';
 import { announce } from '../lib/live.ts';
 
 const KEY = 'bh.cli.open';
@@ -68,6 +69,9 @@ export const CliStrip = ({
   title?: string;
 }) => {
   const [open, setOpen] = useState(readOpen);
+  // Hidden in the desktop app unless Settings → Advanced → "Show command-line equivalents" is on.
+  const show = useShowCli();
+  if (!show) return null;
   return (
     <Disclosure
       isExpanded={open}

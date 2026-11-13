@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -150,5 +151,89 @@ describe('explainStartFailure', () => {
     expect(explainStartFailure(log, 'http://127.0.0.1:7878')).toBe(
       'The beamhop daemon did not start: the data key does not match /h/.beamhop/beamhop.db: move the beamhop home aside',
     );
+  });
+
+  describe('a daemon left running by an earlier run of the app', () => {
+    const withMarker = (port: number, build: string) =>
+      new DaemonSupervisor({
+        url: `http://127.0.0.1:${port}`,
+        command: process.execPath,
+        args: [script, String(port), 'ok'],
+        env: process.env,
+        tokenFile,
+        logFile: join(dir, 'logs', 'daemon.log'),
+        markerFile: join(dir, 'desktop-daemon.json'),
+        buildId: build,
+        startTimeoutMs: 10_000,
+        stopTimeoutMs: 5_000,
+        pollMs: 100,
+      });
+    /** A daemon a killed app left behind: running on its own, recorded in the marker file. */
+    const orphan = async (port: number, build: string) => {
+      const child = spawn(process.execPath, [script, String(port), 'ok'], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+      const probe = withMarker(port, build);
+      for (let i = 0; i < 100 && !(await probe.healthy(200)); i++)
+        await new Promise((r) => setTimeout(r, 50));
+      writeFileSync(
+        join(dir, 'desktop-daemon.json'),
+        JSON.stringify({ pid: child.pid, build, startedAt: '' }),
+      );
+      return child.pid!;
+    };
+    const gone = async (pid: number) => {
+      for (let i = 0; i < 50; i++) {
+        try {
+          process.kill(pid, 0);
+        } catch {
+          return true;
+        }
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return false;
+    };
+
+    it('adopts it when it is the same build, and stops it on quit', async () => {
+      const port = await freePort();
+      const pid = await orphan(port, 'build-1');
+      const sup = withMarker(port, 'build-1');
+      expect(await sup.ensure()).toBe('owned');
+      expect(sup.owned).toBe(true);
+      await sup.stop();
+      expect(await sup.healthy()).toBe(false);
+      expect(await gone(pid)).toBe(true);
+      expect(existsSync(join(dir, 'desktop-daemon.json'))).toBe(false);
+    });
+
+    it('replaces it when the app was updated (another build)', async () => {
+      const port = await freePort();
+      const oldPid = await orphan(port, 'build-1');
+      const sup = withMarker(port, 'build-2');
+      expect(await sup.ensure()).toBe('owned');
+      expect(await gone(oldPid)).toBe(true);
+      const marker = JSON.parse(readFileSync(join(dir, 'desktop-daemon.json'), 'utf8'));
+      expect(marker).toMatchObject({ build: 'build-2' });
+      expect(marker.pid).not.toBe(oldPid);
+      await sup.stop();
+    });
+
+    it("treats a daemon it has no record of (the CLI's) as external", async () => {
+      const port = await freePort();
+      const pid = await orphan(port, 'build-1');
+      // The record points at a process that is gone: the running daemon is not ours.
+      writeFileSync(join(dir, 'desktop-daemon.json'), '{"pid":999999,"build":"build-1"}');
+      try {
+        const sup = withMarker(port, 'build-2');
+        expect(await sup.ensure()).toBe('external');
+        expect(sup.owned).toBe(false);
+        await sup.stop();
+        expect(await sup.healthy()).toBe(true);
+      } finally {
+        process.kill(pid, 'SIGTERM');
+      }
+    });
   });
 });

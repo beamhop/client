@@ -108,6 +108,14 @@ export interface MockState {
   alerts: AlertRulesPatch;
   policies: Map<string, { profile: string; effective: SandboxPolicy }>;
   doctor: DoctorCheck[];
+  /** `harness.updates`: newer versions of installed harnesses. */
+  harnessUpdates: Array<{
+    id: string;
+    current?: string;
+    latest?: string;
+    available: boolean;
+    required: boolean;
+  }>;
 }
 
 export const seed = (now = Date.now()): MockState => {
@@ -266,6 +274,12 @@ export const seed = (now = Date.now()): MockState => {
       status: 'not-installed',
       protocol: 'acp',
       install: { npm: 'npm i -g @github/copilot', brew: 'brew install copilot-cli' },
+      installPlan: {
+        method: 'npm',
+        label: 'npm',
+        command: ['npm', 'i', '-g', '--prefix', '~/.beamhop/harnesses/npm', '@github/copilot'],
+        alternatives: ['brew'],
+      },
     },
     {
       id: 'pi',
@@ -276,14 +290,26 @@ export const seed = (now = Date.now()): MockState => {
       status: 'unsupported-version',
       protocol: 'rpc',
       message: 'Needs ≥0.5',
-      install: { npm: 'npm i -g @mariozechner/pi-coding-agent@latest' },
+      install: { npm: 'npm i -g @earendil-works/pi-coding-agent@latest' },
+      managed: true,
+    },
+    {
+      id: 'cursor',
+      displayName: 'Cursor Agent',
+      command: 'cursor-agent',
+      version: '2025.11.6',
+      path: '/home/alice/.local/bin/cursor-agent',
+      status: 'needs-login',
+      protocol: 'acp',
+      message: 'Run: cursor-agent login',
+      loginFlow: { kind: 'device-code' },
     },
   ];
   /** Login methods as the daemon reports them (catalog `auth.methods`). */
   const m = (
     id: string,
     label: string,
-    kind: 'broker' | 'env',
+    kind: 'broker' | 'env' | 'home',
     secret: string,
     set = false,
     hint?: string,
@@ -316,7 +342,10 @@ export const seed = (now = Date.now()): MockState => {
     codex: {
       status: 'logged-out',
       message: 'Not logged in. Run: beamhop harness login codex',
-      methods: [m('openai-key', 'OpenAI API key', 'broker', 'OPENAI_API_KEY')],
+      methods: [
+        m('chatgpt', 'ChatGPT plan', 'home', 'CODEX_CHATGPT_LOGIN'),
+        m('openai-key', 'OpenAI API key', 'broker', 'OPENAI_API_KEY'),
+      ],
     },
     gemini: {
       status: 'logged-in',
@@ -1407,6 +1436,18 @@ export const seed = (now = Date.now()): MockState => {
       status: 'warn',
       message: 'Restricted for unprivileged users. bwrap needs an exception.',
       fix: 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+      action: {
+        id: 'linux.apparmor.bwrap',
+        label: 'Allow bubblewrap',
+        summary:
+          'Adds an AppArmor exception for bubblewrap, which beamhop uses to keep each agent in its folder. Other programs stay restricted.',
+        admin: true,
+        command: [
+          'sh',
+          '-c',
+          'install -m644 bwrap.profile /etc/apparmor.d/bwrap && systemctl reload apparmor',
+        ],
+      },
     },
   ];
 
@@ -1447,5 +1488,10 @@ export const seed = (now = Date.now()): MockState => {
     alerts: {},
     policies,
     doctor,
+    harnessUpdates: [
+      { id: 'pi', current: '0.4.0', latest: '0.6.1', available: true, required: true },
+      { id: 'gemini', current: '1.3.0', latest: '1.4.0', available: true, required: false },
+      { id: 'claude', current: '2.1.4', latest: '2.1.4', available: false, required: false },
+    ],
   };
 };

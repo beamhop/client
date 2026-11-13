@@ -8,6 +8,7 @@ import type { BeamhopClient } from '@beamhop/client';
 import { type HarnessView, installCommand } from '@beamhop/core';
 import pc from 'picocolors';
 import QRCode from 'qrcode';
+import { installHint } from './jobs.ts';
 
 export interface InitOptions {
   yes?: boolean;
@@ -139,6 +140,8 @@ const middle = (s: string, keep = 12) =>
 const harnessHint = (h: HarnessView): string => {
   if (h.status === 'needs-login') return h.message ?? `log in: ${h.command} login`;
   if (h.status === 'not-installed') {
+    if (h.installPlan && h.installPlan.method !== 'none')
+      return `install: ${installHint(h, () => undefined)}`;
     const i = h.install;
     const opts = [
       i?.npm && installCommand('npm', i.npm),

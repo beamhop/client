@@ -144,7 +144,7 @@ describe('resolveHarnessPackages', () => {
   it('maps, dedupes and honours overrides', () => {
     expect(resolveHarnessPackages(['claude', 'claude-code', 'pi'])).toEqual([
       '@anthropic-ai/claude-code',
-      '@mariozechner/pi-coding-agent',
+      '@earendil-works/pi-coding-agent',
     ]);
     expect(resolveHarnessPackages(['claude'], { claude: ['@anthropic-ai/claude-code@2.0.1'] })).toEqual([
       '@anthropic-ai/claude-code@2.0.1',

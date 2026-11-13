@@ -22,11 +22,13 @@ import {
 } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
+import { isDesktop } from '../lib/desktop.ts';
 import { ago, middleTruncate, since } from '../lib/format.ts';
 import { Button, LinkButton } from '../ui/Button.tsx';
 import { Badge, Eyebrow } from '../ui/Meta.tsx';
 import { ConfirmDialog, Sheet } from '../ui/Sheet.tsx';
 import { SignalBars, StatusDot } from '../ui/Status.tsx';
+import { RestartBeamhopButton } from './DesktopActions.tsx';
 
 export type DaemonLink = 'reachable' | 'connecting' | 'no-answer' | 'unpaired' | 'not-paired' | 'offline';
 
@@ -289,9 +291,16 @@ export const ConnectionSheet = ({
         {offline && conn.kind !== 'mock' && <p className="type-body-sm text-ink-2">{t('offline.banner')}</p>}
 
         {conn.kind === 'mock' ? (
-          <p className="type-body-sm text-ink-2">
-            {t('conn.mock.body')} <code className="font-mono text-[0.875em] text-ink">beamhop ui</code>
-          </p>
+          isDesktop() ? (
+            <div className="flex flex-col items-start gap-2">
+              <p className="type-body-sm text-ink-2">{t('conn.mock.bodyDesktop')}</p>
+              <RestartBeamhopButton />
+            </div>
+          ) : (
+            <p className="type-body-sm text-ink-2">
+              {t('conn.mock.body')} <code className="font-mono text-[0.875em] text-ink">beamhop ui</code>
+            </p>
+          )
         ) : conn.kind !== 'none' ? (
           <Button variant="destructive-outline" className="self-start" onPress={() => setConfirm(true)}>
             {t('conn.disconnect')}
@@ -308,7 +317,7 @@ export const ConnectionSheet = ({
       >
         {conn.kind === 'nostr'
           ? t('conn.disconnect.hosted', { name: active?.name ?? '' })
-          : t('conn.disconnect.local')}
+          : t(isDesktop() ? 'conn.disconnect.localDesktop' : 'conn.disconnect.local')}
       </ConfirmDialog>
     </Sheet>
   );

@@ -22,7 +22,8 @@ Commands:
   init [options]                   first-run setup: doctor, harnesses, owner key, phone, first
                                    agent, hello
   status                           daemon, agents and approvals at a glance
-  doctor                           check sandbox prerequisites, harnesses and channels
+  doctor [options] [checkIds...]   check sandbox prerequisites, harnesses and channels; --fix
+                                   repairs what it can
   panic [options]                  EMERGENCY STOP: kill all sessions, pause schedules, disconnect
                                    channels (incl. cloud agents)
   resume                           resume after panic
@@ -81,6 +82,11 @@ Commands:
   - [`beamhop harness ls`](#beamhop-harness-ls)
   - [`beamhop harness status`](#beamhop-harness-status)
   - [`beamhop harness login`](#beamhop-harness-login)
+  - [`beamhop harness install`](#beamhop-harness-install)
+  - [`beamhop harness update`](#beamhop-harness-update)
+  - [`beamhop harness updates`](#beamhop-harness-updates)
+  - [`beamhop harness jobs`](#beamhop-harness-jobs)
+  - [`beamhop harness job`](#beamhop-harness-job)
   - [`beamhop harness logout`](#beamhop-harness-logout)
   - [`beamhop harness add`](#beamhop-harness-add)
 - [`beamhop channel`](#beamhop-channel)
@@ -194,11 +200,14 @@ Options:
 ## beamhop doctor
 
 ```text
-Usage: beamhop doctor [options]
+Usage: beamhop doctor [options] [checkIds...]
 
-check sandbox prerequisites, harnesses and channels
+check sandbox prerequisites, harnesses and channels; --fix repairs what it can
 
 Options:
+  --fix       apply the fixes beamhop knows: every failing check, or only the given check ids
+  -y, --yes   with --fix: run fixes that need administrator rights (sudo) without asking
+  --verbose   with --fix: show the output of every fix
   -h, --help  display help for command
 ```
 
@@ -386,19 +395,27 @@ Usage: beamhop harness [options] [command]
 discover and manage agent harnesses
 
 Options:
-  -h, --help             display help for command
+  -h, --help              display help for command
 
 Commands:
-  scan                   look for installed harnesses
-  ls|list                list known harnesses and their status (from the last scan)
-  status [options] [id]  login status of harnesses for sandboxed agents; --check verifies it for
-                         real
-  login [options] <id>   log a harness in for sandboxed agents; reads the key or token from stdin,
-                         --from-env, or --from gh
-  logout [options] <id>  remove a harness login (other harnesses using the same key lose it too)
-  add [options] <id>     register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
-                         "my-agent --acp"`
-  help [command]         display help for command
+  scan                    look for installed harnesses
+  ls|list                 list known harnesses and their status (from the last scan)
+  status [options] [id]   login status of harnesses for sandboxed agents; --check verifies it for
+                          real
+  login [options] <id>    log a harness in for sandboxed agents; reads the key or token from stdin,
+                          --from-env, or --from gh; --browser runs the harness's own sign-in
+  install [options] <id>  install a harness on this computer (its own installer, Homebrew, npm or
+                          winget)
+  update [options] <id>   update an installed harness the way it was installed
+  updates [options]       installed harnesses with a newer version (checked once a day; --refresh
+                          checks now)
+  jobs                    running and recent (last hour) installs, updates and logins
+  job [options] <jobId>   follow an install, update or login (also one started in the app); --cancel
+                          stops it
+  logout [options] <id>   remove a harness login (other harnesses using the same key lose it too)
+  add [options] <id>      register any ACP-speaking agent, e.g. `beamhop harness add myagent --acp
+                          "my-agent --acp"`
+  help [command]          display help for command
 ```
 
 ### beamhop harness scan
@@ -440,13 +457,83 @@ Options:
 ```text
 Usage: beamhop harness login [options] <id>
 
-log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh
+log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh;
+--browser runs the harness's own sign-in
 
 Options:
   --method <method>  which login method (default: the first; see `beamhop harness status <id>`)
   --from-env <var>   read the value from this environment variable
   --from <tool>      import it from another tool: gh (`gh auth token`)
+  --browser          run the harness's own sign-in (browser or device code) instead of storing a key
+  --no-open          with --browser: do not open a browser here; print the page (and code) to open
+                     on any device
+  --verbose          with --browser: show the login command's output
   -h, --help         display help for command
+```
+
+### beamhop harness install
+
+```text
+Usage: beamhop harness install [options] <id>
+
+install a harness on this computer (its own installer, Homebrew, npm or winget)
+
+Options:
+  --method <method>  how to install (default: the best one for this computer) (choices: "native",
+                     "brew", "npm", "winget")
+  --no-follow        start the install and return; follow it later with `beamhop harness job
+                     <jobId>`
+  --verbose          show the installer's output
+  -h, --help         display help for command
+```
+
+### beamhop harness update
+
+```text
+Usage: beamhop harness update [options] <id>
+
+update an installed harness the way it was installed
+
+Options:
+  --no-follow  start the update and return; follow it later with `beamhop harness job <jobId>`
+  --verbose    show the installer's output
+  -h, --help   display help for command
+```
+
+### beamhop harness updates
+
+```text
+Usage: beamhop harness updates [options]
+
+installed harnesses with a newer version (checked once a day; --refresh checks now)
+
+Options:
+  --refresh   check again now
+  -h, --help  display help for command
+```
+
+### beamhop harness jobs
+
+```text
+Usage: beamhop harness jobs [options]
+
+running and recent (last hour) installs, updates and logins
+
+Options:
+  -h, --help  display help for command
+```
+
+### beamhop harness job
+
+```text
+Usage: beamhop harness job [options] <jobId>
+
+follow an install, update or login (also one started in the app); --cancel stops it
+
+Options:
+  --cancel    cancel the job
+  --verbose   show the raw output
+  -h, --help  display help for command
 ```
 
 ### beamhop harness logout

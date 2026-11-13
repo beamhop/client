@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApi, useBeamhop, useCall, useConnection } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { useShowCli } from '../../lib/desktop.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { Wordmark } from '../../shell/Wordmark.tsx';
@@ -81,6 +82,7 @@ const Frame = ({ step, children }: { step: number; children: React.ReactNode }) 
 const EnterCode = ({ onCode }: { onCode: (code: string) => void }) => {
   const [raw, setRaw] = useState('');
   const [touched, setTouched] = useState(false);
+  const showCli = useShowCli();
   const code = formatPairCode(raw);
   return (
     <>
@@ -121,10 +123,12 @@ const EnterCode = ({ onCode }: { onCode: (code: string) => void }) => {
         <h2 id="pair-where" className="type-micro text-ink-2">
           {t('pair.where.title')}
         </h2>
-        <p className="type-body-sm text-ink">{t('pair.where.body')}</p>
-        <code className="self-start rounded-sm bg-sunken px-2 py-1 type-meta text-ink">
-          beamhop device pair
-        </code>
+        <p className="type-body-sm text-ink">{t(showCli ? 'pair.where.body' : 'pair.where.bodyApp')}</p>
+        {showCli && (
+          <code className="self-start rounded-sm bg-sunken px-2 py-1 type-meta text-ink">
+            beamhop device pair
+          </code>
+        )}
       </section>
     </>
   );

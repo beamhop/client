@@ -8,19 +8,25 @@
  */
 import type { DoctorCheck, HarnessView } from '@beamhop/core';
 import { Plus } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { harnessLamp, harnessMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { apiKey, harnessLamp, harnessMonogram, useApi, useCall, useMutationApi } from '../../api/index.ts';
 import { t as tr } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { desktop, useShowCli, withoutCommand } from '../../lib/desktop.ts';
 import { announce } from '../../lib/live.ts';
+import { OpenLogButton, RestartBeamhopButton } from '../../shell/DesktopActions.tsx';
 import { Button } from '../../ui/Button.tsx';
 import { CopyButton } from '../../ui/CliStrip.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { LetterTile } from '../../ui/Meta.tsx';
 import { useReduced } from '../../ui/motion.ts';
-import { Sheet } from '../../ui/Sheet.tsx';
+import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { Banner, ErrorState, Skeleton } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
+import { HarnessJobControls, JobDetails } from '../harnesses/HarnessJob.tsx';
+import { LoginSheet, managesLogin } from '../harnesses/HarnessLogin.tsx';
+import { useCanRunPrograms } from '../harnesses/jobs.ts';
 import { markDone, markSkipped, nextStep, useSetupProgress } from './progress.ts';
 import { StepFrame, useGoStep } from './StepFrame.tsx';
 
@@ -48,8 +54,32 @@ export const CommandLine = ({ cmd, label }: { cmd: string; label: string }) => (
 const LAMP = { ok: 'ready', warn: 'needs-you', fail: 'error', skip: 'stopped' } as const;
 const WORD = { ok: 'ok', warn: 'attention', fail: 'missing', skip: 'skipped' } as const;
 
-const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
+/** Who will ask for the password when an admin fix runs (the OS prompt; beamhop never sees it). */
+export const adminPromptNote = (platform = desktop()?.platform): string =>
+  platform === 'darwin'
+    ? tr('setup.checks.adminMac')
+    : platform === 'linux'
+      ? tr('setup.checks.adminLinux')
+      : tr('setup.checks.adminOther');
+
+type Fixing = { id?: string; error?: { check: string; message: string } };
+
+const CheckRow = ({
+  c,
+  revealed,
+  canFix,
+  fixing,
+  onFix,
+}: {
+  c: DoctorCheck;
+  revealed: boolean;
+  canFix: boolean;
+  fixing: Fixing;
+  onFix: (c: DoctorCheck) => void;
+}) => {
   const open = revealed && (c.status === 'warn' || c.status === 'fail');
+  const showCli = useShowCli();
+  const err = fixing.error?.check === c.id ? fixing.error.message : undefined;
   return (
     <li className={cx('px-4 py-3', open && 'bg-caution-wash/40')}>
       <div className="flex items-center gap-3">
@@ -66,7 +96,31 @@ const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
       {open && (
         <div className="mt-3 flex flex-col gap-2.5">
           {WHY[c.id] && <p className="type-body-sm text-ink-2">{WHY[c.id]}</p>}
-          {c.id === 'userns' ? (
+          {c.action && (
+            <div className="flex flex-col items-start gap-2">
+              <p className="type-body-sm text-ink">{c.action.summary}</p>
+              {c.action.admin && <p className="type-meta text-ink-2">{adminPromptNote()}</p>}
+              <Button
+                variant="primary"
+                size="sm"
+                isDisabled={!canFix || (!!fixing.id && fixing.id !== c.action.id)}
+                isPending={fixing.id === c.action.id}
+                onPress={() => onFix(c)}
+                aria-label={tr('setup.checks.fixFor', { title: c.title })}
+              >
+                {tr('setup.checks.fix')}
+              </Button>
+              {!canFix && <p className="type-meta text-ink-2">{tr('setup.checks.fixRemote')}</p>}
+              {err && (
+                <p role="alert" className="type-body-sm text-stop-text">
+                  {err}
+                </p>
+              )}
+            </div>
+          )}
+          {!showCli ? (
+            (c.action || c.fix) && <JobDetails lines={c.fix ? [c.fix] : []} command={c.action?.command} />
+          ) : c.id === 'userns' ? (
             <>
               <p className="type-label text-ink">{tr('setup.checks.allowItForBubblewrap')}</p>
               <CommandLine
@@ -80,9 +134,11 @@ const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
           ) : (
             c.fix && <CommandLine cmd={c.fix} label={tr('setup.checks.copyFix', { title: c.title })} />
           )}
-          <p className="type-meta text-ink-2">
-            {tr('setup.checks.orRun')} <span className="text-ink">beamhop doctor --fix</span>
-          </p>
+          {showCli && (
+            <p className="type-meta text-ink-2">
+              {tr('setup.checks.orRun')} <span className="text-ink">beamhop doctor --fix</span>
+            </p>
+          )}
         </div>
       )}
     </li>
@@ -91,6 +147,11 @@ const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
 
 export const StepDoctor = () => {
   const q = useApi('system.doctor');
+  const call = useCall();
+  const qc = useQueryClient();
+  const canFix = useCanRunPrograms();
+  const [fixing, setFixing] = useState<Fixing>({});
+  const [confirmAll, setConfirmAll] = useState(false);
   const reduce = useReduced();
   const [shown, setShown] = useState(0);
   const [, update] = useSetupProgress();
@@ -115,6 +176,35 @@ export const StepDoctor = () => {
   }, [q.data, reduce, checks.length]);
 
   const finished = q.data && shown >= checks.length;
+  const fixable = checks.filter((c) => c.action && (c.status === 'warn' || c.status === 'fail'));
+
+  /** Apply one fix; false when it was refused or failed (Fix all stops there). */
+  const applyFix = async (c: DoctorCheck): Promise<boolean> => {
+    if (!c.action) return false;
+    setFixing({ id: c.action.id });
+    announce(tr('setup.checks.fixing', { title: c.title }));
+    try {
+      const r = await call('system.doctorFix', { id: c.action.id });
+      qc.setQueryData(apiKey('system.doctor'), { checks: r.checks });
+      setShown(r.checks.length);
+      const after = r.checks.find((x) => x.id === c.id);
+      const ok = after?.status === 'ok';
+      announce(ok ? tr('setup.checks.fixed', { title: c.title }) : (after?.message ?? ''));
+      setFixing(
+        ok ? {} : { error: { check: c.id, message: after?.message ?? tr('setup.checks.fixDidntHelp') } },
+      );
+      return ok;
+    } catch (e) {
+      const message = (e as Error).message;
+      setFixing({ error: { check: c.id, message } });
+      announce(message);
+      return false;
+    }
+  };
+  const fixAll = async () => {
+    setConfirmAll(false);
+    for (const c of fixable) if (!(await applyFix(c))) return;
+  };
   const fails = checks.filter((c) => c.status === 'fail').length;
   const warns = checks.filter((c) => c.status === 'warn').length;
   useEffect(() => {
@@ -155,8 +245,23 @@ export const StepDoctor = () => {
           title={tr('setup.checks.couldnTRunThe')}
           details={q.error}
           onRetry={() => void q.refetch()}
+          actions={
+            desktop() && (
+              <>
+                <RestartBeamhopButton variant="secondary" onDone={() => void q.refetch()} />
+                <OpenLogButton />
+              </>
+            )
+          }
         >
-          {q.error.message} {tr('setup.checks.isRunning')} <code className="font-mono">beamhop daemon</code>
+          {q.error.message}{' '}
+          {desktop() ? (
+            tr('setup.checks.isRunningApp')
+          ) : (
+            <>
+              {tr('setup.checks.isRunning')} <code className="font-mono">beamhop daemon</code>
+            </>
+          )}
         </ErrorState>
       ) : !q.data ? (
         <Skeleton variant="list" count={5} label={tr('setup.checks.runningChecks')} />
@@ -168,7 +273,14 @@ export const StepDoctor = () => {
             className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
           >
             {checks.map((c, i) => (
-              <CheckRow key={c.id} c={c} revealed={i < shown} />
+              <CheckRow
+                key={c.id}
+                c={c}
+                revealed={i < shown}
+                canFix={canFix}
+                fixing={fixing}
+                onFix={(x) => void applyFix(x)}
+              />
             ))}
           </ul>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -177,15 +289,43 @@ export const StepDoctor = () => {
                 ? `${checks.length} checks · ${checks.length - fails - warns} ok${warns ? ` · ${warns} attention` : ''}${fails ? ` · ${fails} missing` : ''}`
                 : `checking ${Math.min(shown + 1, checks.length)} of ${checks.length}…`}
             </p>
-            <Button
-              variant="quiet"
-              size="sm"
-              onPress={() => void q.refetch()}
-              isPending={q.isFetching && !!q.data}
-            >
-              {tr('setup.checks.runAgain')}
-            </Button>
+            <span className="flex flex-wrap items-center gap-2">
+              {finished && fixable.length > 1 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  isDisabled={!canFix || !!fixing.id}
+                  onPress={() => setConfirmAll(true)}
+                >
+                  {tr('setup.checks.fixAll', { count: fixable.length })}
+                </Button>
+              )}
+              <Button
+                variant="quiet"
+                size="sm"
+                onPress={() => void q.refetch()}
+                isPending={q.isFetching && !!q.data}
+              >
+                {tr('setup.checks.runAgain')}
+              </Button>
+            </span>
           </div>
+          <ConfirmDialog
+            isOpen={confirmAll}
+            onOpenChange={setConfirmAll}
+            title={tr('setup.checks.fixAllTitle', { count: fixable.length })}
+            confirmLabel={tr('setup.checks.fixAllConfirm')}
+            variant="primary"
+            onConfirm={fixAll}
+          >
+            <ul className="flex list-disc flex-col gap-2 pl-5">
+              {fixable.map((c) => (
+                <li key={c.id}>{c.action?.summary}</li>
+              ))}
+            </ul>
+            {fixable.some((c) => c.action?.admin) && <p className="mt-3">{adminPromptNote()}</p>}
+            <p className="mt-3">{tr('setup.checks.fixAllStops')}</p>
+          </ConfirmDialog>
           {finished && warns > 0 && fails === 0 && (
             <Banner tone="caution" className="rounded-md border-x px-4">
               {tr('setup.checks.youCanContinueFix')}
@@ -213,6 +353,8 @@ const InstallSheet = ({
   onCheck: () => void;
 }) => {
   const opts = Object.entries(h.install ?? {}).filter(([k]) => k !== 'url') as Array<[string, string]>;
+  const showCli = useShowCli();
+  const plan = h.installPlan;
   return (
     <Sheet
       isOpen
@@ -225,8 +367,37 @@ const InstallSheet = ({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="type-body-sm text-ink-2">{tr('setup.checks.runOneOfThese')}</p>
-        {opts.length ? (
+        {plan && plan.method !== 'none' ? (
+          <>
+            <p className="type-body-sm text-ink-2">
+              {tr('setup.checks.installWith', { name: h.displayName, method: plan.label })}
+            </p>
+            <HarnessJobControls h={h} primary />
+          </>
+        ) : (
+          plan?.method === 'none' && (
+            <p className="type-body-sm text-ink-2">
+              {tr('setup.checks.installNone', { name: h.displayName })} {h.message}
+            </p>
+          )
+        )}
+        {showCli && (
+          <p className="type-body-sm text-ink-2">
+            {tr(plan ? 'setup.checks.orTerminal' : 'setup.checks.runOneOfThese')}
+          </p>
+        )}
+        {!showCli ? (
+          h.install?.url && (
+            <a
+              href={h.install.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="type-label text-ink underline underline-offset-[3px]"
+            >
+              {tr('setup.checks.vendorPage', { name: h.displayName })}
+            </a>
+          )
+        ) : opts.length ? (
           opts.map(([pm, cmd]) => (
             <div key={pm} className="flex flex-col gap-1.5">
               <span className="type-micro text-ink-2">{pm}</span>
@@ -249,6 +420,8 @@ export const StepHarnesses = () => {
   const [, update] = useSetupProgress();
   const go = useGoStep();
   const [installing, setInstalling] = useState<HarnessView>();
+  const [loginId, setLoginId] = useState<string>();
+  const showCli = useShowCli();
   const [acp, setAcp] = useState(false);
   const [cmd, setCmd] = useState('');
   const hs = q.data?.harnesses ?? [];
@@ -320,12 +493,32 @@ export const StepHarnesses = () => {
                     }
                   />
                 </div>
-                {h.status === 'needs-login' && (
+                {h.status === 'needs-login' && managesLogin(h) && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="ml-10 self-start"
+                    onPress={() => setLoginId(h.id)}
+                    aria-label={tr('setup.checks.logInFor', { name: h.displayName })}
+                  >
+                    {tr('setup.checks.logIn')}
+                  </Button>
+                )}
+                {h.status === 'needs-login' && !managesLogin(h) && h.loginFlow && (
+                  <HarnessJobControls h={h} className="pl-10" />
+                )}
+                {h.status === 'needs-login' && !managesLogin(h) && !h.loginFlow && (
                   <div className="flex flex-col gap-2 pl-10">
-                    <CommandLine
-                      cmd={`${h.command} login`}
-                      label={tr('setup.checks.copyLogin', { name: h.displayName })}
-                    />
+                    {showCli ? (
+                      <CommandLine
+                        cmd={`${h.command} login`}
+                        label={tr('setup.checks.copyLogin', { name: h.displayName })}
+                      />
+                    ) : (
+                      <p className="type-body-sm text-ink-2">
+                        {tr('setup.checks.loginElsewhere', { name: h.displayName })}
+                      </p>
+                    )}
                     <Button
                       variant="quiet"
                       size="sm"
@@ -337,18 +530,11 @@ export const StepHarnesses = () => {
                     </Button>
                   </div>
                 )}
-                {h.status === 'not-installed' && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="ml-10 self-start"
-                    onPress={() => setInstalling(h)}
-                  >
-                    {tr('setup.checks.install')}
-                  </Button>
-                )}
                 {(h.status === 'unsupported-version' || h.status === 'error') && h.message && (
-                  <p className="pl-10 type-body-sm text-ink-2">{h.message}</p>
+                  <p className="pl-10 type-body-sm text-ink-2">{withoutCommand(h.message, showCli)}</p>
+                )}
+                {(h.status === 'not-installed' || h.status === 'unsupported-version') && (
+                  <HarnessJobControls h={h} onManual={() => setInstalling(h)} className="pl-10" />
                 )}
               </li>
             ))}
@@ -395,6 +581,12 @@ export const StepHarnesses = () => {
           )}
         </>
       )}
+      {(() => {
+        const lh = hs.find((h) => h.id === loginId);
+        return lh && managesLogin(lh) ? (
+          <LoginSheet h={lh} isOpen onOpenChange={(o) => !o && setLoginId(undefined)} />
+        ) : null;
+      })()}
       {installing && (
         <InstallSheet
           h={installing}

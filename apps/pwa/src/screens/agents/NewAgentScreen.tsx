@@ -20,6 +20,7 @@ import { Radio, RadioGroup } from 'react-aria-components';
 import { harnessLamp, harnessMonogram, useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { useShowCli, withoutCommand } from '../../lib/desktop.ts';
 import { usd } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Screen } from '../../shell/Screen.tsx';
@@ -31,6 +32,7 @@ import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { HarnessJobControls } from '../harnesses/HarnessJob.tsx';
 import { createCli, PRESET_META, reachOf, suggestName, validateName } from './model.ts';
 import { ReachSummary } from './parts.tsx';
 import { AddMount, loginCommand, MountRow } from './sections/Setup.tsx';
@@ -164,11 +166,12 @@ const HarnessStep = ({
   scanning: boolean;
 }) => {
   const ready = list.filter((h) => h.status === 'ready');
+  const showCli = useShowCli();
   return (
     <div className="flex flex-col gap-4">
       {ready.length === 0 && (
         <p className="rounded-md bg-caution-wash px-3 py-2.5 type-body-sm text-ink">
-          {t('agents.new.noReady')}
+          {t(showCli ? 'agents.new.noReady' : 'agents.new.noReadyApp')}
         </p>
       )}
       <RadioGroup
@@ -178,8 +181,9 @@ const HarnessStep = ({
         className="flex flex-col gap-2"
       >
         {list.map((h) => {
-          const fix =
-            h.status === 'needs-login'
+          const fix = !showCli
+            ? undefined
+            : h.status === 'needs-login'
               ? loginCommand(h)
               : h.status === 'not-installed' || h.status === 'unsupported-version'
                 ? h.install?.npm
@@ -189,56 +193,58 @@ const HarnessStep = ({
                     : undefined
                 : undefined;
           return (
-            <Radio
-              key={h.id}
-              value={h.id}
-              isDisabled={h.status !== 'ready'}
-              className={cx(cardClass, 'border-line py-3 data-[disabled]:bg-bg')}
-            >
-              {({ isSelected, isDisabled }) => (
-                <>
-                  <div className="flex items-center gap-3">
-                    {isDisabled ? (
-                      <span className="size-6 shrink-0" aria-hidden="true" />
-                    ) : (
-                      <RadioDot on={isSelected} />
-                    )}
-                    <LetterTile code={harnessMonogram(h.id)} />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className={cx('type-title-3', isDisabled ? 'text-ink-2' : 'text-ink')}>
-                        {h.displayName}
-                      </span>
-                      <MetaLine
-                        items={[
-                          h.version ?? t('agents.new.notFound'),
-                          h.protocol,
-                          h.path && { value: h.path, truncate: 22 },
-                        ]}
-                      />
-                    </span>
-                    <StatusDot
-                      state={harnessLamp(h)}
-                      label={t(`agents.harness.${h.status}` as 'agents.harness.ready')}
-                    />
-                  </div>
-                  {fix && (
-                    <div className="ml-9 flex flex-col gap-1">
-                      {h.message && h.status !== 'needs-login' && (
-                        <p className="type-meta text-ink-2">{h.message}</p>
+            <div key={h.id} className="flex flex-col gap-2">
+              <Radio
+                value={h.id}
+                isDisabled={h.status !== 'ready'}
+                className={cx(cardClass, 'border-line py-3 data-[disabled]:bg-bg')}
+              >
+                {({ isSelected, isDisabled }) => (
+                  <>
+                    <div className="flex items-center gap-3">
+                      {isDisabled ? (
+                        <span className="size-6 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <RadioDot on={isSelected} />
                       )}
-                      <div className="flex items-center gap-1 rounded-sm bg-sunken pl-3">
-                        <code className="min-w-0 flex-1 truncate type-code text-ink">{fix}</code>
-                        <CopyButton
-                          value={fix}
-                          label={t('agents.new.copyFix', { name: h.displayName })}
-                          compact
+                      <LetterTile code={harnessMonogram(h.id)} />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className={cx('type-title-3', isDisabled ? 'text-ink-2' : 'text-ink')}>
+                          {h.displayName}
+                        </span>
+                        <MetaLine
+                          items={[
+                            h.version ?? t('agents.new.notFound'),
+                            h.protocol,
+                            h.path && { value: h.path, truncate: 22 },
+                          ]}
                         />
-                      </div>
+                      </span>
+                      <StatusDot
+                        state={harnessLamp(h)}
+                        label={t(`agents.harness.${h.status}` as 'agents.harness.ready')}
+                      />
                     </div>
-                  )}
-                </>
-              )}
-            </Radio>
+                    {fix && (
+                      <div className="ml-9 flex flex-col gap-1">
+                        {h.message && h.status !== 'needs-login' && (
+                          <p className="type-meta text-ink-2">{withoutCommand(h.message, showCli)}</p>
+                        )}
+                        <div className="flex items-center gap-1 rounded-sm bg-sunken pl-3">
+                          <code className="min-w-0 flex-1 truncate type-code text-ink">{fix}</code>
+                          <CopyButton
+                            value={fix}
+                            label={t('agents.new.copyFix', { name: h.displayName })}
+                            compact
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </Radio>
+              {h.status !== 'ready' && <HarnessJobControls h={h} className="ml-12" />}
+            </div>
           );
         })}
       </RadioGroup>

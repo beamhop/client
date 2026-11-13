@@ -41,6 +41,12 @@ export const parseCatalog = (json: string | Uint8Array): Catalog => {
   for (const h of r.data.harnesses) {
     if (ids.has(h.id)) throw new BeamhopError('invalid_input', `duplicate harness id ${h.id}`);
     ids.add(h.id);
+    const cap = h.auth.loginFlow?.capture;
+    if (cap && !h.auth.methods.some((m) => m.id === cap.method))
+      throw new BeamhopError(
+        'invalid_input',
+        `${h.id}: loginFlow captures into unknown method ${cap.method}`,
+      );
   }
   return r.data;
 };

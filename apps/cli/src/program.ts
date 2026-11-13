@@ -2,8 +2,10 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { BeamhopClient } from '@beamhop/client';
 import { RpcError } from '@beamhop/client';
+import { type DoctorCheck, type HarnessJob, type HarnessView, installCommand } from '@beamhop/core';
 import { Command, Option } from 'commander';
 import pc from 'picocolors';
+import { isRemoteDaemon, runDoctorFix } from './doctor-fix.ts';
 import {
   clackPrompter,
   headlessPrompter,
@@ -14,6 +16,15 @@ import {
   runInit,
   terminalQr,
 } from './init.ts';
+import {
+  type FollowIO,
+  type FollowResult,
+  followJob,
+  installHint,
+  isHeadless,
+  jobExitCode,
+  METHOD_LABEL,
+} from './jobs.ts';
 
 export interface CliIO {
   out(line: string): void;
@@ -36,9 +47,48 @@ export interface CliDeps {
   uiUrl?(): Promise<string>;
   /** Prompter for interactive wizards (default: @clack/prompts). */
   prompter?(): Promise<Prompter>;
-  /** Injected wait for wizard polling (tests). */
+  /** Injected wait for wizard and job polling (tests). */
   sleep?(ms: number): Promise<void>;
+  /** Ctrl-C while following a job (default: process SIGINT); returns the unregister function. */
+  onInterrupt?(fn: () => void): () => void;
+  /**
+   * Run argv with the terminal's stdin (doctor --fix runs `sudo …`, which asks for the password itself);
+   * resolves to the exit code. Default: spawn, child stdout to our stderr so stdout stays ours.
+   */
+  runInherit?(argv: string[]): Promise<number>;
+  /** Yes/no question on the terminal (default: readline, `[y/N]`). */
+  confirm?(message: string): Promise<boolean>;
+  /** OS for headless detection (default: process.platform). */
+  platform?: string;
 }
+
+const defaultInterrupt = (fn: () => void) => {
+  const h = () => fn();
+  process.on('SIGINT', h);
+  return () => {
+    process.off('SIGINT', h);
+  };
+};
+
+const defaultRunInherit = async (argv: string[]): Promise<number> => {
+  const { spawn } = await import('node:child_process');
+  const [cmd = '', ...args] = argv;
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ['inherit', 2, 'inherit'] });
+    child.on('error', reject);
+    child.on('exit', (code, signal) => resolve(code ?? (signal ? 128 : 1)));
+  });
+};
+
+const defaultConfirm = async (message: string): Promise<boolean> => {
+  const { createInterface } = await import('node:readline/promises');
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return /^y(es)?$/i.test((await rl.question(`${message} [y/N] `)).trim());
+  } finally {
+    rl.close();
+  }
+};
 
 type Row = Record<string, unknown>;
 
@@ -106,6 +156,20 @@ export const buildProgram = (deps: CliDeps): Command => {
 
   const json = () => Boolean(program.opts().json);
 
+  /** Print an error the way every command does (JSON for --json, a hint when the daemon is down). */
+  const report = (e: unknown) => {
+    io.exitCode = 1;
+    if (e instanceof RpcError) {
+      if (json()) io.err(JSON.stringify({ error: { code: e.beamhopCode ?? e.code, message: e.message } }));
+      else io.err(`${pc.red('error')} ${e.message}`);
+    } else if (
+      e instanceof Error &&
+      /ECONNREFUSED|fetch failed/.test(`${e.message} ${(e as { cause?: Error }).cause?.message ?? ''}`)
+    ) {
+      io.err(`${pc.red('error')} beamhop daemon is not running. Start it with ${pc.bold('beamhop daemon')}.`);
+    } else io.err(`${pc.red('error')} ${(e as Error).message}`);
+  };
+
   /** Wrap an action: call the API, print JSON or a human rendering, map errors. */
   const act =
     <A extends unknown[]>(
@@ -118,21 +182,33 @@ export const buildProgram = (deps: CliDeps): Command => {
         if (json() || !human) io.out(JSON.stringify(data, null, 2));
         else io.out(human());
       } catch (e) {
-        io.exitCode = 1;
-        if (e instanceof RpcError) {
-          if (json())
-            io.err(JSON.stringify({ error: { code: e.beamhopCode ?? e.code, message: e.message } }));
-          else io.err(`${pc.red('error')} ${e.message}`);
-        } else if (
-          e instanceof Error &&
-          /ECONNREFUSED|fetch failed/.test(`${e.message} ${(e as { cause?: Error }).cause?.message ?? ''}`)
-        ) {
-          io.err(
-            `${pc.red('error')} beamhop daemon is not running. Start it with ${pc.bold('beamhop daemon')}.`,
-          );
-        } else io.err(`${pc.red('error')} ${(e as Error).message}`);
+        report(e);
       }
     };
+
+  /** Like `act`, for commands that print as they go (job progress, prompts). */
+  const run =
+    <A extends unknown[]>(fn: (c: BeamhopClient, ...args: A) => Promise<void>) =>
+    async (...args: A) => {
+      try {
+        await fn(await deps.client(), ...args);
+      } catch (e) {
+        report(e);
+      }
+    };
+
+  const followIO = (): FollowIO => ({
+    out: io.out,
+    sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    onInterrupt: deps.onInterrupt ?? defaultInterrupt,
+  });
+
+  /** Final output of a followed job: JSON (job + raw lines) for --json, and the exit code. */
+  const finishJob = (r: FollowResult) => {
+    if (json()) io.out(JSON.stringify({ job: r.job, lines: r.lines }, null, 2));
+    const code = jobExitCode(r);
+    if (code) io.exitCode = code;
+  };
 
   // ── first run ─────────────────────────────────────────────
   program
@@ -238,22 +314,48 @@ export const buildProgram = (deps: CliDeps): Command => {
       }),
     );
 
+  const doctorHuman = (checks: DoctorCheck[]) =>
+    checks
+      .map((k) => {
+        const lines = [`${STATUS_DOT[k.status] ?? '?'} ${k.title}  ${pc.dim(k.message)}`];
+        const open = k.status !== 'ok' && k.status !== 'skip';
+        if (k.action && open) {
+          lines.push(`    ${pc.cyan('fix:')} beamhop doctor --fix ${k.id}  ${pc.dim(`(${k.action.label})`)}`);
+          if (k.fix) lines.push(`    ${pc.dim(`or by hand: ${k.fix}`)}`);
+        } else if (k.fix) lines.push(`    ${pc.cyan('fix:')} ${k.fix}`);
+        return lines.join('\n');
+      })
+      .join('\n');
+
   program
-    .command('doctor')
-    .description('check sandbox prerequisites, harnesses and channels')
+    .command('doctor [checkIds...]')
+    .description('check sandbox prerequisites, harnesses and channels; --fix repairs what it can')
+    .option('--fix', 'apply the fixes beamhop knows: every failing check, or only the given check ids')
+    .option('-y, --yes', 'with --fix: run fixes that need administrator rights (sudo) without asking')
+    .option('--verbose', 'with --fix: show the output of every fix')
     .action(
-      act(async (c) => {
-        const r = await c.call('system.doctor');
-        return {
-          data: r,
-          human: () =>
-            r.checks
-              .map(
-                (k) =>
-                  `${STATUS_DOT[k.status] ?? '?'} ${k.title}  ${pc.dim(k.message)}${k.fix ? `\n    ${pc.cyan('fix:')} ${k.fix}` : ''}`,
-              )
-              .join('\n'),
-        };
+      run(async (c, ids: string[], o: { fix?: boolean; yes?: boolean; verbose?: boolean }) => {
+        if (!o.fix) {
+          if (ids.length)
+            throw new Error(`to fix ${ids.join(', ')}, run: beamhop doctor --fix ${ids.join(' ')}`);
+          const r = await c.call('system.doctor');
+          io.out(json() ? JSON.stringify(r, null, 2) : doctorHuman(r.checks));
+          return;
+        }
+        const r = await runDoctorFix(
+          c,
+          {
+            out: io.out,
+            interactive: io.interactive === true && !json(),
+            confirm: deps.confirm ?? defaultConfirm,
+            runInherit: deps.runInherit ?? defaultRunInherit,
+            remote: isRemoteDaemon(io.env),
+          },
+          { ids, yes: o.yes === true, verbose: o.verbose === true, quiet: json() },
+        );
+        if (json()) io.out(JSON.stringify({ fixes: r.fixes, checks: r.checks }, null, 2));
+        else io.out(`\n${doctorHuman(r.checks)}`);
+        if (r.exitCode) io.exitCode = r.exitCode;
       }),
     );
 
@@ -509,6 +611,9 @@ export const buildProgram = (deps: CliDeps): Command => {
       message?: string;
       methods: { id: string; label: string; kind: string; secret: string; set: boolean; hint?: string }[];
     };
+    install?: HarnessView['install'];
+    installPlan?: HarnessView['installPlan'];
+    loginFlow?: HarnessView['loginFlow'];
   };
   const loginWord = (h: HarnessRow) => {
     const l = h.login;
@@ -519,8 +624,19 @@ export const buildProgram = (deps: CliDeps): Command => {
     if (l.status === 'invalid') return pc.red('rejected');
     return pc.red('logged out');
   };
-  const harnessTable = (hs: HarnessRow[]) =>
-    table(
+  /** The package-manager commands from the catalog (when the daemon sends no install plan). */
+  const packageHint = (h: HarnessRow) => {
+    const i = h.install;
+    const opts = [
+      i?.npm && installCommand('npm', i.npm),
+      i?.brew && installCommand('brew', i.brew),
+      i?.winget && installCommand('winget', i.winget),
+      i?.url,
+    ].filter(Boolean);
+    return opts.length ? opts.join('  |  ') : undefined;
+  };
+  const harnessTable = (hs: HarnessRow[]) => {
+    const t = table(
       hs.map((h) => ({
         id: h.id,
         name: h.displayName,
@@ -530,6 +646,57 @@ export const buildProgram = (deps: CliDeps): Command => {
       })),
       ['id', 'name', 'status', 'login', 'version'],
     );
+    const missing = hs
+      .filter((h) => h.status === 'not-installed')
+      .map((h) => ({ id: h.id, hint: installHint(h, () => packageHint(h)) }))
+      .filter((m): m is { id: string; hint: string } => Boolean(m.hint));
+    if (!missing.length) return t;
+    const w = Math.max(...missing.map((m) => m.id.length));
+    return `${t}\n\n${pc.dim('not installed, to install:')}\n${missing.map((m) => `  ${m.id.padEnd(w)}  ${m.hint}`).join('\n')}`;
+  };
+  const findHarness = async (c: BeamhopClient, id: string) =>
+    ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
+  const jobRows = (jobs: HarnessJob[]) =>
+    table(
+      jobs.map((j) => ({
+        id: j.id,
+        harness: j.harness,
+        kind: j.kind,
+        step: j.step,
+        via: j.method ? (METHOD_LABEL[j.method] ?? j.method) : '',
+        started: j.startedAt,
+        message: j.message ?? '',
+      })),
+      ['id', 'harness', 'kind', 'step', 'via', 'started', 'message'],
+    );
+  /** Follow a job the daemon just started, or print how to follow it later (--no-follow). */
+  const followOrDetach = async (
+    c: BeamhopClient,
+    job: HarnessJob,
+    o: {
+      follow?: boolean;
+      verbose?: boolean;
+      name?: string;
+      onLogin?: (what: 'url' | 'code', v: string) => void;
+    },
+  ) => {
+    if (o.follow === false) {
+      io.out(
+        json()
+          ? JSON.stringify(job, null, 2)
+          : `started ${job.kind} of ${o.name ?? job.harness} (job ${job.id}). Follow it with ${pc.bold(`beamhop harness job ${job.id}`)}`,
+      );
+      return;
+    }
+    finishJob(
+      await followJob(c, job, followIO(), {
+        verbose: o.verbose === true,
+        quiet: json(),
+        ...(o.name ? { name: o.name } : {}),
+        ...(o.onLogin ? { onLogin: o.onLogin } : {}),
+      }),
+    );
+  };
   const loginDetail = (h: HarnessRow) => {
     const l = h.login;
     if (!l || l.status === 'unmanaged')
@@ -541,7 +708,11 @@ export const buildProgram = (deps: CliDeps): Command => {
     for (const m of l.methods)
       lines.push(
         `   ${m.set ? pc.green('●') : pc.dim('○')} ${m.id.padEnd(20)} ${m.label}  ${pc.dim(
-          m.kind === 'env' ? '(the agent can read it)' : '(the agent never sees it)',
+          m.kind === 'home'
+            ? `(sign in: beamhop harness login ${h.id} --browser --method ${m.id}; the agent can read it)`
+            : m.kind === 'env'
+              ? '(the agent can read it)'
+              : '(the agent never sees it)',
         )}`,
       );
     return lines.join('\n');
@@ -593,45 +764,256 @@ export const buildProgram = (deps: CliDeps): Command => {
         return { data: installed, human: () => harnessTable(installed) };
       }),
     );
+  type LoginOpts = {
+    method?: string;
+    fromEnv?: string;
+    from?: string;
+    browser?: boolean;
+    open?: boolean;
+    verbose?: boolean;
+  };
+  /** `harness login --browser`: the harness's own sign-in, run by the daemon (no terminal needed). */
+  const browserLogin = run(async (c, id: string, o: LoginOpts) => {
+    if (o.fromEnv || o.from)
+      throw new Error("--browser runs the harness's own sign-in; it does not take --from-env or --from");
+    const h = await findHarness(c, id);
+    if (!h) throw new Error(`no harness ${id} (\`beamhop harness ls\` lists them)`);
+    if (h.status === 'not-installed')
+      throw new Error(`${h.displayName} is not installed. Install it first: beamhop harness install ${id}`);
+    const all = h.login && h.login.status !== 'unmanaged' ? h.login.methods : [];
+    const signIns = all.filter((m) => m.kind === 'home');
+    if (o.method && !signIns.some((m) => m.id === o.method))
+      throw new Error(
+        signIns.length
+          ? `${o.method} is not a sign-in for ${h.displayName}; one of: ${signIns.map((m) => m.id).join(', ')}`
+          : `${h.displayName} has no sign-in method ${o.method}. Without --browser it stores a key: printenv KEY | beamhop harness login ${id} --method ${o.method}`,
+      );
+    const signIn = o.method ? signIns.find((m) => m.id === o.method) : h.loginFlow ? undefined : signIns[0];
+    if (!h.loginFlow && !signIn) {
+      const methods = all;
+      throw new Error(
+        methods.length
+          ? `${h.displayName} has no browser sign-in. Store a login for it instead (${methods
+              .map((m) => `${m.id}: ${m.label}`)
+              .join(
+                '; ',
+              )}), e.g. \`printenv KEY | beamhop harness login ${id} --method ${methods[0]!.id}\`. Details: beamhop harness status ${id}`
+          : `${h.displayName} cannot be logged in from beamhop yet; it uses its own configuration (run its own login in a terminal).`,
+      );
+    }
+    const headless = o.open === false || isHeadless(io.env, deps.platform ?? process.platform);
+    // In --json mode stdout is for the final JSON; the URL and code still have to reach the user.
+    const tell = json() ? io.err : io.out;
+    if (!json())
+      io.out(
+        headless
+          ? `Signing in ${h.displayName}${signIn ? ` (${signIn.label})` : ''}. Open the page below on any device with a browser.`
+          : `Signing in ${h.displayName}${signIn ? ` (${signIn.label})` : ''}. Your browser opens; finish signing in there.`,
+      );
+    const job = await c.call('harness.loginFlow', {
+      id,
+      openBrowser: !headless,
+      ...(signIn ? { method: signIn.id } : {}),
+    });
+    await followOrDetach(c, job, {
+      follow: true,
+      verbose: o.verbose === true,
+      name: h.displayName,
+      onLogin: (what, v) => {
+        if (what === 'url')
+          tell(
+            headless ? `Open this page on any device: ${pc.bold(v)}` : pc.dim(`If it does not open: ${v}`),
+          );
+        else tell(`Code: ${pc.bold(v)}`);
+      },
+    });
+  });
+  const vaultLogin = act(async (c, id: string, o: LoginOpts) => {
+    let value: string | undefined;
+    if (o.from) {
+      if (o.from !== 'gh') throw new Error('--from supports: gh');
+      const { spawnSync } = await import('node:child_process');
+      const r = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8', env: io.env });
+      if (r.status !== 0 || !r.stdout.trim())
+        throw new Error(
+          `\`gh auth token\` failed${r.stderr ? `: ${r.stderr.trim()}` : ''}. Log in with \`gh auth login\` first.`,
+        );
+      value = r.stdout.trim();
+    } else if (o.fromEnv) value = io.env[o.fromEnv];
+    else {
+      const view = ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
+      const m = view?.login?.methods.find((x) => (o.method ? x.id === o.method : true));
+      if (io.interactive && m) io.err(pc.dim(`${m.label}${m.hint ? ` — ${m.hint}` : ''}`));
+      value = (await io.readStdin()).trim();
+    }
+    if (!value)
+      throw new Error(
+        o.fromEnv
+          ? `environment variable ${o.fromEnv} is empty or not set`
+          : 'empty value (pipe it in, e.g. `printenv ANTHROPIC_API_KEY | beamhop harness login claude`)',
+      );
+    const h = (await c.call('harness.login', {
+      id,
+      value,
+      ...(o.method ? { method: o.method } : {}),
+    })) as HarnessRow;
+    return { data: h, human: () => loginDetail(h) };
+  });
   harness
     .command('login <id>')
     .description(
-      'log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh',
+      "log a harness in for sandboxed agents; reads the key or token from stdin, --from-env, or --from gh; --browser runs the harness's own sign-in",
     )
     .option('--method <method>', 'which login method (default: the first; see `beamhop harness status <id>`)')
     .option('--from-env <var>', 'read the value from this environment variable')
     .option('--from <tool>', 'import it from another tool: gh (`gh auth token`)')
+    .option('--browser', "run the harness's own sign-in (browser or device code) instead of storing a key")
+    .option(
+      '--no-open',
+      'with --browser: do not open a browser here; print the page (and code) to open on any device',
+    )
+    .option('--verbose', "with --browser: show the login command's output")
+    .action(async (id: string, o: LoginOpts, cmd: Command) => {
+      if (o.browser || cmd.getOptionValueSource('open') === 'cli') return browserLogin(id, o);
+      // A subscription sign-in (ChatGPT plan, Google account…) is never a pasted value: run it.
+      if (!o.fromEnv && !o.from) {
+        const methods = await deps
+          .client()
+          .then((c) => findHarness(c, id))
+          .then((h) => (h?.login?.status !== 'unmanaged' ? (h?.login?.methods ?? []) : []))
+          .catch(() => []);
+        const m = o.method ? methods.find((x) => x.id === o.method) : methods[0];
+        if (m?.kind === 'home') return browserLogin(id, o);
+      }
+      return vaultLogin(id, o);
+    });
+
+  const methodOption = new Option(
+    '--method <method>',
+    'how to install (default: the best one for this computer)',
+  ).choices(['native', 'brew', 'npm', 'winget']);
+  harness
+    .command('install <id>')
+    .description('install a harness on this computer (its own installer, Homebrew, npm or winget)')
+    .addOption(methodOption)
+    .option('--no-follow', 'start the install and return; follow it later with `beamhop harness job <jobId>`')
+    .option('--verbose', "show the installer's output")
     .action(
-      act(async (c, id: string, o: { method?: string; fromEnv?: string; from?: string }) => {
-        let value: string | undefined;
-        if (o.from) {
-          if (o.from !== 'gh') throw new Error('--from supports: gh');
-          const { spawnSync } = await import('node:child_process');
-          const r = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8', env: io.env });
-          if (r.status !== 0 || !r.stdout.trim())
-            throw new Error(
-              `\`gh auth token\` failed${r.stderr ? `: ${r.stderr.trim()}` : ''}. Log in with \`gh auth login\` first.`,
+      run(
+        async (
+          c,
+          id: string,
+          o: { method?: 'native' | 'brew' | 'npm' | 'winget'; follow?: boolean; verbose?: boolean },
+        ) => {
+          const h = await findHarness(c, id);
+          if (h && h.status !== 'not-installed') {
+            io.out(
+              json()
+                ? JSON.stringify({ alreadyInstalled: true, harness: h }, null, 2)
+                : `${h.displayName} is already installed${h.version ? ` (${h.version})` : ''}.${h.status === 'ready' ? '' : ` Status: ${h.status}.`}`,
             );
-          value = r.stdout.trim();
-        } else if (o.fromEnv) value = io.env[o.fromEnv];
-        else {
-          const view = ((await c.call('harness.list')).harnesses as HarnessRow[]).find((x) => x.id === id);
-          const m = view?.login?.methods.find((x) => (o.method ? x.id === o.method : true));
-          if (io.interactive && m) io.err(pc.dim(`${m.label}${m.hint ? ` — ${m.hint}` : ''}`));
-          value = (await io.readStdin()).trim();
-        }
-        if (!value)
+            return;
+          }
+          const name = h?.displayName ?? id;
+          const plan = h?.installPlan;
+          if (!o.method && plan?.method === 'none') {
+            const url = h?.install?.url;
+            throw new Error(
+              `beamhop cannot install ${name} on this computer: none of its installers apply here (no Homebrew, npm or winget it can use).${url ? ` Install it by hand: ${url}` : ''}`,
+            );
+          }
+          if (!json()) {
+            if (o.method) io.out(`Installing ${name} with ${METHOD_LABEL[o.method]}…`);
+            else if (plan)
+              io.out(
+                `Installing ${name} with ${plan.label}${plan.command.length ? pc.dim(`  (${plan.command.join(' ')})`) : ''}${
+                  plan.alternatives.length
+                    ? pc.dim(`\n  other ways: --method ${plan.alternatives.join(' | ')}`)
+                    : ''
+                }`,
+              );
+            else io.out(`Installing ${name}…`);
+          }
+          const job = await c.call('harness.install', { id, ...(o.method ? { method: o.method } : {}) });
+          await followOrDetach(c, job, { ...o, name });
+        },
+      ),
+    );
+  harness
+    .command('update <id>')
+    .description('update an installed harness the way it was installed')
+    .option('--no-follow', 'start the update and return; follow it later with `beamhop harness job <jobId>`')
+    .option('--verbose', "show the installer's output")
+    .action(
+      run(async (c, id: string, o: { follow?: boolean; verbose?: boolean }) => {
+        const h = await findHarness(c, id);
+        if (h?.status === 'not-installed')
           throw new Error(
-            o.fromEnv
-              ? `environment variable ${o.fromEnv} is empty or not set`
-              : 'empty value (pipe it in, e.g. `printenv ANTHROPIC_API_KEY | beamhop harness login claude`)',
+            `${h.displayName} is not installed. Install it with: beamhop harness install ${id}`,
           );
-        const h = (await c.call('harness.login', {
-          id,
-          value,
-          ...(o.method ? { method: o.method } : {}),
-        })) as HarnessRow;
-        return { data: h, human: () => loginDetail(h) };
+        const name = h?.displayName ?? id;
+        if (!json()) io.out(`Updating ${name}${h?.version ? pc.dim(` (now ${h.version})`) : ''}…`);
+        const job = await c.call('harness.update', { id });
+        await followOrDetach(c, job, { ...o, name });
+      }),
+    );
+  harness
+    .command('updates')
+    .description('installed harnesses with a newer version (checked once a day; --refresh checks now)')
+    .option('--refresh', 'check again now')
+    .action(
+      act(async (c, o: { refresh?: boolean }) => {
+        const { updates } = await c.call('harness.updates', { refresh: o.refresh === true });
+        const due = updates.filter((u) => u.available || u.required);
+        return {
+          data: updates,
+          human: () =>
+            due.length
+              ? `${table(
+                  due.map((u) => ({
+                    id: u.id,
+                    current: u.current ?? '',
+                    latest: u.latest ?? '',
+                    required: u.required ? pc.red('yes') : '',
+                  })),
+                  ['id', 'current', 'latest', 'required'],
+                )}\n${pc.dim('update one with: beamhop harness update <id>')}`
+              : 'All installed harnesses are up to date.',
+        };
+      }),
+    );
+  harness
+    .command('jobs')
+    .description('running and recent (last hour) installs, updates and logins')
+    .action(
+      act(async (c) => {
+        const { jobs } = await c.call('harness.job.list');
+        return { data: jobs, human: () => jobRows(jobs) };
+      }),
+    );
+  harness
+    .command('job <jobId>')
+    .description('follow an install, update or login (also one started in the app); --cancel stops it')
+    .option('--cancel', 'cancel the job')
+    .option('--verbose', 'show the raw output')
+    .action(
+      run(async (c, jobId: string, o: { cancel?: boolean; verbose?: boolean }) => {
+        if (o.cancel) {
+          const j = await c.call('harness.job.cancel', { jobId });
+          io.out(
+            json()
+              ? JSON.stringify(j, null, 2)
+              : `cancelling ${j.kind} of ${j.harness} (job ${j.id}): ${j.step}`,
+          );
+          return;
+        }
+        const { job } = await c.call('harness.job.get', { jobId, since: 0 });
+        const tell = json() ? io.err : io.out;
+        await followOrDetach(c, job, {
+          verbose: o.verbose === true,
+          onLogin: (what, v) =>
+            tell(what === 'url' ? `Open this page on any device: ${pc.bold(v)}` : `Code: ${pc.bold(v)}`),
+        });
       }),
     );
   harness

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import type { LampState } from '../../api/derive.ts';
 import { useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
+import { useShowCli, withoutCommand } from '../../lib/desktop.ts';
 import { clock } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -19,6 +20,7 @@ import { SecretField } from '../../ui/Field.tsx';
 import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { HarnessJobControls } from './HarnessJob.tsx';
 
 type Login = NonNullable<HarnessView['login']>;
 
@@ -95,17 +97,19 @@ export const LoginSheet = ({
       isDismissable={false}
       footer={
         <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            isPending={login.isPending}
-            onPress={() => void save()}
-          >
-            {t('harnesses.login.saveAndCheck')}
-          </Button>
+          {m?.kind !== 'home' && (
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              isPending={login.isPending}
+              onPress={() => void save()}
+            >
+              {t('harnesses.login.saveAndCheck')}
+            </Button>
+          )}
           <Button variant="secondary" size="lg" fullWidth onPress={close}>
-            {t('settings.identity.cancel')}
+            {m?.kind === 'home' ? t('harnesses.login.close') : t('settings.identity.cancel')}
           </Button>
         </div>
       }
@@ -118,6 +122,15 @@ export const LoginSheet = ({
         }}
       >
         <p className="type-body-sm text-ink-2">{t('harnesses.login.lead', { name: h.displayName })}</p>
+        {h.loginFlow && (
+          <div className="flex flex-col gap-2 rounded-md border border-line px-3 py-3">
+            <p className="type-label text-ink">{t('harnesses.login.browserTitle')}</p>
+            <p className="type-body-sm text-ink-2">
+              {t('harnesses.login.browserLead', { name: h.displayName })}
+            </p>
+            <HarnessJobControls h={h} forceAction="login" primary />
+          </div>
+        )}
         {methods.length > 1 && (
           <RadioGroup
             label={t('harnesses.login.method')}
@@ -134,7 +147,22 @@ export const LoginSheet = ({
             ))}
           </RadioGroup>
         )}
-        {m && (
+        {m?.kind === 'home' && (
+          <div className="flex flex-col gap-2 rounded-md border border-line px-3 py-3">
+            <p className="type-body-sm text-ink-2">
+              {t('harnesses.login.signInLead', { plan: m.label, name: h.displayName })}
+            </p>
+            <p className="type-meta text-ink-2">{t('harnesses.login.agentReads')}</p>
+            <HarnessJobControls
+              h={h}
+              forceAction="login"
+              method={m.id}
+              actionLabel={t('harnesses.login.signInWith', { plan: m.label })}
+              primary
+            />
+          </div>
+        )}
+        {m && m.kind !== 'home' && (
           <SecretField
             label={m.label}
             value={value}
@@ -159,9 +187,11 @@ export const LoginSheet = ({
         {login.isError && <p className="type-body-sm text-stop-text">{login.error.message}</p>}
         <CliStrip
           command={
-            m?.importFrom === 'gh'
-              ? `beamhop harness login ${h.id} --from gh`
-              : `beamhop harness login ${h.id}${m && m.id !== methods[0]?.id ? ` --method ${m.id}` : ''}   # reads stdin`
+            m?.kind === 'home'
+              ? `beamhop harness login ${h.id} --browser --method ${m.id}`
+              : m?.importFrom === 'gh'
+                ? `beamhop harness login ${h.id} --from gh`
+                : `beamhop harness login ${h.id}${m && m.id !== methods[0]?.id ? ` --method ${m.id}` : ''}   # reads stdin`
           }
         />
       </form>
@@ -176,6 +206,7 @@ export const LoginPanel = ({ h }: { h: HarnessView & { login: Login } }) => {
   const check = useMutationApi('harness.checkLogin');
   const logout = useMutationApi('harness.logout');
   const toast = useToast();
+  const showCli = useShowCli();
   const l = h.login;
   const anySet = l.methods.some((m) => m.set);
   const runCheck = async () => {
@@ -195,7 +226,9 @@ export const LoginPanel = ({ h }: { h: HarnessView & { login: Login } }) => {
         {t('harnesses.login.heading')}
       </h3>
       <LoginStatus login={l} />
-      {l.message && <p className="type-body-sm text-ink-2">{l.message}</p>}
+      {withoutCommand(l.message, showCli) && (
+        <p className="type-body-sm text-ink-2">{withoutCommand(l.message, showCli)}</p>
+      )}
       {l.checkedAt && (
         <p className="type-meta text-ink-2">
           {t('harnesses.login.checkedAt', { time: clock(new Date(l.checkedAt)) })}

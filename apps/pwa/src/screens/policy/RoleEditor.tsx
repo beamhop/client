@@ -7,6 +7,7 @@ import { BUILTIN_ROLES, DEFAULT_ROLES, type RoleDef, RoleName } from '@beamhop/c
 import { useEffect, useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
+import { useShowCli } from '../../lib/desktop.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Select, Switch } from '../../ui/Choice.tsx';
 import { NumberField, TextField } from '../../ui/Field.tsx';
@@ -32,6 +33,7 @@ export const RoleEditor = ({
   onClose: () => void;
 }) => {
   const agents = useApi('agent.list');
+  const showCli = useShowCli();
   const define = useMutationApi('role.define');
   const remove = useMutationApi('role.delete');
   const toast = useToast();
@@ -136,7 +138,7 @@ export const RoleEditor = ({
               placeholder="reviewer-guest"
               isInvalid={!!draft.name && !!nameError}
               errorMessage={nameError}
-              description={t('policy.roleEdit.nameHint')}
+              description={t(showCli ? 'policy.roleEdit.nameHint' : 'policy.roleEdit.nameHintApp')}
             />
           )}
           <TextField

@@ -5,10 +5,18 @@ import { loadCatalog } from '@beamhop/harness-catalog';
 import { unsafePassthroughSandbox, writeFakeAcpAgent, writeFakeBin } from '@beamhop/harness-kit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  availableMethods,
   detectAuth,
   executableNames,
   expandPath,
   findExecutable,
+  type InstallHost,
+  installCommand,
+  installPlan,
+  isManagedPath,
+  isValidPackageName,
+  managedDirs,
+  noneReason,
   probeAcpCommand,
   scanHarnesses,
   searchDirs,
@@ -55,8 +63,8 @@ describe('scanHarnesses', () => {
     expect(by.opencode).toMatchObject({ status: 'ready', version: '1.2.3', protocol: 'acp' });
     expect(by.opencode!.message).toMatch(/OPENROUTER_API_KEY/);
     expect(by.pi).toMatchObject({ status: 'ready', version: '0.73.1' });
-    expect(by.goose).toMatchObject({ status: 'not-installed' });
-    expect(by.goose!.install?.brew).toBe('block-goose-cli');
+    expect(by.cline).toMatchObject({ status: 'not-installed' });
+    expect(by.cline!.install?.npm).toBe('cline');
   });
 
   it('reports needs-login when no credentials exist', async () => {
@@ -65,7 +73,7 @@ describe('scanHarnesses', () => {
   });
 
   it('can omit missing harnesses and restrict ids', async () => {
-    const res = await scanHarnesses({ env, home, includeMissing: false, only: ['goose', 'claude'] });
+    const res = await scanHarnesses({ env, home, includeMissing: false, only: ['cline', 'claude'] });
     expect(res.map((r) => r.id)).toEqual(['claude']);
   });
 
@@ -216,5 +224,167 @@ describe('detectAuth', () => {
       home: '/',
     });
     expect(JSON.stringify(r)).not.toContain(FAKE_KEY);
+  });
+});
+
+describe('install plans', () => {
+  const cat = loadCatalog();
+  const entry = (id: string) => cat.harnesses.find((h) => h.id === id)!;
+  const host = (tools: string[], platform: NodeJS.Platform = 'darwin'): InstallHost => ({
+    platform,
+    arch: 'arm64',
+    beamhopHome: '/Users/u/.beamhop',
+    home: '/Users/u',
+    which: (c) => (tools.includes(c) ? `/bin/${c}` : undefined),
+  });
+
+  it('prefers the native installer, then brew, then npm', () => {
+    expect(availableMethods(entry('claude'), host(['bash', 'brew', 'npm']))).toEqual([
+      'native',
+      'brew',
+      'npm',
+    ]);
+    expect(availableMethods(entry('gemini'), host(['bash', 'brew', 'npm']))).toEqual(['brew', 'npm']);
+    expect(availableMethods(entry('gemini'), host(['npm']))).toEqual(['npm']);
+    // brew is not used on Windows; winget only there.
+    expect(availableMethods(entry('claude'), host(['brew', 'npm', 'winget'], 'win32'))).toEqual([
+      'npm',
+      'winget',
+    ]);
+    expect(availableMethods(entry('claude'), host(['brew', 'npm', 'winget'], 'linux'))).toEqual([
+      'brew',
+      'npm',
+    ]);
+  });
+
+  it('describes what would run', () => {
+    expect(installPlan(entry('claude'), host(['bash', 'npm']))).toEqual({
+      method: 'native',
+      label: 'Claude Code installer',
+      command: ['bash', '-c', 'curl -fsSL https://claude.ai/install.sh | bash'],
+      alternatives: ['npm'],
+    });
+    expect(installPlan(entry('gemini'), host(['npm']))).toEqual({
+      method: 'npm',
+      label: 'npm',
+      command: ['npm', 'install', '-g', '--prefix', '~/.beamhop/harnesses/npm', '@google/gemini-cli'],
+      alternatives: [],
+    });
+    expect(installPlan(entry('gemini'), host(['brew'])).command).toEqual(['brew', 'install', 'gemini-cli']);
+    expect(installCommand(entry('gemini'), 'brew', host([]), true).argv).toEqual([
+      'brew',
+      'upgrade',
+      'gemini-cli',
+    ]);
+    expect(installCommand(entry('gemini'), 'npm', host([]), true).argv.at(-1)).toBe(
+      '@google/gemini-cli@latest',
+    );
+    expect(installCommand(entry('claude'), 'winget', host([], 'win32')).argv).toEqual([
+      'winget',
+      'install',
+      '--id',
+      'Anthropic.ClaudeCode',
+      '-e',
+      '--silent',
+      '--accept-source-agreements',
+      '--accept-package-agreements',
+    ]);
+  });
+
+  it('explains when nothing applies', () => {
+    expect(installPlan(entry('gemini'), host([]))).toMatchObject({
+      method: 'none',
+      command: [],
+      reason: 'Needs Homebrew or Node.js; neither was found.',
+    });
+    expect(noneReason(entry('pi'), { platform: 'darwin' })).toBe('Needs Node.js, which was not found.');
+    expect(noneReason(entry('cursor-agent'), { platform: 'win32' })).toMatch(
+      /no automatic installer.*website/,
+    );
+  });
+
+  it('pins archives by arch and checksum', () => {
+    const e = {
+      ...entry('gemini'),
+      install: {
+        native: {
+          linux: {
+            kind: 'archive' as const,
+            url: 'https://example.com/g-{arch}.tar.gz',
+            sha256: { x64: 'a'.repeat(64) },
+            bin: 'g/bin/gemini',
+          },
+        },
+      },
+    };
+    expect(availableMethods(e, { ...host(['tar'], 'linux'), arch: 'arm64' })).toEqual([]);
+    expect(installPlan(e, { ...host(['tar'], 'linux'), arch: 'x64' }).command).toEqual([
+      'download',
+      'https://example.com/g-x64.tar.gz',
+      'sha256',
+      'a'.repeat(64),
+      'unpack',
+      '~/.beamhop/harnesses/gemini',
+    ]);
+  });
+
+  it('validates package names before any tool sees them', () => {
+    for (const ok of ['@google/gemini-cli', 'opencode-ai', 'cline', 'qwen.code', 'a_b'])
+      expect(isValidPackageName('npm', ok), ok).toBe(true);
+    for (const bad of [
+      '',
+      '-g',
+      '--prefix=/',
+      '@x/../y',
+      'a b',
+      'a;rm -rf /',
+      'A',
+      'x@1.0.0',
+      'git+https://x',
+      '.x',
+      '@/x',
+      'a/b',
+    ])
+      expect(isValidPackageName('npm', bad), bad).toBe(false);
+    for (const ok of ['gemini-cli', 'sst/tap/opencode', 'node@20', 'gtk+3'])
+      expect(isValidPackageName('brew', ok), ok).toBe(true);
+    for (const bad of ['--cask', 'a b', 'x;y', 'a/b/c/d', '../x', '$(id)'])
+      expect(isValidPackageName('brew', bad), bad).toBe(false);
+    expect(isValidPackageName('winget', 'Anthropic.ClaudeCode')).toBe(true);
+    for (const bad of ['--id', 'a b', 'x&y']) expect(isValidPackageName('winget', bad), bad).toBe(false);
+    const bad = { ...entry('gemini'), install: { npm: '--prefix=/etc' } };
+    expect(availableMethods(bad, host(['npm']))).toEqual([]);
+    expect(() => installCommand(bad, 'npm', host(['npm']))).toThrow(/invalid npm package name/);
+  });
+});
+
+describe('managed installs', () => {
+  it('finds harnesses beamhop installed and marks them managed', async () => {
+    if (process.platform === 'win32') return;
+    const bh = path.join(root, 'bh-home');
+    const npmBin = path.join(bh, 'harnesses', 'npm', 'bin');
+    mkdirSync(npmBin, { recursive: true });
+    writeFakeBin(npmBin, 'pi', `console.log('0.80.0');`);
+    const own = path.join(bh, 'harnesses', 'kimi-code', 'bin');
+    mkdirSync(own, { recursive: true });
+    writeFakeBin(own, 'kimi', `console.log('1.9.0');`);
+    const res = await scanHarnesses({
+      env: { PATH: '', HOME: home },
+      home,
+      beamhopHome: bh,
+      only: ['pi', 'kimi-code', 'codex'],
+      versionTimeoutMs: 1500,
+    });
+    const by = Object.fromEntries(res.map((r) => [r.id, r]));
+    expect(by.pi).toMatchObject({ managed: true, version: '0.80.0', path: path.join(npmBin, 'pi') });
+    expect(by['kimi-code']).toMatchObject({ managed: true, path: path.join(own, 'kimi') });
+    expect(by.codex?.managed).toBeUndefined();
+    expect(managedDirs('/h/.beamhop', 'kimi-code', 'linux')).toEqual([
+      '/h/.beamhop/harnesses/npm/bin',
+      '/h/.beamhop/harnesses/kimi-code/bin',
+      '/h/.beamhop/harnesses/kimi-code',
+    ]);
+    expect(isManagedPath('/h/.beamhop/harnesses/npm/bin/pi', '/h/.beamhop', 'linux')).toBe(true);
+    expect(isManagedPath('/h/.beamhop/harnessesX/pi', '/h/.beamhop', 'linux')).toBe(false);
   });
 });

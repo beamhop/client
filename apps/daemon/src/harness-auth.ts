@@ -13,6 +13,7 @@
  * `checkLogin` verifies the active credential for real: against the provider's (free) key endpoint, or
  * by starting the harness in the sandbox (env kind) and closing it before any prompt.
  */
+import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,7 @@ import { type AgentConfig, BeamhopError, type HarnessView, paths, type SecretSto
 import { type CatalogEntry, findHarness, type LoginMethod, loadCatalog } from '@beamhop/harness-catalog';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { Daemon } from './daemon.ts';
+import { decodeBlob, HomeLoginSync, homeArgs, homeEnv, homeOf, writeHome } from './home-login.ts';
 
 export type HarnessLogin = NonNullable<HarnessView['login']>;
 type CheckResult =
@@ -238,6 +240,25 @@ const checkByStarting = async (d: Daemon, harnessId: string): Promise<CheckResul
     mkdirSync(join(dir, 'harness-home'), { recursive: true, mode: 0o700 });
     env[plugin.homeEnv] = join(dir, 'harness-home');
   }
+  // A subscription login: its files in the throwaway home (a refresh during the check is saved back).
+  let homeSync: HomeLoginSync | undefined;
+  const active = await activeMethod(d.secrets, harnessId);
+  if (active?.kind === 'home') {
+    const home = homeOf(active);
+    const blob = decodeBlob(await d.secrets.get(active.secret));
+    if (!blob) return { status: 'invalid', message: 'the stored sign-in is damaged; sign in again' };
+    const hdir = join(dir, home.env && home.env === plugin.homeEnv ? 'harness-home' : 'login-home');
+    try {
+      homeSync = await HomeLoginSync.open(d.secrets, active, hdir, blob, {
+        ...(home.transfer ? { bin: (await plugin.detect().catch(() => null))?.path } : {}),
+      });
+    } catch (e) {
+      rmSync(dir, { recursive: true, force: true });
+      return { status: 'invalid', message: (e as Error).message };
+    }
+    Object.assign(env, homeEnv(hdir, home, blob));
+    for (const h of home.network) if (!policy.net.allow.includes(h)) policy.net.allow.push(h);
+  }
   let sandbox: Awaited<ReturnType<Daemon['sandboxFactory']>> | undefined;
   try {
     sandbox = await d.sandboxFactory(policy, {
@@ -268,6 +289,47 @@ const checkByStarting = async (d: Daemon, harnessId: string): Promise<CheckResul
       : { status: 'error', message: msg };
   } finally {
     await sandbox?.close().catch(() => {});
+    await homeSync?.stop().catch(() => {});
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+/**
+ * A subscription login's own status command (e.g. `codex login status`), run with the stored files in a
+ * throwaway home. No tokens spent. Undefined when the method has none.
+ */
+const checkByStatus = async (
+  d: Daemon,
+  harnessId: string,
+  m: LoginMethod,
+): Promise<CheckResult | undefined> => {
+  const args = m.signIn?.statusArgs;
+  const plugin = d.registry.harness(harnessId);
+  if (!args || !plugin) return undefined;
+  const bin = (await plugin.detect().catch(() => null))?.path;
+  if (!bin) return { status: 'error', message: `${plugin.displayName} is not installed` };
+  const home = homeOf(m);
+  const blob = decodeBlob(await d.secrets.get(m.secret));
+  if (!blob) return { status: 'invalid', message: 'the stored sign-in is damaged; sign in again' };
+  const dir = join(paths(d.home).sessions, `loginstatus-${harnessId}-${randomBytes(4).toString('hex')}`);
+  try {
+    writeHome(dir, home, blob);
+    const r = await new Promise<{ code: number | null; out: string }>((resolve) => {
+      execFile(
+        bin,
+        homeArgs(args, dir),
+        { env: { ...process.env, ...homeEnv(dir, home, blob) }, timeout: 30_000 },
+        (err, stdout, stderr) =>
+          resolve({
+            code: err ? (typeof err.code === 'number' ? err.code : 1) : 0,
+            out: `${stdout}${stderr}`.trim().split('\n').slice(-1)[0] ?? '',
+          }),
+      );
+    });
+    return r.code === 0
+      ? { status: 'logged-in', message: `${m.label} sign-in works` }
+      : { status: 'invalid', message: r.out || `${m.label} sign-in rejected` };
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 };
@@ -277,7 +339,10 @@ export const checkLogin = async (d: Daemon, harnessId: string, f: Fetch = fetch)
   const active = await activeMethod(d.secrets, harnessId);
   if (active) {
     const key = (await d.secrets.get(active.secret)) ?? '';
-    const r = (await checkProviderKey(active.check, key, f)) ?? (await checkByStarting(d, harnessId));
+    const r =
+      (active.kind === 'home' ? undefined : await checkProviderKey(active.check, key, f)) ??
+      (active.kind === 'home' ? await checkByStatus(d, harnessId, active) : undefined) ??
+      (await checkByStarting(d, harnessId));
     if (r.status !== 'error') {
       const idx = await secretIndex(d.secrets);
       const stored: StoredCheck = {

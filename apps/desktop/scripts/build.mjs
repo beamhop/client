@@ -16,6 +16,7 @@
 // installs nothing else. Native deps are platform-specific: build each OS/arch on that OS/arch
 // (see .github/workflows/release.yml).
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,6 +90,22 @@ await build({
   // Workspace packages export TS sources.
   conditions: ['node', 'import'],
   mainFields: ['module', 'main'],
+  legalComments: 'none',
+  logLevel: 'warning',
+});
+
+// A new id for every build: the app replaces a daemon left running by another build (see supervisor.ts).
+writeFileSync(join(DAEMON, 'BUILD_ID'), `${new Date().toISOString()}-${randomBytes(4).toString('hex')}\n`);
+
+// Window preload (sandboxed: only `electron` may be required, so everything else is bundled in).
+await build({
+  entryPoints: [join(DESKTOP, 'src/preload.ts')],
+  outfile: join(APP, 'preload.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  target: 'node22',
+  external: ['electron'],
   legalComments: 'none',
   logLevel: 'warning',
 });

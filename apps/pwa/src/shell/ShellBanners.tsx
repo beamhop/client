@@ -8,6 +8,7 @@ import { useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useDaemons } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
+import { isDesktop } from '../lib/desktop.ts';
 import { useInstall } from '../lib/install.ts';
 import { useExpanded } from '../lib/media.ts';
 import { Button, LinkButton } from '../ui/Button.tsx';
@@ -149,7 +150,7 @@ export const ShellBanners = () => {
             </Button>
           }
         >
-          {t('demo.banner')} {t('demo.run', { cmd: 'beamhop ui' })}
+          {t('demo.banner')} {isDesktop() ? t('demo.runDesktop') : t('demo.run', { cmd: 'beamhop ui' })}
         </Banner>
       )}
     </>

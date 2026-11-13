@@ -56,6 +56,7 @@ export const createMockTransport = (opts: MockOptions = {}): MockTransport => {
     },
     close() {
       simulator.stop();
+      daemon.jobs.close();
     },
   };
 };

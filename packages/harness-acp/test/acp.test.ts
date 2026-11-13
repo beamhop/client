@@ -264,7 +264,7 @@ describe('ACP harness against a fake agent', () => {
 describe('catalog plugins', () => {
   it('builds plugins for ACP entries', () => {
     const ids = acpHarnessesFromCatalog().map((p) => p.id);
-    expect(ids).toEqual(expect.arrayContaining(['gemini', 'copilot', 'opencode', 'goose', 'qwen-code']));
+    expect(ids).toEqual(expect.arrayContaining(['gemini', 'copilot', 'opencode', 'cline', 'kimi-code']));
     expect(ids).not.toContain('claude');
     expect(opencodeHarness().displayName).toBe('OpenCode');
     expect(() =>

@@ -8,6 +8,8 @@
  * Closing the window keeps beamhop in the menu bar (tray) so agents keep answering; "Quit beamhop"
  * (or Cmd+Q) stops the daemon the app started.
  */
+
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +19,8 @@ import {
   app,
   BrowserWindow,
   dialog,
+  type IpcMainInvokeEvent,
+  ipcMain,
   Menu,
   type MenuItemConstructorOptions,
   Notification,
@@ -27,6 +31,7 @@ import {
 } from 'electron';
 import { fileAutostart, HIDDEN_FLAG, isFileAutostartEnabled, setFileAutostart } from './autostart.ts';
 import { type CliInstallContext, cliStatus, installCli, uninstallCli } from './cli-install.ts';
+import { CHANNELS } from './ipc.ts';
 import { isAllowedPermission, isAppUrl, isSafeExternalUrl } from './links.ts';
 import { mergeShellEnv, resolveShellEnv } from './shell-env.ts';
 import { type DaemonState, DaemonSupervisor } from './supervisor.ts';
@@ -61,6 +66,8 @@ async function run(): Promise<void> {
     env: { ...mergeShellEnv(process.env, shellEnv), ELECTRON_RUN_AS_NODE: '1' },
     tokenFile: home.token,
     logFile: join(home.logs, 'desktop-daemon.log'),
+    markerFile: join(home.home, 'desktop-daemon.json'),
+    buildId: daemonBuildId(daemonDir),
   });
 
   let win: BrowserWindow | undefined;
@@ -69,7 +76,7 @@ async function run(): Promise<void> {
 
   // ── small persisted UI state (userData/state.json) ──
   const stateFile = join(app.getPath('userData'), 'state.json');
-  type UiState = { closeNoticeShown?: boolean; cliOptOut?: boolean };
+  type UiState = { closeNoticeShown?: boolean };
   const uiState = (): UiState => {
     try {
       return JSON.parse(readFileSync(stateFile, 'utf8'));
@@ -105,61 +112,32 @@ async function run(): Promise<void> {
     shellPath: shellEnv?.PATH ?? process.env.PATH,
     appImage: process.env.APPIMAGE,
   };
-  const notify = (title: string, body: string) => {
-    if (Notification.isSupported()) new Notification({ title, body }).show();
-  };
-  const setupCli = (explicit: boolean) => {
-    if (!existsSync(cliCtx.entry)) return;
-    try {
-      const r = installCli(cliCtx);
-      if (r.profile || (explicit && r.status.state === 'installed'))
-        notify(
-          'beamhop command line ready',
-          r.status.state === 'installed' && r.status.onPath
-            ? 'Run `beamhop` in a terminal.'
-            : 'Open a new terminal window, then run `beamhop`.',
-        );
-      else if (explicit && r.status.state === 'other')
-        notify('beamhop command line', `Already installed at ${r.status.path}; leaving it in place.`);
-    } catch (e) {
-      console.warn(`beamhop desktop: could not install the command line tool: ${String(e)}`);
-      if (explicit)
-        void dialog.showMessageBox({
-          type: 'error',
-          message: 'Could not install the command line tool',
-          detail: String(e),
-        });
-    }
-  };
-  const cliMenuItem = (): MenuItemConstructorOptions | undefined => {
-    const st = cliStatus(cliCtx);
-    if (st.state === 'unsupported') return undefined;
-    if (st.state === 'other') return { label: `Command line: using ${st.path}`, enabled: false };
-    return {
-      label:
-        st.state === 'installed' && !st.onPath
-          ? 'Command line tool (open a new terminal)'
-          : 'Command line tool',
-      type: 'checkbox',
-      checked: st.state === 'installed',
-      click: (i) => {
-        saveUiState({ ...uiState(), cliOptOut: !i.checked });
-        if (i.checked) setupCli(true);
-        else {
-          try {
-            uninstallCli(cliCtx);
-          } catch (e) {
-            void dialog.showMessageBox({
-              type: 'error',
-              message: 'Could not remove the command line tool',
-              detail: String(e),
-            });
-          }
-        }
-        refreshTray();
-      },
-    };
-  };
+  /** Only the app window, showing the daemon's UI, may call the bridge. */
+  const fromAppWindow = (e: IpcMainInvokeEvent): boolean =>
+    !!win &&
+    !win.isDestroyed() &&
+    e.sender === win.webContents &&
+    isAppUrl(e.senderFrame?.url ?? '', daemonUrl);
+  const handle = (channel: string, fn: () => unknown) =>
+    ipcMain.handle(channel, async (e) => {
+      if (!fromAppWindow(e)) throw new Error('not allowed');
+      return fn();
+    });
+  // The `beamhop` command is opt-in (Settings → Advanced); nothing is installed unless asked.
+  handle(CHANNELS.cliStatus, () => cliStatus(cliCtx));
+  handle(CHANNELS.cliInstall, () => {
+    if (!existsSync(cliCtx.entry)) throw new Error('this build has no bundled command line');
+    return installCli(cliCtx);
+  });
+  handle(CHANNELS.cliUninstall, () => uninstallCli(cliCtx));
+  handle(CHANNELS.daemonRestart, async () => {
+    if (supervisor.state === 'running' || supervisor.state === 'external') {
+      if (!supervisor.owned)
+        throw new Error('beamhop was started outside the app; restart it where it was started');
+      await supervisor.restart();
+    } else await supervisor.ensure();
+  });
+  handle(CHANNELS.openLog, () => shell.openPath(join(home.logs, 'desktop-daemon.log')));
 
   // ── window ──
   const showDock = (on: boolean) => {
@@ -194,6 +172,8 @@ async function run(): Promise<void> {
       backgroundColor: '#f8f5f1',
       ...(isMac ? {} : { icon: join(assets, 'icon.png') }),
       webPreferences: {
+        preload: join(app.getAppPath(), 'preload.js'),
+        additionalArguments: [`--beamhop-version=${app.getVersion()}`],
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
@@ -265,21 +245,43 @@ async function run(): Promise<void> {
     }
   };
 
+  // Paused by Stop everything (from here, the CLI or a phone): the tray offers Resume instead.
+  let paused = false;
+  const api = () => createClient(httpTransport(daemonUrl, supervisor.token()));
+  const refreshPaused = async () => {
+    try {
+      const was = paused;
+      paused = (await api().call('system.status')).panic;
+      if (was !== paused) refreshTray();
+    } catch {
+      /* daemon not reachable yet */
+    }
+  };
+  const resume = async () => {
+    try {
+      await api().call('system.resume');
+      paused = false;
+      refreshTray();
+    } catch (e) {
+      void dialog.showMessageBox({ type: 'error', message: 'Resume failed', detail: String(e) });
+    }
+  };
+
   const stopEverything = async () => {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
       message: 'Stop everything?',
       detail:
-        'Kills every agent session, pauses schedules and disconnects channels. Resume later from the app or with `beamhop resume`.',
+        'Kills every agent session, pauses schedules and disconnects channels. Resume later from the app or the menu bar.',
       buttons: ['Stop everything', 'Cancel'],
       defaultId: 1,
       cancelId: 1,
     });
     if (response !== 0) return;
     try {
-      await createClient(httpTransport(daemonUrl, supervisor.token())).call('system.panic', {
-        reason: 'desktop app: Stop everything',
-      });
+      await api().call('system.panic', { reason: 'desktop app: Stop everything' });
+      paused = true;
+      refreshTray();
     } catch (e) {
       void dialog.showMessageBox({ type: 'error', message: 'Stop everything failed', detail: String(e) });
     }
@@ -301,12 +303,13 @@ async function run(): Promise<void> {
     if (!tray) return;
     const s = supervisor.state;
     const up = s === 'running' || s === 'external';
-    const cliMenu = cliMenuItem();
     const template: MenuItemConstructorOptions[] = [
       { label: `beamhop — ${statusLabel(s)}`, enabled: false },
       { type: 'separator' },
       { label: 'Open beamhop', click: () => void showWindow() },
-      { label: 'Stop everything…', enabled: up, click: () => void stopEverything() },
+      paused
+        ? { label: 'Resume', enabled: up, click: () => void resume() }
+        : { label: 'Stop everything…', enabled: up, click: () => void stopEverything() },
       { type: 'separator' },
       up
         ? {
@@ -315,7 +318,6 @@ async function run(): Promise<void> {
             click: () => void supervisor.restart().catch(() => void startDaemon()),
           }
         : { label: 'Start daemon', click: () => void startDaemon() },
-      ...(cliMenu ? [cliMenu] : []),
       {
         label: 'Open at login',
         type: 'checkbox',
@@ -337,6 +339,9 @@ async function run(): Promise<void> {
     // Windows/Linux: a left click opens the window (macOS shows the menu).
     if (!isMac) tray.on('click', () => void showWindow());
     refreshTray();
+    // Stop everything may come from the CLI or a phone: check before the menu opens (and every minute).
+    tray.on('mouse-enter', () => void refreshPaused());
+    setInterval(() => void refreshPaused(), 60_000).unref();
   };
 
   // ── app menu (standard roles; DevTools only in development) ──
@@ -374,7 +379,10 @@ async function run(): Promise<void> {
     void supervisor.stop().finally(() => app.quit());
   });
 
-  supervisor.on('state', () => refreshTray());
+  supervisor.on('state', () => {
+    refreshTray();
+    void refreshPaused();
+  });
 
   await app.whenReady();
   if (isMac && startHidden) showDock(false);
@@ -391,7 +399,6 @@ async function run(): Promise<void> {
   if (!existsSync(join(daemonDir, 'bin', 'beamhopd.js')))
     console.warn(`beamhop desktop: no bundled daemon at ${daemonDir}; can only attach to a running one`);
 
-  if (!uiState().cliOptOut) setupCli(false);
   createTray();
   if (!(await startDaemon())) return;
   if (!startHidden) await showWindow();
@@ -402,5 +409,21 @@ function safeShell(): string | undefined {
     return userInfo().shell ?? undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Identifies the bundled daemon build (`BUILD_ID`, stamped by scripts/build.mjs): differs between builds. */
+function daemonBuildId(daemonDir: string): string {
+  try {
+    return readFileSync(join(daemonDir, 'BUILD_ID'), 'utf8').trim();
+  } catch {
+    try {
+      return createHash('sha256')
+        .update(readFileSync(join(daemonDir, 'bin', 'beamhopd.js')))
+        .digest('hex')
+        .slice(0, 16);
+    } catch {
+      return '';
+    }
   }
 }

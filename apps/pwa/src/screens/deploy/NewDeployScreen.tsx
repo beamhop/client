@@ -27,6 +27,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { useShowCli } from '../../lib/desktop.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { Screen } from '../../shell/Screen.tsx';
@@ -523,6 +524,7 @@ export const NewDeployScreen = () => {
   const toast = useToast();
   const [step, setStep] = useState(0);
   const [ack, setAck] = useState(false);
+  const showCli = useShowCli();
   const [d, setD] = useState<Draft>({
     mode: search.mode === 'new' ? 'new' : 'move',
     agent: search.agent ?? '',
@@ -594,9 +596,11 @@ export const NewDeployScreen = () => {
     <div key="plan" className="flex flex-col gap-4">
       <p className="type-body-sm text-ink-2">{t('deploy.newDeploy.nothingIsCreatedUntil')}</p>
       <PlanBlock d={d} ack={ack} setAck={setAck} />
-      <div className="flex flex-wrap items-center gap-2">
-        <CopyButton value={cliFor(d)} label={t('deploy.newDeploy.copyPlanAsCli')} />
-      </div>
+      {showCli && (
+        <div className="flex flex-wrap items-center gap-2">
+          <CopyButton value={cliFor(d)} label={t('deploy.newDeploy.copyPlanAsCli')} />
+        </div>
+      )}
     </div>,
   ][step];
 

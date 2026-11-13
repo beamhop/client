@@ -5,10 +5,15 @@
  * One daemon per beamhop home: if one already answers on the configured URL (started by the CLI, a
  * login service, or another copy of the app) the app attaches to it and never stops it. Otherwise
  * the app starts its own bundled daemon, restarts it if it crashes, and stops it when the app quits.
+ *
+ * A daemon the app started is recorded in `markerFile` (pid + build). If the app was killed or replaced
+ * while running, that daemon outlives it; the next launch finds the marker and either adopts it (same
+ * build: it is stopped on quit again) or replaces it (another build: an updated app never keeps talking
+ * to the old daemon).
  */
 import { type ChildProcess, spawn as nodeSpawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { closeSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export type DaemonState = 'idle' | 'starting' | 'running' | 'external' | 'stopping' | 'stopped' | 'failed';
@@ -31,8 +36,20 @@ export interface SupervisorOptions {
   /** Crash restarts allowed within `restartWindowMs` before giving up. */
   maxRestarts?: number;
   restartWindowMs?: number;
+  /** Where the app records the daemon it started (`<home>/desktop-daemon.json`). */
+  markerFile?: string;
+  /** Identifies this app's bundled daemon (changes with every build). */
+  buildId?: string;
   fetch?: typeof fetch;
   spawn?: typeof nodeSpawn;
+  /** Signal a process (tests pass a fake); `signal 0` checks it is alive. */
+  kill?: (pid: number, signal: NodeJS.Signals | 0) => void;
+}
+
+interface DaemonMarker {
+  pid: number;
+  build: string;
+  startedAt: string;
 }
 
 export interface SupervisorEvents {
@@ -71,8 +88,12 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
   private poll: NodeJS.Timeout | undefined;
   private crashes: number[] = [];
   private wantRunning = false;
-  private readonly o: Required<Omit<SupervisorOptions, 'fetch' | 'spawn'>> &
-    Pick<SupervisorOptions, 'fetch' | 'spawn'>;
+  /** A daemon an earlier run of this app started and this run adopted (no ChildProcess handle). */
+  private adoptedPid: number | undefined;
+  private readonly o: Required<
+    Omit<SupervisorOptions, 'fetch' | 'spawn' | 'kill' | 'markerFile' | 'buildId'>
+  > &
+    Pick<SupervisorOptions, 'fetch' | 'spawn' | 'kill' | 'markerFile' | 'buildId'>;
   lastError: string | undefined;
 
   constructor(opts: SupervisorOptions) {
@@ -93,7 +114,53 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
 
   /** True when this app started the daemon (and will stop it on quit). */
   get owned(): boolean {
-    return this.child !== undefined;
+    return this.child !== undefined || this.adoptedPid !== undefined;
+  }
+
+  private signal(pid: number, sig: NodeJS.Signals | 0): boolean {
+    try {
+      (this.o.kill ?? ((p, s) => process.kill(p, s)))(pid, sig);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private readMarker(): DaemonMarker | undefined {
+    if (!this.o.markerFile) return undefined;
+    try {
+      const m = JSON.parse(readFileSync(this.o.markerFile, 'utf8')) as DaemonMarker;
+      return typeof m.pid === 'number' && typeof m.build === 'string' ? m : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private writeMarker(pid: number | undefined): void {
+    if (!this.o.markerFile || !pid) return;
+    try {
+      mkdirSync(dirname(this.o.markerFile), { recursive: true });
+      const m: DaemonMarker = { pid, build: this.o.buildId ?? '', startedAt: new Date().toISOString() };
+      writeFileSync(this.o.markerFile, `${JSON.stringify(m)}\n`, { mode: 0o600 });
+    } catch {
+      /* best effort */
+    }
+  }
+
+  private clearMarker(): void {
+    if (this.o.markerFile) rmSync(this.o.markerFile, { force: true });
+  }
+
+  /** Stop a daemon by pid (one we have no handle for) and wait until the API is gone. */
+  private async stopPid(pid: number): Promise<void> {
+    this.signal(pid, 'SIGTERM');
+    const deadline = Date.now() + this.o.stopTimeoutMs;
+    while (Date.now() < deadline) {
+      if (!(await this.healthy(500))) return;
+      await sleep(200);
+    }
+    this.signal(pid, 'SIGKILL');
+    await sleep(300);
   }
 
   get url(): string {
@@ -137,9 +204,24 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     if (this.child) {
       if (await this.healthy()) return 'owned';
     } else if (await this.healthy()) {
-      this.set('external');
-      this.startPolling();
-      return 'external';
+      // Left over from an earlier run of the app (it was killed or replaced while running)?
+      const m = this.readMarker();
+      if (m && this.signal(m.pid, 0)) {
+        if (this.o.buildId && m.build !== this.o.buildId) {
+          // Another build: replace it, so an updated app never talks to the old daemon.
+          await this.stopPid(m.pid);
+          this.clearMarker();
+        } else {
+          this.adoptedPid = m.pid;
+          this.set('running');
+          this.startPolling();
+          return 'owned';
+        }
+      } else {
+        this.set('external');
+        this.startPolling();
+        return 'external';
+      }
     }
     await this.spawnDaemon();
     return 'owned';
@@ -175,6 +257,7 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     while (Date.now() < deadline) {
       if (exited) break;
       if (await this.healthy(1000)) {
+        this.writeMarker(child.pid);
         this.set('running');
         this.startPolling();
         return;
@@ -224,6 +307,13 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     if (this._state !== 'external' && this._state !== 'running') return;
     const ok = await this.healthy();
     if (ok) return;
+    if (this.adoptedPid !== undefined && this.wantRunning) {
+      this.adoptedPid = undefined;
+      this.clearMarker();
+      this.stopPolling();
+      await this.spawnDaemon().catch(() => undefined);
+      return;
+    }
     if (this._state === 'external' && this.wantRunning) {
       this.stopPolling();
       await this.spawnDaemon().catch(() => undefined);
@@ -235,6 +325,14 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     this.wantRunning = false;
     this.stopPolling();
     const child = this.child;
+    if (!child && this.adoptedPid !== undefined) {
+      this.set('stopping');
+      await this.stopPid(this.adoptedPid);
+      this.adoptedPid = undefined;
+      this.clearMarker();
+      this.set('stopped');
+      return;
+    }
     if (!child) {
       if (this._state === 'external') this.set('stopped');
       return;
@@ -250,6 +348,7 @@ export class DaemonSupervisor extends EventEmitter<SupervisorEvents> {
     await exited;
     clearTimeout(timer);
     this.child = undefined;
+    this.clearMarker();
     this.set('stopped');
   }
 

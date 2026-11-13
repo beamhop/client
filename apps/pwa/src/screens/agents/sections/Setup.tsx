@@ -17,12 +17,14 @@ import {
 import { useState } from 'react';
 import { harnessLamp, useApi } from '../../../api/index.ts';
 import { t } from '../../../i18n/index.ts';
+import { useShowCli } from '../../../lib/desktop.ts';
 import { Button } from '../../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl, Select } from '../../../ui/Choice.tsx';
 import { CopyButton } from '../../../ui/CliStrip.tsx';
 import { NumberField, TextField } from '../../../ui/Field.tsx';
 import { PathPicker, useIsGitRepo } from '../../../ui/PathPicker.tsx';
 import { StatusDot } from '../../../ui/Status.tsx';
+import { HarnessJobControls } from '../../harnesses/HarnessJob.tsx';
 import { validateMountPath } from '../model.ts';
 import { Block, OverflowMenu, Rows, SaveBar, useAgentDraft } from '../parts.tsx';
 
@@ -221,6 +223,7 @@ export const AddMount = ({
 };
 
 export const SetupSection = ({ agent }: { agent: AgentView }) => {
+  const showCli = useShowCli();
   const d = useAgentDraft(agent);
   const c = d.draft;
   const name = c.name;
@@ -254,7 +257,8 @@ export const SetupSection = ({ agent }: { agent: AgentView }) => {
               state={harnessLamp(current)}
               label={t('agents.setup.harnessNeeds', { name: current.displayName })}
             />
-            {current.status === 'needs-login' && (
+            <HarnessJobControls h={current} />
+            {current.status === 'needs-login' && showCli && (
               <div className="flex items-center gap-2 rounded-sm bg-surface pl-3">
                 <code className="min-w-0 flex-1 truncate type-code text-ink">{loginCommand(current)}</code>
                 <CopyButton value={loginCommand(current)} label={t('agents.setup.copyLogin')} compact />

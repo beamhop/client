@@ -18,6 +18,7 @@ import {
   Info,
   Key,
   Palette,
+  SlidersHorizontal,
   Stop,
 } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
@@ -26,6 +27,7 @@ import { useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { useAppearance } from '../../lib/appearance.ts';
 import { cx } from '../../lib/cx.ts';
+import { isDesktop } from '../../lib/desktop.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
@@ -39,6 +41,8 @@ export interface SettingsSectionMeta {
   slug: string;
   group: 'trust' | 'data' | 'app' | 'kill';
   icon: Icon;
+  /** Only in the desktop app (window.beamhopDesktop). */
+  desktopOnly?: boolean;
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
@@ -97,6 +101,14 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     slug: t('settings.settings.themeContrastMotionHaptics'),
     group: 'app',
     icon: Palette,
+  },
+  {
+    id: 'advanced',
+    title: t('settings.section.advanced'),
+    slug: t('settings.settings.advancedSlug'),
+    group: 'app',
+    icon: SlidersHorizontal,
+    desktopOnly: true,
   },
   {
     id: 'about',
@@ -184,7 +196,8 @@ export const SettingsScreen = () => {
   const hasDetail = useHasDetail('/settings');
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const live = useLiveSlugs();
-  const groups = [...new Set(SETTINGS_SECTIONS.map((s) => s.group))];
+  const sections = SETTINGS_SECTIONS.filter((s) => !s.desktopOnly || isDesktop());
+  const groups = [...new Set(sections.map((s) => s.group))];
   return (
     <SplitView
       hasDetail={hasDetail}
@@ -195,38 +208,40 @@ export const SettingsScreen = () => {
               <section key={g} aria-labelledby={`set-${g}`}>
                 <Eyebrow id={`set-${g}`}>{t(`settings.group.${g}`)}</Eyebrow>
                 <ul className="-mx-2 flex flex-col">
-                  {SETTINGS_SECTIONS.filter((s) => s.group === g).map((s) => {
-                    const href = `/settings/${s.id}`;
-                    const active = pathname === href;
-                    const Ico = s.icon;
-                    return (
-                      <li key={s.id}>
-                        <Link
-                          to={href}
-                          aria-current={active ? 'page' : undefined}
-                          className={cx(
-                            'flex min-h-14 items-center gap-3 rounded-md px-2 py-2 outline-none focus-visible:outline-2 focus-visible:outline-focus',
-                            active ? 'bg-flare-wash' : 'hover:bg-sunken',
-                          )}
-                        >
-                          <Ico
-                            size={22}
-                            weight={active ? 'bold' : 'regular'}
-                            aria-hidden="true"
-                            className={s.id === 'stop' ? 'text-stop-text' : 'text-ink-2'}
-                          />
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <span className="truncate type-title-3 text-ink">{s.title}</span>
-                            <span className="truncate type-meta text-ink-2">
-                              {live[s.id]?.text ?? s.slug}
+                  {sections
+                    .filter((s) => s.group === g)
+                    .map((s) => {
+                      const href = `/settings/${s.id}`;
+                      const active = pathname === href;
+                      const Ico = s.icon;
+                      return (
+                        <li key={s.id}>
+                          <Link
+                            to={href}
+                            aria-current={active ? 'page' : undefined}
+                            className={cx(
+                              'flex min-h-14 items-center gap-3 rounded-md px-2 py-2 outline-none focus-visible:outline-2 focus-visible:outline-focus',
+                              active ? 'bg-flare-wash' : 'hover:bg-sunken',
+                            )}
+                          >
+                            <Ico
+                              size={22}
+                              weight={active ? 'bold' : 'regular'}
+                              aria-hidden="true"
+                              className={s.id === 'stop' ? 'text-stop-text' : 'text-ink-2'}
+                            />
+                            <span className="flex min-w-0 flex-1 flex-col">
+                              <span className="truncate type-title-3 text-ink">{s.title}</span>
+                              <span className="truncate type-meta text-ink-2">
+                                {live[s.id]?.text ?? s.slug}
+                              </span>
                             </span>
-                          </span>
-                          {live[s.id]?.flag}
-                          <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />
-                        </Link>
-                      </li>
-                    );
-                  })}
+                            {live[s.id]?.flag}
+                            <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />
+                          </Link>
+                        </li>
+                      );
+                    })}
                 </ul>
               </section>
             ))}

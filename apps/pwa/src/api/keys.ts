@@ -42,6 +42,7 @@ export const INVALIDATES: Record<string, MethodName[] | 'all'> = {
   'device.*': ['device.list'],
   'harness.*': ['harness.list', 'harness.scan'],
   'identity.*': ['identity.get'],
+  'system.doctorFix': ['system.doctor'],
   'data.purge': ['audit.query', 'usage.query', 'session.list'],
 };
 

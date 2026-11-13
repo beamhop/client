@@ -64,6 +64,8 @@ export class PluginRegistry {
 
 export interface BuiltinContext {
   registry: PluginRegistry;
+  /** beamhop home (discovery also searches `<home>/harnesses`, where beamhop installs harnesses). */
+  home?: string;
   secrets: SecretStore;
   log: Logger;
   /**
@@ -184,8 +186,8 @@ export const BUILTIN_PLUGINS: { module: string; load: Loader }[] = [
   {
     module: '@beamhop/harness-discovery',
     load: (m, c) => {
-      const scan = m.scanHarnesses as () => Promise<HarnessDetection[]>;
-      c.registry.discovery = { scan: () => scan() };
+      const scan = m.scanHarnesses as (o: { beamhopHome?: string }) => Promise<HarnessDetection[]>;
+      c.registry.discovery = { scan: () => scan(c.home ? { beamhopHome: c.home } : {}) };
     },
   },
 ];

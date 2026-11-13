@@ -28,6 +28,7 @@ import { Button as RACButton } from 'react-aria-components';
 import { apiKey, harnessLamp, harnessMonogram, useApi, useCall, useConnection } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
+import { useShowCli, withoutCommand } from '../../lib/desktop.ts';
 import { clock } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
@@ -42,6 +43,7 @@ import { Badge, Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { Sheet } from '../../ui/Sheet.tsx';
 import { Banner, EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
+import { HarnessJobControls, type HarnessUpdateInfo } from './HarnessJob.tsx';
 import { LoginPanel, LoginSheet, loginWord, managesLogin } from './HarnessLogin.tsx';
 import {
   detectOs,
@@ -54,6 +56,7 @@ import {
   splitCommand,
   supportedOses,
 } from './harness-util.ts';
+import { useHarnessUpdates } from './jobs.ts';
 import { PULL_THRESHOLD, usePullToRefresh } from './usePullToRefresh.ts';
 
 const OS_LABEL: Record<Os, string> = { mac: 'macOS', linux: 'Linux', windows: 'Windows' };
@@ -92,6 +95,8 @@ const InstallSheet = ({
   const shown = oses.includes(os) ? os : (oses[0] ?? os);
   const options = h ? installOptions(h, shown) : [];
   const update = h?.status === 'unsupported-version';
+  const showCli = useShowCli();
+  const plan = h?.installPlan;
   return (
     <Sheet
       isOpen={!!h}
@@ -104,7 +109,11 @@ const InstallSheet = ({
       subtitle={
         h && (
           <MetaLine
-            items={[h.command, h.version ? `found ${h.version}` : t('harnesses.notOnPath'), h.message]}
+            items={[
+              h.command,
+              h.version ? `found ${h.version}` : t('harnesses.notOnPath'),
+              withoutCommand(h.message, showCli),
+            ]}
           />
         )
       }
@@ -123,8 +132,17 @@ const InstallSheet = ({
     >
       {h && (
         <div className="flex flex-col gap-4">
-          <p className="type-body-sm text-ink-2">{t('harnesses.install.lead')}</p>
-          {oses.length > 1 && (
+          <p className="type-body-sm text-ink-2">
+            {!plan
+              ? t(showCli ? 'harnesses.install.lead' : 'harnesses.install.leadApp', { name: h.displayName })
+              : plan.method === 'none'
+                ? t('harnesses.install.leadNone', { name: h.displayName })
+                : t('harnesses.install.leadPlan', { name: h.displayName, method: plan.label })}
+          </p>
+          {plan?.method === 'none' && h.message && <p className="type-body-sm text-ink-2">{h.message}</p>}
+          {plan && plan.method !== 'none' && <HarnessJobControls h={h} primary />}
+          {showCli && plan && <p className="type-label text-ink">{t('harnesses.install.orTerminal')}</p>}
+          {showCli && oses.length > 1 && (
             <SegmentedControl
               label={t('harnesses.install.os')}
               value={shown}
@@ -137,7 +155,7 @@ const InstallSheet = ({
               className="w-full"
             />
           )}
-          {options.length === 0 ? (
+          {!showCli ? null : options.length === 0 ? (
             <p className="type-body-sm text-ink-2">{t('harnesses.install.none', { os: OS_LABEL[shown] })}</p>
           ) : (
             <ol className="flex flex-col gap-3">
@@ -167,7 +185,9 @@ const InstallSheet = ({
               <span className="sr-only"> {t('harnesses.harnesses.opensInANew')}</span>
             </a>
           )}
-          <p className="type-meta text-ink-2">{t('harnesses.install.after')}</p>
+          <p className="type-meta text-ink-2">
+            {t(showCli ? 'harnesses.install.after' : 'harnesses.install.afterApp')}
+          </p>
         </div>
       )}
     </Sheet>
@@ -353,10 +373,12 @@ const HarnessRow = ({
   onLogin,
   checking,
   lastCheck,
+  update,
 }: {
   h: HarnessView;
   agents?: AgentView[];
   lastCheck?: Date;
+  update?: HarnessUpdateInfo;
   selected: boolean;
   onOpen: () => void;
   onInstall: () => void;
@@ -365,6 +387,7 @@ const HarnessRow = ({
   checking: boolean;
 }) => {
   const users = usedBy(h.id, agents);
+  const showCli = useShowCli();
   const slug: Array<string | false | undefined> =
     h.status === 'ready'
       ? [
@@ -379,7 +402,7 @@ const HarnessRow = ({
               ? loginWord(h.login)
               : h.status === 'needs-login'
                 ? h.path
-                : (h.message ?? STATUS_WORD[h.status]),
+                : (withoutCommand(h.message, showCli) ?? STATUS_WORD[h.status]),
             users.length > 0 && t('harnesses.usedBy', { count: users.length }),
           ];
   return (
@@ -404,7 +427,7 @@ const HarnessRow = ({
         <div className="flex flex-col gap-2 px-4 pb-3 pl-[3.75rem]">
           <p className="type-body-sm text-ink-2">
             {h.login.status === 'invalid' && h.login.message
-              ? h.login.message
+              ? withoutCommand(h.login.message, showCli)
               : t('harnesses.loginHintManaged', { name: h.displayName })}
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -419,21 +442,28 @@ const HarnessRow = ({
           </div>
         </div>
       )}
-      {h.status === 'needs-login' && !managesLogin(h) && (
+      {h.status === 'needs-login' && !managesLogin(h) && h.loginFlow && (
+        <div className="flex flex-col gap-2 px-4 pb-3 pl-[3.75rem]">
+          <p className="type-body-sm text-ink-2">{t('harnesses.loginHintFlow', { name: h.displayName })}</p>
+        </div>
+      )}
+      {h.status === 'needs-login' && !managesLogin(h) && !h.loginFlow && (
         <div className="flex flex-col gap-2 px-4 pb-3 pl-[3.75rem]">
           <p className="type-body-sm text-ink-2">
-            {t('harnesses.loginHint', { name: h.displayName })}
+            {t(showCli ? 'harnesses.loginHint' : 'harnesses.loginHintApp', { name: h.displayName })}
             {lastCheck && (
               <span className="type-meta"> {t('harnesses.stillLogin', { time: clock(lastCheck) })}</span>
             )}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0 flex-1 basis-48">
-              <CommandLine
-                command={loginCommand(h)}
-                label={t('harnesses.copyLogin', { name: h.displayName })}
-              />
-            </div>
+            {showCli && (
+              <div className="min-w-0 flex-1 basis-48">
+                <CommandLine
+                  command={loginCommand(h)}
+                  label={t('harnesses.copyLogin', { name: h.displayName })}
+                />
+              </div>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -446,20 +476,8 @@ const HarnessRow = ({
           </div>
         </div>
       )}
-      {(h.status === 'not-installed' || h.status === 'unsupported-version') && (
-        <div className="flex px-4 pb-3 pl-[3.75rem]">
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={onInstall}
-            aria-label={t(h.status === 'not-installed' ? 'harnesses.installFor' : 'harnesses.updateFor', {
-              name: h.displayName,
-            })}
-          >
-            {t(h.status === 'not-installed' ? 'harnesses.install' : 'harnesses.update')}
-          </Button>
-        </div>
-      )}
+      {/* Install / Update / Log in, and the progress of a job that is running or just finished. */}
+      <HarnessJobControls h={h} update={update} onManual={onInstall} className="px-4 pb-3 pl-[3.75rem]" />
     </li>
   );
 };
@@ -469,13 +487,16 @@ const Details = ({
   agents,
   onInstall,
   inSheet,
+  update,
 }: {
   h: HarnessView;
   agents?: AgentView[];
   onInstall: () => void;
   inSheet?: boolean;
+  update?: HarnessUpdateInfo;
 }) => {
   const users = usedBy(h.id, agents);
+  const showCli = useShowCli();
   const rows: Array<[string, ReactNode]> = [
     [t('harnesses.d.status'), <StatusDot key="s" state={harnessLamp(h)} label={STATUS_WORD[h.status]} />],
     [t('harnesses.d.version'), h.version ?? '—'],
@@ -499,7 +520,7 @@ const Details = ({
       t('harnesses.d.protocol'),
       h.protocol === 'acp' ? t('harnesses.harnesses.acpAgentClientProtocol') : h.protocol,
     ],
-    [t('harnesses.d.message'), h.message ?? '—'],
+    [t('harnesses.d.message'), withoutCommand(h.message, showCli) ?? '—'],
   ];
   return (
     <div className="flex flex-col gap-5">
@@ -537,15 +558,20 @@ const Details = ({
         )}
       </section>
       {managesLogin(h) && h.status !== 'not-installed' && <LoginPanel h={h} />}
-      {h.status === 'needs-login' && !managesLogin(h) && (
+      {(h.status === 'not-installed' ||
+        h.status === 'unsupported-version' ||
+        update?.available ||
+        (h.status === 'needs-login' && h.loginFlow && !managesLogin(h))) && (
+        <HarnessJobControls h={h} update={update} onManual={onInstall} />
+      )}
+      {h.status === 'needs-login' && !managesLogin(h) && showCli && (
         <CommandLine command={loginCommand(h)} label={t('harnesses.copyLogin', { name: h.displayName })} />
       )}
-      {(h.status === 'not-installed' || h.status === 'unsupported-version' || h.install) &&
-        h.status !== 'ready' && (
-          <Button variant="secondary" onPress={onInstall}>
-            {t(h.status === 'unsupported-version' ? 'harnesses.update' : 'harnesses.install')}
-          </Button>
-        )}
+      {showCli && (h.status === 'not-installed' || h.status === 'unsupported-version') && h.install && (
+        <Button variant="quiet" className="self-start" onPress={onInstall}>
+          {t('harnesses.installByHand')}
+        </Button>
+      )}
       <CliStrip command="beamhop harness ls" />
     </div>
   );
@@ -571,6 +597,8 @@ export const HarnessesScreen = () => {
   const [acpOpen, setAcpOpen] = useState(false);
   const [loginId, setLoginId] = useState<string>();
   const harnesses = q.data?.harnesses ?? [];
+  // Newer versions (cached by the daemon for a day); fetched when this screen opens.
+  const updates = useHarnessUpdates();
 
   const scan = async () => {
     if (scanning || offline) return;
@@ -620,6 +648,7 @@ export const HarnessesScreen = () => {
               onLogin={() => setLoginId(h.id)}
               checking={scanning}
               lastCheck={lastScan}
+              update={updates.get(h.id)}
             />
           ))}
         </ul>
@@ -769,7 +798,12 @@ export const HarnessesScreen = () => {
             className="sticky top-24 self-start rounded-lg border border-line bg-surface p-5"
           >
             {selected && (
-              <Details h={selected} agents={agentList} onInstall={() => setInstallId(selected.id)} />
+              <Details
+                h={selected}
+                agents={agentList}
+                update={updates.get(selected.id)}
+                onInstall={() => setInstallId(selected.id)}
+              />
             )}
           </aside>
         </div>
@@ -786,6 +820,7 @@ export const HarnessesScreen = () => {
             <Details
               h={harnesses.find((h) => h.id === sheetId)!}
               agents={agentList}
+              update={updates.get(sheetId ?? '')}
               inSheet
               onInstall={() => {
                 setInstallId(sheetId);

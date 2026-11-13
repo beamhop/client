@@ -13,7 +13,7 @@ export const HARNESS_NPM_PACKAGES: Record<string, string[]> = {
   'gemini-cli': ['@google/gemini-cli'],
   copilot: ['@github/copilot'],
   opencode: ['opencode-ai'],
-  pi: ['@mariozechner/pi-coding-agent'],
+  pi: ['@earendil-works/pi-coding-agent'],
 };
 
 /** Resolve harness ids to validated npm specs (deduplicated, order preserved). */

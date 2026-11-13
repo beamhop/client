@@ -29,11 +29,11 @@ test('groups results; a harness without a login for agents gets Log in, checked 
   page,
 }, info) => {
   await open(page, '/harnesses');
-  await expect(page.getByRole('heading', { name: /Needs you · 2/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Needs you · 3/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Ready · 3/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Not installed · 1/ })).toBeVisible();
   await expect(page.getByText(/is not logged in for agents/).first()).toBeVisible();
-  await expect(page.getByText(/3\/6 ready/)).toBeVisible();
+  await expect(page.getByText(/3\/7 ready/)).toBeVisible();
   await axe(page);
   await shot(page, 'harnesses', info.project.name);
 
@@ -43,16 +43,35 @@ test('groups results; a harness without a login for agents gets Log in, checked 
     .click();
   const sheet = page.getByRole('dialog', { name: /^Log Codex.* in$/ });
   await expect(sheet).toBeVisible();
+  // The subscription sign-in comes first; switch to the API key.
+  await expect(sheet.getByRole('button', { name: 'Sign in with ChatGPT plan' })).toBeVisible();
+  await sheet.getByRole('radio', { name: 'OpenAI API key' }).dispatchEvent('click');
   await expect(sheet.getByText(/Agents never see it/)).toBeVisible();
-  await sheet.getByLabel('OpenAI API key', { exact: true }).fill('bad-key-value');
+  await sheet.getByLabel('OpenAI API key', { exact: true }).last().fill('bad-key-value');
   await sheet.getByRole('button', { name: 'Save and check' }).click();
   await expect(sheet.getByRole('alert')).toContainText('rejected');
   // Let the sheet finish its entrance: axe measures contrast mid-fade otherwise.
   await page.waitForTimeout(800);
   await axe(page);
-  await sheet.getByLabel('OpenAI API key', { exact: true }).fill('sk-proj-good-key');
+  await sheet.getByLabel('OpenAI API key', { exact: true }).last().fill('sk-proj-good-key');
   await sheet.getByRole('button', { name: 'Save and check' }).click();
   await expect(sheet).toBeHidden();
+  await expect(page.getByRole('heading', { name: /Ready · 4/ })).toBeVisible();
+});
+
+test('signs Codex in with a ChatGPT plan through the browser', async ({ page }) => {
+  await open(page, '/harnesses');
+  await page
+    .getByRole('button', { name: /^Log in: Codex/ })
+    .first()
+    .click();
+  const sheet = page.getByRole('dialog', { name: /^Log Codex.* in$/ });
+  await expect(sheet.getByText(/Sign in with your ChatGPT plan in the browser/)).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Save and check' })).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Sign in with ChatGPT plan' }).click();
+  await expect(sheet.getByText('Continue in your browser').first()).toBeVisible();
+  await expect(sheet.getByText('Ready')).toBeVisible({ timeout: 8000 });
+  await sheet.getByRole('button', { name: 'Close' }).last().click();
   await expect(page.getByRole('heading', { name: /Ready · 4/ })).toBeVisible();
 });
 
@@ -71,9 +90,10 @@ test('details: login status, check and log out', async ({ page }) => {
   await expect(login.getByText('not logged in', { exact: true })).toBeVisible();
 });
 
-test('install sheet offers per-OS package manager commands', async ({ page }, info) => {
+test('install sheet offers per-OS package manager commands (browser)', async ({ page }, info) => {
   await open(page, '/harnesses');
-  await page.getByRole('button', { name: 'Install Copilot CLI' }).first().click();
+  await page.getByRole('button', { name: /^Copilot CLI/ }).click();
+  await page.getByRole('button', { name: 'Install by hand…' }).last().click();
   const sheet = page.getByRole('dialog', { name: 'Install Copilot CLI' });
   await expect(sheet).toBeVisible();
   await sheet.getByRole('radio', { name: /macOS/ }).click();
@@ -109,4 +129,33 @@ test('add a custom ACP command: failing then passing handshake', async ({ page }
   await shot(page, 'harnesses_acp', info.project.name);
   await sheet.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('button', { name: /^goose/ })).toBeVisible();
+});
+
+test('Install runs a job: plain steps, details, then Ready', async ({ page }) => {
+  await open(page, '/harnesses');
+  await page.getByRole('button', { name: 'Install Copilot CLI' }).first().click();
+  const job = page.locator('[data-harness-job="copilot"]').first();
+  await expect(job.getByText(/Getting ready…|Downloading…|Verifying…|Installing…|Checking…/)).toBeVisible();
+  await expect(job.getByRole('button', { name: 'Cancel for Copilot CLI' })).toBeVisible();
+  await expect(job.getByText('Ready', { exact: true })).toBeVisible({ timeout: 8000 });
+  await job.getByRole('button', { name: 'Show details' }).click();
+  await expect(job.getByText(/added 37 packages/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Not installed/ })).toBeHidden();
+});
+
+test('Update a too-old harness, and log in through the browser with a device code', async ({ page }) => {
+  await open(page, '/harnesses');
+  await page.getByRole('button', { name: 'Update pi' }).first().click();
+  await expect(
+    page.locator('[data-harness-job="pi"]').first().getByText('Ready', { exact: true }),
+  ).toBeVisible({ timeout: 8000 });
+
+  await page.getByRole('button', { name: 'Log in to Cursor Agent' }).first().click();
+  const job = page.locator('[data-harness-job="cursor"]').first();
+  await expect(job.getByText('Continue in your browser', { exact: true })).toBeVisible();
+  await expect(job.getByRole('link', { name: /Open page again/ })).toBeVisible();
+  await expect(job.getByText('WDJB-MJHT', { exact: true })).toBeVisible();
+  await expect(job.getByRole('button', { name: 'Copy code' })).toBeVisible();
+  await axe(page);
+  await expect(job.getByText('Ready', { exact: true })).toBeVisible({ timeout: 8000 });
 });

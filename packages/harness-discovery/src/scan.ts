@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
+import path from 'node:path';
 import type { HarnessDetection, Logger, SandboxHandle } from '@beamhop/core';
 import {
   type Catalog,
@@ -11,6 +12,7 @@ import {
 } from '@beamhop/harness-catalog';
 import { minimalEnv, resolveSpawn } from '@beamhop/harness-kit';
 import { mapAcpCapabilities, probeAcpCommand } from './acp-probe.ts';
+import { isManagedPath, managedDirs } from './install.ts';
 import { expandPath, fileExists, findExecutable, type HostInfo, searchDirs } from './paths.ts';
 
 export interface ExtraAcpAgent {
@@ -32,6 +34,8 @@ export interface ScanOptions {
   includeMissing?: boolean;
   /** Extra directories to search. */
   extraDirs?: string[];
+  /** beamhop home, whose `harnesses/` folder holds beamhop-installed harnesses (default $BEAMHOP_HOME or ~/.beamhop). */
+  beamhopHome?: string;
   /** Restrict to these catalog ids. */
   only?: string[];
   versionTimeoutMs?: number;
@@ -102,14 +106,35 @@ const hostFrom = (opts: ScanOptions): HostInfo => ({
   home: opts.home ?? homedir(),
 });
 
+/** beamhop home for a scan: the option, else $BEAMHOP_HOME, else ~/.beamhop. */
+export const scanBeamhopHome = (
+  opts: Pick<ScanOptions, 'beamhopHome' | 'env' | 'home' | 'platform'>,
+): string => {
+  const host = hostFrom(opts);
+  return opts.beamhopHome ?? host.env.BEAMHOP_HOME ?? path.join(host.home, '.beamhop');
+};
+
+/** Directories to search for `entry`: PATH and the usual places, its install dirs, then beamhop's own. */
+export const harnessSearchDirs = (entry: CatalogEntry, opts: ScanOptions = {}): string[] => {
+  const host = hostFrom(opts);
+  return searchDirs(host, [
+    ...(opts.extraDirs ?? []),
+    ...entry.installDirs,
+    ...managedDirs(scanBeamhopHome(opts), entry.id, host.platform),
+  ]);
+};
+
+/** A detection plus whether beamhop installed it (under <beamhop home>/harnesses). */
+export type DiscoveredHarness = HarnessDetection & { managed?: boolean };
+
 const childEnv = (host: HostInfo): Record<string, string> => minimalEnv(host.env as NodeJS.ProcessEnv);
 
 /** Detect a single catalog entry. */
 export const detectHarness = async (
   entry: CatalogEntry,
   opts: ScanOptions = {},
-  dirs: string[] = searchDirs(hostFrom(opts), [...(opts.extraDirs ?? []), ...entry.installDirs]),
-): Promise<HarnessDetection> => {
+  dirs: string[] = harnessSearchDirs(entry, opts),
+): Promise<DiscoveredHarness> => {
   const host = hostFrom(opts);
   const base: HarnessDetection = {
     id: entry.id,
@@ -121,7 +146,8 @@ export const detectHarness = async (
   };
   const found = findExecutable(entry.binaries, dirs, host);
   if (!found) return base;
-  const det: HarnessDetection = { ...base, path: found, capabilities: DEFAULT_CAPS[entry.protocol] };
+  const det: DiscoveredHarness = { ...base, path: found, capabilities: DEFAULT_CAPS[entry.protocol] };
+  if (isManagedPath(found, scanBeamhopHome(opts), host.platform)) det.managed = true;
   const env = childEnv(host);
   try {
     const out = await runVersion(found, entry.versionArgs, env, opts.versionTimeoutMs ?? 5000);
@@ -150,7 +176,7 @@ export const detectHarness = async (
 };
 
 /** Scan the machine for known harnesses (and user-registered ACP commands). */
-export const scanHarnesses = async (opts: ScanOptions = {}): Promise<HarnessDetection[]> => {
+export const scanHarnesses = async (opts: ScanOptions = {}): Promise<DiscoveredHarness[]> => {
   const catalog = opts.catalog ?? loadCatalog();
   const host = hostFrom(opts);
   const entries = catalog.harnesses.filter((h) => !opts.only || opts.only.includes(h.id));

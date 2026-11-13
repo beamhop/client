@@ -48,7 +48,7 @@ import { createMcpBridge, type McpBridge } from '@beamhop/mcp';
 import { createSandbox } from '@beamhop/sandbox';
 import { ConfigStore, openStore, type Store } from '@beamhop/store';
 import { type AlertOptions, Alerts } from './alerts.ts';
-import { ApiHandlers } from './api.ts';
+import { ApiHandlers, type HarnessToolsOptions } from './api.ts';
 import { ApprovalManager } from './approvals.ts';
 import { ChannelManager } from './channels.ts';
 import { CloudSide } from './cloud.ts';
@@ -142,6 +142,8 @@ export interface DaemonOptions {
   remote?: RemoteOptions;
   /** Extra directories `fs.list` may browse besides the home directory. */
   fsRoots?: string[];
+  /** Harness install/login jobs and doctor fixes (tests inject fakes so nothing real runs). */
+  harnessTools?: HarnessToolsOptions;
 }
 
 export interface AuditInput {
@@ -310,6 +312,7 @@ export class Daemon {
       if (!this.opts.plugins || this.opts.loadBuiltins) {
         const loaded = await loadBuiltinPlugins({
           registry: this.registry,
+          home: this.home,
           secrets: this.secrets,
           log: this.log,
           fetchAttachment: (url) => this.fetcher.fetch(url),
@@ -396,6 +399,7 @@ export class Daemon {
     this.stopping = (async () => {
       if (this.timer) clearInterval(this.timer);
       this.scheduler.stop();
+      await this.apiHandlers.shutdown().catch(() => {});
       this.remotes.close();
       this.cloud.close();
       await this.sessions.closeAll({ hard: false }).catch(() => {});

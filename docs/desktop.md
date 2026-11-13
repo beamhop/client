@@ -25,8 +25,14 @@ Download it from the [releases page](https://github.com/beamhop/client/releases)
   the AppImage, install those three with your package manager; the sandbox needs them on Linux.
 
 Agent harnesses (Claude Code, Codex, Gemini CLI and so on) are separate programs. The app finds the ones
-you have installed, and Harnesses shows how to install the rest. Claude Code's agent runtime is bundled,
-so Claude agents work without it.
+you have installed and installs the rest for you: **Harnesses → Install** uses the harness's own installer
+when there is one, otherwise Homebrew or npm, and shows its progress. Claude Code's agent runtime is
+bundled, so Claude agents work without it.
+
+You never need a terminal in the app. Installing, updating and logging in harnesses, and fixing what
+**Setup → Checks** finds, are buttons; fixes that need administrator rights ask for your password through
+the system's own prompt. Everything the app does is also a CLI command for servers without a screen (see
+[the CLI](cli.md)): `beamhop harness install|update|login --browser`, `beamhop doctor --fix`.
 
 ## Using it
 
@@ -37,7 +43,8 @@ so Claude agents work without it.
 - **Open at login** (menu bar / tray) starts beamhop hidden at login: the daemon comes up and the app waits
   in the menu bar. On macOS this is a LaunchAgent you can also see in System Settings → General → Login
   Items; on Linux an `~/.config/autostart` entry; on Windows the usual Run key.
-- **Stop everything** (menu bar / tray) is the same emergency stop as `beamhop panic`.
+- **Stop everything** (menu bar / tray) is the same emergency stop as `beamhop panic`; the menu then offers
+  **Resume**.
 - **Show logs** opens `~/.beamhop/logs`. The app's daemon writes `desktop-daemon.log` there.
 
 Apps opened from Finder or the Dock do not get your shell's `PATH`, so at startup beamhop asks your login
@@ -49,6 +56,15 @@ If your shell config is slow or waits for input, beamhop gives up after 10 secon
 
 The daemon listens on `127.0.0.1:7878` unless `BEAMHOP_PORT` (or `BEAMHOP_URL`) is set in the app's
 environment; `BEAMHOP_HOME` moves the beamhop home, as with the CLI.
+
+### The `beamhop` command
+
+The app does not put anything on your `PATH` by itself. If you want the CLI too, turn on *Settings →
+Advanced → Install the `beamhop` command*: the app writes a small launcher to `~/.beamhop/bin/beamhop` that
+runs the CLI bundled in the app, and adds that folder to your login shell's profile (a marked block in
+`~/.zprofile`, `~/.bash_profile`/`~/.bashrc`, fish's `conf.d`, or `~/.profile`). It never replaces a
+`beamhop` you installed another way, and turning the setting off removes both. macOS and the Linux `.deb`
+only. *Settings → Advanced → Show command-line equivalents* shows the matching command under each screen.
 
 ### Secrets and the system keychain
 
@@ -106,6 +122,10 @@ to release an unsigned macOS app on a tag push, and checks the result with `code
 
 - The window loads only the daemon origin; other links open in your browser (`http`, `https`, `mailto` only).
 - Renderer: context isolation, sandbox, no Node integration, no `<webview>`; DevTools only in development.
+  A preload exposes `window.beamhopDesktop` (app version, the `beamhop` command setting, restart the
+  daemon, open the log) over fixed IPC channels that answer only the app window on the daemon origin.
+- Installing harnesses, logging them in and applying doctor fixes run programs on the computer, so the
+  daemon accepts them only from local clients (the app, the CLI), never from paired phones.
 - Permissions: notifications, clipboard write and camera (for pairing QR codes), only for the daemon origin.
 - Electron fuses: cookie encryption on; `NODE_OPTIONS` and `--inspect` off; the app loads only from its
   integrity-checked `app.asar`. `runAsNode` stays on because the daemon needs it.

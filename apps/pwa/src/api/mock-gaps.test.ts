@@ -155,3 +155,59 @@ describe('mock daemon: API gaps (parity with beamhopd)', () => {
     t.close?.();
   });
 });
+
+describe('mock daemon: desktop without a terminal', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('installs a harness through a job, with steps and output lines', async () => {
+    vi.useFakeTimers();
+    const t = mk();
+    const job = (await t.request('harness.install', { id: 'copilot' })) as { id: string; step: string };
+    expect(job.step).toBe('resolving');
+    await expect(t.request('harness.install', { id: 'copilot' })).rejects.toMatchObject({ code: -32009 });
+    vi.advanceTimersByTime(900);
+    const mid = (await t.request('harness.job.get', { jobId: job.id })) as {
+      job: { step: string };
+      lines: string[];
+      next: number;
+    };
+    expect(['verifying', 'installing']).toContain(mid.job.step);
+    expect(mid.lines.length).toBe(mid.next);
+    vi.advanceTimersByTime(2000);
+    const end = (await t.request('harness.job.get', { jobId: job.id, since: mid.next })) as {
+      job: { step: string };
+    };
+    expect(end.job.step).toBe('done');
+    const { harnesses } = (await t.request('harness.list', {})) as {
+      harnesses: Array<{ id: string; status: string }>;
+    };
+    expect(harnesses.find((h) => h.id === 'copilot')?.status).not.toBe('not-installed');
+    t.close?.();
+  });
+
+  it('cancels a job; login exposes url and code; doctorFix flips the check', async () => {
+    vi.useFakeTimers();
+    const t = mk();
+    const up = (await t.request('harness.update', { id: 'pi' })) as { id: string };
+    expect(await t.request('harness.job.cancel', { jobId: up.id })).toMatchObject({ step: 'cancelled' });
+    const login = (await t.request('harness.loginFlow', { id: 'cursor' })) as { id: string };
+    vi.advanceTimersByTime(400);
+    expect(await t.request('harness.job.get', { jobId: login.id })).toMatchObject({
+      job: { step: 'waiting-browser', url: expect.stringContaining('https://'), code: expect.any(String) },
+    });
+    const { jobs } = (await t.request('harness.job.list', {})) as { jobs: unknown[] };
+    expect(jobs).toHaveLength(2);
+    expect(await t.request('harness.updates', {})).toMatchObject({
+      updates: expect.arrayContaining([expect.objectContaining({ id: 'pi', required: true })]),
+    });
+    vi.useRealTimers();
+    await expect(
+      t.request('system.doctorFix', { id: 'linux.apparmor.bwrap', elevate: 'none' }),
+    ).rejects.toMatchObject({ code: -32003 });
+    const r = (await t.request('system.doctorFix', { id: 'linux.apparmor.bwrap' })) as {
+      checks: Array<{ id: string; status: string }>;
+    };
+    expect(r.checks.find((c) => c.id === 'userns')?.status).toBe('ok');
+    t.close?.();
+  });
+});

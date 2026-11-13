@@ -10,6 +10,7 @@ import { Cpu, DownloadSimple, Key, LockSimple, MagnifyingGlass, SealCheck } from
 import { useMemo, useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
+import { useShowCli } from '../../lib/desktop.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Checkbox, Tabs } from '../../ui/Choice.tsx';
@@ -275,6 +276,8 @@ export const IdentitySection = () => {
   const q = useApi('identity.get');
   const toast = useToast();
   const publish = useMutationApi('identity.publish', { invalidate: ['identity.get'] });
+  const createOwner = useMutationApi('identity.ownerCreate');
+  const showCli = useShowCli();
   const [backup, setBackup] = useState(false);
   const showSkeleton = useDelayedLoading(q.isPending);
 
@@ -325,9 +328,34 @@ export const IdentitySection = () => {
               )}
             </>
           ) : (
-            <p className="type-body-sm text-ink-2">
-              {t('settings.identity.noOwnerKey')} <code className="font-mono text-ink">beamhop init</code>.
-            </p>
+            <>
+              <p className="type-body-sm text-ink-2">
+                {showCli ? (
+                  <>
+                    {t('settings.identity.noOwnerKey')}{' '}
+                    <code className="font-mono text-ink">beamhop init</code>.
+                  </>
+                ) : (
+                  t('settings.identity.noOwnerKeyApp')
+                )}
+              </p>
+              <Button
+                variant="primary"
+                className="self-start"
+                icon={<Key size={16} aria-hidden="true" />}
+                isPending={createOwner.isPending}
+                onPress={async () => {
+                  try {
+                    await createOwner.mutateAsync({});
+                    toast.show({ message: t('settings.identity.ownerCreated'), tone: 'success' });
+                  } catch (e) {
+                    toast.show({ message: (e as Error).message, tone: 'error' });
+                  }
+                }}
+              >
+                {t('settings.identity.createOwner')}
+              </Button>
+            </>
           )}
         </div>
       </Group>

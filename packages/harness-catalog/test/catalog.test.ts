@@ -27,8 +27,8 @@ describe('bundled catalog', () => {
       'opencode',
       'pi',
       'cursor-agent',
-      'goose',
-      'qwen-code',
+      'kimi-code',
+      'cline',
       'auggie',
     ]) {
       expect(ids).toContain(id);
@@ -60,6 +60,67 @@ describe('bundled catalog', () => {
       const hasMode = Object.values(h.modes).some(Boolean);
       expect(hasMode, h.id).toBe(true);
     }
+  });
+
+  it('has installers and login flows only from vendor URLs, without guessed checksums', () => {
+    const claude = findHarness(cat, 'claude')!;
+    expect(claude.install.native?.darwin).toEqual({ kind: 'script', url: 'https://claude.ai/install.sh' });
+    expect(claude.auth.loginFlow).toMatchObject({
+      args: ['setup-token'],
+      kind: 'browser',
+      capture: { method: 'claude-subscription' },
+    });
+    const re = new RegExp(claude.auth.loginFlow!.capture!.pattern);
+    expect(re.exec(`token: sk-ant-oat01-${'a'.repeat(40)}\n`)?.[0]).toBe(`sk-ant-oat01-${'a'.repeat(40)}`);
+    expect(findHarness(cat, 'auggie')!.auth.loginFlow).toBeUndefined();
+    for (const h of cat.harnesses)
+      for (const n of Object.values(h.install.native ?? {})) expect(n.url, h.id).toMatch(/^https:\/\//);
+  });
+
+  it('offers subscription sign-ins for the harnesses that have them', () => {
+    const signIns = Object.fromEntries(
+      cat.harnesses.map((h) => [h.id, h.auth.methods.filter((m) => m.kind === 'home').map((m) => m.id)]),
+    );
+    expect(signIns).toMatchObject({
+      codex: ['chatgpt'],
+      gemini: ['google-account'],
+      cline: ['cline-account', 'chatgpt'],
+      'kimi-code': ['kimi-account'],
+      auggie: ['augment-account'],
+      'cursor-agent': ['cursor-account'],
+      pi: ['chatgpt', 'github-copilot', 'kimi'],
+      opencode: ['chatgpt', 'github-copilot'],
+    });
+    for (const h of cat.harnesses)
+      for (const m of h.auth.methods.filter((x) => x.kind === 'home')) {
+        expect(m.home!.network.length, `${h.id}/${m.id} network`).toBeGreaterThan(0);
+        // A sign-in listed first is what `beamhop harness login <id>` runs by default.
+        expect(h.auth.methods.indexOf(m), `${h.id}/${m.id}`).toBeLessThan(3);
+      }
+  });
+
+  it('rejects a login flow that captures into an unknown method, and bad installers', () => {
+    const base = JSON.parse(readFileSync(BUNDLED_CATALOG_URL, 'utf8'));
+    const claude = base.harnesses.find((h: { id: string }) => h.id === 'claude');
+    claude.auth.loginFlow.capture.method = 'nope';
+    expect(() => parseCatalog(JSON.stringify(base))).toThrow(/unknown method nope/);
+    claude.auth.loginFlow.capture.method = 'claude-subscription';
+    claude.install.native.linux = { kind: 'script', url: 'http://claude.ai/install.sh' };
+    expect(() => parseCatalog(JSON.stringify(base))).toThrow(/schema/);
+    claude.install.native.linux = {
+      kind: 'archive',
+      url: 'https://x.example/a.tgz',
+      sha256: { x64: 'nope' },
+      bin: 'a',
+    };
+    expect(() => parseCatalog(JSON.stringify(base))).toThrow(/schema/);
+    claude.install.native.linux = {
+      kind: 'archive',
+      url: 'https://x.example/a.tgz',
+      sha256: { x64: 'a'.repeat(64) },
+      bin: '../../bin/sh',
+    };
+    expect(() => parseCatalog(JSON.stringify(base))).toThrow(/schema/);
   });
 
   it('every ACP-protocol entry has an acp mode', () => {

@@ -50,6 +50,77 @@ const defaultDeps = (): ProbeDeps => ({
   },
 });
 
+export type LinuxPackageManager = 'apt' | 'dnf' | 'pacman' | 'zypper';
+
+/** The distribution's package manager (first one found). */
+export const linuxPackageManager = (which: (cmd: string) => boolean): LinuxPackageManager | undefined => {
+  if (which('apt-get')) return 'apt';
+  if (which('dnf')) return 'dnf';
+  if (which('pacman')) return 'pacman';
+  if (which('zypper')) return 'zypper';
+  return undefined;
+};
+
+/** Non-interactive install argv for fixed package names (run as root: pkexec, the macOS prompt or sudo). */
+export const packageInstallArgv = (pm: LinuxPackageManager, pkgs: readonly string[]): string[] => {
+  switch (pm) {
+    case 'apt':
+      return ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', 'install', '-y', '-q', ...pkgs];
+    case 'dnf':
+      return ['dnf', 'install', '-y', ...pkgs];
+    case 'pacman':
+      return ['pacman', '-S', '--noconfirm', '--needed', ...pkgs];
+    case 'zypper':
+      return ['zypper', '--non-interactive', 'install', ...pkgs];
+  }
+};
+
+export type DoctorAction = NonNullable<DoctorCheck['action']>;
+
+const LINUX_TOOLS = {
+  bwrap: { pkg: 'bubblewrap', why: 'which beamhop uses to keep each agent in its folder' },
+  socat: { pkg: 'socat', why: 'which carries the sandbox’s network traffic through beamhop’s proxy' },
+  rg: { pkg: 'ripgrep', why: 'which the sandbox uses to find files it must protect' },
+} as const;
+
+export const APPARMOR_SYSCTL = 'kernel.apparmor_restrict_unprivileged_userns';
+export const APPARMOR_CONF = '/etc/sysctl.d/60-beamhop.conf';
+
+/**
+ * Every fix the sandbox doctor can offer, keyed by action id. Commands are fixed here (package names and
+ * the sysctl are constants); callers look a fix up by id and never run anything a client sent.
+ */
+export const sandboxActions = (
+  overrides: Partial<Pick<ProbeDeps, 'platform' | 'which'>> = {},
+): Record<string, DoctorAction> => {
+  const d = { ...defaultDeps(), ...overrides };
+  if (d.platform !== 'linux') return {};
+  const out: Record<string, DoctorAction> = {};
+  const pm = linuxPackageManager(d.which);
+  if (pm)
+    for (const { pkg, why } of Object.values(LINUX_TOOLS))
+      out[`linux.pkg.${pkg}`] = {
+        id: `linux.pkg.${pkg}`,
+        label: `Install ${pkg}`,
+        summary: `Installs ${pkg}, ${why}.`,
+        admin: true,
+        command: packageInstallArgv(pm, [pkg]),
+      };
+  out['linux.apparmor-userns'] = {
+    id: 'linux.apparmor-userns',
+    label: 'Allow the sandbox',
+    summary:
+      'Lets bubblewrap create its private namespaces. Ubuntu blocks this by default; the change stays after a restart.',
+    admin: true,
+    command: [
+      'sh',
+      '-c',
+      `printf '%s\\n' '${APPARMOR_SYSCTL}=0' > ${APPARMOR_CONF} && sysctl -w ${APPARMOR_SYSCTL}=0`,
+    ],
+  };
+  return out;
+};
+
 const INSTALL_HINT: Record<string, string> = {
   bwrap:
     'Install bubblewrap: `sudo apt install bubblewrap` (Debian/Ubuntu), `sudo dnf install bubblewrap` (Fedora).',
@@ -86,16 +157,17 @@ export const probeSandbox = async (overrides: Partial<ProbeDeps> = {}): Promise<
     ...(ver ? {} : { fix: 'Reinstall beamhop (`npm i -g beamhop`); the sandbox runtime ships with it.' }),
   });
 
+  const actions = sandboxActions({ platform: d.platform, which: d.which });
   if (d.platform === 'linux') {
-    const tools = { bwrap: 'bubblewrap', socat: 'socat', rg: 'ripgrep' } as const;
-    for (const [bin, name] of Object.entries(tools)) {
+    for (const [bin, { pkg }] of Object.entries(LINUX_TOOLS)) {
       const ok = d.which(bin);
+      const action = actions[`linux.pkg.${pkg}`];
       checks.push({
         id: `sandbox.${bin}`,
-        title: name,
+        title: pkg,
         status: ok ? 'ok' : 'fail',
         message: ok ? `${bin} found` : `${bin} not found on PATH`,
-        ...(ok ? {} : { fix: INSTALL_HINT[bin] }),
+        ...(ok ? {} : { fix: INSTALL_HINT[bin], ...(action ? { action } : {}) }),
       });
     }
 
@@ -154,6 +226,7 @@ export const probeSandbox = async (overrides: Partial<ProbeDeps> = {}): Promise<
       ...(restricted && userns.status !== 'ok'
         ? {
             fix: 'Run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` and persist it with `echo kernel.apparmor_restrict_unprivileged_userns=0 | sudo tee /etc/sysctl.d/60-beamhop.conf`.',
+            action: actions['linux.apparmor-userns']!,
           }
         : {}),
     });

@@ -12,7 +12,7 @@ test('the whole journey, with a skipped phone, ends in a verified round trip', a
   await page.getByRole('button', { name: 'Continue · Harnesses' }).click();
 
   await expect(page).toHaveURL(/\/setup\/harnesses/);
-  await expect(page.getByText('codex login')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Log in: Codex' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue · Identity' }).click();
 
   await expect(page.locator('[data-owner="ready"]')).toBeVisible();

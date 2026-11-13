@@ -101,13 +101,13 @@ and the security reviews in [docs/security](docs/security/). Report vulnerabilit
 
 ## What's supported
 
-| Harnesses (auto-discovered)                                                                      | Protocol                                 |
-| ------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| Claude Code                                                                                      | Claude Agent SDK (in-process)            |
-| Codex CLI                                                                                        | `codex app-server` (JSON-RPC)            |
-| pi                                                                                               | `--mode rpc` + approval extension        |
-| Gemini CLI, GitHub Copilot CLI, OpenCode, Cursor CLI, goose, Qwen Code, Auggie, Kimi Code, Cline | ACP                                      |
-| Any other ACP agent                                                                              | `beamhop harness add <id> --acp "<cmd>"` |
+| Harnesses (auto-discovered)                                                    | Protocol                                 |
+| ------------------------------------------------------------------------------ | ---------------------------------------- |
+| Claude Code                                                                    | Claude Agent SDK (in-process)            |
+| Codex CLI                                                                      | `codex app-server` (JSON-RPC)            |
+| pi                                                                             | `--mode rpc` + approval extension        |
+| Gemini CLI, GitHub Copilot CLI, OpenCode, Cursor CLI, Auggie, Kimi Code, Cline | ACP                                      |
+| Any other ACP agent                                                            | `beamhop harness add <id> --acp "<cmd>"` |
 
 | Channels     | Transport (no public URL needed)                             | You provide                                     |
 | ------------ | ------------------------------------------------------------ | ----------------------------------------------- |
