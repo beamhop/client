@@ -58,6 +58,12 @@ importers:
         specifier: ^8.5.12
         version: 8.18.2
 
+  packages/authz:
+    dependencies:
+      '@beamhop/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/broker:
     dependencies:
       '@beamhop/core':
@@ -108,6 +114,18 @@ importers:
       '@beamhop/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/store:
+    dependencies:
+      '@beamhop/core':
+        specifier: workspace:*
+        version: link:../core
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.1
+      zod:
+        specifier: ^4.1.0
+        version: 4.6.7
 
 packages:
 
