@@ -207,6 +207,20 @@ async function run(): Promise<void> {
       if (isSafeExternalUrl(url)) void shell.openExternal(url);
     });
 
+    // The UI blocks unload while an edit is unsaved (beforeunload). Electron would then silently cancel
+    // a quit or reload, so ask here the way a browser would.
+    w.webContents.on('will-prevent-unload', (e) => {
+      const choice = dialog.showMessageBoxSync(w, {
+        type: 'question',
+        buttons: ['Discard changes', 'Keep editing'],
+        defaultId: 1,
+        cancelId: 1,
+        message: 'Discard unsaved changes?',
+        detail: 'An edit in beamhop is not saved yet.',
+      });
+      if (choice === 0) e.preventDefault(); // preventDefault here lets the unload go ahead
+    });
+
     w.on('close', (e) => {
       if (quitting) return;
       // Keep running in the menu bar / tray: agents keep answering while the window is closed.
