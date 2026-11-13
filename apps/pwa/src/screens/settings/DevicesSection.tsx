@@ -121,7 +121,7 @@ export const DevicesSection = () => {
         <EmptyState
           glyph={<DeviceMobile size={32} aria-hidden="true" />}
           title={t('settings.devices.noPairedDevicesYet')}
-          cli="beamhop pair-device"
+          cli="beamhop device pair"
           action={
             <Button
               variant="primary"
@@ -175,7 +175,7 @@ export const DevicesSection = () => {
           </Button>
         </>
       )}
-      <CliStrip command="beamhop pair-device" />
+      <CliStrip command="beamhop device pair" />
 
       <Sheet
         isOpen={pairing}

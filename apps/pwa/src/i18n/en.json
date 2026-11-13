@@ -2416,7 +2416,7 @@
   "unpaired.route.computer": "your computer",
   "unpaired.route.reason": "Not paired yet",
   "unpaired.pair.eyebrow": "Pair with your computer",
-  "unpaired.pair.body": "On the computer: Settings → Devices → Pair a device, or run beamhop pair-device. Scan the QR code or type the 8-character code here, then check the 4 words match.",
+  "unpaired.pair.body": "On the computer: Settings → Devices → Pair a device, or run beamhop device pair. Scan the QR code or type the 8-character code here, then check the 4 words match.",
   "unpaired.local.eyebrow": "On the computer itself",
   "unpaired.local.body": "Run this in a terminal. It opens the control panel with a one-time link, no pairing needed.",
   "unpaired.demo": "Look around with demo data first",

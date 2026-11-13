@@ -123,7 +123,7 @@ const EnterCode = ({ onCode }: { onCode: (code: string) => void }) => {
         </h2>
         <p className="type-body-sm text-ink">{t('pair.where.body')}</p>
         <code className="self-start rounded-sm bg-sunken px-2 py-1 type-meta text-ink">
-          beamhop pair-device
+          beamhop device pair
         </code>
       </section>
     </>

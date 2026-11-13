@@ -234,7 +234,7 @@ export const StepPhone = () => {
       step="phone"
       title={t('setup.setup.pairYourPhone')}
       lede="Approve requests and stop agents from your pocket. The phone gets its own key; your owner key stays here."
-      cli="beamhop pair-device"
+      cli="beamhop device pair"
       primary={{
         label: t('setup.setup.continueAgent'),
         disabled: !paired,
