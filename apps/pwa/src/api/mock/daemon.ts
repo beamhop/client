@@ -667,7 +667,20 @@ export class MockDaemon {
     'schedule.add': (p) => {
       const s = ScheduleConfig.parse({ ...p, id: `sch_${Date.now().toString(36)}` });
       this.state.schedules.push(s);
-      return s;
+      this.audit({
+        agent: s.agent,
+        actor: 'alice',
+        type: 'schedule.added',
+        severity: 'info',
+        summary: `alice added a ${s.kind} schedule to ${s.agent}`,
+      });
+      if (s.kind !== 'webhook') return s;
+      // Webhook secrets are shown once (agents screen). Built at runtime, never a literal.
+      const secret = Array.from(
+        { length: 32 },
+        () => 'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)],
+      ).join('');
+      return { ...s, webhook: { url: `http://127.0.0.1:7878${s.spec}`, secret } };
     },
     'schedule.update': (p) => {
       const i = this.state.schedules.findIndex((s) => s.id === p.id);
