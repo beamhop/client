@@ -11,12 +11,21 @@ import { ScreenStub } from '../../shell/ScreenStub.tsx';
 import { StubList } from '../../shell/StubList.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
 
-const WORD: Record<string, string> = { ready: 'ready', 'needs-login': 'login', 'not-installed': 'not installed', 'unsupported-version': 'unsupported', error: 'error' };
+const WORD: Record<string, string> = {
+  ready: 'ready',
+  'needs-login': 'login',
+  'not-installed': 'not installed',
+  'unsupported-version': 'unsupported',
+  error: 'error',
+};
 
 export const HarnessesScreen = () => {
   const q = useApi('harness.list');
   return (
-    <Screen title="Harnesses" slug={<MetaLine items={['Catalog v2026.11.12', { value: 'signed ✓', tone: 'go' }]} />}>
+    <Screen
+      title="Harnesses"
+      slug={<MetaLine items={['Catalog v2026.11.12', { value: 'signed ✓', tone: 'go' }]} />}
+    >
       <StubList
         label="Harnesses"
         loading={q.isPending}
@@ -31,7 +40,16 @@ export const HarnessesScreen = () => {
         }))}
       />
       <div className="mt-6">
-        <ScreenStub spec="SCREENS §6" owner="src/screens/harnesses/" outline={['Row tap → detail: binary path, supported range, ACP capabilities', 'Install… sheet with package-manager commands', 'REMOTE · fly-ams-1 scans']} cli="beamhop harness scan" />
+        <ScreenStub
+          spec="SCREENS §6"
+          owner="src/screens/harnesses/"
+          outline={[
+            'Row tap → detail: binary path, supported range, ACP capabilities',
+            'Install… sheet with package-manager commands',
+            'REMOTE · fly-ams-1 scans',
+          ]}
+          cli="beamhop harness scan"
+        />
       </div>
     </Screen>
   );

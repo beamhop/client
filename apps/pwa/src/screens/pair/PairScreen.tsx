@@ -10,15 +10,26 @@ import { Wordmark } from '../../shell/Wordmark.tsx';
 import { QrCode } from '../../ui/QrCode.tsx';
 
 export const PairScreen = () => (
-  <div className="mx-auto flex min-h-svh max-w-[560px] flex-col gap-6 px-gutter pt-[calc(var(--bh-safe-top)+24px)] pb-10" id="bh-main-content">
+  <div
+    className="mx-auto flex min-h-svh max-w-[560px] flex-col gap-6 px-gutter pt-[calc(var(--bh-safe-top)+24px)] pb-10"
+    id="bh-main-content"
+  >
     <Wordmark />
     <h1 className="type-title-1 text-ink">Pair with your computer</h1>
-    <p className="type-body text-ink-2">Scan the code that <code className="font-mono text-[0.875em] text-ink">beamhop pair-device</code> shows, or enter the 8-character code.</p>
+    <p className="type-body text-ink-2">
+      Scan the code that <code className="font-mono text-[0.875em] text-ink">beamhop pair-device</code> shows,
+      or enter the 8-character code.
+    </p>
     <QrCode value="https://app.beamhop.dev/pair#demo" label="Example pairing QR code" size={200} />
     <ScreenStub
       spec="JOURNEYS §9"
       owner="src/screens/pair/"
-      outline={['Device name + 4-word safety phrase', 'Confirm happens on the computer (trusted side)', 'Install sheet (iOS instructions / Android prompt)', 'Push permission after a purpose pre-prompt']}
+      outline={[
+        'Device name + 4-word safety phrase',
+        'Confirm happens on the computer (trusted side)',
+        'Install sheet (iOS instructions / Android prompt)',
+        'Push permission after a purpose pre-prompt',
+      ]}
     />
   </div>
 );

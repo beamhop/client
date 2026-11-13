@@ -121,7 +121,8 @@ export const SwipeAction = ({
     const dx = info.offset.x;
     const vx = info.velocity.x;
     const far = Math.abs(dx) >= w * COMMIT_RATIO;
-    const fling = Math.abs(vx) >= FLING_VELOCITY && Math.abs(dx) >= w * FLING_RATIO && Math.sign(vx) === Math.sign(dx);
+    const fling =
+      Math.abs(vx) >= FLING_VELOCITY && Math.abs(dx) >= w * FLING_RATIO && Math.sign(vx) === Math.sign(dx);
     if (far || fling) commit(dx > 0 ? 'right' : 'left', vx);
     else void animate(x, 0, reduce ? reduced : spring.settle);
   };
@@ -140,7 +141,9 @@ export const SwipeAction = ({
     }
   };
 
-  const tint = useTransform(x, (v) => (v > 0 ? 'var(--bh-go-wash)' : v < 0 ? 'var(--bh-stop-wash)' : 'transparent'));
+  const tint = useTransform(x, (v) =>
+    v > 0 ? 'var(--bh-go-wash)' : v < 0 ? 'var(--bh-stop-wash)' : 'transparent',
+  );
   const hintId = useRef(`swipe-hint-${Math.random().toString(36).slice(2, 8)}`).current;
 
   return (

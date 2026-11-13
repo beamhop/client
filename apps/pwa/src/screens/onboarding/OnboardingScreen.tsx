@@ -14,7 +14,14 @@ import { LinkButton } from '../../ui/Button.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 
 export const SETUP_STEPS = ['doctor', 'harnesses', 'identity', 'phone', 'agent', 'hello'] as const;
-const LABEL: Record<string, string> = { doctor: 'Doctor', harnesses: 'Harnesses', identity: 'Identity', phone: 'Phone', agent: 'Agent', hello: 'Hello' };
+const LABEL: Record<string, string> = {
+  doctor: 'Doctor',
+  harnesses: 'Harnesses',
+  identity: 'Identity',
+  phone: 'Phone',
+  agent: 'Agent',
+  hello: 'Hello',
+};
 
 export const OnboardingScreen = () => {
   const { step } = useParams({ strict: false }) as { step: string };
@@ -30,7 +37,12 @@ export const OnboardingScreen = () => {
       <ScreenStub
         spec={`JOURNEYS §1.0${i + 1}`}
         owner="src/screens/onboarding/"
-        outline={['Doctor rows resolve live with fixes', 'Harness scan · Identity key · Pair phone (QR + safety phrase)', 'First agent with exposure summary', 'Hello round-trip over 3 relays']}
+        outline={[
+          'Doctor rows resolve live with fixes',
+          'Harness scan · Identity key · Pair phone (QR + safety phrase)',
+          'First agent with exposure summary',
+          'Hello round-trip over 3 relays',
+        ]}
         calls={i === 0 ? [{ method: 'system.doctor' }] : [{ method: 'harness.list' }]}
         cli="npx beamhop"
       />
@@ -46,7 +58,12 @@ export const OnboardingScreen = () => {
       <div className="grid min-h-svh grid-cols-[280px_1fr]">
         <aside className="border-r border-line px-6 py-6">
           <Wordmark />
-          <Stepper className="mt-10" orientation="vertical" steps={SETUP_STEPS.map((s) => LABEL[s]!)} current={i} />
+          <Stepper
+            className="mt-10"
+            orientation="vertical"
+            steps={SETUP_STEPS.map((s) => LABEL[s]!)}
+            current={i}
+          />
         </aside>
         <div className="max-w-[640px] px-10 py-16" id="bh-main-content">
           {body}

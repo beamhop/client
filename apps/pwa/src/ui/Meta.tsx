@@ -9,7 +9,17 @@ import { cx } from '../lib/cx.ts';
 import { middleTruncate } from '../lib/format.ts';
 
 /** 28×28 monogram tile (DESIGN §7). Decorative: the provider name is always next to it in text. */
-export const LetterTile = ({ code, size = 28, tone = 'sunken', className }: { code: string; size?: number; tone?: 'sunken' | 'ink' | 'flare'; className?: string }) => (
+export const LetterTile = ({
+  code,
+  size = 28,
+  tone = 'sunken',
+  className,
+}: {
+  code: string;
+  size?: number;
+  tone?: 'sunken' | 'ink' | 'flare';
+  className?: string;
+}) => (
   <span
     aria-hidden="true"
     className={cx(
@@ -25,7 +35,9 @@ export const LetterTile = ({ code, size = 28, tone = 'sunken', className }: { co
   </span>
 );
 
-export type MetaItem = string | { value: string; truncate?: number; title?: string; tone?: 'ink' | 'flare' | 'caution' | 'stop' | 'go' };
+export type MetaItem =
+  | string
+  | { value: string; truncate?: number; title?: string; tone?: 'ink' | 'flare' | 'caution' | 'stop' | 'go' };
 
 const TONE: Record<string, string> = {
   ink: 'text-ink',
@@ -36,14 +48,23 @@ const TONE: Record<string, string> = {
 };
 
 /** One mono line of metadata, ` · ` separated, long values middle-truncated (DESIGN §3.4). */
-export const MetaLine = ({ items, className, as: As = 'p' }: { items: Array<MetaItem | false | null | undefined>; className?: string; as?: 'p' | 'span' | 'div' }) => {
+export const MetaLine = ({
+  items,
+  className,
+  as: As = 'p',
+}: {
+  items: Array<MetaItem | false | null | undefined>;
+  className?: string;
+  as?: 'p' | 'span' | 'div';
+}) => {
   const list = items.filter(Boolean) as MetaItem[];
   return (
-    <As className={cx('type-meta text-ink-2 min-w-0 truncate', className)}>
+    <As className={cx('relative type-meta text-ink-2 min-w-0 truncate', className)}>
       {list.map((it, i) => {
         const v = typeof it === 'string' ? { value: it } : it;
         const shown = v.truncate ? middleTruncate(v.value, v.truncate) : v.value;
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: values may repeat; position is identity
           <Fragment key={`${v.value}-${i}`}>
             {i > 0 && <span aria-hidden="true"> · </span>}
             {i > 0 && <span className="sr-only">, </span>}
@@ -58,11 +79,23 @@ export const MetaLine = ({ items, className, as: As = 'p' }: { items: Array<Meta
 };
 
 /** Dot-matrix readout (DESIGN §3.7). One per screen at most. */
-export const Readout = ({ children, className, tone = 'ink', size = 'lg' }: { children: ReactNode; className?: string; tone?: 'ink' | 'caution' | 'stop' | 'flare'; size?: 'lg' | 'md' }) => (
+export const Readout = ({
+  children,
+  className,
+  tone = 'ink',
+  size = 'lg',
+}: {
+  children: ReactNode;
+  className?: string;
+  tone?: 'ink' | 'caution' | 'stop' | 'flare';
+  size?: 'lg' | 'md';
+}) => (
   <span
     className={cx(
       size === 'lg' ? 'type-readout' : 'font-display text-[28px] leading-7 font-bold tabular-nums',
-      { ink: 'text-ink', caution: 'text-caution-text', stop: 'text-stop-text', flare: 'text-flare-text' }[tone],
+      { ink: 'text-ink', caution: 'text-caution-text', stop: 'text-stop-text', flare: 'text-flare-text' }[
+        tone
+      ],
       className,
     )}
   >
@@ -99,7 +132,10 @@ export const Eyebrow = ({
     <div className={cx('flex min-h-11 items-center justify-between gap-3', className)}>
       <H id={id} className="type-micro text-ink-2">
         {href ? (
-          <Link href={href} className="inline-flex min-h-11 items-center gap-2 text-ink-2 outline-none hover:text-ink data-[focus-visible]:outline-2">
+          <Link
+            href={href}
+            className="inline-flex min-h-11 items-center gap-2 text-ink-2 outline-none hover:text-ink data-[focus-visible]:outline-2"
+          >
             {text}
             <ArrowRight size={14} aria-hidden="true" />
           </Link>
@@ -115,7 +151,15 @@ export const Eyebrow = ({
 export type BadgeTone = 'neutral' | 'flare' | 'go' | 'stop' | 'caution' | 'outline';
 
 /** Small rectangular tag (`radius-sm`, micro). For risk tiers, `this device`, `demo`… */
-export const Badge = ({ children, tone = 'neutral', className }: { children: ReactNode; tone?: BadgeTone; className?: string }) => (
+export const Badge = ({
+  children,
+  tone = 'neutral',
+  className,
+}: {
+  children: ReactNode;
+  tone?: BadgeTone;
+  className?: string;
+}) => (
   <span
     className={cx(
       'bh-chip inline-flex h-5 items-center gap-1 rounded-sm px-1.5 type-micro whitespace-nowrap',
@@ -133,7 +177,15 @@ export const Badge = ({ children, tone = 'neutral', className }: { children: Rea
 );
 
 /** Count badge (flare fill, mono 11, min 18px, pill) — tab bar Inbox. */
-export const CountBadge = ({ count, label, className }: { count: number; label?: string; className?: string }) =>
+export const CountBadge = ({
+  count,
+  label,
+  className,
+}: {
+  count: number;
+  label?: string;
+  className?: string;
+}) =>
   count > 0 ? (
     <span
       className={cx(
@@ -141,8 +193,8 @@ export const CountBadge = ({ count, label, className }: { count: number; label?:
         className,
       )}
     >
-      <span aria-hidden={label ? 'true' : undefined}>{count > 99 ? '99+' : count}</span>
-      {label && <span className="sr-only">{label}</span>}
+      {count > 99 ? '99+' : count}
+      {label && <span className="sr-only"> {label}</span>}
     </span>
   ) : null;
 

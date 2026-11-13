@@ -66,10 +66,8 @@ export const AppShell = () => {
   const wide = useWide();
   const matches = useMatches();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const flags = matches.reduce<{ chrome?: string; hideTabBar?: boolean; hideInboxRail?: boolean }>(
-    (acc, m) => ({ ...acc, ...(m.staticData ?? {}) }),
-    {},
-  );
+  const flags: { chrome?: string; hideTabBar?: boolean; hideInboxRail?: boolean } = {};
+  for (const m of matches) Object.assign(flags, m.staticData ?? {});
   const [collapsed, setCollapsed] = useState(() => readBool('bh.sidebar.collapsed'));
   const [railHidden, setRailHidden] = useState(() => readBool('bh.inboxRail.hidden'));
   const { open: openPanic } = usePanicSheet();

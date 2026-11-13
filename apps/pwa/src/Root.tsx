@@ -4,8 +4,8 @@
  */
 import { type NavigateOptions, type ToOptions, useRouter } from '@tanstack/react-router';
 import { RouterProvider as AriaRouterProvider } from 'react-aria-components';
-import { PanicProvider } from './shell/panic.tsx';
 import { AppShell } from './shell/AppShell.tsx';
+import { PanicProvider } from './shell/panic.tsx';
 import { ToastProvider } from './ui/Toast.tsx';
 
 declare module 'react-aria-components' {

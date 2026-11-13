@@ -3,18 +3,25 @@
  */
 import { forwardRef, type ReactNode } from 'react';
 import {
+  OverlayArrow,
   Button as RACButton,
   type ButtonProps as RACButtonProps,
   Link as RACLink,
   type LinkProps as RACLinkProps,
-  OverlayArrow,
   Tooltip,
   TooltipTrigger,
 } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { HopMeter } from './glyphs/index.tsx';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'allow' | 'deny' | 'destructive' | 'destructive-outline';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'quiet'
+  | 'allow'
+  | 'deny'
+  | 'destructive'
+  | 'destructive-outline';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT: Record<ButtonVariant, string> = {
@@ -22,13 +29,15 @@ const VARIANT: Record<ButtonVariant, string> = {
     'bg-flare text-on-flare data-[hovered]:bg-[color-mix(in_oklch,var(--bh-flare),var(--bh-ink)_6%)] data-[pressed]:bg-[color-mix(in_oklch,var(--bh-flare),var(--bh-ink)_12%)]',
   secondary:
     'bg-surface text-ink border border-line-strong data-[hovered]:bg-sunken data-[pressed]:bg-[color-mix(in_oklch,var(--bh-sunken),var(--bh-ink)_6%)]',
-  quiet: 'bg-transparent text-ink px-3! data-[hovered]:underline underline-offset-[3px] data-[pressed]:bg-sunken',
+  quiet:
+    'bg-transparent text-ink px-3! data-[hovered]:underline underline-offset-[3px] data-[pressed]:bg-sunken',
   allow:
     'bg-go text-on-go data-[hovered]:bg-[color-mix(in_oklch,var(--bh-go),var(--bh-ink)_8%)] data-[pressed]:bg-[color-mix(in_oklch,var(--bh-go),var(--bh-ink)_14%)]',
   deny: 'bg-surface text-stop-text border-[1.5px] border-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
   destructive:
     'bg-stop text-on-stop data-[hovered]:bg-[color-mix(in_oklch,var(--bh-stop),var(--bh-ink)_8%)] data-[pressed]:bg-[color-mix(in_oklch,var(--bh-stop),var(--bh-ink)_14%)]',
-  'destructive-outline': 'bg-transparent text-stop-text border border-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
+  'destructive-outline':
+    'bg-transparent text-stop-text border border-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
 };
 
 const SIZE: Record<ButtonSize, string> = {
@@ -65,7 +74,20 @@ export interface ButtonProps extends Omit<RACButtonProps, 'className' | 'childre
  * (RAC `isPending` keeps the button focusable and announces progress).
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'secondary', size = 'md', icon, trailing, fullWidth, className, children, isPending, ...rest }, ref) => (
+  (
+    {
+      variant = 'secondary',
+      size = 'md',
+      icon,
+      trailing,
+      fullWidth,
+      className,
+      children,
+      isPending,
+      ...rest
+    },
+    ref,
+  ) => (
     <RACButton
       ref={ref}
       {...rest}
@@ -73,7 +95,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       aria-busy={isPending || undefined}
       className={buttonClass(variant, size, cx(fullWidth && 'w-full', className))}
     >
-      <span className={cx('inline-flex items-center gap-[inherit]', isPending && 'invisible')}>
+      <span className={cx('inline-flex items-center gap-[inherit]', isPending && 'opacity-0')}>
         {icon}
         {children}
         {trailing}
@@ -112,8 +134,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
           'data-[disabled]:opacity-45',
           variant === 'ghost' && 'data-[hovered]:bg-sunken data-[pressed]:bg-sunken',
           variant === 'secondary' && 'border border-line-strong bg-surface data-[hovered]:bg-sunken',
-          variant === 'destructive' && 'bg-stop text-on-stop data-[pressed]:bg-[color-mix(in_oklch,var(--bh-stop),var(--bh-ink)_14%)]',
-          variant === 'destructive-ghost' && 'text-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
+          variant === 'destructive' &&
+            'bg-stop text-on-stop data-[pressed]:bg-[color-mix(in_oklch,var(--bh-stop),var(--bh-ink)_14%)]',
+          variant === 'destructive-ghost' &&
+            'text-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
           className,
         )}
       >
@@ -152,20 +176,39 @@ export interface LinkButtonProps extends Omit<RACLinkProps, 'className' | 'child
 }
 
 /** A navigation that looks like a button (e.g. `+ New agent`). Uses the router via RAC RouterProvider. */
-export const LinkButton = ({ variant = 'secondary', size = 'md', icon, fullWidth, className, children, ...rest }: LinkButtonProps) => (
-  <RACLink {...rest} className={buttonClass(variant, size, cx(fullWidth && 'w-full', 'no-underline', className))}>
+export const LinkButton = ({
+  variant = 'secondary',
+  size = 'md',
+  icon,
+  fullWidth,
+  className,
+  children,
+  ...rest
+}: LinkButtonProps) => (
+  <RACLink
+    {...rest}
+    className={buttonClass(variant, size, cx(fullWidth && 'w-full', 'no-underline', className))}
+  >
     {icon}
     {children}
   </RACLink>
 );
 
 /** Inline text link (DESIGN §9.1). External links get ↗ and open in a new tab. */
-export const TextLink = ({ children, className, external, ...rest }: RACLinkProps & { external?: boolean; className?: string; children?: ReactNode }) => (
+export const TextLink = ({
+  children,
+  className,
+  external,
+  ...rest
+}: RACLinkProps & { external?: boolean; className?: string; children?: ReactNode }) => (
   <RACLink
     {...rest}
     target={external ? '_blank' : rest.target}
     rel={external ? 'noopener noreferrer' : rest.rel}
-    className={cx('text-ink underline decoration-1 underline-offset-[3px] data-[hovered]:decoration-2', className)}
+    className={cx(
+      'text-ink underline decoration-1 underline-offset-[3px] data-[hovered]:decoration-2',
+      className,
+    )}
   >
     {children}
     {external && (

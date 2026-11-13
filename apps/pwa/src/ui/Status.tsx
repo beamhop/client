@@ -44,7 +44,10 @@ export interface StatusDotProps {
 export const StatusDot = ({ state, label, hideLabel, className }: StatusDotProps) => {
   const word = label ?? LAMP_WORD[state];
   return (
-    <span className={cx('inline-flex items-center gap-1.5 type-meta whitespace-nowrap', className)} data-state={state}>
+    <span
+      className={cx('inline-flex items-center gap-1.5 type-meta whitespace-nowrap', className)}
+      data-state={state}
+    >
       <Lamp state={state} />
       <span className={cx(hideLabel ? 'sr-only' : WORD_COLOR[state])}>{word}</span>
     </span>
@@ -66,7 +69,13 @@ export interface SignalBarsProps {
 
 /** Hop meter + mono number: `▂▄▆█ 3/4 relays`. A number beside every meter (DESIGN §2). */
 export const SignalBars = ({ up, total, unit, limit, busy, hideNumber, className }: SignalBarsProps) => (
-  <span className={cx('inline-flex items-center gap-2 type-meta tabular-nums', limit ? 'text-caution-text' : 'text-ink-2', className)}>
+  <span
+    className={cx(
+      'inline-flex items-center gap-2 type-meta tabular-nums',
+      limit ? 'text-caution-text' : 'text-ink-2',
+      className,
+    )}
+  >
     <HopMeter up={up} total={total} tone={limit ? 'caution' : 'ink'} busy={busy} />
     <span className={hideNumber ? 'sr-only' : undefined}>
       {up}/{total}
@@ -90,7 +99,16 @@ export interface SegmentedMeterProps {
 }
 
 /** 10-segment VU-style meter for budgets (DESIGN §3.5). */
-export const SegmentedMeter = ({ value, max, label, valueText, name, segments = 10, className, compact }: SegmentedMeterProps) => {
+export const SegmentedMeter = ({
+  value,
+  max,
+  label,
+  valueText,
+  name,
+  segments = 10,
+  className,
+  compact,
+}: SegmentedMeterProps) => {
   const pct = max > 0 ? value / max : 0;
   const filled = Math.min(segments, Math.round(pct * segments));
   const fill = pct >= 1 ? 'bg-stop' : pct >= 0.8 ? 'bg-caution-text' : 'bg-ink';
@@ -110,7 +128,12 @@ export const SegmentedMeter = ({ value, max, label, valueText, name, segments = 
           <span key={i} className={cx('h-1.5 flex-1 rounded-[1px]', i < filled ? fill : 'bg-line')} />
         ))}
       </div>
-      <span className={cx('type-meta whitespace-nowrap tabular-nums', pct >= 1 ? 'text-stop-text' : pct >= 0.8 ? 'text-caution-text' : 'text-ink-2')}>
+      <span
+        className={cx(
+          'type-meta whitespace-nowrap tabular-nums',
+          pct >= 1 ? 'text-stop-text' : pct >= 0.8 ? 'text-caution-text' : 'text-ink-2',
+        )}
+      >
         {label}
       </span>
     </div>
@@ -141,7 +164,12 @@ const NodeMark = ({ kind, filled }: { kind: RouteNode['kind']; filled?: boolean 
   kind === 'channel' || kind === 'device' ? (
     <span className={cx('size-2 shrink-0 border border-ink', filled ? 'bg-flare' : 'bg-ink')} />
   ) : kind === 'agent' ? (
-    <span className={cx('size-2.5 shrink-0 rounded-full border-[1.5px] border-ink', filled ? 'bg-flare' : 'bg-surface')} />
+    <span
+      className={cx(
+        'size-2.5 shrink-0 rounded-full border-[1.5px] border-ink',
+        filled ? 'bg-flare' : 'bg-surface',
+      )}
+    />
   ) : (
     <span className="size-1.5 shrink-0 rounded-full bg-ink-2" />
   );
@@ -150,7 +178,16 @@ const NodeMark = ({ kind, filled }: { kind: RouteNode['kind']; filled?: boolean 
  * Beam line between named nodes. `nostr:dm ──●── reviewer`. The pulse is a 16px flare segment;
  * with reduced motion the destination node fills for 400 ms instead (DESIGN §3.1).
  */
-export const RouteLine = ({ nodes, pulse = 0, reverse, live, state = 'ok', reason, className, ...aria }: RouteLineProps) => {
+export const RouteLine = ({
+  nodes,
+  pulse = 0,
+  reverse,
+  live,
+  state = 'ok',
+  reason,
+  className,
+  ...aria
+}: RouteLineProps) => {
   const reduce = useReduced();
   const [pulses, setPulses] = useState<number[]>([]);
   const [flash, setFlash] = useState(false);
@@ -183,24 +220,35 @@ export const RouteLine = ({ nodes, pulse = 0, reverse, live, state = 'ok', reaso
   const dest = reverse ? 0 : nodes.length - 1;
   return (
     <div className={cx('min-w-0', className)}>
-      <div role="img" aria-label={`Route: ${label}${state === 'broken' ? ', broken' : state === 'blocked' ? ', blocked by policy' : ''}`} className="flex min-w-0 items-center gap-2 type-meta text-ink-2">
+      <div
+        role="img"
+        aria-label={`Route: ${label}${state === 'broken' ? ', broken' : state === 'blocked' ? ', blocked by policy' : ''}`}
+        className="flex min-w-0 items-center gap-2 type-meta text-ink-2"
+      >
         {nodes.map((n, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: labels may repeat; position is identity
           <Fragment key={`${n.label}-${i}`}>
             {i > 0 && (
               <span className="relative flex h-3 min-w-6 flex-1 items-center" aria-hidden="true">
                 <span
                   className={cx(
                     'h-px w-full',
-                    state === 'broken' ? 'border-t border-dashed border-stop-text bg-transparent' : 'bg-line-strong',
+                    state === 'broken'
+                      ? 'border-t border-dashed border-stop-text bg-transparent'
+                      : 'bg-line-strong',
                   )}
                   style={state === 'broken' ? { borderTopStyle: 'dashed' } : undefined}
                 />
                 {nodes.length === 2 && state === 'ok' && (
                   <span className="absolute left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-ink-2" />
                 )}
-                {state === 'blocked' && i === nodes.length - 1 && <span className="absolute right-0 h-3 w-[2px] bg-caution-text" />}
+                {state === 'blocked' && i === nodes.length - 1 && (
+                  <span className="absolute right-0 h-3 w-[2px] bg-caution-text" />
+                )}
                 {state === 'broken' && i === nodes.length - 1 && (
-                  <span className="absolute left-1/2 -translate-x-1/2 bg-bg px-0.5 font-mono text-[10px] leading-none text-stop-text">✕</span>
+                  <span className="absolute left-1/2 -translate-x-1/2 bg-bg px-0.5 font-mono text-[10px] leading-none text-stop-text">
+                    ✕
+                  </span>
                 )}
                 <AnimatePresence>
                   {pulses.map((id) => (
@@ -224,7 +272,9 @@ export const RouteLine = ({ nodes, pulse = 0, reverse, live, state = 'ok', reaso
         ))}
       </div>
       {reason && state !== 'ok' && (
-        <p className={cx('mt-1 type-meta', state === 'broken' ? 'text-stop-text' : 'text-caution-text')}>{reason}</p>
+        <p className={cx('mt-1 type-meta', state === 'broken' ? 'text-stop-text' : 'text-caution-text')}>
+          {reason}
+        </p>
       )}
     </div>
   );

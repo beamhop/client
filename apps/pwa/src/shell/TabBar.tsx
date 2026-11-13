@@ -30,18 +30,32 @@ export const TabBar = () => {
               <Link
                 to={item.to}
                 aria-current={active ? 'page' : undefined}
-                aria-label={isInbox && pending > 0 ? `${item.label}, ${t('inbox.badge', { count: pending })}` : undefined}
                 className={cx(
                   'relative flex h-full flex-col items-center justify-center gap-0.5 rounded-md outline-none',
                   active ? 'text-ink' : 'text-ink-2',
                 )}
               >
-                <span aria-hidden="true" className={cx('absolute top-0 h-0.5 w-5 rounded-b-[1px]', active ? 'bg-flare' : 'bg-transparent')} />
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'absolute top-0 h-0.5 w-5 rounded-b-[1px]',
+                    active ? 'bg-flare' : 'bg-transparent',
+                  )}
+                />
                 <span className="relative">
                   <Icon size={24} weight={active ? 'bold' : 'regular'} aria-hidden="true" />
-                  {isInbox && <CountBadge count={pending} className="absolute -top-1.5 -right-3" />}
+                  {isInbox && (
+                    <CountBadge
+                      count={pending}
+                      label={pending === 1 ? 'approval waiting,' : 'approvals waiting,'}
+                      className="absolute -top-1.5 -right-3"
+                    />
+                  )}
                 </span>
-                <span className="text-[11px] leading-[14px] font-medium" style={{ fontVariationSettings: '"wdth" 90' }}>
+                <span
+                  className="text-[11px] leading-[14px] font-medium"
+                  style={{ fontVariationSettings: '"wdth" 90' }}
+                >
                   {item.label}
                 </span>
               </Link>

@@ -9,7 +9,15 @@ import { cx } from '../../lib/cx.ts';
 type G = SVGProps<SVGSVGElement> & { size?: number };
 
 /** Status lamp, 10px (DESIGN §3.3). Colour lives here so shape and colour never drift apart. */
-export const Lamp = ({ state, size = 10, className }: { state: LampState; size?: number; className?: string }) => {
+export const Lamp = ({
+  state,
+  size = 10,
+  className,
+}: {
+  state: LampState;
+  size?: number;
+  className?: string;
+}) => {
   const color: Record<LampState, string> = {
     live: 'text-flare-text dark:text-flare',
     ready: 'text-go',
@@ -33,7 +41,15 @@ export const Lamp = ({ state, size = 10, className }: { state: LampState; size?:
         {state === 'live' && (
           <>
             <circle cx="5" cy="5" r="3.2" fill="currentColor" />
-            <circle cx="5" cy="5" r="4.4" fill="none" stroke="currentColor" strokeOpacity="0.45" strokeWidth="1" />
+            <circle
+              cx="5"
+              cy="5"
+              r="4.4"
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity="0.45"
+              strokeWidth="1"
+            />
           </>
         )}
         {state === 'ready' && <circle cx="5" cy="5" r="4" fill="currentColor" />}
@@ -49,11 +65,23 @@ export const Lamp = ({ state, size = 10, className }: { state: LampState; size?:
             <rect x="6" y="1.5" width="2" height="7" fill="currentColor" />
           </>
         )}
-        {state === 'stopped' && <circle cx="5" cy="5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.5" />}
-        {(state === 'error' || state === 'offline') && <rect x="1.5" y="1.5" width="7" height="7" fill="currentColor" />}
+        {state === 'stopped' && (
+          <circle cx="5" cy="5" r="3.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+        )}
+        {(state === 'error' || state === 'offline') && (
+          <rect x="1.5" y="1.5" width="7" height="7" fill="currentColor" />
+        )}
         {state === 'panic' && (
           <>
-            <rect x="1.25" y="1.25" width="7.5" height="7.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <rect
+              x="1.25"
+              y="1.25"
+              width="7.5"
+              height="7.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
             <path d="M1.5 6.5 L6.5 1.5 M3.5 8.5 L8.5 3.5" stroke="currentColor" strokeWidth="1.1" />
           </>
         )}
@@ -80,9 +108,17 @@ export const HopMeter = ({
 }) => {
   const n = Math.max(1, Math.min(5, total));
   const heights = BAR_HEIGHTS.slice(5 - n);
-  const fill = { ink: 'bg-ink', caution: 'bg-caution-text', stop: 'bg-stop-text', flare: 'bg-flare-text dark:bg-flare' }[tone];
+  const fill = {
+    ink: 'bg-ink',
+    caution: 'bg-caution-text',
+    stop: 'bg-stop-text',
+    flare: 'bg-flare-text dark:bg-flare',
+  }[tone];
   return (
-    <span aria-hidden="true" className={cx('inline-flex h-4 items-end gap-[2px]', busy && 'hop-busy', className)}>
+    <span
+      aria-hidden="true"
+      className={cx('inline-flex h-4 items-end gap-[2px]', busy && 'hop-busy', className)}
+    >
       {heights.map((h, i) => (
         <span
           // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length decorative bars
@@ -112,7 +148,11 @@ export const Hatch = ({ className }: { className?: string }) => (
 
 /** The carrier square from the wordmark. */
 export const CarrierMark = ({ size = 8, className }: { size?: number; className?: string }) => (
-  <span aria-hidden="true" className={cx('inline-block bg-flare-text dark:bg-flare', className)} style={{ width: size, height: size }} />
+  <span
+    aria-hidden="true"
+    className={cx('inline-block bg-flare-text dark:bg-flare', className)}
+    style={{ width: size, height: size }}
+  />
 );
 
 /** Beam glyph for empty states: node ── node ── node (32px tall). */

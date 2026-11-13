@@ -24,15 +24,33 @@ export const ChannelWizardScreen = () => {
       back={{ href: '/channels/add', label: 'Add a channel' }}
       pane="detail"
       maxWidth="form"
-      crumbs={[{ label: 'Channels', href: '/channels' }, { label: 'Add', href: '/channels/add' }, { label: name }]}
-      titleAside={<span className="type-meta text-ink-2">{i + 1} / {WIZARD_STEPS.length}</span>}
+      crumbs={[
+        { label: 'Channels', href: '/channels' },
+        { label: 'Add', href: '/channels/add' },
+        { label: name },
+      ]}
+      titleAside={
+        <span className="type-meta text-ink-2">
+          {i + 1} / {WIZARD_STEPS.length}
+        </span>
+      }
     >
       <div className="flex flex-col gap-6">
-        <Stepper steps={WIZARD_STEPS} current={i} orientation={expanded ? 'horizontal' : 'horizontal'} showLabels={expanded} />
+        <Stepper
+          steps={WIZARD_STEPS}
+          current={i}
+          orientation={expanded ? 'horizontal' : 'horizontal'}
+          showLabels={expanded}
+        />
         <ScreenStub
           spec={`JOURNEYS §4 ${name} · step ${String(i + 1).padStart(2, '0')} ${WIZARD_STEPS[i]}`}
           owner="src/screens/channels/"
-          outline={['Create: deep link to the provider + copyable script', 'Credentials: SecretField with live format check', 'Validate / Connect resolve in place', 'Pair: deep link + code (Doto) · Join: chats, roles, triggers']}
+          outline={[
+            'Create: deep link to the provider + copyable script',
+            'Credentials: SecretField with live format check',
+            'Validate / Connect resolve in place',
+            'Pair: deep link + code (Doto) · Join: chats, roles, triggers',
+          ]}
           cli={`beamhop channel add ${provider}`}
         />
       </div>

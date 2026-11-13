@@ -16,7 +16,10 @@ export const StatusStrip = () => {
   const { panic } = usePanicState();
   const s = status.data;
   return (
-    <div className="flex h-8 shrink-0 items-center gap-4 border-b border-line px-8 type-micro text-ink-3" data-status-strip="">
+    <div
+      className="flex h-8 shrink-0 items-center gap-4 border-b border-line px-8 type-micro text-ink-3"
+      data-status-strip=""
+    >
       <span className="flex items-center gap-2">
         <span className="text-ink-2">beamhopd {s?.version ?? '—'}</span>
         <span aria-hidden="true">·</span>
@@ -29,14 +32,21 @@ export const StatusStrip = () => {
         )}
       </span>
       <span className="flex items-center gap-2">
-        <StatusDot state={offline ? 'offline' : panic ? 'panic' : 'ready'} label={offline ? 'link down' : panic ? 'stopped by panic' : 'link up'} />
+        <StatusDot
+          state={offline ? 'offline' : panic ? 'panic' : 'ready'}
+          label={offline ? 'link down' : panic ? 'stopped by panic' : 'link up'}
+        />
       </span>
       {relays && (
         <span>
           relays {relays.up}/{relays.total}
         </span>
       )}
-      {s && <span>{s.agents} agents · {s.channels} channels · {s.pendingApprovals} pending</span>}
+      {s && (
+        <span>
+          {s.agents} agents · {s.channels} channels · {s.pendingApprovals} pending
+        </span>
+      )}
       <span className="ml-auto flex items-center gap-3">
         {conn.kind === 'mock' && <Badge tone="flare">demo data</Badge>}
         <span className="flex items-center gap-1 normal-case tracking-normal">

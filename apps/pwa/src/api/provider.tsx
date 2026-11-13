@@ -9,7 +9,15 @@
 import { type BeamhopClient, createClient, type Transport, wsTransport } from '@beamhop/client';
 import type { ServerEvent } from '@beamhop/core';
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ConnectionConfig, ConnectionStatus } from './connection.ts';
 import { applyServerEvent } from './events.ts';
 import { createMockTransport, type MockTransport } from './mock/index.ts';

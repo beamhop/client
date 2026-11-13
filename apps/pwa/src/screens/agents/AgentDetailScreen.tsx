@@ -14,7 +14,15 @@ import { Tabs } from '../../ui/Choice.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { SegmentedMeter, StatusDot } from '../../ui/Status.tsx';
 
-export const AGENT_SECTIONS = ['overview', 'setup', 'sandbox', 'channels', 'schedules', 'budgets', 'identity'] as const;
+export const AGENT_SECTIONS = [
+  'overview',
+  'setup',
+  'sandbox',
+  'channels',
+  'schedules',
+  'budgets',
+  'identity',
+] as const;
 
 export const AgentDetailScreen = () => {
   const { name, section = 'overview' } = useParams({ strict: false }) as { name: string; section?: string };
@@ -26,7 +34,11 @@ export const AgentDetailScreen = () => {
       title={name}
       back={{ href: '/agents', label: 'Agents' }}
       pane="detail"
-      crumbs={[{ label: 'Agents', href: '/agents' }, { label: name, href: `/agents/${name}` }, { label: section[0]!.toUpperCase() + section.slice(1) }]}
+      crumbs={[
+        { label: 'Agents', href: '/agents' },
+        { label: name, href: `/agents/${name}` },
+        { label: section[0]!.toUpperCase() + section.slice(1) },
+      ]}
       slug={
         a && (
           <div className="flex flex-col gap-2">
@@ -35,9 +47,17 @@ export const AgentDetailScreen = () => {
               <StatusDot state={agentLamp(a)} />
               <span className="type-meta text-ink-2">· {a.location.kind}</span>
             </div>
-            <MetaLine items={[{ value: a.config.identity.npub ?? 'no npub', truncate: 16 }, a.config.identity.nip05]} />
+            <MetaLine
+              items={[{ value: a.config.identity.npub ?? 'no npub', truncate: 16 }, a.config.identity.nip05]}
+            />
             {budget > 0 && (
-              <SegmentedMeter name={`${name} budget today`} value={a.usageToday.usd} max={budget} label={`${usd(a.usageToday.usd)} / ${usd(budget)} today`} valueText={`${usd(a.usageToday.usd)} of ${usd(budget)} used today`} />
+              <SegmentedMeter
+                name={`${name} budget today`}
+                value={a.usageToday.usd}
+                max={budget}
+                label={`${usd(a.usageToday.usd)} / ${usd(budget)} today`}
+                valueText={`${usd(a.usageToday.usd)} of ${usd(budget)} used today`}
+              />
             )}
           </div>
         )
@@ -47,15 +67,29 @@ export const AgentDetailScreen = () => {
         label={`${name} sections`}
         selectedKey={section}
         panels={false}
-        tabs={AGENT_SECTIONS.map((s) => ({ id: s, label: s[0]!.toUpperCase() + s.slice(1), href: `/agents/${name}/${s}` }))}
-      />
-      <ScreenStub
-        spec={`SCREENS §4.2 · section ${section}`}
-        owner="src/screens/agents/"
-        outline={['Overview: live + last 5 sessions, behaviour files, memberships', 'Setup: harness, model, mounts (RO|RW), concurrency', 'Sandbox: reach summary, findings, profile, roles matrix', 'Channels · Schedules · Budgets · Identity']}
-        calls={[{ method: 'agent.get', params: { name } }, { method: 'policy.get', params: { name } }, { method: 'schedule.list', params: { agent: name } }]}
-        cli={`beamhop agent show ${name}`}
-      />
+        tabs={AGENT_SECTIONS.map((s) => ({
+          id: s,
+          label: s[0]!.toUpperCase() + s.slice(1),
+          href: `/agents/${name}/${s}`,
+        }))}
+      >
+        <ScreenStub
+          spec={`SCREENS §4.2 · section ${section}`}
+          owner="src/screens/agents/"
+          outline={[
+            'Overview: live + last 5 sessions, behaviour files, memberships',
+            'Setup: harness, model, mounts (RO|RW), concurrency',
+            'Sandbox: reach summary, findings, profile, roles matrix',
+            'Channels · Schedules · Budgets · Identity',
+          ]}
+          calls={[
+            { method: 'agent.get', params: { name } },
+            { method: 'policy.get', params: { name } },
+            { method: 'schedule.list', params: { agent: name } },
+          ]}
+          cli={`beamhop agent show ${name}`}
+        />
+      </Tabs>
     </Screen>
   );
 };

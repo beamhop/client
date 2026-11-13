@@ -82,7 +82,11 @@ export const setAppearance = (patch: Partial<Appearance>): void => {
 /** Call once at startup: applies attributes and follows OS changes while a pref is "system". */
 export const initAppearance = (): (() => void) => {
   apply();
-  const queries = ['(prefers-color-scheme: dark)', '(prefers-contrast: more)', '(prefers-reduced-motion: reduce)'];
+  const queries = [
+    '(prefers-color-scheme: dark)',
+    '(prefers-contrast: more)',
+    '(prefers-reduced-motion: reduce)',
+  ];
   const mqls = queries.map((q) => window.matchMedia?.(q)).filter(Boolean) as MediaQueryList[];
   const onChange = () => {
     apply();

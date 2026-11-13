@@ -5,12 +5,13 @@
  * sheet, undo toast (useToast onUndo → approval.undo), decided-recently list, J/K/A/D/Z keys,
  * desktop list/detail. Data: useApi('approval.list'), useMutationApi('approval.decide' | 'approval.undo').
  */
+
+import { Outlet } from '@tanstack/react-router';
 import { approvalTarget, RISK_LABEL, useApi } from '../../api/index.ts';
 import { pad2 } from '../../lib/format.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { ScreenStub, useHasDetail } from '../../shell/ScreenStub.tsx';
 import { StubList } from '../../shell/StubList.tsx';
-import { Outlet } from '@tanstack/react-router';
 import { Readout } from '../../ui/Meta.tsx';
 
 export const InboxScreen = () => {

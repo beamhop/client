@@ -20,7 +20,20 @@ export const ChannelsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={
-        <Screen title="Channels" pane="list" actions={<LinkButton href="/channels/add" variant="primary" size="sm" icon={<Plus size={16} weight="bold" aria-hidden="true" />}>Add</LinkButton>}>
+        <Screen
+          title="Channels"
+          pane="list"
+          actions={
+            <LinkButton
+              href="/channels/add"
+              variant="primary"
+              size="sm"
+              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+            >
+              Add
+            </LinkButton>
+          }
+        >
           <StubList
             label="Channels"
             loading={q.isPending}
@@ -33,7 +46,16 @@ export const ChannelsScreen = () => {
             }))}
           />
           <div className="mt-6">
-            <ScreenStub spec="SCREENS §5 · JOURNEYS §4" owner="src/screens/channels/" outline={['Channel rows with status + transport', 'Error rows: reason + Replace token', 'Add a channel → provider picker → 6-step wizard']} cli="beamhop channel list" />
+            <ScreenStub
+              spec="SCREENS §5 · JOURNEYS §4"
+              owner="src/screens/channels/"
+              outline={[
+                'Channel rows with status + transport',
+                'Error rows: reason + Replace token',
+                'Add a channel → provider picker → 6-step wizard',
+              ]}
+              cli="beamhop channel list"
+            />
           </div>
         </Screen>
       }

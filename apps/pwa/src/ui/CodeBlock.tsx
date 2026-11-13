@@ -22,7 +22,15 @@ export interface CodeBlockProps {
   className?: string;
 }
 
-export const CodeBlock = ({ code, label, lineNumbers = false, wrap: wrapInit = false, copy = true, maxLines, className }: CodeBlockProps) => {
+export const CodeBlock = ({
+  code,
+  label,
+  lineNumbers = false,
+  wrap: wrapInit = false,
+  copy = true,
+  maxLines,
+  className,
+}: CodeBlockProps) => {
   const [wrap, setWrap] = useState(wrapInit);
   const [all, setAll] = useState(false);
   const lines = code.replace(/\n$/, '').split('\n');
@@ -42,8 +50,12 @@ export const CodeBlock = ({ code, label, lineNumbers = false, wrap: wrapInit = f
           {copy && <CopyButton value={code} label="Copy code" compact />}
         </div>
       </div>
-      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard reachable */}
-      <div role="region" aria-label={label} tabIndex={0} className="overflow-x-auto py-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2">
+      <div
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+        className="overflow-x-auto py-2 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2"
+      >
         <pre className={cx('type-code text-ink', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>
           {shown.map((l, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
@@ -59,7 +71,10 @@ export const CodeBlock = ({ code, label, lineNumbers = false, wrap: wrapInit = f
         </pre>
       </div>
       {maxLines && lines.length > maxLines && (
-        <RACButton onPress={() => setAll((a) => !a)} className="min-h-11 w-full border-t border-line px-3 text-left type-label text-ink data-[hovered]:bg-[color-mix(in_oklch,var(--bh-sunken),var(--bh-ink)_5%)]">
+        <RACButton
+          onPress={() => setAll((a) => !a)}
+          className="min-h-11 w-full border-t border-line px-3 text-left type-label text-ink data-[hovered]:bg-[color-mix(in_oklch,var(--bh-sunken),var(--bh-ink)_5%)]"
+        >
           {all ? 'Show less' : `Show all ${lines.length} lines`}
         </RACButton>
       )}
@@ -122,21 +137,37 @@ export const parseDiff = (diff: string): DiffFile[] => {
   return files;
 };
 
-export const DiffView = ({ diff, className, defaultCollapsed = false }: { diff: string; className?: string; defaultCollapsed?: boolean }) => {
+export const DiffView = ({
+  diff,
+  className,
+  defaultCollapsed = false,
+}: {
+  diff: string;
+  className?: string;
+  defaultCollapsed?: boolean;
+}) => {
   const files = useMemo(() => parseDiff(diff), [diff]);
   const [wrap, setWrap] = useState(false);
   const [closed, setClosed] = useState<Record<string, boolean>>(() =>
     defaultCollapsed ? Object.fromEntries(files.map((f) => [f.path, true])) : {},
   );
-  const totals = files.reduce((a, f) => ({ add: a.add + f.added, del: a.del + f.removed }), { add: 0, del: 0 });
+  const totals = files.reduce((a, f) => ({ add: a.add + f.added, del: a.del + f.removed }), {
+    add: 0,
+    del: 0,
+  });
   return (
     <div className={cx('overflow-hidden rounded-md border border-line bg-sunken', className)}>
       <div className="flex items-center justify-between border-b border-line pl-3">
         <span className="type-meta text-ink-2">
-          {files.length} {files.length === 1 ? 'file' : 'files'} · <span className="text-go-text">+{totals.add}</span>{' '}
+          {files.length} {files.length === 1 ? 'file' : 'files'} ·{' '}
+          <span className="text-go-text">+{totals.add}</span>{' '}
           <span className="text-stop-text">−{totals.del}</span>
         </span>
-        <RACButton aria-pressed={wrap} onPress={() => setWrap((w) => !w)} className="min-h-11 px-3 type-meta text-ink-2 data-[hovered]:text-ink aria-pressed:text-ink">
+        <RACButton
+          aria-pressed={wrap}
+          onPress={() => setWrap((w) => !w)}
+          className="min-h-11 px-3 type-meta text-ink-2 data-[hovered]:text-ink aria-pressed:text-ink"
+        >
           Wrap
         </RACButton>
       </div>
@@ -150,33 +181,66 @@ export const DiffView = ({ diff, className, defaultCollapsed = false }: { diff: 
                 onPress={() => setClosed((c) => ({ ...c, [f.path]: !c[f.path] }))}
                 className="flex min-h-11 w-full items-center gap-2 bg-surface px-3 text-left outline-none data-[hovered]:bg-[color-mix(in_oklch,var(--bh-surface),var(--bh-ink)_3%)] data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus"
               >
-                <CaretRight size={14} aria-hidden="true" className={cx('shrink-0 text-ink-2', !isClosed && 'rotate-90')} />
+                <CaretRight
+                  size={14}
+                  aria-hidden="true"
+                  className={cx('shrink-0 text-ink-2', !isClosed && 'rotate-90')}
+                />
                 <span className="min-w-0 flex-1 truncate type-meta text-ink">{f.path}</span>
                 <span className="type-meta text-go-text">+{f.added}</span>
                 <span className="type-meta text-stop-text">−{f.removed}</span>
               </RACButton>
             </h3>
             {!isClosed && (
-              // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard reachable
-              <div role="region" aria-label={`Diff of ${f.path}`} tabIndex={0} className="overflow-x-auto outline-none focus-visible:outline-2 focus-visible:-outline-offset-2">
+              <div
+                role="region"
+                aria-label={`Diff of ${f.path}`}
+                tabIndex={0}
+                className="overflow-x-auto outline-none focus-visible:outline-2 focus-visible:-outline-offset-2"
+              >
                 <table className="w-full border-collapse type-code">
                   <tbody>
                     {f.lines.map((l, i) => (
                       <tr
                         // biome-ignore lint/suspicious/noArrayIndexKey: diff lines are positional
                         key={i}
-                        className={cx(l.kind === 'add' && 'bg-go-wash', l.kind === 'del' && 'bg-stop-wash', l.kind === 'hunk' && 'text-ink-3')}
+                        className={cx(
+                          l.kind === 'add' && 'bg-go-wash',
+                          l.kind === 'del' && 'bg-stop-wash',
+                          l.kind === 'hunk' && 'text-ink-3',
+                        )}
                       >
-                        <td aria-hidden="true" className="w-9 pr-2 pl-3 text-right align-top text-ink-3 select-none">
+                        <td
+                          aria-hidden="true"
+                          className="w-9 pr-2 pl-3 text-right align-top text-ink-3 select-none"
+                        >
                           {l.kind === 'del' ? l.oldNo : l.kind === 'hunk' ? '' : l.newNo}
                         </td>
                         <td
-                          className={cx('w-4 align-top select-none', l.kind === 'add' ? 'text-go-text' : l.kind === 'del' ? 'text-stop-text' : 'text-ink-3')}
+                          className={cx(
+                            'w-4 align-top select-none',
+                            l.kind === 'add'
+                              ? 'text-go-text'
+                              : l.kind === 'del'
+                                ? 'text-stop-text'
+                                : 'text-ink-3',
+                          )}
                         >
-                          <span aria-hidden="true">{l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ''}</span>
-                          <span className="sr-only">{l.kind === 'add' ? 'added' : l.kind === 'del' ? 'removed' : ''}</span>
+                          <span aria-hidden="true">
+                            {l.kind === 'add' ? '+' : l.kind === 'del' ? '−' : ''}
+                          </span>
+                          <span className="sr-only">
+                            {l.kind === 'add' ? 'added' : l.kind === 'del' ? 'removed' : ''}
+                          </span>
                         </td>
-                        <td className={cx('pr-3 text-ink', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}>{l.kind === 'hunk' ? l.text : l.text || ' '}</td>
+                        <td
+                          className={cx(
+                            'pr-3 text-ink',
+                            wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre',
+                          )}
+                        >
+                          {l.kind === 'hunk' ? l.text : l.text || ' '}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

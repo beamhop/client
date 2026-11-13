@@ -37,7 +37,9 @@ test('screenshot dark home + kitchen', async ({ page }, info) => {
 test('screenshot panic band', async ({ page }, info) => {
   await page.goto('/?mock=1&still=1');
   await page.evaluate(async () => {
-    const w = window as unknown as { __beamhop: { runtime: { client: { call: (m: string, p?: unknown) => Promise<unknown> } } } };
+    const w = window as unknown as {
+      __beamhop: { runtime: { client: { call: (m: string, p?: unknown) => Promise<unknown> } } };
+    };
     await w.__beamhop.runtime.client.call('system.panic', {});
   });
   await page.waitForTimeout(800);

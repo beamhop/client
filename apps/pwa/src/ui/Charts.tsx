@@ -9,7 +9,13 @@ import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 import { Button } from './Button.tsx';
 
-const SERIES_COLOR = ['var(--bh-chart-1)', 'var(--bh-chart-2)', 'var(--bh-chart-3)', 'var(--bh-chart-4)', 'var(--bh-chart-5)'];
+const SERIES_COLOR = [
+  'var(--bh-chart-1)',
+  'var(--bh-chart-2)',
+  'var(--bh-chart-3)',
+  'var(--bh-chart-4)',
+  'var(--bh-chart-5)',
+];
 export const seriesColor = (i: number) => (i < 5 ? SERIES_COLOR[i]! : 'var(--bh-ink-3)');
 
 export interface SparklineProps {
@@ -25,7 +31,15 @@ export interface SparklineProps {
   labels?: string[];
 }
 
-export const Sparkline = ({ values, label, spikeAt, width = 96, height = 20, className, labels }: SparklineProps) => {
+export const Sparkline = ({
+  values,
+  label,
+  spikeAt,
+  width = 96,
+  height = 20,
+  className,
+  labels,
+}: SparklineProps) => {
   const max = Math.max(1, ...values);
   const bw = width / values.length;
   return (
@@ -90,7 +104,16 @@ export interface BarChartProps {
   legendExtra?: (seriesId: string) => string;
 }
 
-export const BarChart = ({ data, series, label, format = (n) => String(n), height = 160, className, legend = true, legendExtra }: BarChartProps) => {
+export const BarChart = ({
+  data,
+  series,
+  label,
+  format = (n) => String(n),
+  height = 160,
+  className,
+  legend = true,
+  legendExtra,
+}: BarChartProps) => {
   const [sel, setSel] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
   const [isolated, setIsolated] = useState<string | null>(null);
@@ -108,7 +131,9 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
   const choose = (i: number) => {
     setSel(i);
     const d = data[i]!;
-    announce(`${d.label}: ${format(totals[i]!)}. ${shown.map((s) => `${s.label} ${format(d.values[s.id] ?? 0)}`).join(', ')}`);
+    announce(
+      `${d.label}: ${format(totals[i]!)}. ${shown.map((s) => `${s.label} ${format(d.values[s.id] ?? 0)}`).join(', ')}`,
+    );
   };
 
   return (
@@ -116,7 +141,13 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
       {!asTable ? (
         <>
           <div className="relative">
-            <div className={cx('mb-2 min-h-12 rounded-md border border-line bg-surface px-3 py-2 type-meta', sel === null && 'invisible')} aria-hidden="true">
+            <div
+              className={cx(
+                'mb-2 min-h-12 rounded-md border border-line bg-surface px-3 py-2 type-meta',
+                sel === null && 'invisible',
+              )}
+              aria-hidden="true"
+            >
               {sel !== null && (
                 <>
                   <span className="text-ink">
@@ -125,7 +156,10 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
                   <span className="mt-0.5 flex flex-wrap gap-x-3 text-ink-2">
                     {shown.map((s) => (
                       <span key={s.id} className="inline-flex items-center gap-1">
-                        <span className="size-2 rounded-[1px]" style={{ background: seriesColor(series.indexOf(s)) }} />
+                        <span
+                          className="size-2 rounded-[1px]"
+                          style={{ background: seriesColor(series.indexOf(s)) }}
+                        />
                         {s.label} {format(data[sel]!.values[s.id] ?? 0)}
                       </span>
                     ))}
@@ -133,7 +167,6 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
                 </>
               )}
             </div>
-            {/* biome-ignore lint/a11y/useSemanticElements: an SVG chart navigated with arrow keys */}
             <div
               role="group"
               tabIndex={0}
@@ -151,23 +184,61 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
               onBlur={() => setSel(null)}
               className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-4"
             >
-              <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" aria-hidden="true" className="block">
+              <svg
+                width="100%"
+                height={height}
+                viewBox={`0 0 ${W} ${height}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+                className="block"
+              >
                 {[0.25, 0.5, 0.75].map((f) => (
-                  <line key={f} x1={0} x2={W} y1={height * f} y2={height * f} stroke="var(--bh-line)" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="2 3" />
+                  <line
+                    key={f}
+                    x1={0}
+                    x2={W}
+                    y1={height * f}
+                    y2={height * f}
+                    stroke="var(--bh-line)"
+                    strokeWidth={1}
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray="2 3"
+                  />
                 ))}
-                <line x1={0} x2={W} y1={height - 0.5} y2={height - 0.5} stroke="var(--bh-line-strong)" vectorEffect="non-scaling-stroke" />
+                <line
+                  x1={0}
+                  x2={W}
+                  y1={height - 0.5}
+                  y2={height - 0.5}
+                  stroke="var(--bh-line-strong)"
+                  vectorEffect="non-scaling-stroke"
+                />
                 {data.map((d, i) => {
                   let y = height;
                   return (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: pointer accelerator; keyboard handled on the group
-                    <g key={d.label} onPointerEnter={() => setSel(i)} onClick={() => choose(i)} opacity={sel !== null && sel !== i ? 0.45 : 1}>
+                    <g
+                      key={d.label}
+                      onPointerEnter={() => setSel(i)}
+                      onClick={() => choose(i)}
+                      opacity={sel !== null && sel !== i ? 0.45 : 1}
+                    >
                       <rect x={i * 11} y={0} width={11} height={height} fill="transparent" />
                       {shown.map((s) => {
                         const v = d.values[s.id] ?? 0;
                         const h = (v / max) * (height - 4);
                         y -= h;
                         return h > 0 ? (
-                          <rect key={s.id} x={i * 11 + 2} y={y} width={7} height={h} fill={seriesColor(series.indexOf(s))} stroke="var(--bh-surface)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                          <rect
+                            key={s.id}
+                            x={i * 11 + 2}
+                            y={y}
+                            width={7}
+                            height={h}
+                            fill={seriesColor(series.indexOf(s))}
+                            stroke="var(--bh-surface)"
+                            strokeWidth={1}
+                            vectorEffect="non-scaling-stroke"
+                          />
                         ) : null;
                       })}
                     </g>
@@ -193,11 +264,21 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
                     onClick={() => setIsolated((x) => (x === s.id ? null : s.id))}
                     className="flex min-h-11 w-full items-center gap-3 px-1 text-left type-meta hover:bg-sunken"
                   >
-                    <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px]" style={{ background: seriesColor(i) }} />
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 shrink-0 rounded-[2px]"
+                      style={{ background: seriesColor(i) }}
+                    />
                     <span className="min-w-0 flex-1 truncate text-ink">{s.label}</span>
-                    <span className="w-16 text-right text-ink tabular-nums">{format(seriesTotal[s.id] ?? 0)}</span>
-                    {legendExtra && <span className="w-20 text-right text-ink-2 tabular-nums">{legendExtra(s.id)}</span>}
-                    <span className="w-10 text-right text-ink-2 tabular-nums">{grand ? Math.round(((seriesTotal[s.id] ?? 0) / grand) * 100) : 0}%</span>
+                    <span className="w-16 text-right text-ink tabular-nums">
+                      {format(seriesTotal[s.id] ?? 0)}
+                    </span>
+                    {legendExtra && (
+                      <span className="w-20 text-right text-ink-2 tabular-nums">{legendExtra(s.id)}</span>
+                    )}
+                    <span className="w-10 text-right text-ink-2 tabular-nums">
+                      {grand ? Math.round(((seriesTotal[s.id] ?? 0) / grand) * 100) : 0}%
+                    </span>
                   </button>
                 </li>
               ))}
@@ -234,7 +315,9 @@ export const BarChart = ({ data, series, label, format = (n) => String(n), heigh
                       {format(d.values[s.id] ?? 0)}
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-right text-ink tabular-nums">{format(series.reduce((a, s) => a + (d.values[s.id] ?? 0), 0))}</td>
+                  <td className="px-3 py-2 text-right text-ink tabular-nums">
+                    {format(series.reduce((a, s) => a + (d.values[s.id] ?? 0), 0))}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -49,7 +49,21 @@ export interface ScreenProps {
 
 const MAX = { prose: 'max-w-[760px]', form: 'max-w-[640px]', wide: 'max-w-[960px]', none: '' };
 
-export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 'single', showPanic, maxWidth = 'wide', bleed, children, footer, className }: ScreenProps) => {
+export const Screen = ({
+  title,
+  back,
+  actions,
+  slug,
+  titleAside,
+  crumbs,
+  pane = 'single',
+  showPanic,
+  maxWidth = 'wide',
+  bleed,
+  children,
+  footer,
+  className,
+}: ScreenProps) => {
   const expanded = useExpanded();
   const topLevel = !back;
   const largeTitle = topLevel && !expanded;
@@ -63,7 +77,9 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
     }
     const el = sentinel.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(([e]) => setCollapsed(!e?.isIntersecting), { rootMargin: '-52px 0px 0px 0px' });
+    const io = new IntersectionObserver(([e]) => setCollapsed(!e?.isIntersecting), {
+      rootMargin: '-52px 0px 0px 0px',
+    });
     io.observe(el);
     return () => io.disconnect();
   }, [largeTitle]);
@@ -73,7 +89,10 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
   if (!expanded) {
     return (
       <div className={cx('flex min-h-dvh flex-col', className)} data-screen={title}>
-        <header className="sticky top-0 z-30 border-b border-transparent bg-bg pt-safe data-[collapsed=true]:border-line" data-collapsed={collapsed}>
+        <header
+          className="sticky top-0 z-30 border-b border-transparent bg-bg pt-safe data-[collapsed=true]:border-line"
+          data-collapsed={collapsed}
+        >
           <div className="flex h-[52px] items-center gap-1 pr-1 pl-1">
             {back ? (
               <Link
@@ -119,7 +138,13 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
             {titleAside}
           </div>
         )}
-        <div id="bh-main-content" className={cx('flex-1', !bleed && 'px-gutter pt-2 pb-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom)+24px)]')}>
+        <div
+          id="bh-main-content"
+          className={cx(
+            'flex-1',
+            !bleed && 'px-gutter pt-2 pb-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom)+24px)]',
+          )}
+        >
           {children}
         </div>
         {footer && <div className="sticky bottom-0 z-20 border-t border-line bg-bg pb-safe">{footer}</div>}
@@ -130,15 +155,20 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
   return (
     <div className={cx('flex h-full min-h-0 flex-col', className)} data-screen={title}>
       <div data-scroll-root="" className="pane-scroll min-h-0 flex-1">
-        <header className={cx('sticky top-0 z-20 bg-bg', pane === 'list' ? 'border-b border-line px-5' : 'px-8')}>
+        <header
+          className={cx('sticky top-0 z-20 bg-bg', pane === 'list' ? 'border-b border-line px-5' : 'px-8')}
+        >
           {crumbs && crumbs.length > 0 && (
             <nav aria-label="Breadcrumb" className="pt-4 type-meta text-ink-2">
               <ol className="flex flex-wrap items-center gap-1.5">
                 {crumbs.map((c, i) => (
-                  <li key={`${c.label}-${i}`} className="flex items-center gap-1.5">
+                  <li key={c.href ?? c.label} className="flex items-center gap-1.5">
                     {i > 0 && <span aria-hidden="true">/</span>}
                     {c.href ? (
-                      <Link href={c.href} className="text-ink-2 underline-offset-[3px] outline-none data-[hovered]:text-ink data-[hovered]:underline">
+                      <Link
+                        href={c.href}
+                        className="text-ink-2 underline-offset-[3px] outline-none data-[hovered]:text-ink data-[hovered]:underline"
+                      >
                         {c.label}
                       </Link>
                     ) : (
@@ -152,13 +182,26 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
             </nav>
           )}
           <div className={cx('flex items-center gap-3', pane === 'list' ? 'min-h-16' : 'min-h-[72px]')}>
-            <h1 className={cx('min-w-0 flex-1 truncate text-ink', pane === 'list' ? 'type-title-2' : 'type-title-1')}>{title}</h1>
+            <h1
+              className={cx(
+                'min-w-0 flex-1 truncate text-ink',
+                pane === 'list' ? 'type-title-2' : 'type-title-1',
+              )}
+            >
+              {title}
+            </h1>
             {titleAside}
             {actions && <div className="flex items-center gap-1">{actions}</div>}
           </div>
           {slug && <div className="-mt-2 pb-3">{slug}</div>}
         </header>
-        <div id={pane === 'list' ? undefined : 'bh-main-content'} className={cx(!bleed && (pane === 'list' ? 'px-5 pb-8' : 'px-8 pb-16'), !bleed && pane !== 'list' && MAX[maxWidth])}>
+        <div
+          id={pane === 'list' ? undefined : 'bh-main-content'}
+          className={cx(
+            !bleed && (pane === 'list' ? 'px-5 pb-8' : 'px-8 pb-16'),
+            !bleed && pane !== 'list' && MAX[maxWidth],
+          )}
+        >
           {children}
         </div>
       </div>
@@ -171,7 +214,19 @@ export const Screen = ({ title, back, actions, slug, titleAside, crumbs, pane = 
  * List/detail split (SCREENS §0.3). Expanded: 360px list pane + fluid detail pane.
  * Compact: shows the detail when a child route is active, otherwise the list.
  */
-export const SplitView = ({ list, children, hasDetail, empty, listWidth = 360 }: { list: ReactNode; children?: ReactNode; hasDetail: boolean; empty?: ReactNode; listWidth?: number }) => {
+export const SplitView = ({
+  list,
+  children,
+  hasDetail,
+  empty,
+  listWidth = 360,
+}: {
+  list: ReactNode;
+  children?: ReactNode;
+  hasDetail: boolean;
+  empty?: ReactNode;
+  listWidth?: number;
+}) => {
   const expanded = useExpanded();
   if (!expanded) return <>{hasDetail ? children : list}</>;
   return (
@@ -185,7 +240,7 @@ export const SplitView = ({ list, children, hasDetail, empty, listWidth = 360 }:
 };
 
 const EmptyDetail = () => (
-  <div className="grid h-full place-items-center p-8">
+  <div id="bh-main-content" className="grid h-full place-items-center p-8">
     <p className="type-body-sm text-ink-3">Select an item to see its details.</p>
   </div>
 );

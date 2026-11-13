@@ -25,12 +25,28 @@ export const SessionScreen = () => {
       title={s?.agent ?? 'Session'}
       back={{ href: '/sessions', label: 'Sessions' }}
       pane="detail"
-      crumbs={[{ label: 'Sessions', href: '/sessions' }, { label: s?.agent ?? sessionId }, { label: s ? `thread ${s.threadId}` : '' }]}
+      crumbs={[
+        { label: 'Sessions', href: '/sessions' },
+        { label: s?.agent ?? sessionId },
+        { label: s ? `thread ${s.threadId}` : '' },
+      ]}
       slug={
         s && (
           <div className="flex flex-col gap-1">
-            <RouteLine nodes={[{ label: `${s.channel}:${s.conversationId}`, kind: 'channel' }, { label: s.agent, kind: 'agent' }]} live={s.status === 'running'} />
-            <MetaLine items={[`thread ${s.threadId}`, s.worktree ? `worktree ${s.worktree.branch}` : null, usd(s.usage.usd)]} />
+            <RouteLine
+              nodes={[
+                { label: `${s.channel}:${s.conversationId}`, kind: 'channel' },
+                { label: s.agent, kind: 'agent' },
+              ]}
+              live={s.status === 'running'}
+            />
+            <MetaLine
+              items={[
+                `thread ${s.threadId}`,
+                s.worktree ? `worktree ${s.worktree.branch}` : null,
+                usd(s.usage.usd),
+              ]}
+            />
           </div>
         )
       }

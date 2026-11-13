@@ -10,11 +10,20 @@ import { ScreenStub } from '../../shell/ScreenStub.tsx';
 export const ChannelDetailScreen = () => {
   const { id } = useParams({ strict: false }) as { id: string };
   return (
-    <Screen title={id} back={{ href: '/channels', label: 'Channels' }} pane="detail" crumbs={[{ label: 'Channels', href: '/channels' }, { label: id }]}>
+    <Screen
+      title={id}
+      back={{ href: '/channels', label: 'Channels' }}
+      pane="detail"
+      crumbs={[{ label: 'Channels', href: '/channels' }, { label: id }]}
+    >
       <ScreenStub
         spec="SCREENS §5 Channel detail"
         owner="src/screens/channels/"
-        outline={['Status, transport, last event time', 'Memberships: which agents, which chats', 'Owner pairings · Replace token · Disconnect · Remove channel']}
+        outline={[
+          'Status, transport, last event time',
+          'Memberships: which agents, which chats',
+          'Owner pairings · Replace token · Disconnect · Remove channel',
+        ]}
         calls={[{ method: 'channel.list' }, { method: 'agent.list' }]}
         cli={`beamhop channel show ${id}`}
       />

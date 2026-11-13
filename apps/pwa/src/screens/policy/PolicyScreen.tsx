@@ -24,12 +24,20 @@ export const PolicyScreen = () => {
       hasDetail={hasDetail}
       list={
         <Screen title="Policy" pane="list">
-          <StubList label="Sandbox profiles" items={PROFILES.map((p) => ({ href: `/policy/${p.id}`, title: p.id, slug: [p.blurb] }))} />
+          <StubList
+            label="Sandbox profiles"
+            items={PROFILES.map((p) => ({ href: `/policy/${p.id}`, title: p.id, slug: [p.blurb] }))}
+          />
           <div className="mt-6">
             <ScreenStub
               spec="SCREENS §7 · JOURNEYS §5"
               owner="src/screens/policy/"
-              outline={['Reach summary in plain sentences', 'Findings with one-tap fixes', 'Profile picker with diff before applying', 'Learning-mode suggestions as triage cards']}
+              outline={[
+                'Reach summary in plain sentences',
+                'Findings with one-tap fixes',
+                'Profile picker with diff before applying',
+                'Learning-mode suggestions as triage cards',
+              ]}
               calls={[{ method: 'policy.suggestions' }, { method: 'role.list' }]}
             />
           </div>

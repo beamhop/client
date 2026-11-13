@@ -7,11 +7,22 @@ import { Screen } from '../../shell/Screen.tsx';
 import { ScreenStub } from '../../shell/ScreenStub.tsx';
 
 export const NewAgentScreen = () => (
-  <Screen title="New agent" back={{ href: '/agents', label: 'Agents' }} pane="detail" maxWidth="form" crumbs={[{ label: 'Agents', href: '/agents' }, { label: 'New agent' }]}>
+  <Screen
+    title="New agent"
+    back={{ href: '/agents', label: 'Agents' }}
+    pane="detail"
+    maxWidth="form"
+    crumbs={[{ label: 'Agents', href: '/agents' }, { label: 'New agent' }]}
+  >
     <ScreenStub
       spec="SCREENS §4.3 · JOURNEYS §1.05"
       owner="src/screens/agents/"
-      outline={['Preset cards: Personal assistant, Code reviewer, Team dev bot, Public Q&A', 'Name · Harness (ready only) · Folder (read-only default) · Sandbox profile', 'Live exposure summary', 'Create reviewer']}
+      outline={[
+        'Preset cards: Personal assistant, Code reviewer, Team dev bot, Public Q&A',
+        'Name · Harness (ready only) · Folder (read-only default) · Sandbox profile',
+        'Live exposure summary',
+        'Create reviewer',
+      ]}
       calls={[{ method: 'agent.presets' }, { method: 'harness.list' }]}
       cli="beamhop agent create reviewer --preset code-reviewer"
     />

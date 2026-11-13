@@ -23,7 +23,8 @@ const slip = (fill, cut, beam) => `
   <circle cx="256" cy="260" r="24" fill="${beam}"/>
   <circle cx="256" cy="260" r="11" fill="${fill === 'none' ? beam : fill}"/>`;
 
-const icon = (bg, body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">${bg}${body}</svg>`;
+const icon = (bg, body) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">${bg}${body}</svg>`;
 
 const svgs = {
   // any: rounded flare tile
@@ -35,8 +36,14 @@ const svgs = {
     `<defs><mask id="m"><rect width="512" height="512" fill="#fff"/>${slip('none', '#000', '#000').replace(/fill="none"/, 'fill="none"')}</mask></defs>`,
     `<g mask="url(#m)">${slip('#fff', '#fff', '#fff')}</g><path d="M96 420 L150 366 M362 154 L416 100" stroke="#fff" stroke-width="14" stroke-linecap="square"/>`,
   ),
-  'shortcut-stop.svg': icon(`<rect width="512" height="512" rx="112" fill="${INK}"/>`, `<rect x="166" y="166" width="180" height="180" rx="10" fill="${FLARE}"/>`),
-  'shortcut-inbox.svg': icon(`<rect width="512" height="512" rx="112" fill="${PAPER}"/>`, slip(INK, PAPER, FLARE)),
+  'shortcut-stop.svg': icon(
+    `<rect width="512" height="512" rx="112" fill="${INK}"/>`,
+    `<rect x="166" y="166" width="180" height="180" rx="10" fill="${FLARE}"/>`,
+  ),
+  'shortcut-inbox.svg': icon(
+    `<rect width="512" height="512" rx="112" fill="${PAPER}"/>`,
+    slip(INK, PAPER, FLARE),
+  ),
 };
 
 for (const [name, svg] of Object.entries(svgs)) writeFileSync(join(out, name), svg);

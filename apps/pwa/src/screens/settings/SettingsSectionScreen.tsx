@@ -52,7 +52,11 @@ export const AppearanceSettings = () => {
           ]}
         />
       </div>
-      <Switch isSelected={prefs.haptics} onChange={(haptics) => set({ haptics })} description="Short vibrations when a swipe commits. Android and iPhone (Safari 18+) only.">
+      <Switch
+        isSelected={prefs.haptics}
+        onChange={(haptics) => set({ haptics })}
+        description="Short vibrations when a swipe commits. Android and iPhone (Safari 18+) only."
+      >
         Haptics
       </Switch>
       <p className="type-body-sm text-ink-2">Text size follows your system setting.</p>
@@ -65,7 +69,13 @@ export const SettingsSectionScreen = () => {
   const meta = SETTINGS_SECTIONS.find((s) => s.id === section);
   const title = meta?.title ?? section;
   return (
-    <Screen title={title} back={{ href: '/settings', label: 'Settings' }} pane="detail" maxWidth="form" crumbs={[{ label: 'Settings', href: '/settings' }, { label: title }]}>
+    <Screen
+      title={title}
+      back={{ href: '/settings', label: 'Settings' }}
+      pane="detail"
+      maxWidth="form"
+      crumbs={[{ label: 'Settings', href: '/settings' }, { label: title }]}
+    >
       {section === 'appearance' ? (
         <AppearanceSettings />
       ) : (
@@ -73,7 +83,15 @@ export const SettingsSectionScreen = () => {
           spec={`SCREENS §10 · ${title}`}
           owner="src/screens/settings/"
           outline={[meta?.slug ?? 'Section content']}
-          calls={section === 'devices' ? [{ method: 'device.list' }] : section === 'identity' ? [{ method: 'identity.get' }, { method: 'role.list' }] : section === 'retention' ? [{ method: 'secret.list' }] : []}
+          calls={
+            section === 'devices'
+              ? [{ method: 'device.list' }]
+              : section === 'identity'
+                ? [{ method: 'identity.get' }, { method: 'role.list' }]
+                : section === 'retention'
+                  ? [{ method: 'secret.list' }]
+                  : []
+          }
         />
       )}
     </Screen>

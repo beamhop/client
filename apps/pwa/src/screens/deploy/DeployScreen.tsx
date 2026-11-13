@@ -7,14 +7,20 @@
  */
 import { Plus } from '@phosphor-icons/react';
 import { Outlet } from '@tanstack/react-router';
-import { deployMonogram, useApi } from '../../api/index.ts';
 import type { LampState } from '../../api/derive.ts';
+import { deployMonogram, useApi } from '../../api/index.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { ScreenStub, useHasDetail } from '../../shell/ScreenStub.tsx';
 import { StubList } from '../../shell/StubList.tsx';
 import { LinkButton } from '../../ui/Button.tsx';
 
-const LAMP: Record<string, LampState> = { running: 'ready', provisioning: 'paused', stopped: 'stopped', error: 'error', destroyed: 'stopped' };
+const LAMP: Record<string, LampState> = {
+  running: 'ready',
+  provisioning: 'paused',
+  stopped: 'stopped',
+  error: 'error',
+  destroyed: 'stopped',
+};
 
 export const DeployScreen = () => {
   const hasDetail = useHasDetail('/deploy');
@@ -23,7 +29,20 @@ export const DeployScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={
-        <Screen title="Deploy" pane="list" actions={<LinkButton href="/deploy/new" variant="primary" size="sm" icon={<Plus size={16} weight="bold" aria-hidden="true" />}>New</LinkButton>}>
+        <Screen
+          title="Deploy"
+          pane="list"
+          actions={
+            <LinkButton
+              href="/deploy/new"
+              variant="primary"
+              size="sm"
+              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+            >
+              New
+            </LinkButton>
+          }
+        >
           <StubList
             label="Deployments"
             loading={q.isPending}
@@ -31,13 +50,23 @@ export const DeployScreen = () => {
               href: `/deploy/${d.id}`,
               title: `${d.agent} @ ${d.provider} ${d.region ?? ''}`,
               tile: deployMonogram(d.provider),
-              slug: [d.size ?? '', d.monthlyCostUsd ? `$${d.monthlyCostUsd.toFixed(2)}/mo` : ''].filter(Boolean),
+              slug: [d.size ?? '', d.monthlyCostUsd ? `$${d.monthlyCostUsd.toFixed(2)}/mo` : ''].filter(
+                Boolean,
+              ),
               lamp: LAMP[d.status] ?? 'stopped',
               lampLabel: d.status,
             }))}
           />
           <div className="mt-6">
-            <ScreenStub spec="SCREENS §8" owner="src/screens/deploy/" outline={['Rows with heartbeat lamp + cost', 'New / Move wizard: Provider · Size · Harness & auth · Mounts · Plan · Apply']} cli="beamhop deploy list" />
+            <ScreenStub
+              spec="SCREENS §8"
+              owner="src/screens/deploy/"
+              outline={[
+                'Rows with heartbeat lamp + cost',
+                'New / Move wizard: Provider · Size · Harness & auth · Mounts · Plan · Apply',
+              ]}
+              cli="beamhop deploy list"
+            />
           </div>
         </Screen>
       }

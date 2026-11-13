@@ -28,7 +28,14 @@ export const SettingsScreen = () => {
       hasDetail={hasDetail}
       list={
         <Screen title="Settings" pane="list">
-          <StubList label="Settings sections" items={SETTINGS_SECTIONS.map((s) => ({ href: `/settings/${s.id}`, title: s.title, slug: [s.slug] }))} />
+          <StubList
+            label="Settings sections"
+            items={SETTINGS_SECTIONS.map((s) => ({
+              href: `/settings/${s.id}`,
+              title: s.title,
+              slug: [s.slug],
+            }))}
+          />
         </Screen>
       }
     >

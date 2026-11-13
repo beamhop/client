@@ -5,8 +5,8 @@
  */
 import { RpcError } from '@beamhop/client';
 import {
-  type AgentView,
   AgentConfig,
+  type AgentView,
   type ApprovalView,
   type AuditEvent,
   ChannelConfig,
@@ -196,7 +196,8 @@ export class MockDaemon {
       for (const a of this.pending())
         this.putApproval({ ...a, status: 'denied', decidedBy: 'panic', decidedAt: at });
       st.schedules = st.schedules.map((s) => ({ ...s, paused: true }));
-      for (const c of st.channels.values()) if (c.status !== 'error') this.putChannel({ ...c, status: 'disconnected' });
+      for (const c of st.channels.values())
+        if (c.status !== 'error') this.putChannel({ ...c, status: 'disconnected' });
       st.deployments = st.deployments.map((d) => (d.status === 'running' ? { ...d, status: 'stopped' } : d));
       this.audit({
         actor: 'alice',
@@ -212,7 +213,8 @@ export class MockDaemon {
       if (!st.panic.active) return OK;
       st.panic = { active: false, snapshot: st.panic.snapshot };
       // Channels reconnect; agents and schedules stay stopped until resumed one by one (§7A).
-      for (const c of st.channels.values()) if (c.status === 'disconnected') this.putChannel({ ...c, status: 'connected' });
+      for (const c of st.channels.values())
+        if (c.status === 'disconnected') this.putChannel({ ...c, status: 'connected' });
       this.audit({ actor: 'alice', type: 'resume', severity: 'info', summary: 'alice resumed after review' });
       this.emit({ type: 'panic', active: false });
       return OK;
@@ -225,54 +227,101 @@ export class MockDaemon {
       const preset = PRESETS.find((x) => x.id === p.preset);
       const parsed = AgentConfig.safeParse({ ...(preset?.config ?? {}), ...p.config, preset: p.preset });
       if (!parsed.success) return fail('invalid_input', parsed.error.issues[0]?.message ?? 'invalid config');
-      if (this.state.agents.has(parsed.data.name)) return fail('conflict', `${parsed.data.name} already exists`);
+      if (this.state.agents.has(parsed.data.name))
+        return fail('conflict', `${parsed.data.name} already exists`);
       const a: AgentView = {
         config: {
           ...parsed.data,
-          identity: { ...parsed.data.identity, npub: `npub1${parsed.data.name}${'q'.repeat(20)}x9`.slice(0, 63) },
+          identity: {
+            ...parsed.data.identity,
+            npub: `npub1${parsed.data.name}${'q'.repeat(20)}x9`.slice(0, 63),
+          },
         },
         status: 'idle',
         activeSessions: 0,
         usageToday: { usd: 0, tokens: 0, minutes: 0 },
         location: { kind: 'local' },
       };
-      this.audit({ agent: a.config.name, actor: 'alice', type: 'agent.created', severity: 'info', summary: `alice created ${a.config.name}` });
+      this.audit({
+        agent: a.config.name,
+        actor: 'alice',
+        type: 'agent.created',
+        severity: 'info',
+        summary: `alice created ${a.config.name}`,
+      });
       return this.putAgent(a);
     },
     'agent.update': (p) => {
       const a = this.agent(p.name);
       const parsed = AgentConfig.safeParse({ ...a.config, ...p.patch, name: a.config.name });
       if (!parsed.success) return fail('invalid_input', parsed.error.issues[0]?.message ?? 'invalid config');
-      this.audit({ agent: p.name, actor: 'alice', type: 'config.changed', severity: 'info', summary: `alice edited ${p.name}`, data: { keys: Object.keys(p.patch) } });
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'config.changed',
+        severity: 'info',
+        summary: `alice edited ${p.name}`,
+        data: { keys: Object.keys(p.patch) },
+      });
       return this.putAgent({ ...a, config: parsed.data });
     },
     'agent.delete': (p) => {
       this.agent(p.name);
       this.state.agents.delete(p.name);
-      this.audit({ agent: p.name, actor: 'alice', type: 'agent.deleted', severity: 'warn', summary: `alice deleted ${p.name}` });
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'agent.deleted',
+        severity: 'warn',
+        summary: `alice deleted ${p.name}`,
+      });
       return OK;
     },
     'agent.start': (p) => {
       if (this.state.panic.active) return fail('conflict', 'Everything is stopped. Resume first.');
-      this.audit({ agent: p.name, actor: 'alice', type: 'agent.started', severity: 'info', summary: `alice started ${p.name}` });
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'agent.started',
+        severity: 'info',
+        summary: `alice started ${p.name}`,
+      });
       return this.patchAgent(p.name, { status: 'idle', error: undefined });
     },
     'agent.stop': (p) => {
       const a = this.agent(p.name);
       for (const s of this.state.sessions.values()) {
-        if (s.agent === a.config.name && (s.status === 'running' || s.status === 'queued' || (p.hard && s.status === 'idle'))) {
-          this.pushEvent(s.id, { kind: 'system', text: p.hard ? 'Stopped hard by alice.' : 'Stopped by alice.' });
+        if (
+          s.agent === a.config.name &&
+          (s.status === 'running' || s.status === 'queued' || (p.hard && s.status === 'idle'))
+        ) {
+          this.pushEvent(s.id, {
+            kind: 'system',
+            text: p.hard ? 'Stopped hard by alice.' : 'Stopped by alice.',
+          });
           this.putSession({ ...this.session(s.id), status: 'ended' });
         }
       }
-      this.audit({ agent: p.name, actor: 'alice', type: 'agent.stopped', severity: 'info', summary: `alice stopped ${p.name}${p.hard ? ' (hard)' : ''}` });
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'agent.stopped',
+        severity: 'info',
+        summary: `alice stopped ${p.name}${p.hard ? ' (hard)' : ''}`,
+      });
       return this.patchAgent(p.name, { status: 'stopped', activeSessions: 0 });
     },
     'agent.clone': (p) => {
       const a = this.agent(p.name);
       if (this.state.agents.has(p.newName)) return fail('conflict', `${p.newName} already exists`);
       const cfg = AgentConfig.parse({ ...a.config, name: p.newName, identity: {}, memberships: [] });
-      return this.putAgent({ ...a, config: cfg, status: 'stopped', activeSessions: 0, usageToday: { usd: 0, tokens: 0, minutes: 0 } });
+      return this.putAgent({
+        ...a,
+        config: cfg,
+        status: 'stopped',
+        activeSessions: 0,
+        usageToday: { usd: 0, tokens: 0, minutes: 0 },
+      });
     },
     'agent.presets': () => ({
       presets: PRESETS.map((p) => ({ ...p, config: p.config as Record<string, unknown> })),
@@ -285,7 +334,8 @@ export class MockDaemon {
           {
             path: '~/code/app/CLAUDE.md',
             harness: 'claude',
-            content: '# acme/app\n\n- Run `npm test` before pushing.\n- Never push to main; use beamhop/* branches.\n- Keep diffs small and explain them in the thread.\n',
+            content:
+              '# acme/app\n\n- Run `npm test` before pushing.\n- Never push to main; use beamhop/* branches.\n- Keep diffs small and explain them in the thread.\n',
           },
           {
             path: '~/code/app/AGENTS.md',
@@ -315,9 +365,21 @@ export class MockDaemon {
     // ── channels
     'channel.providers': () => ({
       providers: [
-        { provider: 'telegram', displayName: 'Telegram', steps: ['create', 'credentials', 'validate', 'connect', 'pair', 'join'] },
-        { provider: 'slack', displayName: 'Slack', steps: ['create', 'credentials', 'validate', 'connect', 'pair', 'join'] },
-        { provider: 'discord', displayName: 'Discord', steps: ['create', 'credentials', 'validate', 'connect', 'join', 'pair'] },
+        {
+          provider: 'telegram',
+          displayName: 'Telegram',
+          steps: ['create', 'credentials', 'validate', 'connect', 'pair', 'join'],
+        },
+        {
+          provider: 'slack',
+          displayName: 'Slack',
+          steps: ['create', 'credentials', 'validate', 'connect', 'pair', 'join'],
+        },
+        {
+          provider: 'discord',
+          displayName: 'Discord',
+          steps: ['create', 'credentials', 'validate', 'connect', 'join', 'pair'],
+        },
         { provider: 'nostr', displayName: 'Nostr group (NIP-29)', steps: ['relay', 'group', 'join'] },
       ],
     }),
@@ -326,8 +388,15 @@ export class MockDaemon {
       const token = String(Object.values(p.secrets)[0] ?? '');
       if (p.provider === 'telegram') {
         if (!/^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(token))
-          return { ok: false, message: "Telegram didn't accept this token. In @BotFather, send /token to get a new one." };
-        return { ok: true, message: 'Valid', identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' } };
+          return {
+            ok: false,
+            message: "Telegram didn't accept this token. In @BotFather, send /token to get a new one.",
+          };
+        return {
+          ok: true,
+          message: 'Valid',
+          identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' },
+        };
       }
       if (!token) return { ok: false, message: 'The token is empty.' };
       return { ok: true, message: 'Valid', identity: { name: 'beamhop', handle: '@beamhop' } };
@@ -346,28 +415,48 @@ export class MockDaemon {
       };
       this.putChannel(c);
       setTimeout(() => this.putChannel({ ...c, status: 'connected' }), 900);
-      this.audit({ actor: 'alice', type: 'channel.added', severity: 'info', summary: `alice added ${p.provider} channel ${p.name}` });
+      this.audit({
+        actor: 'alice',
+        type: 'channel.added',
+        severity: 'info',
+        summary: `alice added ${p.provider} channel ${p.name}`,
+      });
       return c;
     },
     'channel.remove': (p) => {
       if (!this.state.channels.delete(p.name)) return fail('not_found', `No channel ${p.name}`);
-      this.audit({ actor: 'alice', type: 'channel.removed', severity: 'warn', summary: `alice removed channel ${p.name}` });
+      this.audit({
+        actor: 'alice',
+        type: 'channel.removed',
+        severity: 'warn',
+        summary: `alice removed channel ${p.name}`,
+      });
       return OK;
     },
     'channel.pair': (p) => {
       if (!this.state.channels.has(p.name)) return fail('not_found', `No channel ${p.name}`);
-      return { code: '7KQ2-9XHD', expiresAt: ahead(Date.now(), 10), instructions: 'Send /pair 7KQ2-9XHD to the bot.' };
+      return {
+        code: '7KQ2-9XHD',
+        expiresAt: ahead(Date.now(), 10),
+        instructions: 'Send /pair 7KQ2-9XHD to the bot.',
+      };
     },
 
     // ── memberships
     'membership.join': (p) => {
       const a = this.agent(p.agent);
-      const memberships = [...a.config.memberships.filter((m) => m.target !== p.membership.target), p.membership];
+      const memberships = [
+        ...a.config.memberships.filter((m) => m.target !== p.membership.target),
+        p.membership,
+      ];
       return this.putAgent({ ...a, config: { ...a.config, memberships } });
     },
     'membership.leave': (p) => {
       const a = this.agent(p.agent);
-      return this.putAgent({ ...a, config: { ...a.config, memberships: a.config.memberships.filter((m) => m.target !== p.target) } });
+      return this.putAgent({
+        ...a,
+        config: { ...a.config, memberships: a.config.memberships.filter((m) => m.target !== p.target) },
+      });
     },
 
     // ── sessions
@@ -383,7 +472,11 @@ export class MockDaemon {
     'session.send': (p) => {
       const s = this.session(p.id);
       if (this.state.panic.active) return fail('conflict', 'Everything is stopped. Resume first.');
-      this.pushEvent(p.id, { kind: 'user', from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' }, text: p.text });
+      this.pushEvent(p.id, {
+        kind: 'user',
+        from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' },
+        text: p.text,
+      });
       this.putSession({ ...this.session(s.id), status: 'running' });
       this.onUserMessage?.(p.id, p.text);
       return OK;
@@ -406,7 +499,11 @@ export class MockDaemon {
         usage: { inputTokens: 0, outputTokens: 0, usd: 0 },
       };
       this.putSession(s);
-      this.pushEvent(id, { kind: 'user', from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' }, text: p.text });
+      this.pushEvent(id, {
+        kind: 'user',
+        from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' },
+        text: p.text,
+      });
       this.onUserMessage?.(id, p.text);
       return s;
     },
@@ -422,12 +519,15 @@ export class MockDaemon {
       approvals: [...this.state.approvals.values()]
         .filter((a) => p.status === 'all' || a.status === 'pending')
         .sort((a, b) =>
-          p.status === 'all' ? b.createdAt.localeCompare(a.createdAt) : a.expiresAt.localeCompare(b.expiresAt),
+          p.status === 'all'
+            ? b.createdAt.localeCompare(a.createdAt)
+            : a.expiresAt.localeCompare(b.expiresAt),
         ),
     }),
     'approval.decide': (p) => {
       const a = this.state.approvals.get(p.id) ?? fail('not_found', `No approval ${p.id}`);
-      if (a.status !== 'pending') return fail('conflict', `Already ${a.status}${a.decidedBy ? ` by ${a.decidedBy}` : ''}`);
+      if (a.status !== 'pending')
+        return fail('conflict', `Already ${a.status}${a.decidedBy ? ` by ${a.decidedBy}` : ''}`);
       const next = this.putApproval({
         ...a,
         status: p.allow ? 'approved' : 'denied',
@@ -443,7 +543,7 @@ export class MockDaemon {
             actor: 'alice',
             type: 'approval.decided',
             severity: 'info',
-            summary: `alice ${p.allow ? (p.always ? 'always allowed' : 'allowed') : 'denied'} ${describe(a)}`,
+            summary: `alice ${p.allow ? (p.always ? 'always allowed' : 'allowed') : 'denied'} ${describeApproval(a)}`,
             data: { approvalId: a.id, always: p.always },
           });
           this.onDecisionReleased?.(next);
@@ -464,12 +564,24 @@ export class MockDaemon {
     'role.list': () => ({ roles: this.state.roles, grants: this.state.grants }),
     'role.grant': (p) => {
       this.state.grants[p.principal] = p.role;
-      this.audit({ agent: p.agent, actor: 'alice', type: 'role.granted', severity: 'info', summary: `alice granted ${p.role} to ${p.principal}` });
+      this.audit({
+        agent: p.agent,
+        actor: 'alice',
+        type: 'role.granted',
+        severity: 'info',
+        summary: `alice granted ${p.role} to ${p.principal}`,
+      });
       return OK;
     },
     'role.revoke': (p) => {
       delete this.state.grants[p.principal];
-      this.audit({ agent: p.agent, actor: 'alice', type: 'role.revoked', severity: 'warn', summary: `alice revoked ${p.principal}` });
+      this.audit({
+        agent: p.agent,
+        actor: 'alice',
+        type: 'role.revoked',
+        severity: 'warn',
+        summary: `alice revoked ${p.principal}`,
+      });
       return OK;
     },
     'principal.link': () => OK,
@@ -491,21 +603,45 @@ export class MockDaemon {
     'policy.set': (p) => {
       const a = this.agent(p.name);
       const prev = this.state.policies.get(p.name);
-      this.state.policies.set(p.name, { profile: p.profile, effective: p.policy ?? prev?.effective ?? SandboxPolicy.parse({}) });
-      this.putAgent({ ...a, config: { ...a.config, sandbox: { profile: p.profile as 'strict' | 'workspace' | 'custom', policy: p.policy } } });
-      this.audit({ agent: p.name, actor: 'alice', type: 'config.changed', severity: 'info', summary: `alice changed ${p.name}'s sandbox (${p.profile})` });
+      this.state.policies.set(p.name, {
+        profile: p.profile,
+        effective: p.policy ?? prev?.effective ?? SandboxPolicy.parse({}),
+      });
+      this.putAgent({
+        ...a,
+        config: {
+          ...a.config,
+          sandbox: { profile: p.profile as 'strict' | 'workspace' | 'custom', policy: p.policy },
+        },
+      });
+      this.audit({
+        agent: p.name,
+        actor: 'alice',
+        type: 'config.changed',
+        severity: 'info',
+        summary: `alice changed ${p.name}'s sandbox (${p.profile})`,
+      });
       return OK;
     },
-    'policy.suggestions': (p) => ({ suggestions: this.state.suggestions.filter((s) => !p.name || s.agent === p.name) }),
+    'policy.suggestions': (p) => ({
+      suggestions: this.state.suggestions.filter((s) => !p.name || s.agent === p.name),
+    }),
     'policy.applySuggestion': (p) => {
-      const s = this.state.suggestions.find((x) => x.id === p.id) ?? fail('not_found', `No suggestion ${p.id}`);
+      const s =
+        this.state.suggestions.find((x) => x.id === p.id) ?? fail('not_found', `No suggestion ${p.id}`);
       this.state.suggestions = this.state.suggestions.filter((x) => x.id !== p.id);
       if (p.accept) {
         const pol = this.state.policies.get(s.agent);
         if (pol && s.kind === 'net.allow') pol.effective.net.allow.push(s.value);
         if (pol && s.kind === 'fs.read') pol.effective.fs.read.push(s.value);
       }
-      this.audit({ agent: s.agent, actor: 'alice', type: 'policy.suggestion', severity: 'info', summary: `alice ${p.accept ? 'allowed' : 'kept blocked'} ${s.value} for ${s.agent}` });
+      this.audit({
+        agent: s.agent,
+        actor: 'alice',
+        type: 'policy.suggestion',
+        severity: 'info',
+        summary: `alice ${p.accept ? 'allowed' : 'kept blocked'} ${s.value} for ${s.agent}`,
+      });
       return OK;
     },
 
@@ -513,7 +649,10 @@ export class MockDaemon {
     'secret.list': () => ({ secrets: this.state.secrets, backend: 'OS keychain (libsecret)' }),
     'secret.set': (p) => {
       const now = new Date().toISOString();
-      this.state.secrets = [...this.state.secrets.filter((s) => s.name !== p.name), { name: p.name, updatedAt: now }];
+      this.state.secrets = [
+        ...this.state.secrets.filter((s) => s.name !== p.name),
+        { name: p.name, updatedAt: now },
+      ];
       return OK;
     },
     'secret.delete': (p) => {
@@ -522,7 +661,9 @@ export class MockDaemon {
     },
 
     // ── schedules
-    'schedule.list': (p) => ({ schedules: this.state.schedules.filter((s) => !p.agent || s.agent === p.agent) }),
+    'schedule.list': (p) => ({
+      schedules: this.state.schedules.filter((s) => !p.agent || s.agent === p.agent),
+    }),
     'schedule.add': (p) => {
       const s = ScheduleConfig.parse({ ...p, id: `sch_${Date.now().toString(36)}` });
       this.state.schedules.push(s);
@@ -541,7 +682,13 @@ export class MockDaemon {
     },
     'schedule.run': (p) => {
       const s = this.state.schedules.find((x) => x.id === p.id) ?? fail('not_found', `No schedule ${p.id}`);
-      this.audit({ agent: s.agent, actor: 'alice', type: 'schedule.run', severity: 'info', summary: `alice ran ${s.id} now` });
+      this.audit({
+        agent: s.agent,
+        actor: 'alice',
+        type: 'schedule.run',
+        severity: 'info',
+        summary: `alice ran ${s.id} now`,
+      });
       return OK;
     },
 
@@ -593,7 +740,11 @@ export class MockDaemon {
       const isVps = p.provider === 'hetzner' || p.provider === 'digitalocean';
       const cost = p.provider === 'hetzner' ? 4.9 : p.provider === 'fly' ? 5.7 : 7;
       const actions = [
-        { op: 'create', resource: 'server', detail: `${p.provider} ${p.size ?? 'default'} · ${p.region ?? 'default'}` },
+        {
+          op: 'create',
+          resource: 'server',
+          detail: `${p.provider} ${p.size ?? 'default'} · ${p.region ?? 'default'}`,
+        },
         { op: 'create', resource: 'firewall', detail: 'outbound only, 0 inbound ports' },
         { op: 'install', resource: 'beamhopd', detail: 'beamhopd 0.1.0, srt, bubblewrap' },
         ...(p.mode === 'move'
@@ -629,22 +780,42 @@ export class MockDaemon {
         if (i !== -1) this.state.deployments[i] = { ...d, status: 'running' };
         const a = this.state.agents.get(p.agent);
         if (a) this.putAgent({ ...a, location: { kind: 'cloud', provider: p.provider } });
-        this.audit({ agent: p.agent, actor: 'alice', type: 'deploy.applied', severity: 'info', summary: `${p.agent} is running on ${p.provider}` });
+        this.audit({
+          agent: p.agent,
+          actor: 'alice',
+          type: 'deploy.applied',
+          severity: 'info',
+          summary: `${p.agent} is running on ${p.provider}`,
+        });
       }, 8000);
       return d;
     },
     'deploy.list': () => ({ deployments: this.state.deployments }),
     'deploy.destroy': (p) => {
-      const d = this.state.deployments.find((x) => x.id === p.id) ?? fail('not_found', `No deployment ${p.id}`);
-      this.state.deployments = this.state.deployments.map((x) => (x.id === d.id ? { ...x, status: 'destroyed' } : x));
-      this.audit({ agent: d.agent, actor: 'alice', type: 'deploy.destroyed', severity: 'warn', summary: `alice destroyed ${d.agent} on ${d.provider}` });
+      const d =
+        this.state.deployments.find((x) => x.id === p.id) ?? fail('not_found', `No deployment ${p.id}`);
+      this.state.deployments = this.state.deployments.map((x) =>
+        x.id === d.id ? { ...x, status: 'destroyed' } : x,
+      );
+      this.audit({
+        agent: d.agent,
+        actor: 'alice',
+        type: 'deploy.destroyed',
+        severity: 'warn',
+        summary: `alice destroyed ${d.agent} on ${d.provider}`,
+      });
       return OK;
     },
 
     // ── audit & usage
     'audit.query': (p) => ({
       events: this.state.audit
-        .filter((e) => (!p.agent || e.agent === p.agent) && (!p.severity || e.severity === p.severity) && (!p.before || e.at < p.before))
+        .filter(
+          (e) =>
+            (!p.agent || e.agent === p.agent) &&
+            (!p.severity || e.severity === p.severity) &&
+            (!p.before || e.at < p.before),
+        )
         .slice(0, p.limit),
     }),
     'usage.query': (p) => {
@@ -656,19 +827,43 @@ export class MockDaemon {
     'device.list': () => ({ devices: this.state.devices }),
     'device.pairStart': () => {
       // Runtime-built one-time token (never a literal in source).
-      const token = Array.from({ length: 24 }, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)]).join('');
-      return { uri: `https://app.beamhop.dev/pair#${token}`, code: 'AMBR-RLY8', expiresAt: ahead(Date.now(), 2) };
+      const token = Array.from(
+        { length: 24 },
+        () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 31)],
+      ).join('');
+      return {
+        uri: `https://app.beamhop.dev/pair#${token}`,
+        code: 'AMBR-RLY8',
+        expiresAt: ahead(Date.now(), 2),
+      };
     },
     'device.pairComplete': (p) => {
-      const d = { id: `dev_${Date.now().toString(36)}`, name: p.name, pubkey: p.pubkey, pairedAt: new Date().toISOString(), lastSeenAt: new Date().toISOString(), pushEnabled: false };
+      const d = {
+        id: `dev_${Date.now().toString(36)}`,
+        name: p.name,
+        pubkey: p.pubkey,
+        pairedAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+        pushEnabled: false,
+      };
       this.state.devices.push(d);
-      this.audit({ actor: 'alice', type: 'device.paired', severity: 'info', summary: `alice paired ${p.name}` });
+      this.audit({
+        actor: 'alice',
+        type: 'device.paired',
+        severity: 'info',
+        summary: `alice paired ${p.name}`,
+      });
       return d;
     },
     'device.remove': (p) => {
       const d = this.state.devices.find((x) => x.id === p.id) ?? fail('not_found', `No device ${p.id}`);
       this.state.devices = this.state.devices.filter((x) => x.id !== p.id);
-      this.audit({ actor: 'alice', type: 'device.removed', severity: 'warn', summary: `alice removed ${d.name}` });
+      this.audit({
+        actor: 'alice',
+        type: 'device.removed',
+        severity: 'warn',
+        summary: `alice removed ${d.name}`,
+      });
       return OK;
     },
     'device.pushSubscribe': (p) => {
@@ -679,7 +874,11 @@ export class MockDaemon {
     // ── identity
     'identity.get': () => ({
       npub: OWNER.npub,
-      agents: [...this.state.agents.values()].map((a) => ({ name: a.config.name, npub: a.config.identity.npub, nip05: a.config.identity.nip05 })),
+      agents: [...this.state.agents.values()].map((a) => ({
+        name: a.config.name,
+        npub: a.config.identity.npub,
+        nip05: a.config.identity.nip05,
+      })),
     }),
     'identity.nip05': (p) => {
       const names = p.names ?? { reviewer: NPUBS.reviewer, help: NPUBS.helpdesk };
@@ -695,17 +894,21 @@ export class MockDaemon {
     },
 
     // ── data
-    'data.export': () => ({ path: `~/.beamhop/exports/beamhop-${new Date().toISOString().slice(0, 10)}.tar.gz` }),
+    'data.export': () => ({
+      path: `~/.beamhop/exports/beamhop-${new Date().toISOString().slice(0, 10)}.tar.gz`,
+    }),
     'data.purge': (p) => {
       const before = p.before ?? new Date().toISOString();
       const n = this.state.audit.length;
-      this.state.audit = this.state.audit.filter((e) => !((!p.agent || e.agent === p.agent) && e.at < before));
+      this.state.audit = this.state.audit.filter(
+        (e) => !((!p.agent || e.agent === p.agent) && e.at < before),
+      );
       return { deleted: n - this.state.audit.length };
     },
   };
 }
 
-export const describe = (a: ApprovalView): string => {
+export const describeApproval = (a: ApprovalView): string => {
   const i = (a.input ?? {}) as Record<string, unknown>;
   return String(i.command ?? i.host ?? i.path ?? a.title);
 };

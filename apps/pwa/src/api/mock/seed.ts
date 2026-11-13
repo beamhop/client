@@ -5,11 +5,11 @@
  * All times are relative to page load so the demo always looks "current".
  */
 import {
+  AgentConfig,
+  type AgentConfigInput,
   type AgentView,
   type ApprovalView,
   type AuditEvent,
-  AgentConfig,
-  type AgentConfigInput,
   ChannelConfig,
   type ChannelView,
   DEFAULT_ROLES,
@@ -31,7 +31,10 @@ export const OWNER = {
   npub: 'npub1alc3q8zk2m4v7hx9r0s6w5ud3fy8pt2n7l4k0g6c9e1j5a3s8d2q7wmz4k',
   principal: 'nostr:npub1alc3q8zk2m4v7hx9r0s6w5ud3fy8pt2n7l4k0g6c9e1j5a3s8d2q7wmz4k',
 };
-export const BOB = { name: 'bob', principal: 'nostr:npub1b0bz7f3k9q2w8e4r6t1y5u0i3o7p9a2s4d6f8g0h1j3k5l7z9x2c4vqh8' };
+export const BOB = {
+  name: 'bob',
+  principal: 'nostr:npub1b0bz7f3k9q2w8e4r6t1y5u0i3o7p9a2s4d6f8g0h1j3k5l7z9x2c4vqh8',
+};
 
 export const NPUBS = {
   reviewer: 'npub1x7k4m2q9r8t5w3e6y1u0i7o4p2a5s8d3f6g9h1j4k7l0z2x5c8v3b6n9q9fz',
@@ -41,7 +44,12 @@ export const NPUBS = {
   stranger: 'npub1qz8k4w7e2r9t5y1u6i3o0p8a4s7d2f9g5h1j6k3l0z8x4c7v2b9n5m1q8k4',
 };
 
-export const RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.nostr.band'];
+export const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.primal.net',
+  'wss://relay.nostr.band',
+];
 
 const MIN = 60_000;
 export const ago = (now: number, minutes: number) => new Date(now - minutes * MIN).toISOString();
@@ -430,7 +438,7 @@ export const seed = (now = Date.now()): MockState => {
     '--- a/src/util/url.ts',
     '+++ b/src/util/url.ts',
     '@@ -1,3 +1,8 @@',
-    "+export const safeNext = (next: unknown): string => {",
+    '+export const safeNext = (next: unknown): string => {',
     "+  if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//')) return '/';",
     '+  return next;',
     '+};',
@@ -448,20 +456,40 @@ export const seed = (now = Date.now()): MockState => {
       text: 'can you fix the login redirect and push it? users land on / instead of where they were.',
     }),
     e842(6.0, { kind: 'assistant', text: 'Looking at the auth flow first.' }),
-    e842(5.9, { kind: 'tool_call', tool: { id: 't1', name: 'Read', title: 'Read src/auth.ts', input: { path: 'src/auth.ts' } } }),
+    e842(5.9, {
+      kind: 'tool_call',
+      tool: { id: 't1', name: 'Read', title: 'Read src/auth.ts', input: { path: 'src/auth.ts' } },
+    }),
     e842(5.9, { kind: 'tool_result', tool: { id: 't1', name: 'Read', ok: true, output: '84 lines' } }),
-    e842(5.8, { kind: 'tool_call', tool: { id: 't2', name: 'Grep', title: 'Grep "redirect"', input: { pattern: 'redirect' } } }),
-    e842(5.8, { kind: 'tool_result', tool: { id: 't2', name: 'Grep', ok: true, output: '4 hits in 2 files' } }),
+    e842(5.8, {
+      kind: 'tool_call',
+      tool: { id: 't2', name: 'Grep', title: 'Grep "redirect"', input: { pattern: 'redirect' } },
+    }),
+    e842(5.8, {
+      kind: 'tool_result',
+      tool: { id: 't2', name: 'Grep', ok: true, output: '4 hits in 2 files' },
+    }),
     e842(5.6, {
       kind: 'assistant',
       text: 'The redirect drops the `next` param. Fixing it in two places, and guarding against open redirects (`//evil.example`).',
     }),
     e842(5.1, {
       kind: 'tool_call',
-      tool: { id: 't3', name: 'Edit', title: 'Edit 2 files +14 −3', input: { files: ['src/auth.ts', 'src/util/url.ts'] } },
+      tool: {
+        id: 't3',
+        name: 'Edit',
+        title: 'Edit 2 files +14 −3',
+        input: { files: ['src/auth.ts', 'src/util/url.ts'] },
+      },
     }),
-    e842(5.0, { kind: 'tool_result', tool: { id: 't3', name: 'Edit', ok: true, diff, output: '2 files changed' } }),
-    e842(4.9, { kind: 'tool_call', tool: { id: 't4', name: 'Bash', title: 'Bash npm test', input: { command: 'npm test' } } }),
+    e842(5.0, {
+      kind: 'tool_result',
+      tool: { id: 't3', name: 'Edit', ok: true, diff, output: '2 files changed' },
+    }),
+    e842(4.9, {
+      kind: 'tool_call',
+      tool: { id: 't4', name: 'Bash', title: 'Bash npm test', input: { command: 'npm test' } },
+    }),
     e842(4.2, { kind: 'progress', text: 'running tests… 214 passing' }),
     e842(1.1, {
       kind: 'tool_result',
@@ -584,7 +612,10 @@ export const seed = (now = Date.now()): MockState => {
     requestedBy: { principal: `nostr:${NPUBS.stranger}`, displayName: 'npub1qz…8k4', role: 'viewer' },
     tool: 'access',
     title: 'Unknown sender asked to talk',
-    input: { principal: `nostr:${NPUBS.stranger}`, message: 'hi, can your helpdesk agent answer billing questions?' },
+    input: {
+      principal: `nostr:${NPUBS.stranger}`,
+      message: 'hi, can your helpdesk agent answer billing questions?',
+    },
     risk: 'low',
     createdAt: ago(now, 31),
     expiresAt: ahead(now, 29),
@@ -622,33 +653,177 @@ export const seed = (now = Date.now()): MockState => {
   let aid = 1000;
   const au = (minAgo: number, e: Omit<AuditEvent, 'id' | 'at' | 'data'> & { data?: AuditEvent['data'] }) =>
     audit.push({ id: `aud_${aid++}`, at: ago(now, minAgo), data: {}, ...e });
-  au(0.4, { agent: 'reviewer', actor: 'reviewer', type: 'approval.requested', severity: 'info', summary: 'reviewer asked to run git push origin beamhop/842', data: { approvalId: 'apr_a41f' } });
-  au(3, { agent: 'helpdesk', actor: 'srt', type: 'sandbox.blocked_host', severity: 'security', summary: 'helpdesk was blocked from pypi.org (learning mode logged it)', data: { host: 'pypi.org', session: 'ses_h31' } });
-  au(9, { agent: 'reviewer', actor: 'srt', type: 'sandbox.blocked_host', severity: 'security', summary: 'reviewer was blocked from 169.254.169.254 (cloud metadata)', data: { host: '169.254.169.254', session: 'ses_842' } });
-  au(31, { agent: 'helpdesk', actor: `nostr:${NPUBS.stranger}`, type: 'sender.unknown', severity: 'warn', summary: 'npub1qz…8k4 asked to talk to helpdesk', data: {} });
-  au(48, { actor: 'telegram:9911', type: 'pairing.failed', severity: 'security', summary: 'Failed pairing on tg: wrong code from @mallory_x', data: { channel: 'tg' } });
-  au(128, { agent: 'ci-bot', actor: 'alice', type: 'approval.decided', severity: 'info', summary: 'alice allowed fly deploy --app acme-staging', data: {} });
-  au(141, { agent: 'reviewer', actor: 'reviewer', type: 'session.ended', severity: 'info', summary: 'reviewer finished thread 839 · 3 files changed', data: { session: 'ses_839' } });
-  au(150, { agent: 'reviewer', actor: 'alice', type: 'approval.decided', severity: 'info', summary: 'alice allowed git push origin beamhop/839', data: {} });
-  au(300, { agent: 'helpdesk', actor: 'bob', type: 'approval.decided', severity: 'info', summary: 'bob denied fetch status.acme.dev', data: {} });
-  au(380, { agent: 'reviewer', actor: 'dlp', type: 'dlp.redacted', severity: 'security', summary: "reviewer's reply to Alice contained something that looks like an AWS key. It was redacted.", data: { pattern: 'aws-key' } });
-  au(60 * 8, { agent: 'reviewer', actor: 'mesh', type: 'mesh.hop_limit', severity: 'warn', summary: 'reviewer and summarizer hit the 6-turn limit in thread 822', data: {} });
-  au(60 * 11, { actor: 'alice', type: 'config.changed', severity: 'info', summary: 'alice added registry.npmjs.org to reviewer’s network allowlist', data: { file: '~/.beamhop/agents/reviewer.yaml' } });
-  au(60 * 22, { actor: 'alice', type: 'device.paired', severity: 'info', summary: 'alice paired iPhone · Safari', data: {} });
-  au(60 * 26, { agent: 'scribe', actor: 'beamhopd', type: 'approval.expired', severity: 'warn', summary: 'Auto-denied write ~/notes/todo.md — the agent was told', data: {} });
-  au(60 * 30, { agent: 'ci-bot', actor: 'alice', type: 'deploy.applied', severity: 'info', summary: 'ci-bot moved to fly · ams (shared-cpu-1x)', data: { deployment: 'dep_fly_ams1' } });
-  au(60 * 40, { agent: 'helpdesk', actor: 'alice', type: 'policy.learning', severity: 'info', summary: 'alice turned on learning mode for helpdesk (7 days)', data: {} });
-  au(60 * 52, { actor: 'alice', type: 'role.granted', severity: 'info', summary: 'alice made bob an admin on reviewer (signed)', data: { signed: true } });
-  const blockedHosts = ['api.openai.com', 'pypi.org', 'files.pythonhosted.org', 'registry.yarnpkg.com', 'raw.githubusercontent.com', '169.254.169.254'];
+  au(0.4, {
+    agent: 'reviewer',
+    actor: 'reviewer',
+    type: 'approval.requested',
+    severity: 'info',
+    summary: 'reviewer asked to run git push origin beamhop/842',
+    data: { approvalId: 'apr_a41f' },
+  });
+  au(3, {
+    agent: 'helpdesk',
+    actor: 'srt',
+    type: 'sandbox.blocked_host',
+    severity: 'security',
+    summary: 'helpdesk was blocked from pypi.org (learning mode logged it)',
+    data: { host: 'pypi.org', session: 'ses_h31' },
+  });
+  au(9, {
+    agent: 'reviewer',
+    actor: 'srt',
+    type: 'sandbox.blocked_host',
+    severity: 'security',
+    summary: 'reviewer was blocked from 169.254.169.254 (cloud metadata)',
+    data: { host: '169.254.169.254', session: 'ses_842' },
+  });
+  au(31, {
+    agent: 'helpdesk',
+    actor: `nostr:${NPUBS.stranger}`,
+    type: 'sender.unknown',
+    severity: 'warn',
+    summary: 'npub1qz…8k4 asked to talk to helpdesk',
+    data: {},
+  });
+  au(48, {
+    actor: 'telegram:9911',
+    type: 'pairing.failed',
+    severity: 'security',
+    summary: 'Failed pairing on tg: wrong code from @mallory_x',
+    data: { channel: 'tg' },
+  });
+  au(128, {
+    agent: 'ci-bot',
+    actor: 'alice',
+    type: 'approval.decided',
+    severity: 'info',
+    summary: 'alice allowed fly deploy --app acme-staging',
+    data: {},
+  });
+  au(141, {
+    agent: 'reviewer',
+    actor: 'reviewer',
+    type: 'session.ended',
+    severity: 'info',
+    summary: 'reviewer finished thread 839 · 3 files changed',
+    data: { session: 'ses_839' },
+  });
+  au(150, {
+    agent: 'reviewer',
+    actor: 'alice',
+    type: 'approval.decided',
+    severity: 'info',
+    summary: 'alice allowed git push origin beamhop/839',
+    data: {},
+  });
+  au(300, {
+    agent: 'helpdesk',
+    actor: 'bob',
+    type: 'approval.decided',
+    severity: 'info',
+    summary: 'bob denied fetch status.acme.dev',
+    data: {},
+  });
+  au(380, {
+    agent: 'reviewer',
+    actor: 'dlp',
+    type: 'dlp.redacted',
+    severity: 'security',
+    summary: "reviewer's reply to Alice contained something that looks like an AWS key. It was redacted.",
+    data: { pattern: 'aws-key' },
+  });
+  au(60 * 8, {
+    agent: 'reviewer',
+    actor: 'mesh',
+    type: 'mesh.hop_limit',
+    severity: 'warn',
+    summary: 'reviewer and summarizer hit the 6-turn limit in thread 822',
+    data: {},
+  });
+  au(60 * 11, {
+    actor: 'alice',
+    type: 'config.changed',
+    severity: 'info',
+    summary: 'alice added registry.npmjs.org to reviewer’s network allowlist',
+    data: { file: '~/.beamhop/agents/reviewer.yaml' },
+  });
+  au(60 * 22, {
+    actor: 'alice',
+    type: 'device.paired',
+    severity: 'info',
+    summary: 'alice paired iPhone · Safari',
+    data: {},
+  });
+  au(60 * 26, {
+    agent: 'scribe',
+    actor: 'beamhopd',
+    type: 'approval.expired',
+    severity: 'warn',
+    summary: 'Auto-denied write ~/notes/todo.md — the agent was told',
+    data: {},
+  });
+  au(60 * 30, {
+    agent: 'ci-bot',
+    actor: 'alice',
+    type: 'deploy.applied',
+    severity: 'info',
+    summary: 'ci-bot moved to fly · ams (shared-cpu-1x)',
+    data: { deployment: 'dep_fly_ams1' },
+  });
+  au(60 * 40, {
+    agent: 'helpdesk',
+    actor: 'alice',
+    type: 'policy.learning',
+    severity: 'info',
+    summary: 'alice turned on learning mode for helpdesk (7 days)',
+    data: {},
+  });
+  au(60 * 52, {
+    actor: 'alice',
+    type: 'role.granted',
+    severity: 'info',
+    summary: 'alice made bob an admin on reviewer (signed)',
+    data: { signed: true },
+  });
+  const blockedHosts = [
+    'api.openai.com',
+    'pypi.org',
+    'files.pythonhosted.org',
+    'registry.yarnpkg.com',
+    'raw.githubusercontent.com',
+    '169.254.169.254',
+  ];
   for (let d = 2; d < 14; d++) {
     const n = 1 + Math.floor(rnd() * 3);
     for (let i = 0; i < n; i++) {
       const host = blockedHosts[Math.floor(rnd() * blockedHosts.length)]!;
       const who = rnd() > 0.5 ? 'helpdesk' : 'reviewer';
-      au(60 * 24 * d + Math.floor(rnd() * 600), { agent: who, actor: 'srt', type: 'sandbox.blocked_host', severity: 'security', summary: `${who} was blocked from ${host}`, data: { host } });
+      au(60 * 24 * d + Math.floor(rnd() * 600), {
+        agent: who,
+        actor: 'srt',
+        type: 'sandbox.blocked_host',
+        severity: 'security',
+        summary: `${who} was blocked from ${host}`,
+        data: { host },
+      });
     }
-    au(60 * 24 * d + 300, { agent: 'reviewer', actor: 'reviewer', type: 'session.ended', severity: 'info', summary: `reviewer finished thread ${800 - d * 3}`, data: {} });
-    if (d % 4 === 0) au(60 * 24 * d + 120, { agent: 'reviewer', actor: 'srt', type: 'sandbox.blocked_path', severity: 'security', summary: 'reviewer tried to read ~/.ssh/id_ed25519 — blocked by design', data: { path: '~/.ssh/id_ed25519' } });
+    au(60 * 24 * d + 300, {
+      agent: 'reviewer',
+      actor: 'reviewer',
+      type: 'session.ended',
+      severity: 'info',
+      summary: `reviewer finished thread ${800 - d * 3}`,
+      data: {},
+    });
+    if (d % 4 === 0)
+      au(60 * 24 * d + 120, {
+        agent: 'reviewer',
+        actor: 'srt',
+        type: 'sandbox.blocked_path',
+        severity: 'security',
+        summary: 'reviewer tried to read ~/.ssh/id_ed25519 — blocked by design',
+        data: { path: '~/.ssh/id_ed25519' },
+      });
   }
   audit.sort((a, b) => b.at.localeCompare(a.at));
 
@@ -685,22 +860,86 @@ export const seed = (now = Date.now()): MockState => {
 
   // ─────────── Devices ───────────
   const devices: DeviceView[] = [
-    { id: 'dev_iphone', name: 'iPhone · Safari', pubkey: 'npub1dvc1phn…7k2a', pairedAt: ago(now, 60 * 22), lastSeenAt: ago(now, 0), pushEnabled: true },
-    { id: 'dev_mac', name: 'MacBook · Firefox', pubkey: 'npub1dvc2mcb…q9w1', pairedAt: ago(now, 60 * 46), lastSeenAt: ago(now, 4), pushEnabled: false },
-    { id: 'dev_pixel', name: 'Pixel · Chrome', pubkey: 'npub1dvc3pxl…m3e8', pairedAt: ago(now, 60 * 24 * 120), lastSeenAt: ago(now, 60 * 24 * 94), pushEnabled: true },
+    {
+      id: 'dev_iphone',
+      name: 'iPhone · Safari',
+      pubkey: 'npub1dvc1phn…7k2a',
+      pairedAt: ago(now, 60 * 22),
+      lastSeenAt: ago(now, 0),
+      pushEnabled: true,
+    },
+    {
+      id: 'dev_mac',
+      name: 'MacBook · Firefox',
+      pubkey: 'npub1dvc2mcb…q9w1',
+      pairedAt: ago(now, 60 * 46),
+      lastSeenAt: ago(now, 4),
+      pushEnabled: false,
+    },
+    {
+      id: 'dev_pixel',
+      name: 'Pixel · Chrome',
+      pubkey: 'npub1dvc3pxl…m3e8',
+      pairedAt: ago(now, 60 * 24 * 120),
+      lastSeenAt: ago(now, 60 * 24 * 94),
+      pushEnabled: true,
+    },
   ];
 
   // ─────────── Schedules ───────────
   const schedules: ScheduleConfig[] = [
-    ScheduleConfig.parse({ id: 'sch_standup', agent: 'reviewer', kind: 'cron', spec: '0 9 * * 1-5', timezone: 'Europe/Berlin', prompt: 'Post a summary of open PRs and failing checks.', postTo: 'acme:channel/C0ENG', owner: OWNER.principal }),
-    ScheduleConfig.parse({ id: 'sch_nightly', agent: 'ci-bot', kind: 'webhook', spec: '/hooks/ci-nightly', prompt: 'Read the nightly CI log and explain any failure in one paragraph.', postTo: 'acme:channel/C0DEPLOYS', owner: OWNER.principal }),
-    ScheduleConfig.parse({ id: 'sch_notes', agent: 'scribe', kind: 'file-change', spec: '~/notes/meetings/*.md', prompt: 'Extract action items into ~/notes/todo.md.', owner: OWNER.principal, paused: true }),
+    ScheduleConfig.parse({
+      id: 'sch_standup',
+      agent: 'reviewer',
+      kind: 'cron',
+      spec: '0 9 * * 1-5',
+      timezone: 'Europe/Berlin',
+      prompt: 'Post a summary of open PRs and failing checks.',
+      postTo: 'acme:channel/C0ENG',
+      owner: OWNER.principal,
+    }),
+    ScheduleConfig.parse({
+      id: 'sch_nightly',
+      agent: 'ci-bot',
+      kind: 'webhook',
+      spec: '/hooks/ci-nightly',
+      prompt: 'Read the nightly CI log and explain any failure in one paragraph.',
+      postTo: 'acme:channel/C0DEPLOYS',
+      owner: OWNER.principal,
+    }),
+    ScheduleConfig.parse({
+      id: 'sch_notes',
+      agent: 'scribe',
+      kind: 'file-change',
+      spec: '~/notes/meetings/*.md',
+      prompt: 'Extract action items into ~/notes/todo.md.',
+      owner: OWNER.principal,
+      paused: true,
+    }),
   ];
 
   // ─────────── Deployments ───────────
   const deployments: DeploymentView[] = [
-    { id: 'dep_fly_ams1', provider: 'fly', agent: 'ci-bot', status: 'running', region: 'ams', size: 'shared-cpu-1x · 1 GB', createdAt: ago(now, 60 * 30), monthlyCostUsd: 5.7 },
-    { id: 'dep_hz_fsn1', provider: 'hetzner', agent: 'reviewer-staging', status: 'stopped', region: 'fsn1', size: 'cx22 · 2 vCPU 4 GB', createdAt: ago(now, 60 * 24 * 8), monthlyCostUsd: 4.9 },
+    {
+      id: 'dep_fly_ams1',
+      provider: 'fly',
+      agent: 'ci-bot',
+      status: 'running',
+      region: 'ams',
+      size: 'shared-cpu-1x · 1 GB',
+      createdAt: ago(now, 60 * 30),
+      monthlyCostUsd: 5.7,
+    },
+    {
+      id: 'dep_hz_fsn1',
+      provider: 'hetzner',
+      agent: 'reviewer-staging',
+      status: 'stopped',
+      region: 'fsn1',
+      size: 'cx22 · 2 vCPU 4 GB',
+      createdAt: ago(now, 60 * 24 * 8),
+      monthlyCostUsd: 4.9,
+    },
   ];
 
   // ─────────── Policy ───────────
@@ -708,8 +947,21 @@ export const seed = (now = Date.now()): MockState => {
   policies.set('reviewer', {
     profile: 'workspace',
     effective: SandboxPolicy.parse({
-      fs: { read: ['~/code/app', '~/notes'], write: ['~/code/app'], deny: ['~/.ssh', '~/.aws', '~/.config/gh'] },
-      net: { allow: ['api.anthropic.com', 'github.com', '*.githubusercontent.com', 'registry.npmjs.org', 'nodejs.org', 'objects.githubusercontent.com'] },
+      fs: {
+        read: ['~/code/app', '~/notes'],
+        write: ['~/code/app'],
+        deny: ['~/.ssh', '~/.aws', '~/.config/gh'],
+      },
+      net: {
+        allow: [
+          'api.anthropic.com',
+          'github.com',
+          '*.githubusercontent.com',
+          'registry.npmjs.org',
+          'nodejs.org',
+          'objects.githubusercontent.com',
+        ],
+      },
       secrets: [{ name: 'ANTHROPIC_API_KEY', host: 'api.anthropic.com', header: 'x-api-key' }],
     }),
   });
@@ -718,7 +970,10 @@ export const seed = (now = Date.now()): MockState => {
     effective: SandboxPolicy.parse({
       fs: { read: ['~/code/app'] },
       net: { allow: ['api.openai.com', 'github.com', 'api.fly.io'] },
-      secrets: [{ name: 'OPENAI_API_KEY', host: 'api.openai.com', prefix: 'Bearer' }, { name: 'FLY_API_TOKEN', host: 'api.fly.io', prefix: 'Bearer' }],
+      secrets: [
+        { name: 'OPENAI_API_KEY', host: 'api.openai.com', prefix: 'Bearer' },
+        { name: 'FLY_API_TOKEN', host: 'api.fly.io', prefix: 'Bearer' },
+      ],
     }),
   });
   policies.set('helpdesk', {
@@ -726,19 +981,45 @@ export const seed = (now = Date.now()): MockState => {
     effective: SandboxPolicy.parse({
       fs: { read: ['~/docs/public'] },
       net: { allow: ['generativelanguage.googleapis.com', 'docs.acme.dev'] },
-      secrets: [{ name: 'GEMINI_API_KEY', host: 'generativelanguage.googleapis.com', header: 'x-goog-api-key' }],
+      secrets: [
+        { name: 'GEMINI_API_KEY', host: 'generativelanguage.googleapis.com', header: 'x-goog-api-key' },
+      ],
       learning: true,
     }),
   });
   policies.set('scribe', {
     profile: 'workspace',
-    effective: SandboxPolicy.parse({ fs: { read: ['~/notes'], write: ['~/notes'] }, net: { allow: ['api.anthropic.com'] } }),
+    effective: SandboxPolicy.parse({
+      fs: { read: ['~/notes'], write: ['~/notes'] },
+      net: { allow: ['api.anthropic.com'] },
+    }),
   });
 
   const suggestions: PolicySuggestion[] = [
-    { id: 'sug_pypi', agent: 'helpdesk', kind: 'net.allow', value: 'pypi.org', count: 14, lastSeenAt: ago(now, 3) },
-    { id: 'sug_npm', agent: 'helpdesk', kind: 'net.allow', value: 'registry.npmjs.org', count: 6, lastSeenAt: ago(now, 44) },
-    { id: 'sug_pipcache', agent: 'helpdesk', kind: 'fs.read', value: '~/.cache/pip', count: 3, lastSeenAt: ago(now, 3) },
+    {
+      id: 'sug_pypi',
+      agent: 'helpdesk',
+      kind: 'net.allow',
+      value: 'pypi.org',
+      count: 14,
+      lastSeenAt: ago(now, 3),
+    },
+    {
+      id: 'sug_npm',
+      agent: 'helpdesk',
+      kind: 'net.allow',
+      value: 'registry.npmjs.org',
+      count: 6,
+      lastSeenAt: ago(now, 44),
+    },
+    {
+      id: 'sug_pipcache',
+      agent: 'helpdesk',
+      kind: 'fs.read',
+      value: '~/.cache/pip',
+      count: 3,
+      lastSeenAt: ago(now, 3),
+    },
   ];
 
   const doctor: DoctorCheck[] = [
@@ -746,7 +1027,13 @@ export const seed = (now = Date.now()): MockState => {
     { id: 'bwrap', title: 'bubblewrap', status: 'ok', message: 'bubblewrap 0.9.0' },
     { id: 'socat', title: 'socat', status: 'ok', message: 'socat 1.8.0.0' },
     { id: 'rg', title: 'ripgrep', status: 'ok', message: 'ripgrep 14.1.1' },
-    { id: 'userns', title: 'user namespaces (AppArmor)', status: 'warn', message: 'Restricted for unprivileged users. bwrap needs an exception.', fix: 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0' },
+    {
+      id: 'userns',
+      title: 'user namespaces (AppArmor)',
+      status: 'warn',
+      message: 'Restricted for unprivileged users. bwrap needs an exception.',
+      fix: 'sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+    },
   ];
 
   return {

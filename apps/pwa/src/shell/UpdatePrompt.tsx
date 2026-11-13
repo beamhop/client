@@ -2,8 +2,9 @@
  * Service-worker update prompt (vite-plugin-pwa, registerType "prompt"): a persistent toast with Reload.
  * Never reloads on its own — an approval in progress must not vanish under the user's finger.
  */
-import { useEffect } from 'react';
+
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useEffect } from 'react';
 import { t } from '../i18n/index.ts';
 import { useToast } from '../ui/Toast.tsx';
 

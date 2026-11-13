@@ -91,7 +91,9 @@ export const Sheet = ({
               asSheet && 'max-h-[92dvh] rounded-t-[20px] shadow-sheet',
               asSheet && full && 'h-[92dvh]',
               asPane && 'h-dvh max-w-[480px] border-l border-line shadow-sheet',
-              !asSheet && !asPane && 'max-h-[min(88dvh,800px)] max-w-[560px] rounded-lg border border-line shadow-pop',
+              !asSheet &&
+                !asPane &&
+                'max-h-[min(88dvh,800px)] max-w-[560px] rounded-lg border border-line shadow-pop',
               className,
             )}
             initial={enter}
@@ -117,10 +119,13 @@ export const Sheet = ({
                   <div
                     className={cx('shrink-0 select-none', asSheet && 'touch-none')}
                     onPointerDown={(e) => {
-                      if (asSheet && !reduce && !(e.target as HTMLElement).closest('button')) controls.start(e);
+                      if (asSheet && !reduce && !(e.target as HTMLElement).closest('button'))
+                        controls.start(e);
                     }}
                   >
-                    {asSheet && <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong" />}
+                    {asSheet && (
+                      <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong" />
+                    )}
                     <div className="flex items-start gap-3 pt-3 pr-2 pb-2 pl-4 expanded:pt-4 expanded:pl-6">
                       <div className="min-w-0 flex-1 pt-2">
                         <Heading
@@ -136,7 +141,9 @@ export const Sheet = ({
                       <IconButton label="Close" icon={<X size={20} />} onPress={close} tooltip={false} />
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 expanded:px-6">{children}</div>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 expanded:px-6">
+                    {children}
+                  </div>
                   {footer && (
                     <div className="shrink-0 border-t border-line bg-surface px-4 pt-3 pb-[max(12px,var(--bh-safe-bottom))] expanded:px-6 expanded:pb-4">
                       {footer}
@@ -170,7 +177,17 @@ export interface ConfirmDialogProps {
  * Destructive confirms name the thing and the consequence (DESIGN §11.8). Not scrim-dismissable;
  * focus starts on the title so screen-reader users hear the consequence first, then Confirm, then Cancel.
  */
-export const ConfirmDialog = ({ isOpen, onOpenChange, title, children, confirmLabel, cancelLabel = 'Cancel', onConfirm, variant = 'destructive', isPending }: ConfirmDialogProps) => (
+export const ConfirmDialog = ({
+  isOpen,
+  onOpenChange,
+  title,
+  children,
+  confirmLabel,
+  cancelLabel = 'Cancel',
+  onConfirm,
+  variant = 'destructive',
+  isPending,
+}: ConfirmDialogProps) => (
   <Sheet
     isOpen={isOpen}
     onOpenChange={onOpenChange}

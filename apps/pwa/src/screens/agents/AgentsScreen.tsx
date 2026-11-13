@@ -20,7 +20,20 @@ export const AgentsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={
-        <Screen title="Agents" pane="list" actions={<LinkButton href="/agents/new" variant="primary" size="sm" icon={<Plus size={16} weight="bold" aria-hidden="true" />}>New agent</LinkButton>}>
+        <Screen
+          title="Agents"
+          pane="list"
+          actions={
+            <LinkButton
+              href="/agents/new"
+              variant="primary"
+              size="sm"
+              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+            >
+              New agent
+            </LinkButton>
+          }
+        >
           <StubList
             label="Agents"
             loading={q.isPending}
@@ -28,12 +41,24 @@ export const AgentsScreen = () => {
               href: `/agents/${a.config.name}`,
               title: a.config.name,
               tile: harnessMonogram(a.config.harness),
-              slug: [a.config.harness, a.config.sandbox.profile, a.location.kind === 'cloud' ? (a.location.provider ?? 'cloud') : 'local'],
+              slug: [
+                a.config.harness,
+                a.config.sandbox.profile,
+                a.location.kind === 'cloud' ? (a.location.provider ?? 'cloud') : 'local',
+              ],
               lamp: agentLamp(a),
             }))}
           />
           <div className="mt-6">
-            <ScreenStub spec="SCREENS §4.1" owner="src/screens/agents/" outline={['Dense agent cards (compact) / rows + detail (desktop)', 'Card overflow: Open, New session, Stop, Move to cloud']} cli="beamhop agent list" />
+            <ScreenStub
+              spec="SCREENS §4.1"
+              owner="src/screens/agents/"
+              outline={[
+                'Dense agent cards (compact) / rows + detail (desktop)',
+                'Card overflow: Open, New session, Stop, Move to cloud',
+              ]}
+              cli="beamhop agent list"
+            />
           </div>
         </Screen>
       }

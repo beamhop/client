@@ -24,17 +24,27 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
   return (
     <aside
-      className={cx('fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg', collapsed ? 'w-16' : 'w-60')}
+      className={cx(
+        'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg',
+        collapsed ? 'w-16' : 'w-60',
+      )}
       aria-label="Sidebar"
       data-sidebar={collapsed ? 'rail' : 'full'}
     >
-      <div className={cx('flex h-16 items-center', collapsed ? 'justify-center' : 'justify-between pr-2 pl-5')}>
+      <div
+        className={cx('flex h-16 items-center', collapsed ? 'justify-center' : 'justify-between pr-2 pl-5')}
+      >
         {!collapsed && (
           <Link to="/" aria-label="beamhop home" className="rounded-sm outline-none">
             <Wordmark />
           </Link>
         )}
-        <IconButton label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} shortcut="⌘\" icon={<SidebarSimple size={20} />} onPress={onToggle} />
+        <IconButton
+          label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          shortcut="⌘\"
+          icon={<SidebarSimple size={20} />}
+          onPress={onToggle}
+        />
       </div>
       <nav aria-label={t('nav.main')} className="pane-scroll flex-1 px-3 pb-4">
         {SIDEBAR_GROUPS.map((g) => (
@@ -60,13 +70,32 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                         active ? 'bg-sunken text-ink' : 'text-ink-2 hover:bg-sunken hover:text-ink',
                       )}
                     >
-                      {active && <span aria-hidden="true" className="absolute top-2 bottom-2 -left-3 w-0.5 bg-flare" />}
+                      {active && (
+                        <span aria-hidden="true" className="absolute top-2 bottom-2 -left-3 w-0.5 bg-flare" />
+                      )}
                       <Icon size={20} weight={active ? 'bold' : 'regular'} aria-hidden="true" />
                       {!collapsed && <span className="flex-1 type-label">{item.label}</span>}
-                      {!collapsed && badge > 0 && <CountBadge count={badge} label={t('inbox.badge', { count: badge })} />}
-                      {collapsed && badge > 0 && <span aria-hidden="true" className="absolute top-1.5 right-2 size-2 rounded-full bg-flare" />}
+                      {!collapsed && badge > 0 && (
+                        <CountBadge
+                          count={badge}
+                          label={badge === 1 ? 'approval waiting' : 'approvals waiting'}
+                        />
+                      )}
+                      {collapsed && badge > 0 && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-1.5 right-2 size-2 rounded-full bg-flare"
+                        />
+                      )}
                       {dot && (
-                        <span className={cx('size-1.5 rounded-full bg-caution-text', collapsed && 'absolute top-2 right-2.5')} aria-label="has findings" role="img" />
+                        <span
+                          className={cx(
+                            'size-1.5 rounded-full bg-caution-text',
+                            collapsed && 'absolute top-2 right-2.5',
+                          )}
+                          aria-label="has findings"
+                          role="img"
+                        />
                       )}
                     </Link>
                   </li>
@@ -80,9 +109,21 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <ConnectionPill wide={!collapsed} className={collapsed ? '' : 'self-start'} />
         {!panic &&
           (collapsed ? (
-            <IconButton label="Stop everything" shortcut="⌘⇧." icon={<Stop size={20} weight="fill" />} variant="destructive-ghost" onPress={open} />
+            <IconButton
+              label="Stop everything"
+              shortcut="⌘⇧."
+              icon={<Stop size={20} weight="fill" />}
+              variant="destructive-ghost"
+              onPress={open}
+            />
           ) : (
-            <Button variant="destructive-outline" size="sm" icon={<Stop size={16} weight="fill" aria-hidden="true" />} onPress={open} fullWidth>
+            <Button
+              variant="destructive-outline"
+              size="sm"
+              icon={<Stop size={16} weight="fill" aria-hidden="true" />}
+              onPress={open}
+              fullWidth
+            >
               {t('panic.button')}
             </Button>
           ))}

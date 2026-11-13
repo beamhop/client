@@ -24,7 +24,8 @@ export const ShellBanners = () => {
       <PanicBand />
       {offline && (
         <Banner tone="caution" icon={<CloudSlash size={18} weight="bold" />}>
-          <strong className="font-semibold">Offline.</strong> {t('offline.banner').replace(/^Offline\.\s*/, '')}
+          <strong className="font-semibold">Offline.</strong>{' '}
+          {t('offline.banner').replace(/^Offline\.\s*/, '')}
         </Banner>
       )}
       {conn.kind === 'mock' && conn.reason === 'no-token' && !demoDismissed && (
@@ -48,7 +49,8 @@ export const ShellBanners = () => {
             </Button>
           }
         >
-          {t('demo.banner')} Run <code className="font-mono text-[0.875em]">beamhop ui</code> to connect yours.
+          {t('demo.banner')} Run <code className="font-mono text-[0.875em]">beamhop ui</code> to connect
+          yours.
         </Banner>
       )}
     </>

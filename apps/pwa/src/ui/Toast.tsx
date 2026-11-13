@@ -5,7 +5,16 @@
  */
 import { ArrowCounterClockwise, Check, WarningCircle, X } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Button as RACButton } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
@@ -60,7 +69,8 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
     const duration = t.durationMs ?? (t.tone === 'error' ? Number.POSITIVE_INFINITY : t.onUndo ? 5000 : 4000);
     setToast({ ...t, id, duration });
     const spoken = t.spoken ?? (typeof t.message === 'string' ? t.message : '');
-    if (spoken) announce(t.onUndo ? `${spoken}. Undo available for ${Math.round(duration / 1000)} seconds.` : spoken);
+    if (spoken)
+      announce(t.onUndo ? `${spoken}. Undo available for ${Math.round(duration / 1000)} seconds.` : spoken);
     return id;
   }, []);
 
@@ -96,7 +106,15 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const ToastRegion = ({ toast, onDismiss, ref }: { toast: ActiveToast | null; onDismiss: (id?: number) => void; ref: React.Ref<HTMLElement> }) => {
+const ToastRegion = ({
+  toast,
+  onDismiss,
+  ref,
+}: {
+  toast: ActiveToast | null;
+  onDismiss: (id?: number) => void;
+  ref: React.Ref<HTMLElement>;
+}) => {
   const reduce = useReduced();
   return (
     <section
@@ -126,8 +144,22 @@ const ToastRegion = ({ toast, onDismiss, ref }: { toast: ActiveToast | null; onD
               />
             )}
             <div className="flex min-h-14 items-center gap-3 py-1.5 pr-1.5 pl-4">
-              <span aria-hidden="true" className={cx('shrink-0', toast.tone === 'error' ? 'text-stop-text' : toast.tone === 'success' ? 'text-go-text' : 'text-ink-2')}>
-                {toast.tone === 'error' ? <WarningCircle size={20} weight="bold" /> : <Check size={20} weight="bold" />}
+              <span
+                aria-hidden="true"
+                className={cx(
+                  'shrink-0',
+                  toast.tone === 'error'
+                    ? 'text-stop-text'
+                    : toast.tone === 'success'
+                      ? 'text-go-text'
+                      : 'text-ink-2',
+                )}
+              >
+                {toast.tone === 'error' ? (
+                  <WarningCircle size={20} weight="bold" />
+                ) : (
+                  <Check size={20} weight="bold" />
+                )}
               </span>
               <div className="min-w-0 flex-1 type-body-sm text-ink">{toast.message}</div>
               {toast.action && (

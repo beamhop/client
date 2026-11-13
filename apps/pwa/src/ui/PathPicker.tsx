@@ -7,7 +7,17 @@
  */
 import { CaretRight, FolderSimple, GitBranch } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
-import { Button as RACButton, ComboBox, Input, Label, ListBox, ListBoxItem, Popover, Text } from 'react-aria-components';
+import {
+  ButtonContext,
+  ComboBox,
+  Input,
+  Label,
+  ListBox,
+  ListBoxItem,
+  Popover,
+  Button as RACButton,
+  Text,
+} from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { Button } from './Button.tsx';
 import { descriptionClass, inputShell, labelClass } from './Field.tsx';
@@ -20,7 +30,11 @@ export interface DirEntry {
 
 const DEMO_TREE: Record<string, DirEntry[]> = {
   '~': [{ path: '~/code' }, { path: '~/docs' }, { path: '~/notes' }, { path: '~/Downloads' }],
-  '~/code': [{ path: '~/code/app', git: true }, { path: '~/code/site', git: true }, { path: '~/code/scratch' }],
+  '~/code': [
+    { path: '~/code/app', git: true },
+    { path: '~/code/site', git: true },
+    { path: '~/code/scratch' },
+  ],
   '~/docs': [{ path: '~/docs/public' }, { path: '~/docs/private' }],
   '~/notes': [{ path: '~/notes/meetings' }],
 };
@@ -39,7 +53,15 @@ export interface PathPickerProps {
 
 const parentOf = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) || '~' : '~');
 
-export const PathPicker = ({ label, value, onChange, description, recent = ['~/code/app', '~/notes'], listDir = demoListDir, className }: PathPickerProps) => {
+export const PathPicker = ({
+  label,
+  value,
+  onChange,
+  description,
+  recent = ['~/code/app', '~/notes'],
+  listDir = demoListDir,
+  className,
+}: PathPickerProps) => {
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [browse, setBrowse] = useState(false);
   const [cwd, setCwd] = useState('~');
@@ -63,30 +85,64 @@ export const PathPicker = ({ label, value, onChange, description, recent = ['~/c
   }, [browse, cwd, listDir]);
 
   const items = useMemo(() => {
-    const all = [...recent.map((p) => ({ path: p, recent: true })), ...entries.map((e) => ({ ...e, recent: false }))];
+    const all = [
+      ...recent.map((p) => ({ path: p, recent: true })),
+      ...entries.map((e) => ({ ...e, recent: false })),
+    ];
     const seen = new Set<string>();
-    return all.filter((x) => (seen.has(x.path) ? false : (seen.add(x.path), x.path.startsWith(value) || !value)));
+    return all.filter((x) => {
+      if (seen.has(x.path)) return false;
+      seen.add(x.path);
+      return x.path.startsWith(value) || !value;
+    });
   }, [recent, entries, value]);
-  const gitPaths = new Set([...Object.values(DEMO_TREE).flat(), ...entries].filter((e) => e.git).map((e) => e.path));
+  const gitPaths = new Set(
+    [...Object.values(DEMO_TREE).flat(), ...entries].filter((e) => e.git).map((e) => e.path),
+  );
   const crumbs = cwd.split('/').map((_, i, arr) => arr.slice(0, i + 1).join('/'));
 
   return (
     <div className={cx('flex flex-col gap-1.5', className)}>
-      <ComboBox inputValue={value} onInputChange={onChange} allowsCustomValue menuTrigger="focus" onSelectionChange={(k) => k && onChange(String(k))} className="flex flex-col gap-1.5">
+      <ComboBox
+        inputValue={value}
+        onInputChange={onChange}
+        allowsCustomValue
+        menuTrigger="focus"
+        onSelectionChange={(k) => k && onChange(String(k))}
+        className="flex flex-col gap-1.5"
+      >
         <Label className={labelClass}>{label}</Label>
         <div className="flex items-center gap-2">
           <div className="relative flex min-w-0 flex-1 items-center">
-            <FolderSimple size={18} aria-hidden="true" className="pointer-events-none absolute left-3 text-ink-2" />
-            <Input className={cx(inputShell, 'h-12 pr-3 pl-10 font-mono')} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+            <FolderSimple
+              size={18}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 text-ink-2"
+            />
+            <Input
+              className={cx(inputShell, 'h-12 pr-3 pl-10 font-mono')}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
             {gitPaths.has(value) && (
               <span className="absolute right-3 inline-flex items-center gap-1 type-meta text-ink-2">
                 <GitBranch size={14} aria-hidden="true" /> git
               </span>
             )}
           </div>
-          <Button variant="secondary" onPress={() => { setCwd(value && DEMO_TREE[dir] ? dir : '~'); setBrowse(true); }}>
-            Browse
-          </Button>
+          {/* Clear ComboBox's ButtonContext so Browse isn't treated as the "Show suggestions" trigger. */}
+          <ButtonContext.Provider value={null}>
+            <Button
+              variant="secondary"
+              onPress={() => {
+                setCwd(value && DEMO_TREE[dir] ? dir : '~');
+                setBrowse(true);
+              }}
+            >
+              Browse
+            </Button>
+          </ButtonContext.Provider>
         </div>
         {description && (
           <Text slot="description" className={descriptionClass}>
@@ -96,7 +152,11 @@ export const PathPicker = ({ label, value, onChange, description, recent = ['~/c
         <Popover className="w-[var(--trigger-width)] rounded-lg border border-line bg-surface shadow-pop outline-none">
           <ListBox items={items} className="max-h-72 overflow-y-auto p-1 outline-none">
             {(it) => (
-              <ListBoxItem id={it.path} textValue={it.path} className="flex min-h-11 items-center gap-2 rounded-md px-3 type-meta text-ink outline-none data-[focused]:bg-sunken">
+              <ListBoxItem
+                id={it.path}
+                textValue={it.path}
+                className="flex min-h-11 items-center gap-2 rounded-md px-3 type-meta text-ink outline-none data-[focused]:bg-sunken"
+              >
                 <FolderSimple size={16} aria-hidden="true" className="text-ink-2" />
                 <span className="flex-1 truncate">{it.path}</span>
                 {it.recent && <span className="type-micro text-ink-3">recent</span>}
@@ -112,7 +172,14 @@ export const PathPicker = ({ label, value, onChange, description, recent = ['~/c
         title="Choose a folder"
         subtitle="Only folders under your home directory"
         footer={
-          <Button variant="primary" fullWidth onPress={() => { onChange(cwd); setBrowse(false); }}>
+          <Button
+            variant="primary"
+            fullWidth
+            onPress={() => {
+              onChange(cwd);
+              setBrowse(false);
+            }}
+          >
             Use {cwd}
           </Button>
         }
@@ -121,7 +188,11 @@ export const PathPicker = ({ label, value, onChange, description, recent = ['~/c
           {crumbs.map((c, i) => (
             <span key={c} className="inline-flex items-center gap-1">
               {i > 0 && <CaretRight size={12} aria-hidden="true" className="text-ink-3" />}
-              <RACButton onPress={() => setCwd(c)} className="min-h-11 rounded-sm px-1.5 text-ink data-[hovered]:underline" aria-current={c === cwd ? 'location' : undefined}>
+              <RACButton
+                onPress={() => setCwd(c)}
+                className="min-h-11 rounded-sm px-1.5 text-ink data-[hovered]:underline"
+                aria-current={c === cwd ? 'location' : undefined}
+              >
                 {c.split('/').pop()}
               </RACButton>
             </span>
@@ -131,7 +202,10 @@ export const PathPicker = ({ label, value, onChange, description, recent = ['~/c
           {cwdEntries.length === 0 && <li className="px-4 py-3 type-body-sm text-ink-2">No folders here.</li>}
           {cwdEntries.map((e) => (
             <li key={e.path}>
-              <RACButton onPress={() => setCwd(e.path)} className="flex min-h-12 w-full items-center gap-3 px-4 text-left data-[hovered]:bg-sunken">
+              <RACButton
+                onPress={() => setCwd(e.path)}
+                className="flex min-h-12 w-full items-center gap-3 px-4 text-left data-[hovered]:bg-sunken"
+              >
                 <FolderSimple size={18} aria-hidden="true" className="text-ink-2" />
                 <span className="flex-1 type-meta text-ink">{e.path.split('/').pop()}</span>
                 {e.git && (

@@ -20,7 +20,14 @@ export interface StepperProps {
   onStepPress?: (index: number) => void;
 }
 
-export const Stepper = ({ steps, current, orientation = 'horizontal', showLabels, className, onStepPress }: StepperProps) => {
+export const Stepper = ({
+  steps,
+  current,
+  orientation = 'horizontal',
+  showLabels,
+  className,
+  onStepPress,
+}: StepperProps) => {
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
@@ -42,11 +49,20 @@ export const Stepper = ({ steps, current, orientation = 'horizontal', showLabels
           state === 'todo' && 'border-[1.5px] border-line-strong bg-bg text-ink-2',
         )}
       >
-        {state === 'done' ? <Check size={12} weight="bold" aria-hidden="true" /> : String(i + 1).padStart(2, '0')}
+        {state === 'done' ? (
+          <Check size={12} weight="bold" aria-hidden="true" />
+        ) : (
+          String(i + 1).padStart(2, '0')
+        )}
       </span>
     );
     return state === 'done' && onStepPress ? (
-      <button type="button" onClick={() => onStepPress(i)} aria-label={`Go back to step ${i + 1}: ${steps[i]}`} className="grid size-11 place-items-center rounded-full">
+      <button
+        type="button"
+        onClick={() => onStepPress(i)}
+        aria-label={`Go back to step ${i + 1}: ${steps[i]}`}
+        className="grid size-11 place-items-center rounded-full"
+      >
         {inner}
       </button>
     ) : (
@@ -61,10 +77,19 @@ export const Stepper = ({ steps, current, orientation = 'horizontal', showLabels
           <li key={s} aria-current={i === current ? 'step' : undefined} className="flex gap-3">
             <div className="flex flex-col items-center">
               {node(i)}
-              {i < steps.length - 1 && <span aria-hidden="true" className={cx('my-1 w-px flex-1 min-h-6', i < current ? 'bg-ink' : 'border-l border-dashed border-line-strong')} />}
+              {i < steps.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'my-1 w-px flex-1 min-h-6',
+                    i < current ? 'bg-ink' : 'border-l border-dashed border-line-strong',
+                  )}
+                />
+              )}
             </div>
             <div className={cx('pt-0.5 pb-5', i === current ? 'text-ink' : 'text-ink-2')}>
-              <span className="type-micro">{String(i + 1).padStart(2, '0')}</span> <span className="type-label">{s}</span>
+              <span className="type-micro">{String(i + 1).padStart(2, '0')}</span>{' '}
+              <span className="type-label">{s}</span>
               <span className="sr-only">{i < current ? ' (done)' : i === current ? ' (current)' : ''}</span>
             </div>
           </li>
@@ -78,7 +103,10 @@ export const Stepper = ({ steps, current, orientation = 'horizontal', showLabels
       <ol aria-label={label} className="flex items-center">
         {steps.map((s, i) => (
           <Fragment key={s}>
-            <li aria-current={i === current ? 'step' : undefined} className="flex shrink-0 flex-col items-center">
+            <li
+              aria-current={i === current ? 'step' : undefined}
+              className="flex shrink-0 flex-col items-center"
+            >
               {node(i)}
               <span className="sr-only">
                 {s}
@@ -86,7 +114,13 @@ export const Stepper = ({ steps, current, orientation = 'horizontal', showLabels
               </span>
             </li>
             {i < steps.length - 1 && (
-              <li aria-hidden="true" className={cx('mx-1 h-px flex-1', i < current ? 'bg-ink' : 'border-t border-dashed border-line-strong')} />
+              <li
+                aria-hidden="true"
+                className={cx(
+                  'mx-1 h-px flex-1',
+                  i < current ? 'bg-ink' : 'border-t border-dashed border-line-strong',
+                )}
+              />
             )}
           </Fragment>
         ))}

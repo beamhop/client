@@ -29,7 +29,15 @@ describe('StatusDot', () => {
 
 describe('SegmentedMeter', () => {
   it('is a meter with a spoken value', () => {
-    render(<SegmentedMeter name="reviewer budget" value={3.2} max={5} label="$3.20 / $5.00 today" valueText="$3.20 of $5.00 used today" />);
+    render(
+      <SegmentedMeter
+        name="reviewer budget"
+        value={3.2}
+        max={5}
+        label="$3.20 / $5.00 today"
+        valueText="$3.20 of $5.00 used today"
+      />,
+    );
     const m = screen.getByRole('meter', { name: 'reviewer budget' });
     expect(m).toHaveAttribute('aria-valuetext', '$3.20 of $5.00 used today');
     expect(m).toHaveAttribute('aria-valuemax', '5');
@@ -37,7 +45,12 @@ describe('SegmentedMeter', () => {
 });
 
 const Slip = ({ onRight, onLeft }: { onRight: () => void; onLeft: () => void }) => (
-  <SwipeAction aria-label="Approval from reviewer: git push" hint="Press A to allow once, D to deny." onSwipeRight={onRight} onSwipeLeft={onLeft}>
+  <SwipeAction
+    aria-label="Approval from reviewer: git push"
+    hint="Press A to allow once, D to deny."
+    onSwipeRight={onRight}
+    onSwipeLeft={onLeft}
+  >
     {({ commit }) => (
       <div>
         <p>git push origin beamhop/842</p>
@@ -51,7 +64,12 @@ const Slip = ({ onRight, onLeft }: { onRight: () => void; onLeft: () => void }) 
 describe('SwipeAction', () => {
   it('offers keyboard alternatives (A / D) on the focused card', async () => {
     // Reduced motion → commits synchronously (no fly-out animation in jsdom).
-    window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('reduce'),
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+    })) as never;
     const onRight = vi.fn();
     const onLeft = vi.fn();
     render(<Slip onRight={onRight} onLeft={onLeft} />);
@@ -65,7 +83,12 @@ describe('SwipeAction', () => {
   });
 
   it('always-visible buttons trigger the same commit (WCAG 2.5.1 / 2.5.7)', async () => {
-    window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {} })) as never;
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('reduce'),
+      media: q,
+      addEventListener() {},
+      removeEventListener() {},
+    })) as never;
     const onRight = vi.fn();
     const onLeft = vi.fn();
     const user = userEvent.setup();
@@ -93,7 +116,12 @@ const SheetHarness = () => {
       <button type="button" onClick={() => setOpen(true)}>
         Open
       </button>
-      <Sheet isOpen={open} onOpenChange={setOpen} title="Allow git push?" footer={<button type="button">Allow once</button>}>
+      <Sheet
+        isOpen={open}
+        onOpenChange={setOpen}
+        title="Allow git push?"
+        footer={<button type="button">Allow once</button>}
+      >
         <input aria-label="note" />
       </Sheet>
     </>
@@ -181,7 +209,9 @@ describe('helpers', () => {
   });
 
   it('parses unified diffs with counts and line numbers', () => {
-    const files = parseDiff('diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n ctx\n-old\n+new');
+    const files = parseDiff(
+      'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n ctx\n-old\n+new',
+    );
     expect(files).toHaveLength(1);
     expect(files[0]).toMatchObject({ path: 'a.ts', added: 1, removed: 1 });
   });

@@ -23,7 +23,8 @@ const iosToggle = () => {
   if (!iosSwitch) {
     const label = document.createElement('label');
     label.setAttribute('aria-hidden', 'true');
-    label.style.cssText = 'position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
+    label.style.cssText =
+      'position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.setAttribute('switch', '');

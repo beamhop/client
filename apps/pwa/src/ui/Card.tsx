@@ -26,14 +26,23 @@ const TONE = {
   stop: 'bg-stop-wash border-line',
 };
 
-export const Card = ({ children, className, href, linkLabel, as: As = 'div', tone = 'surface', padding = 'md' }: CardProps) => (
+export const Card = ({
+  children,
+  className,
+  href,
+  linkLabel,
+  as: As = 'div',
+  tone = 'surface',
+  padding = 'md',
+}: CardProps) => (
   <As
     className={cx(
       'relative rounded-lg border',
       TONE[tone],
       padding === 'md' && 'p-4',
       padding === 'sm' && 'p-3',
-      href && 'transition-colors duration-[var(--dur-fast)] has-[[data-card-link][data-hovered]]:border-line-strong',
+      href &&
+        'transition-colors duration-[var(--dur-fast)] has-[[data-card-link][data-hovered]]:border-line-strong',
       className,
     )}
   >
@@ -45,7 +54,13 @@ export const Card = ({ children, className, href, linkLabel, as: As = 'div', ton
         className="absolute inset-0 z-0 rounded-lg outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus"
       />
     )}
-    <div className={cx(href && 'pointer-events-none relative [&_a]:pointer-events-auto [&_button]:pointer-events-auto')}>{children}</div>
+    <div
+      className={cx(
+        href && 'pointer-events-none relative [&_a]:pointer-events-auto [&_button]:pointer-events-auto',
+      )}
+    >
+      {children}
+    </div>
   </As>
 );
 
@@ -67,7 +82,17 @@ export interface TicketCardProps {
   compact?: boolean;
 }
 
-export const TicketCard = ({ children, decision, eyebrow, tag, state = 'resting', statusLine, className, maxTopHeight, compact }: TicketCardProps) => {
+export const TicketCard = ({
+  children,
+  decision,
+  eyebrow,
+  tag,
+  state = 'resting',
+  statusLine,
+  className,
+  maxTopHeight,
+  compact,
+}: TicketCardProps) => {
   const topRef = useRef<HTMLDivElement>(null);
   const [perfY, setPerfY] = useState<number | null>(null);
 
@@ -90,11 +115,22 @@ export const TicketCard = ({ children, decision, eyebrow, tag, state = 'resting'
         state === 'dragging' && 'shadow-lift',
         className,
       )}
-      style={perfY !== null ? ({ ['--bh-perf-y' as string]: `${perfY}px` } as React.CSSProperties) : undefined}
+      style={
+        perfY !== null ? ({ ['--bh-perf-y' as string]: `${perfY}px` } as React.CSSProperties) : undefined
+      }
       data-slip-state={state}
     >
-      {hatched && <span aria-hidden="true" className="hatch pointer-events-none absolute inset-0 rounded-lg text-ink-3" />}
-      <div ref={topRef} className={cx('relative', compact ? 'px-4 py-3' : 'p-4', maxTopHeight && 'overflow-y-auto')} style={maxTopHeight ? { maxHeight: maxTopHeight } : undefined}>
+      {hatched && (
+        <span
+          aria-hidden="true"
+          className="hatch pointer-events-none absolute inset-0 rounded-lg text-ink-3"
+        />
+      )}
+      <div
+        ref={topRef}
+        className={cx('relative', compact ? 'px-4 py-3' : 'p-4', maxTopHeight && 'overflow-y-auto')}
+        style={maxTopHeight ? { maxHeight: maxTopHeight } : undefined}
+      >
         {(eyebrow || tag) && (
           <div className="mb-3 flex items-center justify-between gap-3">
             <span className="type-micro text-ink-2">{eyebrow}</span>
@@ -105,14 +141,24 @@ export const TicketCard = ({ children, decision, eyebrow, tag, state = 'resting'
       </div>
       <div aria-hidden="true" className="perforation mx-3" />
       <div className={cx('relative', compact ? 'px-2 py-2' : 'p-3')}>
-        {statusLine ? <p className="flex min-h-12 items-center px-1 type-body-sm text-ink-2">{statusLine}</p> : decision}
+        {statusLine ? (
+          <p className="flex min-h-12 items-center px-1 type-body-sm text-ink-2">{statusLine}</p>
+        ) : (
+          decision
+        )}
       </div>
     </div>
   );
 };
 
 /** The "untrusted quote" styling for agent-supplied justifications (ink-2, left rule). */
-export const UntrustedQuote = ({ label = 'The agent says', children }: { label?: string; children: ReactNode }) => (
+export const UntrustedQuote = ({
+  label = 'The agent says',
+  children,
+}: {
+  label?: string;
+  children: ReactNode;
+}) => (
   <blockquote className="border-l-2 border-line-strong pl-3 type-body-sm text-ink-2">
     <span className="type-micro text-ink-3">{label}</span>
     <span className="mt-0.5 block">“{children}”</span>

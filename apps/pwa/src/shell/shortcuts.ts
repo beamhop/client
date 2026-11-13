@@ -9,10 +9,19 @@ import { NAV } from './nav.ts';
 
 const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
-  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+  return (
+    !!el &&
+    (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+  );
 };
 
-export const useGlobalShortcuts = ({ onPanic, onToggleSidebar }: { onPanic: () => void; onToggleSidebar: () => void }) => {
+export const useGlobalShortcuts = ({
+  onPanic,
+  onToggleSidebar,
+}: {
+  onPanic: () => void;
+  onToggleSidebar: () => void;
+}) => {
   const navigate = useNavigate();
   useEffect(() => {
     let gAt = 0;

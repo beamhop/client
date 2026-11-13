@@ -38,7 +38,17 @@ export const NAV: Record<string, NavItem> = {
     to: '/more',
     label: 'More',
     icon: DotsNine,
-    match: ['/more', '/channels', '/harnesses', '/policy', '/deploy', '/audit', '/settings', '/panic', '/_kitchen'],
+    match: [
+      '/more',
+      '/channels',
+      '/harnesses',
+      '/policy',
+      '/deploy',
+      '/audit',
+      '/settings',
+      '/panic',
+      '/_kitchen',
+    ],
   },
 };
 
@@ -53,7 +63,14 @@ export const SIDEBAR_GROUPS: Array<{ label: string; items: NavItem[] }> = [
 ];
 
 /** "More" list on compact. */
-export const MORE_ITEMS = [NAV.channels!, NAV.harnesses!, NAV.policy!, NAV.deploy!, NAV.audit!, NAV.settings!];
+export const MORE_ITEMS = [
+  NAV.channels!,
+  NAV.harnesses!,
+  NAV.policy!,
+  NAV.deploy!,
+  NAV.audit!,
+  NAV.settings!,
+];
 
 export const isActive = (item: NavItem, pathname: string): boolean =>
   item.match.some((m) => (m === '/' ? pathname === '/' : pathname === m || pathname.startsWith(`${m}/`)));

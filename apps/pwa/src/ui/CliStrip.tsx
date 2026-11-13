@@ -4,7 +4,7 @@
  */
 import { CaretRight, Check, Copy, TerminalWindow } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { Button as RACButton, Disclosure, DisclosurePanel, Heading } from 'react-aria-components';
+import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 
@@ -17,7 +17,17 @@ const readOpen = () => {
   }
 };
 
-export const CopyButton = ({ value, label = 'Copy', className, compact }: { value: string; label?: string; className?: string; compact?: boolean }) => {
+export const CopyButton = ({
+  value,
+  label = 'Copy',
+  className,
+  compact,
+}: {
+  value: string;
+  label?: string;
+  className?: string;
+  compact?: boolean;
+}) => {
   const [copied, setCopied] = useState(false);
   return (
     <RACButton
@@ -37,13 +47,25 @@ export const CopyButton = ({ value, label = 'Copy', className, compact }: { valu
         className,
       )}
     >
-      {copied ? <Check size={16} weight="bold" aria-hidden="true" className="text-go-text" /> : <Copy size={16} aria-hidden="true" />}
+      {copied ? (
+        <Check size={16} weight="bold" aria-hidden="true" className="text-go-text" />
+      ) : (
+        <Copy size={16} aria-hidden="true" />
+      )}
       {!compact && <span>{copied ? 'Copied' : label}</span>}
     </RACButton>
   );
 };
 
-export const CliStrip = ({ command, className, title = 'CLI' }: { command: string; className?: string; title?: string }) => {
+export const CliStrip = ({
+  command,
+  className,
+  title = 'CLI',
+}: {
+  command: string;
+  className?: string;
+  title?: string;
+}) => {
   const [open, setOpen] = useState(readOpen);
   return (
     <Disclosure

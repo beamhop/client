@@ -5,7 +5,16 @@
  */
 import { Check, LockSimple, Plus, Question, X } from '@phosphor-icons/react';
 import { type ReactNode, useState } from 'react';
-import { Button as RACButton, Input, Label, Tag, TagGroup, TagList, Text, TextField } from 'react-aria-components';
+import {
+  Input,
+  Label,
+  Button as RACButton,
+  Tag,
+  TagGroup,
+  TagList,
+  Text,
+  TextField,
+} from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { descriptionClass, inputShell, labelClass } from './Field.tsx';
 
@@ -44,14 +53,32 @@ export interface ChipGroupProps {
   emptyText?: string;
 }
 
-export const ChipGroup = ({ label, hideLabel, items, onRemove, onAction, className, emptyText = 'None' }: ChipGroupProps) => (
+export const ChipGroup = ({
+  label,
+  hideLabel,
+  items,
+  onRemove,
+  onAction,
+  className,
+  emptyText = 'None',
+}: ChipGroupProps) => (
   <TagGroup
     className={cx('flex flex-col gap-1.5', className)}
-    onRemove={onRemove ? (keys) => keys.forEach((k) => onRemove(String(k))) : undefined}
+    onRemove={
+      onRemove
+        ? (keys) => {
+            for (const k of keys) onRemove(String(k));
+          }
+        : undefined
+    }
     onAction={onAction ? (k) => onAction(String(k)) : undefined}
   >
     <Label className={cx('type-micro text-ink-2', hideLabel && 'sr-only')}>{label}</Label>
-    <TagList items={items} className="flex flex-wrap gap-2" renderEmptyState={() => <span className="type-meta text-ink-3">{emptyText}</span>}>
+    <TagList
+      items={items}
+      className="flex flex-wrap gap-2"
+      renderEmptyState={() => <span className="type-meta text-ink-3">{emptyText}</span>}
+    >
       {(it) => {
         const v = it.variant ?? 'neutral';
         const removable = !!onRemove && v !== 'locked';
@@ -72,7 +99,7 @@ export const ChipGroup = ({ label, hideLabel, items, onRemove, onAction, classNa
             <span className="relative inline-flex items-center gap-1.5">
               {ICON[v]}
               <span>{it.label}</span>
-              {it.note && <span className="opacity-80">{it.note}</span>}
+              {it.note && <span>{it.note}</span>}
               {v === 'locked' && <span className="sr-only">(locked, always blocked)</span>}
             </span>
             {removable && (
@@ -118,7 +145,14 @@ export interface ChipInputProps extends Omit<ChipGroupProps, 'onAction'> {
   description?: ReactNode;
 }
 
-export const ChipInput = ({ inputLabel = 'Add host', placeholder = 'Add host, *.domain or URL', onAdd, parse = parseHostInput, description, ...group }: ChipInputProps) => {
+export const ChipInput = ({
+  inputLabel = 'Add host',
+  placeholder = 'Add host, *.domain or URL',
+  onAdd,
+  parse = parseHostInput,
+  description,
+  ...group
+}: ChipInputProps) => {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string>();
   const [note, setNote] = useState<string>();
@@ -157,8 +191,18 @@ export const ChipInput = ({ inputLabel = 'Add host', placeholder = 'Add host, *.
       >
         <Label className={cx(labelClass, 'sr-only')}>{inputLabel}</Label>
         <div className="relative flex items-center">
-          <Input placeholder={placeholder} className={cx(inputShell, 'h-12 pr-12 pl-3 font-mono')} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-          <RACButton aria-label={inputLabel} onPress={submit} className="absolute right-0.5 grid size-11 place-items-center rounded-md text-ink data-[hovered]:bg-sunken">
+          <Input
+            placeholder={placeholder}
+            className={cx(inputShell, 'h-12 pr-12 pl-3 font-mono')}
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <RACButton
+            aria-label={inputLabel}
+            onPress={submit}
+            className="absolute right-0.5 grid size-11 place-items-center rounded-md text-ink data-[hovered]:bg-sunken"
+          >
             <Plus size={18} weight="bold" aria-hidden="true" />
           </RACButton>
         </div>

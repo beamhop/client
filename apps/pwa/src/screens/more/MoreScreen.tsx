@@ -25,7 +25,13 @@ export const MoreScreen = () => {
     <Screen title="More" showPanic={false}>
       <div className="flex flex-col gap-6">
         {!panic && (
-          <Button variant="destructive" size="lg" fullWidth icon={<Stop size={20} weight="fill" aria-hidden="true" />} onPress={open}>
+          <Button
+            variant="destructive"
+            size="lg"
+            fullWidth
+            icon={<Stop size={20} weight="fill" aria-hidden="true" />}
+            onPress={open}
+          >
             Stop everything
           </Button>
         )}
@@ -34,7 +40,10 @@ export const MoreScreen = () => {
             const Icon = item.icon;
             return (
               <li key={item.to}>
-                <Link to={item.to} className="flex min-h-14 items-center gap-4 px-4 py-2.5 outline-none hover:bg-sunken">
+                <Link
+                  to={item.to}
+                  className="flex min-h-14 items-center gap-4 px-4 py-2.5 outline-none hover:bg-sunken"
+                >
                   <Icon size={22} aria-hidden="true" className="text-ink-2" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="type-title-3 text-ink">{item.label}</span>

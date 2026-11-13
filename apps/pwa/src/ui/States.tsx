@@ -52,8 +52,21 @@ export const useDelayedLoading = (loading: boolean, delay = 300, minShow = 400):
 };
 
 /** Hairline outline block. Compose these into the layout of the screen being loaded. */
-export const SkeletonBlock = ({ className, rounded = 'lg' }: { className?: string; rounded?: 'sm' | 'md' | 'lg' }) => (
-  <div aria-hidden="true" className={cx('border border-line', { sm: 'rounded-sm', md: 'rounded-md', lg: 'rounded-lg' }[rounded], className)} />
+export const SkeletonBlock = ({
+  className,
+  rounded = 'lg',
+}: {
+  className?: string;
+  rounded?: 'sm' | 'md' | 'lg';
+}) => (
+  <div
+    aria-hidden="true"
+    className={cx(
+      'border border-line',
+      { sm: 'rounded-sm', md: 'rounded-md', lg: 'rounded-lg' }[rounded],
+      className,
+    )}
+  />
 );
 
 export interface SkeletonProps {
@@ -66,8 +79,19 @@ export interface SkeletonProps {
 }
 
 /** Hairline skeleton + one flare-wash sweep line (static under reduced motion). */
-export const Skeleton = ({ variant = 'list', count = 3, label = 'Loading', children, className }: SkeletonProps) => (
-  <div role="status" aria-label={label} className={cx('relative overflow-hidden', className)} data-skeleton="">
+export const Skeleton = ({
+  variant = 'list',
+  count = 3,
+  label = 'Loading',
+  children,
+  className,
+}: SkeletonProps) => (
+  <div
+    role="status"
+    aria-label={label}
+    className={cx('relative overflow-hidden', className)}
+    data-skeleton=""
+  >
     <span className="sr-only">{label}…</span>
     <div className="flex flex-col gap-3">
       {children ??
@@ -101,7 +125,10 @@ export const Skeleton = ({ variant = 'list', count = 3, label = 'Loading', child
           ),
         )}
     </div>
-    <span aria-hidden="true" className="skeleton-sweep pointer-events-none absolute inset-x-0 h-px bg-flare-wash shadow-[0_0_0_1px_var(--bh-flare-wash)]" />
+    <span
+      aria-hidden="true"
+      className="skeleton-sweep pointer-events-none absolute inset-x-0 h-px bg-flare-wash shadow-[0_0_0_1px_var(--bh-flare-wash)]"
+    />
   </div>
 );
 
@@ -133,19 +160,40 @@ const detailsText = (d: unknown): string => {
 };
 
 /** Calm, specific, recoverable. No red walls (DESIGN §1 Unflappable). */
-export const ErrorState = ({ title, children, onRetry, details, actions, cachedNote, className }: ErrorStateProps) => {
+export const ErrorState = ({
+  title,
+  children,
+  onRetry,
+  details,
+  actions,
+  cachedNote,
+  className,
+}: ErrorStateProps) => {
   const [copied, setCopied] = useState(false);
   return (
-    <div role="alert" className={cx('rounded-md border-l-[3px] border-stop-text bg-stop-wash px-4 py-3.5', className)}>
+    <div
+      role="alert"
+      className={cx('rounded-md border-l-[3px] border-stop-text bg-stop-wash px-4 py-3.5', className)}
+    >
       <div className="flex items-start gap-2.5">
-        <WarningCircle size={20} weight="bold" className="mt-0.5 shrink-0 text-stop-text" aria-hidden="true" />
+        <WarningCircle
+          size={20}
+          weight="bold"
+          className="mt-0.5 shrink-0 text-stop-text"
+          aria-hidden="true"
+        />
         <div className="min-w-0 flex-1">
           <h2 className="type-title-3 text-ink">{title}</h2>
           {children && <div className="mt-1 type-body-sm text-ink-2">{children}</div>}
           {cachedNote && <p className="mt-1 type-meta text-ink-2">{cachedNote}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
             {onRetry && (
-              <Button variant="secondary" size="sm" icon={<ArrowClockwise size={16} aria-hidden="true" />} onPress={onRetry}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ArrowClockwise size={16} aria-hidden="true" />}
+                onPress={onRetry}
+              >
                 Retry
               </Button>
             )}
@@ -194,8 +242,18 @@ export const Banner = ({ tone = 'caution', icon, children, action, className, ha
       className,
     )}
   >
-    {hatched && <span aria-hidden="true" className="hatch pointer-events-none absolute inset-0 text-stop-text" />}
-    <span aria-hidden="true" className={cx('relative shrink-0', { caution: 'text-caution-text', info: 'text-ink-2', stop: 'text-stop-text', go: 'text-go-text' }[tone])}>
+    {hatched && (
+      <span aria-hidden="true" className="hatch pointer-events-none absolute inset-0 text-stop-text" />
+    )}
+    <span
+      aria-hidden="true"
+      className={cx(
+        'relative shrink-0',
+        { caution: 'text-caution-text', info: 'text-ink-2', stop: 'text-stop-text', go: 'text-go-text' }[
+          tone
+        ],
+      )}
+    >
       {icon ?? <Info size={18} weight="bold" />}
     </span>
     <div className="relative min-w-0 flex-1">{children}</div>

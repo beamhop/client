@@ -26,7 +26,10 @@ export const AuditScreen = () => {
     const days = [...new Set(rows.map((r) => r.day))].sort();
     return {
       series: agents.map((a) => ({ id: a, label: a })),
-      data: days.map((d) => ({ label: shortDate(`${d}T12:00:00`), values: Object.fromEntries(rows.filter((r) => r.day === d).map((r) => [r.agent, r.usd])) })),
+      data: days.map((d) => ({
+        label: shortDate(`${d}T12:00:00`),
+        values: Object.fromEntries(rows.filter((r) => r.day === d).map((r) => [r.agent, r.usd])),
+      })),
       total: rows.reduce((a, r) => a + r.usd, 0),
     };
   }, [usage.data]);
@@ -53,15 +56,29 @@ export const AuditScreen = () => {
             <p className="type-micro text-ink-2">Last 14 days</p>
             <Readout>{usd(total)}</Readout>
           </div>
-          {data.length > 0 && <BarChart label="Spend per day, last 14 days, by agent" data={data} series={series} format={(n) => usd(n)} />}
+          {data.length > 0 && (
+            <BarChart
+              label="Spend per day, last 14 days, by agent"
+              data={data}
+              series={series}
+              format={(n) => usd(n)}
+            />
+          )}
         </div>
       )}
       <div className="mt-6">
         <ScreenStub
           spec={`SCREENS §9 · tab ${tab}`}
           owner="src/screens/audit/"
-          outline={['Usage: readout, range, breakdown, stacked bars, legend = data table', 'Security: category chips, 24 h sparklines, event rows with actions', 'Log: search, filters, virtualized rows, Export JSONL/CSV, Purge…']}
-          calls={[{ method: 'audit.query', params: { limit: 200 } }, { method: 'usage.query', params: { days: 14 } }]}
+          outline={[
+            'Usage: readout, range, breakdown, stacked bars, legend = data table',
+            'Security: category chips, 24 h sparklines, event rows with actions',
+            'Log: search, filters, virtualized rows, Export JSONL/CSV, Purge…',
+          ]}
+          calls={[
+            { method: 'audit.query', params: { limit: 200 } },
+            { method: 'usage.query', params: { days: 14 } },
+          ]}
           cli="beamhop audit --since 24h"
         />
       </div>

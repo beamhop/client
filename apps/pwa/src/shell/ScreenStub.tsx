@@ -61,7 +61,8 @@ export const ScreenStub = ({ spec, owner, outline, calls = [], cli }: ScreenStub
             <span className="type-meta text-ink-2">{spec}</span>
           </div>
           <p className="type-body-sm text-ink-2">
-            Owned by <code className="font-mono text-[0.875em] text-ink">{owner}</code>. The shell, data hooks and components are ready; this body is a stand-in.
+            Owned by <code className="font-mono text-[0.875em] text-ink">{owner}</code>. The shell, data hooks
+            and components are ready; this body is a stand-in.
           </p>
           {entries.length > 0 && (
             <p className="type-meta text-ink-2">
@@ -82,7 +83,9 @@ export const ScreenStub = ({ spec, owner, outline, calls = [], cli }: ScreenStub
         <ol className="flex flex-col gap-1.5">
           {outline.map((o, i) => (
             <li key={o} className="flex gap-3 type-body-sm text-ink">
-              <span className="w-5 shrink-0 type-meta text-ink-3 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
+              <span className="w-5 shrink-0 type-meta text-ink-3 tabular-nums">
+                {String(i + 1).padStart(2, '0')}
+              </span>
               {o}
             </li>
           ))}

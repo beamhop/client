@@ -2,22 +2,33 @@
  * Text inputs (DESIGN §9.3): label above, h-48, 16px body (no iOS zoom), description below,
  * invalid = 1.5px stop border + icon + message linked via aria-describedby (RAC does the wiring).
  */
-import { CheckCircle, ClipboardText, Eye, EyeSlash, LockSimple, MagnifyingGlass, Minus, Plus, WarningCircle, X } from '@phosphor-icons/react';
+import {
+  CheckCircle,
+  ClipboardText,
+  Eye,
+  EyeSlash,
+  LockSimple,
+  MagnifyingGlass,
+  Minus,
+  Plus,
+  WarningCircle,
+  X,
+} from '@phosphor-icons/react';
 import { type ReactNode, useState } from 'react';
 import {
-  Button as RACButton,
   FieldError,
   Group,
   Input,
   Label,
+  Button as RACButton,
   NumberField as RACNumberField,
   type NumberFieldProps as RACNumberFieldProps,
   SearchField as RACSearchField,
   type SearchFieldProps as RACSearchFieldProps,
-  Text,
   TextArea as RACTextArea,
   TextField as RACTextField,
   type TextFieldProps as RACTextFieldProps,
+  Text,
 } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { HopMeter } from './glyphs/index.tsx';
@@ -54,7 +65,18 @@ export interface TextFieldProps extends Omit<RACTextFieldProps, 'className' | 'c
   className?: string;
 }
 
-export const TextField = ({ label, description, errorMessage, placeholder, mono, multiline, rows = 4, trailing, className, ...rest }: TextFieldProps) => (
+export const TextField = ({
+  label,
+  description,
+  errorMessage,
+  placeholder,
+  mono,
+  multiline,
+  rows = 4,
+  trailing,
+  className,
+  ...rest
+}: TextFieldProps) => (
   <RACTextField {...rest} className={cx('flex flex-col gap-1.5', className)}>
     <Label className={labelClass}>{label}</Label>
     <div className="relative flex items-center">
@@ -96,7 +118,15 @@ export interface SecretFieldProps extends Omit<TextFieldProps, 'mono' | 'multili
  * Secret field: password type, no autocomplete/spellcheck, show/hide toggle, explicit paste button,
  * live format check (hop-meter style "format ✓"). Values are never rendered again after save.
  */
-export const SecretField = ({ format, formatLabel = 'Looks right', savedHint, allowPaste = true, label, description, ...rest }: SecretFieldProps) => {
+export const SecretField = ({
+  format,
+  formatLabel = 'Looks right',
+  savedHint,
+  allowPaste = true,
+  label,
+  description,
+  ...rest
+}: SecretFieldProps) => {
   const [shown, setShown] = useState(false);
   const [inner, setInner] = useState(rest.defaultValue ?? '');
   const value = rest.value ?? inner;
@@ -170,7 +200,10 @@ export const SecretField = ({ format, formatLabel = 'Looks right', savedHint, al
         <FieldErrorText />
       </RACTextField>
       {formatOk !== undefined && (
-        <p className={cx('flex items-center gap-2 type-meta', formatOk ? 'text-go-text' : 'text-ink-2')} aria-live="polite">
+        <p
+          className={cx('flex items-center gap-2 type-meta', formatOk ? 'text-go-text' : 'text-ink-2')}
+          aria-live="polite"
+        >
           <HopMeter up={formatOk ? 3 : 1} total={3} tone={formatOk ? 'ink' : 'ink'} />
           {formatOk ? (
             <>
@@ -195,16 +228,29 @@ export interface NumberFieldProps extends Omit<RACNumberFieldProps, 'className' 
 }
 
 /** Budgets use a stepper NumberField, never a slider (precise values, no drag dependency). */
-export const NumberField = ({ label, description, errorMessage, unit, className, ...rest }: NumberFieldProps) => (
+export const NumberField = ({
+  label,
+  description,
+  errorMessage,
+  unit,
+  className,
+  ...rest
+}: NumberFieldProps) => (
   <RACNumberField {...rest} className={cx('flex flex-col gap-1.5', className)}>
     <Label className={labelClass}>{label}</Label>
     <div className="flex items-center gap-3">
       <Group className="flex h-12 items-stretch overflow-hidden rounded-md border border-line-strong bg-surface data-[focus-within]:border-ink data-[invalid]:border-stop-text">
-        <RACButton slot="decrement" className="grid w-11 place-items-center text-ink data-[hovered]:bg-sunken data-[disabled]:opacity-40">
+        <RACButton
+          slot="decrement"
+          className="grid w-11 place-items-center text-ink data-[hovered]:bg-sunken data-[disabled]:opacity-40"
+        >
           <Minus size={18} aria-hidden="true" />
         </RACButton>
         <Input className="w-20 border-x border-line bg-transparent text-center font-mono tabular-nums outline-none" />
-        <RACButton slot="increment" className="grid w-11 place-items-center text-ink data-[hovered]:bg-sunken data-[disabled]:opacity-40">
+        <RACButton
+          slot="increment"
+          className="grid w-11 place-items-center text-ink data-[hovered]:bg-sunken data-[disabled]:opacity-40"
+        >
           <Plus size={18} aria-hidden="true" />
         </RACButton>
       </Group>
@@ -226,12 +272,25 @@ export interface SearchFieldProps extends Omit<RACSearchFieldProps, 'className' 
   className?: string;
 }
 
-export const SearchField = ({ label, hideLabel = true, placeholder, className, ...rest }: SearchFieldProps) => (
+export const SearchField = ({
+  label,
+  hideLabel = true,
+  placeholder,
+  className,
+  ...rest
+}: SearchFieldProps) => (
   <RACSearchField {...rest} className={cx('group flex flex-col gap-1.5', className)}>
     <Label className={cx(labelClass, hideLabel && 'sr-only')}>{label}</Label>
     <div className="relative flex items-center">
-      <MagnifyingGlass size={18} className="pointer-events-none absolute left-3 text-ink-2" aria-hidden="true" />
-      <Input placeholder={placeholder ?? label} className={cx(inputShell, 'h-11 pl-10 pr-11 [&::-webkit-search-cancel-button]:hidden')} />
+      <MagnifyingGlass
+        size={18}
+        className="pointer-events-none absolute left-3 text-ink-2"
+        aria-hidden="true"
+      />
+      <Input
+        placeholder={placeholder ?? label}
+        className={cx(inputShell, 'h-11 pl-10 pr-11 [&::-webkit-search-cancel-button]:hidden')}
+      />
       <RACButton
         aria-label="Clear search"
         className="absolute right-0 grid size-11 place-items-center text-ink-2 group-data-[empty]:hidden data-[hovered]:text-ink"

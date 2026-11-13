@@ -2,8 +2,9 @@
  * Applies pushed `ServerEvent`s to TanStack Query caches so every screen updates live without refetching.
  * Pure function of (QueryClient, event) — unit-testable and transport-agnostic.
  */
-import type { QueryClient } from '@tanstack/react-query';
+
 import type { MethodName, Params, Result, ServerEvent } from '@beamhop/core';
+import type { QueryClient } from '@tanstack/react-query';
 
 type R<M extends MethodName> = Result<M>;
 
@@ -72,9 +73,10 @@ export const applyServerEvent = (qc: QueryClient, e: ServerEvent): void => {
         if (!d) return d;
         const status = (p as { status?: string }).status ?? 'pending';
         if (status === 'pending') {
+          // Same order as the daemon: soonest auto-deny first.
           const approvals =
             a.status === 'pending'
-              ? upsert(d.approvals, a, (x) => x.id)
+              ? upsert(d.approvals, a, (x) => x.id).sort((x, y) => x.expiresAt.localeCompare(y.expiresAt))
               : d.approvals.filter((x) => x.id !== a.id);
           return { approvals };
         }

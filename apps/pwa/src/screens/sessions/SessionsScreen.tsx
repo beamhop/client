@@ -25,7 +25,13 @@ export const SessionsScreen = () => {
             items={(q.data?.sessions ?? []).map((s) => ({
               href: `/sessions/${s.id}`,
               title: s.title,
-              slug: [s.agent, `${s.channel}:${s.conversationId}`, `thread ${s.threadId}`, since(s.lastActivityAt), usd(s.usage.usd)],
+              slug: [
+                s.agent,
+                `${s.channel}:${s.conversationId}`,
+                `thread ${s.threadId}`,
+                since(s.lastActivityAt),
+                usd(s.usage.usd),
+              ],
               lamp: sessionLamp(s),
             }))}
           />
@@ -33,7 +39,11 @@ export const SessionsScreen = () => {
             <ScreenStub
               spec="SCREENS §3 Sessions list"
               owner="src/screens/sessions/"
-              outline={['Rows grouped by agent with sticky micro headers', 'Filters: Live · Needs you · Today · All', 'Partial swipe-left reveals Stop; row ⋯ menu has the same']}
+              outline={[
+                'Rows grouped by agent with sticky micro headers',
+                'Filters: Live · Needs you · Today · All',
+                'Partial swipe-left reveals Stop; row ⋯ menu has the same',
+              ]}
             />
           </div>
         </Screen>

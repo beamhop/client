@@ -5,8 +5,6 @@ import { CaretDown, Check } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
 import type { Key, ReactNode } from 'react';
 import {
-  Checkbox as RACCheckbox,
-  type CheckboxProps as RACCheckboxProps,
   Dialog,
   Label,
   ListBox,
@@ -14,13 +12,14 @@ import {
   Modal,
   ModalOverlay,
   Popover,
+  Button as RACButton,
+  Checkbox as RACCheckbox,
+  type CheckboxProps as RACCheckboxProps,
   Radio as RACRadio,
   RadioGroup as RACRadioGroup,
   type RadioGroupProps as RACRadioGroupProps,
   Select as RACSelect,
   type SelectProps as RACSelectProps,
-  SelectValue,
-  Button as RACButton,
   Switch as RACSwitch,
   type SwitchProps as RACSwitchProps,
   Tab as RACTab,
@@ -28,13 +27,14 @@ import {
   TabPanel as RACTabPanel,
   Tabs as RACTabs,
   type TabsProps as RACTabsProps,
+  SelectValue,
   Text,
   ToggleButton,
   ToggleButtonGroup,
 } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { useExpanded } from '../lib/media.ts';
-import { FieldErrorText, descriptionClass, labelClass } from './Field.tsx';
+import { descriptionClass, FieldErrorText, labelClass } from './Field.tsx';
 import { spring } from './motion.ts';
 
 // ─────────── Switch ───────────
@@ -46,7 +46,13 @@ export interface SwitchProps extends Omit<RACSwitchProps, 'className' | 'childre
 
 /** Label left, switch right, whole row pressable. On = ink track (flare is reserved for live). */
 export const Switch = ({ children, description, className, ...rest }: SwitchProps) => (
-  <RACSwitch {...rest} className={cx('group flex min-h-12 w-full items-center justify-between gap-4 py-2 outline-none data-[disabled]:opacity-50', className)}>
+  <RACSwitch
+    {...rest}
+    className={cx(
+      'group flex min-h-12 w-full items-center justify-between gap-4 py-2 outline-none data-[disabled]:opacity-50',
+      className,
+    )}
+  >
     {({ isSelected }) => (
       <>
         <span className="flex min-w-0 flex-col">
@@ -64,7 +70,10 @@ export const Switch = ({ children, description, className, ...rest }: SwitchProp
           <motion.span
             layout
             transition={spring.snap}
-            className={cx('block size-[22px] rounded-full shadow-[0_1px_2px_oklch(0.2_0.01_60/.25)]', isSelected ? 'ml-auto bg-bg' : 'bg-surface border border-line-strong')}
+            className={cx(
+              'block size-[22px] rounded-full shadow-[0_1px_2px_oklch(0.2_0.01_60/.25)]',
+              isSelected ? 'ml-auto bg-bg' : 'bg-surface border border-line-strong',
+            )}
           />
         </span>
       </>
@@ -81,7 +90,13 @@ export interface CheckboxProps extends Omit<RACCheckboxProps, 'className' | 'chi
 
 /** 24px box inside a 44px row. */
 export const Checkbox = ({ children, description, className, ...rest }: CheckboxProps) => (
-  <RACCheckbox {...rest} className={cx('group flex min-h-11 items-start gap-3 py-2.5 outline-none data-[disabled]:opacity-50', className)}>
+  <RACCheckbox
+    {...rest}
+    className={cx(
+      'group flex min-h-11 items-start gap-3 py-2.5 outline-none data-[disabled]:opacity-50',
+      className,
+    )}
+  >
     {({ isSelected, isIndeterminate }) => (
       <>
         <span
@@ -118,7 +133,15 @@ export interface RadioGroupProps extends Omit<RACRadioGroupProps, 'className' | 
   className?: string;
 }
 
-export const RadioGroup = ({ label, hideLabel, description, children, variant = 'list', className, ...rest }: RadioGroupProps) => (
+export const RadioGroup = ({
+  label,
+  hideLabel,
+  description,
+  children,
+  variant = 'list',
+  className,
+  ...rest
+}: RadioGroupProps) => (
   <RACRadioGroup {...rest} className={cx('flex flex-col gap-1.5', className)}>
     <Label className={cx(labelClass, hideLabel && 'sr-only')}>{label}</Label>
     {description && (
@@ -126,12 +149,29 @@ export const RadioGroup = ({ label, hideLabel, description, children, variant = 
         {description}
       </Text>
     )}
-    <div className={cx('flex flex-col', variant === 'cards' && 'overflow-hidden rounded-lg border border-line bg-surface')}>{children}</div>
+    <div
+      className={cx(
+        'flex flex-col',
+        variant === 'cards' && 'overflow-hidden rounded-lg border border-line bg-surface',
+      )}
+    >
+      {children}
+    </div>
     <FieldErrorText />
   </RACRadioGroup>
 );
 
-export const Radio = ({ value, children, description, isDisabled }: { value: string; children: ReactNode; description?: ReactNode; isDisabled?: boolean }) => (
+export const Radio = ({
+  value,
+  children,
+  description,
+  isDisabled,
+}: {
+  value: string;
+  children: ReactNode;
+  description?: ReactNode;
+  isDisabled?: boolean;
+}) => (
   <RACRadio
     value={value}
     isDisabled={isDisabled}
@@ -170,7 +210,15 @@ export interface SegmentedControlProps<K extends string> {
 }
 
 /** Single-select ToggleButtonGroup: sunken track, selected thumb = surface + hairline. */
-export const SegmentedControl = <K extends string>({ label, options, value, onChange, className, size = 'md', isDisabled }: SegmentedControlProps<K>) => (
+export const SegmentedControl = <K extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  className,
+  size = 'md',
+  isDisabled,
+}: SegmentedControlProps<K>) => (
   <ToggleButtonGroup
     aria-label={label}
     selectionMode="single"
@@ -181,7 +229,11 @@ export const SegmentedControl = <K extends string>({ label, options, value, onCh
       const k = [...keys][0];
       if (k !== undefined) onChange(k as K);
     }}
-    className={cx('inline-flex rounded-md border border-line bg-sunken p-0.5', size === 'md' ? 'h-11 pointer-fine:h-10' : 'h-9', className)}
+    className={cx(
+      'inline-flex rounded-md border border-line bg-sunken p-0.5',
+      size === 'md' ? 'h-11 pointer-fine:h-10' : 'h-9',
+      className,
+    )}
   >
     {options.map((o) => (
       <ToggleButton
@@ -195,7 +247,12 @@ export const SegmentedControl = <K extends string>({ label, options, value, onCh
       >
         {({ isSelected }) => (
           <>
-            {isSelected && <span className="absolute inset-0 rounded-[6px] border border-line-strong bg-surface" aria-hidden="true" />}
+            {isSelected && (
+              <span
+                className="absolute inset-0 rounded-[6px] border border-line-strong bg-surface"
+                aria-hidden="true"
+              />
+            )}
             <span className="relative">{o.label}</span>
           </>
         )}
@@ -294,15 +351,22 @@ export const Select = ({ label, hideLabel, description, options, className, ...r
 export interface TabsProps extends Omit<RACTabsProps, 'className' | 'children'> {
   label: string;
   tabs: Array<{ id: string; label: ReactNode; content?: ReactNode; href?: string }>;
-  /** Render panels (default). Set false when tabs drive routes and content renders elsewhere. */
+  /**
+   * `true` (default): each tab renders its own `content`. `false`: tabs drive routes (`href`) and the
+   * shared `children` render inside the selected panel (keeps aria-controls valid).
+   */
   panels?: boolean;
+  children?: ReactNode;
   className?: string;
 }
 
 /** RAC Tabs with a scrollable list; selected tab = ink + 2px flare bar. Switching is instant. */
-export const Tabs = ({ label, tabs, panels = true, className, ...rest }: TabsProps) => (
+export const Tabs = ({ label, tabs, panels = true, children, className, ...rest }: TabsProps) => (
   <RACTabs {...rest} className={cx('flex flex-col', className)}>
-    <RACTabList aria-label={label} className="-mx-1 flex overflow-x-auto border-b border-line px-1 [scrollbar-width:none]">
+    <RACTabList
+      aria-label={label}
+      className="-mx-1 flex overflow-x-auto border-b border-line px-1 [scrollbar-width:none]"
+    >
       {tabs.map((t) => (
         <RACTab
           key={t.id}
@@ -313,18 +377,23 @@ export const Tabs = ({ label, tabs, panels = true, className, ...rest }: TabsPro
           {({ isSelected }) => (
             <>
               {t.label}
-              {isSelected && <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 bg-flare" />}
+              {isSelected && (
+                <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 bg-flare" />
+              )}
             </>
           )}
         </RACTab>
       ))}
     </RACTabList>
-    {panels &&
-      tabs.map((t) => (
-        <RACTabPanel key={t.id} id={t.id} className="pt-4 outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus">
-          {t.content}
-        </RACTabPanel>
-      ))}
+    {tabs.map((t) => (
+      <RACTabPanel
+        key={t.id}
+        id={t.id}
+        className="pt-4 outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
+      >
+        {panels ? t.content : children}
+      </RACTabPanel>
+    ))}
   </RACTabs>
 );
 

@@ -57,7 +57,9 @@ describe('mock daemon', () => {
 
   it('implements every method in the API contract', async () => {
     const t = createMockTransport({ live: false, latency: [0, 0] });
-    const order = (Object.keys(methods) as MethodName[]).filter((m) => m !== 'system.panic' && m !== 'system.resume');
+    const order = (Object.keys(methods) as MethodName[]).filter(
+      (m) => m !== 'system.panic' && m !== 'system.resume',
+    );
     for (const m of [...order, 'system.panic', 'system.resume'] as MethodName[]) {
       await expect(t.request(m, SAMPLE[m] ?? {}), m).resolves.toBeDefined();
     }
@@ -109,23 +111,39 @@ describe('applyServerEvent', () => {
     const qc = new QueryClient();
     const t = createMockTransport({ live: false, latency: [0, 0] });
     qc.setQueryData(apiKey('agent.list'), await t.request('agent.list', {}));
-    qc.setQueryData(apiKey('approval.list', { status: 'pending' }), await t.request('approval.list', { status: 'pending' }));
-    qc.setQueryData(apiKey('session.events', { id: 'ses_842', afterSeq: 0 }), await t.request('session.events', { id: 'ses_842' }));
+    qc.setQueryData(
+      apiKey('approval.list', { status: 'pending' }),
+      await t.request('approval.list', { status: 'pending' }),
+    );
+    qc.setQueryData(
+      apiKey('session.events', { id: 'ses_842', afterSeq: 0 }),
+      await t.request('session.events', { id: 'ses_842' }),
+    );
     t.subscribe?.((e) => applyServerEvent(qc, e));
 
     await t.request('agent.stop', { name: 'reviewer' });
-    const list = qc.getQueryData(apiKey('agent.list')) as { agents: Array<{ config: { name: string }; status: string }> };
+    const list = qc.getQueryData(apiKey('agent.list')) as {
+      agents: Array<{ config: { name: string }; status: string }>;
+    };
     expect(list.agents.find((a) => a.config.name === 'reviewer')?.status).toBe('stopped');
 
     await t.request('approval.decide', { id: 'apr_b72c', allow: false });
-    const pending = qc.getQueryData(apiKey('approval.list', { status: 'pending' })) as { approvals: Array<{ id: string }> };
+    const pending = qc.getQueryData(apiKey('approval.list', { status: 'pending' })) as {
+      approvals: Array<{ id: string }>;
+    };
     expect(pending.approvals.some((a) => a.id === 'apr_b72c')).toBe(false);
 
-    const before = (qc.getQueryData(apiKey('session.events', { id: 'ses_842', afterSeq: 0 })) as { events: unknown[] }).events.length;
+    const before = (
+      qc.getQueryData(apiKey('session.events', { id: 'ses_842', afterSeq: 0 })) as { events: unknown[] }
+    ).events.length;
     t.daemon.pushEvent('ses_842', { kind: 'assistant', text: 'Pus' });
     const seq = t.daemon.nextSeq('ses_842') - 1;
     t.daemon.pushEvent('ses_842', { seq, kind: 'assistant', text: 'Pushed.' });
-    const evs = (qc.getQueryData(apiKey('session.events', { id: 'ses_842', afterSeq: 0 })) as { events: Array<{ text?: string }> }).events;
+    const evs = (
+      qc.getQueryData(apiKey('session.events', { id: 'ses_842', afterSeq: 0 })) as {
+        events: Array<{ text?: string }>;
+      }
+    ).events;
     expect(evs).toHaveLength(before + 1);
     expect(evs.at(-1)?.text).toBe('Pushed.');
   });

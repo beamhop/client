@@ -37,26 +37,41 @@ export const ConnectionPill = ({ className, wide }: { className?: string; wide?:
     <>
       <RACButton
         onPress={() => setOpen(true)}
-        aria-label={`Connection: ${conn.kind === 'mock' ? 'demo daemon, ' : ''}${label}. Show details`}
         className={cx(
           'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-2 type-meta text-ink-2 outline-none data-[hovered]:bg-sunken data-[pressed]:bg-sunken',
           className,
         )}
         data-connection={offline ? 'offline' : connecting ? 'connecting' : 'open'}
       >
+        <span className="sr-only">Connection: </span>
         {offline ? (
           <StatusDot state="offline" />
         ) : (
-          <SignalBars up={connecting ? 0 : (relays?.up ?? 1)} total={relays?.total ?? 4} busy={connecting} hideNumber={!wide && !relays} unit={relays ? (wide ? 'relays' : undefined) : undefined} />
+          <SignalBars
+            up={connecting ? 0 : (relays?.up ?? 1)}
+            total={relays?.total ?? 4}
+            busy={connecting}
+            hideNumber={!relays}
+            unit={relays && wide ? 'relays' : undefined}
+          />
         )}
+        {relays && !wide && !offline && <span className="sr-only">relays</span>}
+        {!offline && !relays && <span className={connecting ? undefined : 'sr-only'}>{label}</span>}
         {conn.kind === 'mock' && <Badge tone="flare">demo</Badge>}
+        <span className="sr-only">, show details</span>
       </RACButton>
       <ConnectionSheet isOpen={open} onOpenChange={setOpen} />
     </>
   );
 };
 
-export const ConnectionSheet = ({ isOpen, onOpenChange }: { isOpen: boolean; onOpenChange: (o: boolean) => void }) => {
+export const ConnectionSheet = ({
+  isOpen,
+  onOpenChange,
+}: {
+  isOpen: boolean;
+  onOpenChange: (o: boolean) => void;
+}) => {
   const { conn, relays, offline } = useConnectionSummary();
   const status = useApi('system.status', undefined, { enabled: isOpen });
   const channels = useApi('channel.list', undefined, { enabled: isOpen });
@@ -64,17 +79,35 @@ export const ConnectionSheet = ({ isOpen, onOpenChange }: { isOpen: boolean; onO
   const relayList = (nostr?.config.settings.relays as string[] | undefined) ?? [];
   const up = new Set((nostr?.config.settings.relaysUp as string[] | undefined) ?? relayList);
   return (
-    <Sheet isOpen={isOpen} onOpenChange={onOpenChange} title="Connection" subtitle={conn.kind === 'mock' ? 'Demo daemon in this browser' : conn.kind === 'local' ? `beamhopd · ${conn.baseUrl}` : 'Nostr control plane'}>
+    <Sheet
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Connection"
+      subtitle={
+        conn.kind === 'mock'
+          ? 'Demo daemon in this browser'
+          : conn.kind === 'local'
+            ? `beamhopd · ${conn.baseUrl}`
+            : 'Nostr control plane'
+      }
+    >
       <div className="flex flex-col gap-5">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-meta">
           <dt className="text-ink-2">Daemon</dt>
           <dd className="flex items-center gap-2 text-ink">
-            {conn.kind === 'mock' ? <Plugs size={14} aria-hidden="true" /> : <Laptop size={14} aria-hidden="true" />}
+            {conn.kind === 'mock' ? (
+              <Plugs size={14} aria-hidden="true" />
+            ) : (
+              <Laptop size={14} aria-hidden="true" />
+            )}
             {conn.kind === 'mock' ? 'demo (mock)' : `beamhopd ${status.data?.version ?? ''}`}
           </dd>
           <dt className="text-ink-2">Link</dt>
           <dd>
-            <StatusDot state={offline ? 'offline' : conn.status === 'open' ? 'ready' : 'paused'} label={offline ? 'offline' : conn.status} />
+            <StatusDot
+              state={offline ? 'offline' : conn.status === 'open' ? 'ready' : 'paused'}
+              label={offline ? 'offline' : conn.status}
+            />
           </dd>
           {status.data && (
             <>
@@ -95,7 +128,10 @@ export const ConnectionSheet = ({ isOpen, onOpenChange }: { isOpen: boolean; onO
                 <li key={r} className="flex min-h-11 items-center gap-3 px-3 type-meta text-ink">
                   <CellTower size={16} aria-hidden="true" className="text-ink-2" />
                   <span className="flex-1 truncate">{r.replace('wss://', '')}</span>
-                  <StatusDot state={up.has(r) ? 'ready' : 'offline'} label={up.has(r) ? 'connected' : 'unreachable'} />
+                  <StatusDot
+                    state={up.has(r) ? 'ready' : 'offline'}
+                    label={up.has(r) ? 'connected' : 'unreachable'}
+                  />
                 </li>
               ))}
             </ul>
@@ -103,7 +139,9 @@ export const ConnectionSheet = ({ isOpen, onOpenChange }: { isOpen: boolean; onO
         )}
         {conn.kind === 'mock' ? (
           <p className="type-body-sm text-ink-2">
-            This is demo data generated in your browser. To control your real agents, run <code className="font-mono text-[0.875em] text-ink">beamhop ui</code> on your computer and open the link it prints.
+            This is demo data generated in your browser. To control your real agents, run{' '}
+            <code className="font-mono text-[0.875em] text-ink">beamhop ui</code> on your computer and open
+            the link it prints.
           </p>
         ) : (
           <Button

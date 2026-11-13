@@ -44,7 +44,9 @@ export const createMockTransport = (opts: MockOptions = {}): MockTransport => {
     async request(method, params) {
       await wait();
       if (fails.has(method)) {
-        throw new RpcError(-32010, `Couldn't reach the daemon for ${method} (simulated)`, { code: 'unavailable' });
+        throw new RpcError(-32010, `Couldn't reach the daemon for ${method} (simulated)`, {
+          code: 'unavailable',
+        });
       }
       // Structured clone so callers can't mutate daemon state through results.
       return structuredClone(await daemon.handle(method, params));
