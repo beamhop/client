@@ -1,8 +1,9 @@
 /**
  * Journeys that need API methods another builder is adding to `@beamhop/core` + beamhopd
  * (session.merge / session.openPr, fs.list, alerts.*, role.define, system.whoami, approval
- * quorum/votes). They are `fixme` until those methods exist on the real daemon; each note says what
- * the test must check once they land.
+ * quorum/votes). They were `fixme` while those methods were missing on the daemon; the methods have
+ * since landed on main (merged here) but these journeys are not written against them yet. Each
+ * note says what the test must check.
  */
 import { test } from './fixtures.ts';
 

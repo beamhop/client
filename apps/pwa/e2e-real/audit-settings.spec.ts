@@ -78,28 +78,45 @@ test('security tab: the daemon’s sandbox blocks and unknown senders land in th
   await axe(page);
 });
 
-test('settings → devices lists the daemon’s paired devices', async ({ page, bh }) => {
+test('settings → devices lists the daemon’s paired devices; remove revokes it', async ({ page, bh }) => {
   const start = await bh.rpc<{ code: string }>('device.pairStart', { name: 'Test phone' });
   const pubkey = getPublicKey(generateSecretKey());
   await bh.rpc('device.pairComplete', { code: start.code, pubkey, name: 'Test phone' });
   const { devices } = await bh.rpc<{ devices: { id: string; name: string }[] }>('device.list');
   expect(devices.map((d) => d.name)).toEqual(['Test phone']);
   await bh.open(page, '/settings/devices');
-  await expect(main(page).getByText('device.list')).toBeVisible();
-  await expect(main(page).getByText('1 row')).toBeVisible();
+  await expect(main(page).getByText('Test phone').first()).toBeVisible();
   await axe(page);
+  await page.getByRole('button', { name: 'Actions for Test phone' }).click();
+  await page.getByRole('menuitem', { name: 'Remove…' }).click();
+  const dialog = page.getByRole('alertdialog', { name: 'Remove Test phone?' });
+  await dialog.getByRole('button', { name: 'Remove Test phone' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Removed · Test phone'),
+  ).toBeVisible();
+  await expect.poll(async () => (await bh.rpc<{ devices: unknown[] }>('device.list')).devices.length).toBe(0);
 });
 
-test.fixme('settings → devices: remove a device from the UI', async () => {
-  // Settings → Devices is still a ScreenStub (src/screens/settings/SettingsSectionScreen.tsx): it
-  // shows the device.list row count but has no list or remove button yet. When the settings builder
-  // lands it: open /settings/devices, remove "Test phone", expect device.list to be empty.
-});
-
-test.fixme('settings → secrets: set a secret from Settings', async () => {
-  // There is no Settings → Secrets screen yet (secret.set is only reachable from a channel's
-  // "Replace token" sheet, covered below). When it lands: set a value, check secret.list shows the
-  // name only, and that the value never appears in the page, the audit log or any RPC result.
+test('settings → secrets: set a secret; only the name ever comes back', async ({ page, bh }) => {
+  const value = ['val', Math.random().toString(36).slice(2, 12), 'x'.repeat(12)].join('-');
+  const frames: string[] = [];
+  page.on('websocket', (ws) => ws.on('framereceived', (f) => frames.push(String(f.payload))));
+  await bh.open(page, '/settings/secrets');
+  await axe(page);
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const sheet = page.getByRole('dialog', { name: 'Add a secret' });
+  await sheet.getByLabel('Name').fill('SENTRY_DSN');
+  await sheet.getByLabel('Value', { exact: true }).fill(value);
+  await sheet.getByRole('button', { name: 'Save to keychain' }).click();
+  await expect(sheet).toBeHidden();
+  await expect(main(page).getByText('SENTRY_DSN', { exact: true })).toBeVisible();
+  const list = await bh.rpc<{ secrets: { name: string }[] }>('secret.list');
+  expect(list.secrets.map((s) => s.name)).toContain('SENTRY_DSN');
+  expect(JSON.stringify(list)).not.toContain(value);
+  expect(JSON.stringify(await bh.rpc('audit.query', { limit: 200 }))).not.toContain(value);
+  expect(await page.content()).not.toContain(value);
+  expect(frames.join('\n')).not.toContain(value);
+  await axe(page);
 });
 
 test('replace a channel token: saved under the daemon’s name, value never echoed back', async ({
