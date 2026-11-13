@@ -11,7 +11,9 @@
  * regardless of the session's cwd (and on Windows, where `--import` needs URLs for absolute paths).
  *
  * Sandbox requirements: the sandbox must allow reading this package, its node_modules (tsx, SDK) and
- * the node binary, and must allow connecting to 127.0.0.1:<bridge port>.
+ * the node binary (`mcpReadPaths()`), and must allow `127.0.0.1:<bridge port>` (`localAllow`). On
+ * Linux the sandbox forwards that port inside its network namespace, so plain `fetch` reaches it;
+ * on macOS the client goes through srt's proxy (`envProxyFetch`).
  */
 import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
