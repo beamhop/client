@@ -807,7 +807,14 @@ export class SessionManager {
       minutes,
     });
     const delta = { tokens, usd, minutes };
-    const crossings = d.budgets.record(budgetKey.agent(agent.name), delta, agent.budgets);
+    const agentKey = budgetKey.agent(agent.name);
+    const before = d.budgets.usage(agentKey);
+    d.budgets.record(agentKey, delta, agent.budgets);
+    const rules = d.alerts.rules();
+    const crossings = budgetCrossings(before, d.budgets.usage(agentKey), agent.budgets, [
+      rules.budgetWarn / 100,
+      rules.budgetAlert / 100,
+    ]);
     if (turn) {
       d.budgets.record(
         budgetKey.principal(agent.name, normalizePrincipal(turn.from.principal)),
@@ -835,7 +842,7 @@ export class SessionManager {
         agent: agent.name,
         data: { metric: c.metric, threshold: c.threshold, used: c.used, limit: c.limit },
       });
-      void d.notifyOwners(`💸 *${agent.name}* has used ${pct}% of its daily budget (${what}).`);
+      d.alerts.dmOwners(`💸 *${agent.name}* has used ${pct}% of its daily budget (${what}).`);
     }
     if (tokens || usd) this.emitSession(live.id);
   }
@@ -1074,6 +1081,27 @@ const expand = (p: string): string => {
   if (p === '~') return home;
   if (p.startsWith('~/') || p.startsWith('~\\')) return join(home, p.slice(2));
   return p;
+};
+
+/** Alert thresholds (fractions of the daily limit) crossed between two usage snapshots. */
+export const budgetCrossings = (
+  before: { tokens: number; usd: number },
+  after: { tokens: number; usd: number },
+  budget: { dailyUsd?: number; dailyTokens?: number },
+  thresholds: number[],
+): { metric: 'usd' | 'tokens'; threshold: number; used: number; limit: number }[] => {
+  const out: { metric: 'usd' | 'tokens'; threshold: number; used: number; limit: number }[] = [];
+  const ts = [...new Set(thresholds)].sort((a, b) => a - b);
+  for (const [metric, limit] of [
+    ['usd', budget.dailyUsd],
+    ['tokens', budget.dailyTokens],
+  ] as const) {
+    if (!limit) continue;
+    for (const t of ts)
+      if (before[metric] < limit * t && after[metric] >= limit * t)
+        out.push({ metric, threshold: t, used: after[metric], limit });
+  }
+  return out;
 };
 
 export const stripRecord = (s: SessionRecord) => {

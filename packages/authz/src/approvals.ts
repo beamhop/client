@@ -123,8 +123,13 @@ export class ApprovalPolicy {
     };
   }
 
+  /** Approvals needed for this request out of the eligible pool (for the API view). */
+  quorumFor(state: Pick<ApprovalState, 'requestedBy'>): { needed: number; pool: number } {
+    return this.needed(state);
+  }
+
   /** Effective approvals needed for this request (the requester's own vote doesn't count when quorum > 1). */
-  private needed(state: ApprovalState): { needed: number; pool: number } {
+  private needed(state: Pick<ApprovalState, 'requestedBy'>): { needed: number; pool: number } {
     const requester = this.identity(state.requestedBy.principal);
     const requesterIsApprover = this.approverIds.includes(requester);
     if (this.quorum > 1 && requesterIsApprover) {

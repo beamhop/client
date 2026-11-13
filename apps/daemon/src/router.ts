@@ -126,6 +126,17 @@ export class Router {
     const memberChannel = bound?.channel ?? channel;
     const isDm = msg.conversation.kind === 'dm';
     if (isDm) d.rememberDm(msg.from.principal, channel, msg.conversation.id);
+    else
+      try {
+        d.channels.noteChat(
+          memberChannel,
+          msg.conversation.kind,
+          msg.conversation.id,
+          msg.conversation.title,
+        );
+      } catch (e) {
+        d.log.warn('could not record chat', { channel: memberChannel, error: errMsg(e) });
+      }
     d.identity.noteInbound(conn, msg);
 
     // Replies to an outstanding mesh_ask_agent are consumed by the mesh provider.
@@ -432,6 +443,16 @@ export class Router {
     });
     if (msg.conversation.kind === 'dm') d.rememberDm(msg.from.principal, conn.name, msg.conversation.id);
     d.refreshControlAllowlist();
+    try {
+      d.channels.recordPairing(d.channels.binding(conn.name)?.channel ?? conn.name, {
+        principal: msg.from.principal,
+        displayName: msg.from.displayName ?? msg.from.principal,
+        role: 'owner',
+        pairedAt: new Date(now).toISOString(),
+      });
+    } catch (e) {
+      d.log.warn('could not record pairing', { channel: conn.name, error: errMsg(e) });
+    }
     d.audit({
       type: 'pairing.success',
       severity: 'security',
@@ -528,6 +549,11 @@ export class Router {
     const at = new Date(d.now()).toISOString();
     const bound = d.channels.binding(conn.name);
     const base = bound?.channel ?? conn.name;
+    try {
+      d.channels.forgetChat(base, conversationId);
+    } catch (e) {
+      d.log.warn('could not forget chat', { channel: base, error: errMsg(e) });
+    }
     for (const agent of d.config.agents.list()) {
       if (bound && agent.name !== bound.agent) continue;
       let changed = false;
