@@ -7,10 +7,13 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "2.6.0",
     "@beamhop/core": "workspace:*",
     "@beamhop/harness-catalog": "workspace:*",
     "@beamhop/harness-discovery": "workspace:*",
-    "@beamhop/harness-kit": "workspace:*",
-    "@agentclientprotocol/sdk": "2.6.0"
+    "@beamhop/harness-kit": "workspace:*"
+  },
+  "devDependencies": {
+    "opencode-ai": "1.19.5"
   }
 }

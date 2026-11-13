@@ -11,5 +11,8 @@
     "@beamhop/harness-catalog": "workspace:*",
     "@beamhop/harness-discovery": "workspace:*",
     "@beamhop/harness-kit": "workspace:*"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "0.73.1"
   }
 }

@@ -374,7 +374,7 @@ const applySessionSettings = async (
             value: match.value,
           })
           .catch((e) => log.warn('could not set model', { error: (e as Error).message }));
-      } else if (!match) log.info('model not offered by agent; using its default', { model: spec.model });
+      } else if (!match) log.warn('model not offered by agent; using its default', { model: spec.model });
     }
   }
   if (spec.permissionMode === 'plan' && modes?.availableModes.some((m) => m.id === 'plan')) {

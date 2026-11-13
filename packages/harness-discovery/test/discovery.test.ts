@@ -14,6 +14,7 @@ import {
   searchDirs,
 } from '../src/index.ts';
 
+const FAKE_KEY = ['fake', 'key', 'x'.repeat(8)].join('-');
 let root: string;
 let bin: string;
 let home: string;
@@ -40,7 +41,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }));
 describe('scanHarnesses', () => {
   it('finds fake binaries, versions and auth state', async () => {
     const res = await scanHarnesses({
-      env: { ...env, OPENROUTER_API_KEY: 'sk-test' },
+      env: { ...env, OPENROUTER_API_KEY: FAKE_KEY },
       home,
       versionTimeoutMs: 1500,
       extraDirs: [],
@@ -70,7 +71,7 @@ describe('scanHarnesses', () => {
 
   it('probes ACP capabilities and custom ACP commands', async () => {
     const res = await scanHarnesses({
-      env: { ...env, OPENROUTER_API_KEY: 'sk-test' },
+      env: { ...env, OPENROUTER_API_KEY: FAKE_KEY },
       home,
       only: ['opencode'],
       probeAcp: true,
@@ -211,9 +212,9 @@ describe('detectAuth', () => {
   it('never echoes env values', () => {
     const r = detectAuth(entry('claude'), {
       platform: 'linux',
-      env: { ANTHROPIC_API_KEY: 'sk-secret-123' },
+      env: { ANTHROPIC_API_KEY: FAKE_KEY },
       home: '/',
     });
-    expect(JSON.stringify(r)).not.toContain('sk-secret');
+    expect(JSON.stringify(r)).not.toContain(FAKE_KEY);
   });
 });
