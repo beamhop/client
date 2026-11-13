@@ -655,6 +655,13 @@ export const PRESET_META: Record<string, PresetMeta> = {
   },
 };
 
+/**
+ * The "start from scratch" choice in the New agent flow. Not a daemon preset: the agent is created with
+ * no preset, so it gets the AgentConfig defaults (no channels, $5/day) plus the sandbox picked here.
+ */
+export const SCRATCH = 'scratch';
+export const SCRATCH_NAME = 'agent';
+
 /** CLI equivalent for creating an agent. */
 export const createCli = (o: {
   name: string;
@@ -662,12 +669,15 @@ export const createCli = (o: {
   harness?: string;
   model?: string;
   mounts: Mount[];
+  /** Only for agents without a preset; a preset already sets the profile. */
+  profile?: string;
 }): string =>
   [
     // An invalid name would make a broken (or, with shell characters, a different) command, so the
     // preview keeps the placeholder until the name passes validation.
     `beamhop agent add ${o.name && o.name.length <= 48 && SLUG.test(o.name) ? o.name : '<name>'}`,
     o.preset && `--preset ${o.preset}`,
+    o.profile && `--profile ${o.profile}`,
     `--harness ${o.harness || '<harness>'}`,
     o.model && o.model !== 'default' && `--model ${o.model}`,
     ...o.mounts.map((m) => `--mount ${m.path}:${m.mode}`),

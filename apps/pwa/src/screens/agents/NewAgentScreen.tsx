@@ -7,6 +7,9 @@
  * Compact: stepper on top, one step at a time, sticky Back / Continue bar above the tab bar.
  * Expanded: two columns — the step on the left, a sticky live preview (reach + CLI) on the right.
  *
+ * A fifth card, "Start from scratch", skips the preset: the user picks only the sandbox profile here and
+ * the agent gets the config defaults (no channels, $5/day), all editable on its detail screen.
+ *
  * Research: presets as radio cards that pre-fill the rest and a final review grouped by step with inline
  * "Edit" back to that step (Cloudscape multi-page create, https://cloudscape.design/patterns/resource-management/create/multi-page-create ;
  * PatternFly wizard review step, https://www.patternfly.org/components/wizard/design-guidelines). Redundant entry
@@ -25,6 +28,7 @@ import { usd } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Screen } from '../../shell/Screen.tsx';
 import { Button } from '../../ui/Button.tsx';
+import { SegmentedControl } from '../../ui/Choice.tsx';
 import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { Badge, Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
@@ -34,11 +38,20 @@ import { Stepper } from '../../ui/Stepper.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { HarnessJobControls } from '../harnesses/HarnessJob.tsx';
 import { DEFAULT_MODEL, ModelField } from './ModelField.tsx';
-import { createCli, PRESET_META, reachOf, suggestName, validateName } from './model.ts';
+import {
+  createCli,
+  PRESET_META,
+  reachOf,
+  SCRATCH,
+  SCRATCH_NAME,
+  suggestName,
+  validateName,
+} from './model.ts';
 import { ReachSummary } from './parts.tsx';
 import { AddMount, loginCommand, MountRow } from './sections/Setup.tsx';
 
 type Profile = 'strict' | 'workspace' | 'custom';
+type ScratchProfile = 'strict' | 'workspace';
 const STEPS = ['preset', 'harness', 'folders', 'review'] as const;
 type Step = (typeof STEPS)[number];
 const stepLabel = (s: Step) => t(`agents.new.step.${s}` as 'agents.new.step.preset');
@@ -81,6 +94,8 @@ const PresetStep = ({
   name,
   setName,
   nameErr,
+  scratchProfile,
+  setScratchProfile,
 }: {
   presets: Preset[];
   value: string;
@@ -88,6 +103,8 @@ const PresetStep = ({
   name: string;
   setName: (v: string) => void;
   nameErr?: string;
+  scratchProfile: ScratchProfile;
+  setScratchProfile: (p: ScratchProfile) => void;
 }) => (
   <div className="flex flex-col gap-6">
     <RadioGroup
@@ -140,7 +157,68 @@ const PresetStep = ({
           </Radio>
         );
       })}
+      <Radio value={SCRATCH} className={cx(cardClass, 'border-dashed border-line-strong')}>
+        {({ isSelected }) => (
+          <>
+            <div className="flex items-start gap-3">
+              <RadioDot on={isSelected} />
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="type-title-3 text-ink">{t('agents.new.scratch.title')}</span>
+                <span className="type-body-sm text-ink-2">{t('agents.new.scratch.description')}</span>
+              </div>
+            </div>
+            <div
+              className={cx(
+                'mt-1 flex-col gap-1 border-t border-line pt-2 pl-9',
+                isSelected ? 'flex' : 'hidden medium:flex',
+              )}
+            >
+              <dl className="flex flex-col gap-1">
+                <Fact k={t('agents.new.who')} v={t('agents.new.scratch.who')} />
+                <Fact
+                  k={t('agents.new.changes')}
+                  v={t(
+                    scratchProfile === 'strict'
+                      ? 'agents.new.scratch.writesStrict'
+                      : 'agents.new.scratch.writesWorkspace',
+                  )}
+                />
+                <Fact
+                  k={t('agents.new.limits')}
+                  v={
+                    <span className="type-meta text-ink">
+                      {scratchProfile} · {usd(5)}/day
+                    </span>
+                  }
+                />
+              </dl>
+            </div>
+          </>
+        )}
+      </Radio>
     </RadioGroup>
+    {value === SCRATCH && (
+      <div className="flex flex-col gap-2">
+        <span className="type-label text-ink">{t('agents.new.scratch.sandbox')}</span>
+        <SegmentedControl
+          label={t('agents.new.scratch.sandbox')}
+          value={scratchProfile}
+          onChange={setScratchProfile}
+          className="self-start"
+          options={[
+            { id: 'workspace', label: t('agents.new.scratch.workspace') },
+            { id: 'strict', label: t('agents.new.scratch.strict') },
+          ]}
+        />
+        <p className="type-body-sm text-ink-2">
+          {t(
+            scratchProfile === 'strict'
+              ? 'agents.new.scratch.strictHint'
+              : 'agents.new.scratch.workspaceHint',
+          )}
+        </p>
+      </div>
+    )}
     <TextField
       label={t('agents.new.name')}
       value={name}
@@ -320,16 +398,22 @@ export const NewAgentScreen = () => {
   const [tried, setTried] = useState(false);
   const top = useRef<HTMLDivElement>(null);
 
+  const [scratchProfile, setScratchProfile] = useState<ScratchProfile>('workspace');
+  const scratch = presetId === SCRATCH;
   const preset = presets.find((p) => p.id === presetId);
   const meta = PRESET_META[presetId];
-  const profile = ((preset?.config as { sandbox?: { profile?: Profile } } | undefined)?.sandbox?.profile ??
-    'workspace') as Profile;
-  const lockRo = meta?.lockMode === 'ro';
+  const profile: Profile = scratch
+    ? scratchProfile
+    : (((preset?.config as { sandbox?: { profile?: Profile } } | undefined)?.sandbox?.profile ??
+        'workspace') as Profile);
+  const baseName = scratch ? SCRATCH_NAME : meta?.name;
+  // The strict profile makes every mount read-only (sandbox compilePolicy), whatever its mode says.
+  const lockRo = scratch ? profile === 'strict' : meta?.lockMode === 'ro';
 
   // Prefill the name from the preset until the user types their own (WCAG 3.3.7).
   useEffect(() => {
-    if (!nameTouched && meta && agentsQ.data) setName(suggestName(meta.name, taken));
-  }, [agentsQ.data, nameTouched, meta, taken]);
+    if (!nameTouched && baseName && agentsQ.data) setName(suggestName(baseName, taken));
+  }, [agentsQ.data, nameTouched, baseName, taken]);
   useEffect(() => {
     if (!harness) {
       const first = harnesses.find((h) => h.status === 'ready');
@@ -350,7 +434,7 @@ export const NewAgentScreen = () => {
   const current = STEPS[step]!;
   const blocker =
     current === 'preset'
-      ? (nameErr ?? (!preset ? t('agents.new.pickPreset') : undefined))
+      ? (nameErr ?? (!preset && !scratch ? t('agents.new.pickPreset') : undefined))
       : current === 'harness' && !harnessOk
         ? t('agents.new.pickHarness')
         : undefined;
@@ -360,7 +444,9 @@ export const NewAgentScreen = () => {
     [harness, mounts, profile],
   );
   const reach = reachOf(cfg);
-  const cli = createCli({ name, preset: presetId, harness, model, mounts });
+  const cli = scratch
+    ? createCli({ name, harness, model, mounts, profile })
+    : createCli({ name, preset: presetId, harness, model, mounts });
   const harnessName = harnesses.find((h) => h.id === harness)?.displayName ?? harness;
 
   const go = (i: number) => {
@@ -379,7 +465,10 @@ export const NewAgentScreen = () => {
   };
   const submit = () =>
     create
-      .mutateAsync({ preset: presetId, config: { name, harness, model, mounts, sandbox: { profile } } })
+      .mutateAsync({
+        ...(scratch ? {} : { preset: presetId }),
+        config: { name, harness, model, mounts, sandbox: { profile } },
+      })
       .then((a) => {
         haptic('confirm');
         toast.show({ tone: 'success', message: t('agents.new.created', { name: a.config.name }) });
@@ -402,6 +491,8 @@ export const NewAgentScreen = () => {
           setName(v);
         }}
         nameErr={tried || nameTouched ? nameErr : undefined}
+        scratchProfile={scratchProfile}
+        setScratchProfile={setScratchProfile}
       />
     ) : current === 'harness' ? (
       <div className="flex flex-col gap-6">
@@ -418,7 +509,9 @@ export const NewAgentScreen = () => {
       <div className="flex flex-col gap-4">
         {lockRo && (
           <p className="type-body-sm text-ink-2">
-            {t('agents.new.lockedRo', { preset: preset?.title ?? '' })}
+            {scratch
+              ? t('agents.new.lockedRoStrict')
+              : t('agents.new.lockedRo', { preset: preset?.title ?? '' })}
           </p>
         )}
         {mounts.length > 0 ? (
@@ -432,7 +525,7 @@ export const NewAgentScreen = () => {
                 m={m}
                 i={i}
                 count={mounts.length}
-                lockRo={lockRo ? t('agents.new.roNote') : undefined}
+                lockRo={lockRo ? t(scratch ? 'agents.new.roNoteStrict' : 'agents.new.roNote') : undefined}
                 onChange={(nm) => setMounts((ms) => ms.map((x, j) => (j === i ? nm : x)))}
                 onRemove={() => setMounts((ms) => ms.filter((_, j) => j !== i))}
               />
@@ -447,7 +540,14 @@ export const NewAgentScreen = () => {
       <div className="flex flex-col gap-4">
         <ReviewGroup title={stepLabel('preset')} onEdit={() => go(0)}>
           <p className="type-title-3 text-ink">{name}</p>
-          <MetaLine items={[preset?.title ?? presetId, profile, meta?.who]} className="whitespace-normal" />
+          <MetaLine
+            items={
+              scratch
+                ? [t('agents.new.scratch.title'), profile, t('agents.new.scratch.who')]
+                : [preset?.title ?? presetId, profile, meta?.who]
+            }
+            className="whitespace-normal"
+          />
         </ReviewGroup>
         <ReviewGroup title={stepLabel('harness')} onEdit={() => go(1)}>
           <p className="flex items-center gap-2 type-body text-ink">

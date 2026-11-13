@@ -179,6 +179,11 @@ describe('validators', () => {
       }),
     ).toBe('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
   });
+  it('passes the sandbox profile for an agent without a preset', () => {
+    expect(createCli({ name: 'agent', harness: 'claude', mounts: [], profile: 'strict' })).toBe(
+      'beamhop agent add agent --profile strict --harness claude',
+    );
+  });
   it('shows a placeholder instead of an invalid name', () => {
     expect(createCli({ name: 'my bot!', harness: 'codex', mounts: [] })).toBe(
       'beamhop agent add <name> --harness codex',

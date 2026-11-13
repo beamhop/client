@@ -236,6 +236,24 @@ test('new agent: preset → harness → folders → review → create', async ({
   await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Created qa/)).toBeVisible();
 });
 
+test('new agent: from scratch, without a preset', async ({ page }) => {
+  await open(page, '/agents/new');
+  await page.getByText('Start from scratch', { exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('agent');
+  await page.getByRole('radio', { name: 'Strict', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue · Harness' }).click();
+  await page.getByText('Gemini CLI', { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue · Folders' }).click();
+  await expect(page.getByText('The strict sandbox never writes, so folders are read-only.')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip · Review' }).click();
+  await expect(
+    page.getByText('beamhop agent add agent --profile strict --harness gemini').first(),
+  ).toBeAttached();
+  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await expect(page).toHaveURL(/\/agents\/agent/);
+  await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Created agent/)).toBeVisible();
+});
+
 test('new agent: a taken name is caught with a suggestion', async ({ page }) => {
   await open(page, '/agents/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('reviewer');

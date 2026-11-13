@@ -6,6 +6,13 @@ All notable changes to beamhop are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **New agent from scratch.** The New agent flow has a fifth choice next to the presets, "Start from
+  scratch". You pick only the sandbox (workspace or strict). The agent starts with no channels and a
+  $5/day budget, and you set the rest on its own screens. A strict agent's folders are locked read-only,
+  since the strict sandbox never writes.
+
 ## [0.2.0] - 2026-11-13
 
 One version for everything from here on: the CLI, the daemon, the desktop app and the web UI share it
