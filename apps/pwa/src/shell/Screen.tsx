@@ -10,6 +10,7 @@
 import { CaretLeft } from '@phosphor-icons/react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { useExpanded } from '../lib/media.ts';
 import { ConnectionPill } from './Connection.tsx';
@@ -85,6 +86,8 @@ export const Screen = ({
   }, [largeTitle]);
 
   const panicVisible = showPanic ?? topLevel;
+  // A plain-string slug gets the slug-line style (DESIGN §3.4), so every screen's meta line matches.
+  const slugNode = typeof slug === 'string' ? <p className="type-meta text-ink-2">{slug}</p> : slug;
 
   if (!expanded) {
     return (
@@ -97,7 +100,7 @@ export const Screen = ({
             {back ? (
               <Link
                 href={back.href}
-                aria-label={back.label ? `Back to ${back.label}` : 'Back'}
+                aria-label={back.label ? t('a11y.backTo', { label: back.label }) : t('a11y.back')}
                 className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-ink outline-none data-[hovered]:bg-sunken data-[pressed]:bg-sunken"
               >
                 <CaretLeft size={22} aria-hidden="true" />
@@ -127,14 +130,14 @@ export const Screen = ({
               <h1 className="type-title-1 text-ink">{title}</h1>
               {titleAside}
             </div>
-            {slug && <div className="mt-0.5">{slug}</div>}
+            {slugNode && <div className="mt-0.5">{slugNode}</div>}
             <div ref={sentinel} aria-hidden="true" className="h-px" />
           </div>
         )}
         {!largeTitle && <h1 className="sr-only">{title}</h1>}
         {!largeTitle && (slug || titleAside) && (
           <div className="flex items-center justify-between gap-3 px-gutter pt-2">
-            <div className="min-w-0">{slug}</div>
+            <div className="min-w-0">{slugNode}</div>
             {titleAside}
           </div>
         )}
@@ -159,7 +162,7 @@ export const Screen = ({
           className={cx('sticky top-0 z-20 bg-bg', pane === 'list' ? 'border-b border-line px-5' : 'px-8')}
         >
           {crumbs && crumbs.length > 0 && (
-            <nav aria-label="Breadcrumb" className="pt-4 type-meta text-ink-2">
+            <nav aria-label={t('a11y.breadcrumb')} className="pt-4 type-meta text-ink-2">
               <ol className="flex flex-wrap items-center gap-1.5">
                 {crumbs.map((c, i) => (
                   <li key={c.href ?? c.label} className="flex items-center gap-1.5">
@@ -193,7 +196,7 @@ export const Screen = ({
             {titleAside}
             {actions && <div className="flex items-center gap-1">{actions}</div>}
           </div>
-          {slug && <div className="-mt-2 pb-3">{slug}</div>}
+          {slugNode && <div className="-mt-2 pb-3">{slugNode}</div>}
         </header>
         <div
           id={pane === 'list' ? undefined : 'bh-main-content'}
@@ -241,6 +244,6 @@ export const SplitView = ({
 
 const EmptyDetail = () => (
   <div id="bh-main-content" className="grid h-full place-items-center p-8">
-    <p className="type-body-sm text-ink-3">Select an item to see its details.</p>
+    <p className="type-body-sm text-ink-2">{t('a11y.selectItem')}</p>
   </div>
 );
