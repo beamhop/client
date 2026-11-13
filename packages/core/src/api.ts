@@ -50,6 +50,27 @@ export const HarnessView = z.object({
     })
     .optional(),
   /**
+   * What `harness.install` would do on this computer: the first method that applies (the harness's own
+   * installer, Homebrew, npm, winget), or `none` (only `install.url` to follow by hand).
+   */
+  installPlan: z
+    .object({
+      method: z.enum(['native', 'brew', 'npm', 'winget', 'none']),
+      /** e.g. "Claude Code installer", "Homebrew", "npm". */
+      label: z.string(),
+      /** What runs, for display ("Show details", the CLI). Empty for `none`. */
+      command: z.array(z.string()),
+      /** `none`: why nothing applies here ("Needs Homebrew or Node.js; neither was found."). */
+      reason: z.string().optional(),
+      /** Other methods that would also work here, best first. */
+      alternatives: z.array(z.enum(['native', 'brew', 'npm', 'winget'])).default([]),
+    })
+    .optional(),
+  /** beamhop installed it (under <home>/harnesses); `harness.update` and uninstall manage only these + brew. */
+  managed: z.boolean().optional(),
+  /** The harness's own login can run without a terminal (`harness.loginFlow`). */
+  loginFlow: z.object({ kind: z.enum(['browser', 'device-code']) }).optional(),
+  /**
    * Login for sandboxed agents (your own login is not usable inside the sandbox). `unchecked`: a
    * credential is stored but not verified yet; `unmanaged`: beamhop does not manage this harness's login.
    */
@@ -64,8 +85,11 @@ export const HarnessView = z.object({
         z.object({
           id: z.string(),
           label: z.string(),
-          /** broker: the agent never sees it. env: the agent can read it. */
-          kind: z.enum(['broker', 'env']),
+          /**
+           * broker: the agent never sees it. env: the agent can read it. home: a subscription sign-in
+           * (ChatGPT, Google…) run with `harness.loginFlow { method }`; the agent can read it.
+           */
+          kind: z.enum(['broker', 'env', 'home']),
           secret: z.string(),
           set: z.boolean(),
           hint: z.string().optional(),
@@ -76,6 +100,46 @@ export const HarnessView = z.object({
     .optional(),
 });
 export type HarnessView = z.infer<typeof HarnessView>;
+
+export const HarnessJobStep = z.enum([
+  'resolving',
+  'downloading',
+  'verifying',
+  'installing',
+  'checking',
+  'waiting-browser',
+  'done',
+  'failed',
+  'cancelled',
+]);
+export type HarnessJobStep = z.infer<typeof HarnessJobStep>;
+
+/**
+ * A harness install, update or login running in the daemon. Clients poll `harness.job.get` (the CLI
+ * talks plain HTTP; the PWA uses the same call), so a job survives a reload or a CLI Ctrl-C.
+ */
+export const HarnessJob = z.object({
+  id: z.string(),
+  harness: z.string(),
+  /** The harness's display name ("Gemini CLI"). */
+  displayName: z.string().optional(),
+  kind: z.enum(['install', 'update', 'login']),
+  method: z.enum(['native', 'brew', 'npm', 'winget', 'flow']).optional(),
+  step: HarnessJobStep,
+  /** Plain-language status or error ("Homebrew is busy with another install. Try again in a minute."). */
+  message: z.string().optional(),
+  /** Login: the page to open (the daemon opens it when asked; headless clients print it). */
+  url: z.string().optional(),
+  /** Login: a device code to enter on that page. */
+  code: z.string().optional(),
+  startedAt: z.string(),
+  endedAt: z.string().optional(),
+  /** Raw output lines so far (fetch them with `harness.job.get` `since`). */
+  lines: z.number().int(),
+});
+export type HarnessJob = z.infer<typeof HarnessJob>;
+export const isJobFinished = (j: Pick<HarnessJob, 'step'>): boolean =>
+  j.step === 'done' || j.step === 'failed' || j.step === 'cancelled';
 
 /** Package managers the harness catalog lists packages for. */
 export type InstallManager = 'npm' | 'brew' | 'winget';
@@ -232,7 +296,23 @@ export const DoctorCheck = z.object({
   title: z.string(),
   status: z.enum(['ok', 'warn', 'fail', 'skip']),
   message: z.string(),
+  /** Human-readable fix (may mention a command; shown by the CLI and in "Show details"). */
   fix: z.string().optional(),
+  /**
+   * A fix beamhop can apply itself (`system.doctorFix`, `beamhop doctor --fix`). `id` names an entry in
+   * the daemon's fixed table; clients never send a command. `admin`: needs administrator rights (the
+   * daemon asks through the OS prompt; the CLI may run `command` with sudo instead).
+   */
+  action: z
+    .object({
+      id: z.string(),
+      label: z.string(),
+      summary: z.string(),
+      admin: z.boolean(),
+      /** What runs, for display (and for the CLI's sudo path). */
+      command: z.array(z.string()),
+    })
+    .optional(),
 });
 export type DoctorCheck = z.infer<typeof DoctorCheck>;
 
@@ -351,6 +431,14 @@ export const methods = {
   'system.whoami': { params: empty, result: WhoamiView },
   'system.panic': { params: z.object({ reason: z.string().optional() }).default({}), result: ok },
   'system.resume': { params: empty, result: ok },
+  /**
+   * Apply a doctor fix by its action id (local only). Admin fixes go through the OS prompt (macOS admin
+   * dialog, pkexec); `elevate: 'none'` refuses them instead (the CLI then offers sudo itself).
+   */
+  'system.doctorFix': {
+    params: z.object({ id: z.string(), elevate: z.enum(['os-prompt', 'none']).default('os-prompt') }),
+    result: z.object({ checks: z.array(DoctorCheck), output: z.string() }),
+  },
 
   'agent.list': { params: empty, result: z.object({ agents: z.array(AgentView) }) },
   'agent.get': { params: byName, result: AgentView },
@@ -421,6 +509,49 @@ export const methods = {
     params: z.object({ id: z.string(), command: z.string(), args: z.array(z.string()).default([]) }),
     result: HarnessView,
   },
+  /** Install a harness on this computer (local only). Starts a job; poll `harness.job.get`. */
+  'harness.install': {
+    params: z.object({ id: z.string(), method: z.enum(['native', 'brew', 'npm', 'winget']).optional() }),
+    result: HarnessJob,
+  },
+  /** Update an installed harness the way it was installed (local only). */
+  'harness.update': { params: z.object({ id: z.string() }), result: HarnessJob },
+  /** Installed harnesses with a newer version available (cached for a day; `refresh` re-checks). */
+  'harness.updates': {
+    params: z.object({ refresh: z.boolean().default(false) }).default({ refresh: false }),
+    result: z.object({
+      updates: z.array(
+        z.object({
+          id: z.string(),
+          current: z.string().optional(),
+          latest: z.string().optional(),
+          available: z.boolean(),
+          /** Too old to work (unsupported-version): updating fixes it. */
+          required: z.boolean(),
+        }),
+      ),
+    }),
+  },
+  /**
+   * Run the harness's own login without a terminal (local only). `openBrowser`: the daemon opens the
+   * sign-in page itself; headless clients pass false and show `job.url` / `job.code`.
+   */
+  'harness.loginFlow': {
+    params: z.object({
+      id: z.string(),
+      openBrowser: z.boolean().default(true),
+      /** A `home` login method to sign in with (default: the harness's own flow, else its first home method). */
+      method: z.string().optional(),
+    }),
+    result: HarnessJob,
+  },
+  'harness.job.get': {
+    params: z.object({ jobId: z.string(), since: z.number().int().min(0).default(0) }),
+    result: z.object({ job: HarnessJob, lines: z.array(z.string()), next: z.number().int() }),
+  },
+  /** Running and recent (last hour) jobs, newest first. */
+  'harness.job.list': { params: empty, result: z.object({ jobs: z.array(HarnessJob) }) },
+  'harness.job.cancel': { params: z.object({ jobId: z.string() }), result: HarnessJob },
 
   'channel.providers': { params: empty, result: z.object({ providers: z.array(WizardView) }) },
   'channel.list': { params: empty, result: z.object({ channels: z.array(ChannelView) }) },
@@ -580,7 +711,31 @@ export const methods = {
   'owner.add': { params: z.object({ principal: z.string() }), result: ok },
   'owner.remove': { params: z.object({ principal: z.string() }), result: ok },
 
-  'policy.get': { params: byName, result: z.object({ profile: z.string(), effective: SandboxPolicy }) },
+  'policy.get': {
+    params: byName,
+    result: z.object({
+      profile: z.string(),
+      effective: SandboxPolicy,
+      /** Hosts the harness and its sign-in need, added to the sandbox at session start. */
+      required: z.array(z.object({ host: z.string(), source: z.string() })).default([]),
+      /** The agent's own allowlist additions (the profile's defaults are not listed). */
+      userAllow: z.array(z.string()).default([]),
+    }),
+  },
+  /** Probe the hosts a harness needs through the agent's sandbox policy and report which are reachable. */
+  'sandbox.test': {
+    params: byName,
+    result: z.object({
+      results: z.array(
+        z.object({
+          host: z.string(),
+          source: z.string(),
+          status: z.enum(['ok', 'blocked', 'unreachable']),
+          detail: z.string().optional(),
+        }),
+      ),
+    }),
+  },
   'policy.set': {
     params: z.object({ name: z.string(), profile: z.string(), policy: SandboxPolicy.optional() }),
     result: ok,

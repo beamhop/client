@@ -38,8 +38,13 @@ export const SandboxPolicy = z.object({
       allow: z.array(z.string()).default([]),
       deny: z.array(z.string()).default([]),
       denyPrivateIps: z.boolean().default(true),
+      /**
+       * `restricted` (default): only the allowlist (and the harness's own hosts) is reachable.
+       * `all`: any host is reachable; deny entries, metadata and private addresses still apply.
+       */
+      mode: z.enum(['restricted', 'all']).default('restricted'),
     })
-    .default({ allow: [], deny: [], denyPrivateIps: true }),
+    .default({ allow: [], deny: [], denyPrivateIps: true, mode: 'restricted' }),
   secrets: z.array(SecretBinding).default([]),
   env: z.object({ passthrough: z.array(z.string()).default(['PATH', 'LANG', 'TERM', 'HOME']) }).default({
     passthrough: ['PATH', 'LANG', 'TERM', 'HOME'],

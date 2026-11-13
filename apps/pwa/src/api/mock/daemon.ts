@@ -32,6 +32,7 @@ import {
   type SessionView,
   type WhoamiView,
 } from '@beamhop/core';
+import { MockJobs } from './jobs.ts';
 import { MockPairing } from './pairing.ts';
 import { ago, ahead, type MockState, NPUBS, OWNER, seed } from './seed.ts';
 
@@ -231,9 +232,12 @@ export class MockDaemon {
 
   /** Pairing + onboarding hello simulation (mock/pairing.ts). */
   pairing: MockPairing;
+  /** Harness install / update / login jobs (mock/jobs.ts). */
+  jobs: MockJobs;
 
   constructor(now = Date.now()) {
     this.state = seed(now);
+    this.jobs = new MockJobs(() => this.state.harnesses, this.state.harnessUpdates, fail);
     this.pairing = new MockPairing({
       addDevice: (d) => {
         this.state.devices = [...this.state.devices.filter((x) => x.pubkey !== d.pubkey), d];
@@ -533,6 +537,20 @@ export class MockDaemon {
       home: '~/.beamhop',
     }),
     'system.doctor': () => ({ checks: this.state.doctor }),
+    // Fixes come from a fixed table (the check's `action`); admin ones go through the OS prompt.
+    'system.doctorFix': async (p) => {
+      const c = this.state.doctor.find((x) => x.action?.id === p.id) ?? fail('not_found', `No fix ${p.id}`);
+      if (c.action?.admin && p.elevate === 'none')
+        fail('forbidden', `${c.action.label} needs administrator rights.`);
+      await sleep(800);
+      const output = `$ ${c.action?.command.join(' ') ?? ''}\nok`;
+      this.state.doctor = this.state.doctor.map((x) =>
+        x.id === c.id
+          ? { id: x.id, title: x.title, status: 'ok', message: `Fixed: ${c.action?.label ?? ''}` }
+          : x,
+      );
+      return { checks: this.state.doctor, output };
+    },
     // The browser is a local client: the local owner, linked to alice in the demo.
     'system.whoami': (): WhoamiView => {
       const person = this.personOf(LOCAL);
@@ -898,6 +916,14 @@ export class MockDaemon {
       return { harnesses: this.state.harnesses };
     },
     'harness.list': () => ({ harnesses: this.state.harnesses }),
+    // Install / update / login run as jobs (mock/jobs.ts); the browser is the local client, so allowed.
+    'harness.install': (p) => this.jobs.install(p.id, p.method),
+    'harness.update': (p) => this.jobs.update(p.id),
+    'harness.updates': () => ({ updates: this.state.harnessUpdates.map((u) => ({ ...u })) }),
+    'harness.loginFlow': (p) => this.jobs.login(p.id, p.method),
+    'harness.job.get': (p) => this.jobs.get(p.jobId, p.since),
+    'harness.job.list': () => this.jobs.list(),
+    'harness.job.cancel': (p) => this.jobs.cancel(p.jobId),
     // Logins: `bad…` values are rejected like a real check would; anything else is accepted.
     'harness.login': async (p) => {
       await sleep(600);
@@ -1348,7 +1374,18 @@ export class MockDaemon {
     // ── policy
     'policy.get': (p) => {
       this.agent(p.name);
-      return this.state.policies.get(p.name) ?? { profile: 'workspace', effective: SandboxPolicy.parse({}) };
+      return (
+        this.state.policies.get(p.name) ?? {
+          profile: 'workspace',
+          effective: SandboxPolicy.parse({}),
+          required: [],
+          userAllow: [],
+        }
+      );
+    },
+    'sandbox.test': (p) => {
+      this.agent(p.name);
+      return { results: [] };
     },
     'policy.set': (p) => {
       const a = this.agent(p.name);

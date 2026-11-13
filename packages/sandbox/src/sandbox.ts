@@ -234,6 +234,7 @@ export const createSandbox = async (
     const cfg = {
       srt: srtConfig,
       learning: policy.learning,
+      allowAll: policy.net.mode === 'all',
       violationSocket: vserver.path,
       commandId,
       timeoutMs: policy.proc.maxSessionMinutes * 60_000,

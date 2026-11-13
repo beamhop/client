@@ -1,5 +1,7 @@
 /** API handlers for every method in `@beamhop/core` api.ts. */
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
   allRoleDefs,
@@ -16,28 +18,87 @@ import {
   type ChannelConfig,
   type DoctorCheck,
   expandHome,
+  type HarnessJob,
   type HarnessView,
   type MethodName,
   methods,
   newId,
   PRESETS,
+  paths,
   type Result,
-  type SandboxPolicy,
   type ScheduleConfig,
 } from '@beamhop/core';
-import { compilePolicy, probeSandbox } from '@beamhop/sandbox';
+import {
+  type Catalog,
+  type CatalogEntry,
+  findHarness,
+  type LoginMethod,
+  loadCatalog,
+} from '@beamhop/harness-catalog';
+import {
+  availableMethods,
+  expandPath,
+  fileExists,
+  installPlan,
+  isManagedPath,
+  methodLabel,
+  noneReason,
+  toolWhich,
+} from '@beamhop/harness-discovery';
+import { compilePolicy, probeSandbox, sandboxActions } from '@beamhop/sandbox';
 import { INSTRUCTION_FILES, type MoreMethod, moreHandlers } from './api-more.ts';
 import { channelSecretName } from './channels.ts';
 import { type Daemon, LOCAL_OWNER, VERSION } from './daemon.ts';
+import {
+  type DoctorAction,
+  defaultFixRunner,
+  doctorActionTable,
+  elevatedArgv,
+  elevatedFailure,
+  type FixRunner,
+} from './doctor-fix.ts';
 import { checkLogin, harnessLogin, loginMethods, resolveMethod } from './harness-auth.ts';
+import {
+  defaultInstallerDeps,
+  homeSignInBody,
+  type InstallerDeps,
+  installBody,
+  isNewer,
+  latestVersion,
+  loginBody,
+  updateMethodFor,
+} from './harness-install.ts';
+import { type ChildLike, HarnessJobs, type SpawnFn } from './harness-jobs.ts';
 import { isInternalSecret } from './home.ts';
+import { encodeBlob, exportTransfer, homeEnv, readHome, writeHome } from './home-login.ts';
 import { type CallContext, createDispatcher, type Handler, type Handlers } from './rpc-server.ts';
 import { suggestionValue, withPolicyValue } from './rules.ts';
+import { probeHosts, requiredHosts } from './sandbox-hosts.ts';
 import { webhookSecretName } from './schedules.ts';
 import { stripRecord } from './sessions.ts';
 import { errMsg } from './util.ts';
 
 const OK = { ok: true as const };
+
+/** Injection points for harness installs/logins and doctor fixes (tests pass fakes). */
+export interface HarnessToolsOptions {
+  spawn?: SpawnFn;
+  kill?: (child: ChildLike, signal?: NodeJS.Signals) => void;
+  installer?: Partial<InstallerDeps>;
+  fixRunner?: FixRunner;
+  /** Replaces the sandbox's fix table (tests). */
+  sandboxActions?: Record<string, DoctorAction>;
+}
+
+const UPDATES_TTL_MS = 24 * 60 * 60 * 1000;
+const INSTALL_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** Methods that run programs on this computer: only a client on this computer may call them. */
+const LOCAL_ONLY_MESSAGE: Record<'install' | 'login' | 'fix', string> = {
+  install: 'Installing harnesses works only on the computer running beamhop. Open beamhop there.',
+  login: 'Signing in to a harness works only on the computer running beamhop. Open beamhop there.',
+  fix: 'Fixing problems works only on the computer running beamhop. Open beamhop there.',
+};
 
 /**
  * The doctor's harness line: a short summary (ready / needs login / not installed) and a fix that
@@ -86,8 +147,285 @@ const deepMerge = (a: unknown, b: unknown): unknown => {
 export class ApiHandlers {
   private dispatcher: ReturnType<typeof createDispatcher> | undefined;
   private customHarnesses = new Map<string, HarnessView>();
+  private jobsMgr: HarnessJobs | undefined;
+  private installerDeps: InstallerDeps | undefined;
+  private catalogCache: Catalog | undefined;
 
   constructor(private readonly d: Daemon) {}
+
+  /** Refuse anyone but a client on this computer (the API token, or in-process). */
+  requireLocal(ctx: CallContext, what: keyof typeof LOCAL_ONLY_MESSAGE): void {
+    if (ctx.caller === 'local' || ctx.transport === 'direct') return;
+    throw new BeamhopError('forbidden', LOCAL_ONLY_MESSAGE[what]);
+  }
+
+  private get tools(): HarnessToolsOptions {
+    return this.d.opts.harnessTools ?? {};
+  }
+
+  private catalog(): Catalog {
+    this.catalogCache ??= loadCatalog();
+    return this.catalogCache;
+  }
+
+  private catalogEntry(id: string): CatalogEntry {
+    const e = findHarness(this.catalog(), id);
+    if (!e) throw new BeamhopError('not_found', `${id} is not a harness beamhop knows how to install`);
+    return e;
+  }
+
+  /** Tools on the daemon's PATH, the environment children get, and where things install. */
+  installer(): InstallerDeps {
+    if (this.installerDeps) return this.installerDeps;
+    const o = this.tools.installer ?? {};
+    const env = o.env ?? process.env;
+    const platform = o.platform ?? process.platform;
+    const which = o.which ?? toolWhich({ platform, env, home: o.home ?? homedir() });
+    this.installerDeps = { ...defaultInstallerDeps(this.d.home, env, which), ...o, beamhopHome: this.d.home };
+    return this.installerDeps;
+  }
+
+  jobs(): HarnessJobs {
+    this.jobsMgr ??= new HarnessJobs({
+      ...(this.tools.spawn ? { spawn: this.tools.spawn } : {}),
+      ...(this.tools.kill ? { kill: this.tools.kill } : {}),
+      now: () => this.d.now(),
+    });
+    return this.jobsMgr;
+  }
+
+  /** Cancel running jobs (daemon shutdown). */
+  async shutdown(): Promise<void> {
+    await this.jobsMgr?.shutdown();
+  }
+
+  /** install plan, managed flag and login flow from the catalog (for the views `scan` stores). */
+  private decorate(v: HarnessView): HarnessView {
+    const entry = findHarness(this.catalog(), v.id);
+    if (!entry) return v;
+    const deps = this.installer();
+    const out: HarnessView = { ...v };
+    try {
+      out.installPlan = installPlan(entry, deps);
+    } catch (e) {
+      this.d.log.warn('install plan failed', { harness: v.id, error: errMsg(e) });
+    }
+    if (isManagedPath(v.path, deps.beamhopHome, deps.platform)) out.managed = true;
+    const flow = entry.auth.loginFlow;
+    if (flow) out.loginFlow = { kind: flow.kind };
+    return out;
+  }
+
+  /** Re-scan and return one harness (after an install). */
+  private async rescanOne(id: string): Promise<HarnessView | undefined> {
+    return (await this.scan()).find((h) => h.id === id);
+  }
+
+  /** Store a credential as a harness's vault login (`harness.login`, captured login flows). */
+  private async storeHarnessLogin(id: string, method: string | undefined, value: string, ctx: CallContext) {
+    const m = resolveMethod(id, method);
+    await this.d.secrets.set(m.secret, value.trim());
+    this.d.invalidateSecretCache();
+    this.d.audit({
+      type: 'harness.login',
+      severity: 'security',
+      summary: `${id} logged in with ${m.label}`,
+      actor: this.principal(ctx),
+      data: { harness: id, method: m.id, secret: m.secret },
+    });
+    return m;
+  }
+
+  /** Sign in to a subscription login (`home` method) in a fresh directory; the files go to the vault. */
+  private async homeSignIn(entry: CatalogEntry, m: LoginMethod, openBrowser: boolean, ctx: CallContext) {
+    const d = this.d;
+    if (m.kind !== 'home' || !m.home || !m.signIn)
+      throw new BeamhopError(
+        'invalid_input',
+        `${m.label} is not a sign-in; use beamhop harness login ${entry.id}`,
+      );
+    if (!this.scanFresh()) await this.scan();
+    const v = this.harnessViews().find((h) => h.id === entry.id);
+    if (!v?.path || v.status === 'not-installed')
+      throw new BeamhopError('invalid_input', `${entry.displayName} is not installed`);
+    const home = m.home;
+    const dir = join(paths(d.home).sessions, `signin-${entry.id}-${randomBytes(4).toString('hex')}`);
+    writeHome(dir, home);
+    const actor = this.principal(ctx);
+    const cleanup = () => rmSync(dir, { recursive: true, force: true });
+    return this.jobs().start(
+      {
+        harness: entry.id,
+        displayName: entry.displayName,
+        kind: 'login',
+        method: 'flow',
+        timeoutMs: (m.signIn.timeoutSec ?? 300) * 1000,
+        onEnd: (job) => {
+          cleanup();
+          this.auditJob(job, actor);
+        },
+      },
+      homeSignInBody(
+        entry,
+        m,
+        this.installer(),
+        {
+          binary: v.path,
+          dir,
+          read: (final) =>
+            home.transfer ? (final ? exportTransfer(v.path!, home, dir) : undefined) : readHome(dir, home),
+          store: async (files) => {
+            await this.storeHarnessLogin(entry.id, m.id, encodeBlob(files), ctx);
+            await checkLogin(d, entry.id).catch(() => undefined);
+          },
+        },
+        homeEnv(dir, home),
+        openBrowser,
+      ),
+    );
+  }
+
+  /** Audit the end of a job (never its output: a login's may hold a token). */
+  private auditJob(job: HarnessJob, actor: string): void {
+    const name = job.displayName ?? job.harness;
+    const verb = job.kind === 'install' ? 'Install' : job.kind === 'update' ? 'Update' : 'Sign-in';
+    const data = {
+      harness: job.harness,
+      kind: job.kind,
+      ...(job.method ? { method: job.method } : {}),
+      jobId: job.id,
+    };
+    if (job.step === 'done')
+      this.d.audit({
+        type:
+          job.kind === 'login'
+            ? 'harness.loginFlow'
+            : job.kind === 'install'
+              ? 'harness.installed'
+              : 'harness.updated',
+        severity: 'security',
+        summary: job.kind === 'login' ? `Logged in ${name}` : (job.message ?? `${verb} of ${name} finished`),
+        actor,
+        data,
+      });
+    else
+      this.d.audit({
+        type: `harness.${job.kind}.${job.step}`,
+        severity: job.step === 'failed' ? 'warn' : 'info',
+        summary: `${verb} of ${name} ${job.step === 'failed' ? `failed: ${job.message ?? 'unknown error'}` : 'cancelled'}`,
+        actor,
+        data,
+      });
+  }
+
+  private startInstall(
+    entry: CatalogEntry,
+    method: ReturnType<typeof availableMethods>[number],
+    update: boolean,
+    ctx: CallContext,
+  ) {
+    const actor = this.principal(ctx);
+    return this.jobs().start(
+      {
+        harness: entry.id,
+        displayName: entry.displayName,
+        kind: update ? 'update' : 'install',
+        method,
+        timeoutMs: INSTALL_TIMEOUT_MS,
+        onEnd: (job) => this.auditJob(job, actor),
+      },
+      installBody(entry, method, update, this.installer(), () => this.rescanOne(entry.id)),
+    );
+  }
+
+  /** Doctor checks (`system.doctor`, and again after `system.doctorFix`). */
+  private async doctorChecks(): Promise<DoctorCheck[]> {
+    const d = this.d;
+    const checks: DoctorCheck[] = [];
+    try {
+      checks.push(...(await probeSandbox()));
+    } catch (e) {
+      checks.push({ id: 'sandbox', title: 'Sandbox', status: 'fail', message: errMsg(e) });
+    }
+    const hs = await this.scan();
+    // Agents with `harnessAuth: api-key` (the default) reach their LLM only through the broker,
+    // which needs the provider key in beamhop's secret store.
+    const llmKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
+    const haveKeys = (await d.secrets.list().catch(() => []))
+      .map((s) => s.name)
+      .filter((n) => llmKeys.includes(n));
+    const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
+    checks.push(harnessCheck(hs, haveKeys.length > 0));
+    // Agents on a harness with no working login (your own login is not usable inside the sandbox).
+    const seen = new Set<string>();
+    for (const a of d.config.agents.list()) {
+      if (seen.has(a.harness)) continue;
+      seen.add(a.harness);
+      const login = await harnessLogin(d, a.harness);
+      if (login.status !== 'logged-out' && login.status !== 'invalid') continue;
+      const users = d.config.agents
+        .list()
+        .filter((x) => x.harness === a.harness)
+        .map((x) => x.name);
+      checks.push({
+        id: `harness.${a.harness}.login`,
+        title: `${d.registry.harness(a.harness)?.displayName ?? a.harness} login (${users.join(', ')})`,
+        status: 'fail',
+        message: login.status === 'invalid' ? `login rejected: ${login.message}` : 'not logged in',
+        fix: `beamhop harness login ${a.harness}`,
+      });
+    }
+    for (const c of d.config.channels.list()) {
+      const v = d.channels.view(c);
+      checks.push({
+        id: `channel.${c.name}`,
+        title: `Channel ${c.name} (${c.provider})`,
+        status:
+          v.status === 'connected' ? 'ok' : v.status === 'disabled' ? 'skip' : d.isPanic() ? 'warn' : 'fail',
+        message: v.error ?? v.status,
+      });
+    }
+    const secretsBackend = d.secrets.backend;
+    const keyWhere = {
+      file: `key in ${join(d.home, 'vault.key')}`,
+      keychain: 'key in the system keychain',
+      passphrase: 'locked with BEAMHOP_VAULT_PASSPHRASE',
+    } as const;
+    checks.push({
+      id: 'secrets.backend',
+      title: 'Secret storage',
+      status: secretsBackend === 'memory' ? 'warn' : 'ok',
+      message:
+        secretsBackend === 'file'
+          ? `encrypted vault, ${keyWhere[readKeySource({ home: d.home })]}`
+          : 'in memory only: secrets are lost on restart',
+    });
+    checks.push({
+      id: 'llm.keys',
+      title: 'LLM API keys',
+      status: haveKeys.length ? 'ok' : keyAgents.length ? 'warn' : 'skip',
+      message: haveKeys.length
+        ? `set: ${haveKeys.join(', ')}`
+        : keyAgents.length
+          ? `none set; ${keyAgents.map((a) => a.name).join(', ')} cannot reach a model`
+          : 'none set (no agent needs one yet)',
+      ...(haveKeys.length
+        ? {}
+        : {
+            fix: 'beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY (or OPENAI_API_KEY / OPENROUTER_API_KEY for other harnesses)',
+          }),
+    });
+    if (d.isPanic())
+      checks.push({
+        id: 'panic',
+        title: 'Panic',
+        status: 'warn',
+        message: 'panic mode is active',
+        fix: 'beamhop resume',
+        action: doctorActionTable({})['system.resume'],
+      });
+    return checks;
+  }
 
   dispatch(raw: unknown, ctx: CallContext) {
     this.dispatcher ??= createDispatcher(this.handlers(), this.d.log);
@@ -244,8 +582,19 @@ export class ApiHandlers {
       }
     }
     for (const h of this.customHarnesses.values()) add(h);
-    d.store.kv.set('harness', 'scan', out);
-    return out;
+    const views = out.map((v) => this.decorate(v));
+    d.store.kv.set('harness', 'scan', views);
+    d.store.kv.set('harness', 'scanCatalog', this.catalog().revision);
+    return views;
+  }
+
+  /** A stored scan exists and was made with this catalog (an updated app or catalog rescans). */
+  private scanFresh(): boolean {
+    const d = this.d;
+    return (
+      !!d.store.kv.get('harness', 'scan') &&
+      d.store.kv.get<string>('harness', 'scanCatalog') === this.catalog().revision
+    );
   }
 
   private channelProviders() {
@@ -268,11 +617,14 @@ export class ApiHandlers {
     return dep;
   }
 
-  private effectivePolicy(name: string): { profile: string; effective: SandboxPolicy } {
+  private async effectivePolicy(name: string) {
     const a = this.d.agent(name);
+    const required = await requiredHosts(this.d, a.harness);
     return {
       profile: a.sandbox.profile,
       effective: compilePolicy(a.sandbox.profile, a.mounts, (a.sandbox.policy ?? {}) as never),
+      required,
+      userAllow: a.sandbox.policy?.net?.allow ?? [],
     };
   }
 
@@ -294,96 +646,40 @@ export class ApiHandlers {
           remotes: d.remotes.views(),
         };
       },
-      'system.doctor': async () => {
-        const checks: DoctorCheck[] = [];
-        try {
-          checks.push(...(await probeSandbox()));
-        } catch (e) {
-          checks.push({ id: 'sandbox', title: 'Sandbox', status: 'fail', message: errMsg(e) });
-        }
-        const hs = await this.scan();
-        // Agents with `harnessAuth: api-key` (the default) reach their LLM only through the broker,
-        // which needs the provider key in beamhop's secret store.
-        const llmKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
-        const haveKeys = (await d.secrets.list().catch(() => []))
-          .map((s) => s.name)
-          .filter((n) => llmKeys.includes(n));
-        const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
-        checks.push(harnessCheck(hs, haveKeys.length > 0));
-        // Agents on a harness with no working login (your own login is not usable inside the sandbox).
-        const seen = new Set<string>();
-        for (const a of d.config.agents.list()) {
-          if (seen.has(a.harness)) continue;
-          seen.add(a.harness);
-          const login = await harnessLogin(d, a.harness);
-          if (login.status !== 'logged-out' && login.status !== 'invalid') continue;
-          const users = d.config.agents
-            .list()
-            .filter((x) => x.harness === a.harness)
-            .map((x) => x.name);
-          checks.push({
-            id: `harness.${a.harness}.login`,
-            title: `${d.registry.harness(a.harness)?.displayName ?? a.harness} login (${users.join(', ')})`,
-            status: 'fail',
-            message: login.status === 'invalid' ? `login rejected: ${login.message}` : 'not logged in',
-            fix: `beamhop harness login ${a.harness}`,
+      'system.doctor': async () => ({ checks: await this.doctorChecks() }),
+      'system.doctorFix': async ({ id, elevate }, ctx) => {
+        this.requireLocal(ctx, 'fix');
+        const action = doctorActionTable(this.tools.sandboxActions ?? sandboxActions())[id];
+        if (!action) throw new BeamhopError('not_found', `no fix ${id} on this computer`);
+        const actor = this.principal(ctx);
+        let output = '';
+        if (id === 'system.resume') {
+          await d.resume(actor);
+          output = 'Resumed.';
+        } else {
+          if (!action.admin) throw new BeamhopError('internal', `fix ${id} has no runner`);
+          if (elevate === 'none')
+            throw new BeamhopError(
+              'forbidden',
+              `"${action.label}" needs administrator rights. Run \`beamhop doctor --fix\` in a terminal to use sudo.`,
+            );
+          const deps = this.installer();
+          const { cmd, args } = elevatedArgv(deps.platform, action.command, deps.which);
+          const r = await (this.tools.fixRunner ?? defaultFixRunner(deps.env))(cmd, args);
+          output = r.output;
+          d.audit({
+            type: r.code === 0 ? 'doctor.fixed' : 'doctor.fix.failed',
+            severity: r.code === 0 ? 'security' : 'warn',
+            summary: r.code === 0 ? `Ran fix ${id}` : `Fix ${id} failed (exit ${r.code})`,
+            actor,
+            data: { id, command: action.command },
           });
+          if (r.code !== 0)
+            throw new BeamhopError('unavailable', elevatedFailure(deps.platform, r), {
+              output: r.output.slice(-4000),
+            });
         }
-        for (const c of d.config.channels.list()) {
-          const v = d.channels.view(c);
-          checks.push({
-            id: `channel.${c.name}`,
-            title: `Channel ${c.name} (${c.provider})`,
-            status:
-              v.status === 'connected'
-                ? 'ok'
-                : v.status === 'disabled'
-                  ? 'skip'
-                  : d.isPanic()
-                    ? 'warn'
-                    : 'fail',
-            message: v.error ?? v.status,
-          });
-        }
-        const secretsBackend = d.secrets.backend;
-        const keyWhere = {
-          file: `key in ${join(d.home, 'vault.key')}`,
-          keychain: 'key in the system keychain',
-          passphrase: 'locked with BEAMHOP_VAULT_PASSPHRASE',
-        } as const;
-        checks.push({
-          id: 'secrets.backend',
-          title: 'Secret storage',
-          status: secretsBackend === 'memory' ? 'warn' : 'ok',
-          message:
-            secretsBackend === 'file'
-              ? `encrypted vault, ${keyWhere[readKeySource({ home: d.home })]}`
-              : 'in memory only: secrets are lost on restart',
-        });
-        checks.push({
-          id: 'llm.keys',
-          title: 'LLM API keys',
-          status: haveKeys.length ? 'ok' : keyAgents.length ? 'warn' : 'skip',
-          message: haveKeys.length
-            ? `set: ${haveKeys.join(', ')}`
-            : keyAgents.length
-              ? `none set; ${keyAgents.map((a) => a.name).join(', ')} cannot reach a model`
-              : 'none set (no agent needs one yet)',
-          ...(haveKeys.length
-            ? {}
-            : {
-                fix: 'beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY (or OPENAI_API_KEY / OPENROUTER_API_KEY for other harnesses)',
-              }),
-        });
-        if (d.isPanic())
-          checks.push({
-            id: 'panic',
-            title: 'Panic',
-            status: 'warn',
-            message: 'panic mode is active',
-            fix: 'beamhop resume',
-          });
-        return { checks };
+        return { checks: await this.doctorChecks(), output };
       },
       'system.panic': async (p, ctx) => {
         await d.panic(p.reason, this.principal(ctx));
@@ -553,20 +849,16 @@ export class ApiHandlers {
       // ── harnesses ──
       'harness.scan': async () => ({ harnesses: await this.withLogins(await this.scan()) }),
       'harness.list': async () => {
-        if (!d.store.kv.get('harness', 'scan')) await this.scan();
+        if (!this.scanFresh()) await this.scan();
         return { harnesses: await this.withLogins(this.harnessViews()) };
       },
       'harness.login': async ({ id, method, value }, ctx) => {
-        const m = resolveMethod(id, method);
-        await d.secrets.set(m.secret, value.trim());
-        d.invalidateSecretCache();
-        d.audit({
-          type: 'harness.login',
-          severity: 'security',
-          summary: `${id} logged in with ${m.label}`,
-          actor: this.principal(ctx),
-          data: { harness: id, method: m.id, secret: m.secret },
-        });
+        if (resolveMethod(id, method).kind === 'home')
+          throw new BeamhopError(
+            'invalid_input',
+            `${resolveMethod(id, method).label} is a sign-in, not a key: run beamhop harness login ${id} --browser --method ${resolveMethod(id, method).id}`,
+          );
+        await this.storeHarnessLogin(id, method, value, ctx);
         // Verify right away; a failed check is shown in the returned status, not thrown.
         const login = await checkLogin(d, id).catch(() => undefined);
         const v = await this.harnessView(id);
@@ -592,6 +884,121 @@ export class ApiHandlers {
         const v = await this.harnessView(id);
         // Keep the check's own message (e.g. why it could not run), not just the stored state.
         return { ...v, login };
+      },
+      'harness.install': async ({ id, method }, ctx) => {
+        this.requireLocal(ctx, 'install');
+        const entry = this.catalogEntry(id);
+        const deps = this.installer();
+        const avail = availableMethods(entry, deps);
+        const m = method ?? avail[0];
+        if (!m) throw new BeamhopError('unavailable', noneReason(entry, deps));
+        if (!avail.includes(m))
+          throw new BeamhopError(
+            'unavailable',
+            `${methodLabel(entry, m)} can't install ${entry.displayName} on this computer.`,
+          );
+        return this.startInstall(entry, m, false, ctx);
+      },
+      'harness.update': async ({ id }, ctx) => {
+        this.requireLocal(ctx, 'install');
+        const entry = this.catalogEntry(id);
+        const v = this.harnessViews().find((h) => h.id === id);
+        if (!v || v.status === 'not-installed' || !v.path)
+          throw new BeamhopError('invalid_input', `${entry.displayName} is not installed`);
+        const m = updateMethodFor(v, entry, this.installer());
+        if (!m)
+          throw new BeamhopError(
+            'unavailable',
+            `${entry.displayName} wasn't installed by beamhop or Homebrew, so beamhop can't update it. Update it the way you installed it.`,
+          );
+        return this.startInstall(entry, m, true, ctx);
+      },
+      'harness.updates': async ({ refresh }) => {
+        type Updates = Result<'harness.updates'>['updates'];
+        const cached = d.store.kv.get<{ at: number; updates: Updates }>('harness', 'updates');
+        if (!refresh && cached && d.now() - cached.at < UPDATES_TTL_MS) return { updates: cached.updates };
+        if (!this.scanFresh()) await this.scan();
+        const deps = this.installer();
+        const installed = this.harnessViews().filter((h) => h.status !== 'not-installed' && h.path);
+        const updates = (
+          await Promise.all(
+            installed.map(async (v) => {
+              const entry = findHarness(this.catalog(), v.id);
+              if (!entry) return undefined;
+              const m = updateMethodFor(v, entry, deps);
+              const latest = await latestVersion(entry, m, deps).catch(() => undefined);
+              return {
+                id: v.id,
+                ...(v.version ? { current: v.version } : {}),
+                ...(latest ? { latest } : {}),
+                available: !!m && isNewer(latest, v.version),
+                required: v.status === 'unsupported-version',
+              };
+            }),
+          )
+        ).filter((u) => u !== undefined);
+        d.store.kv.set('harness', 'updates', { at: d.now(), updates });
+        return { updates };
+      },
+      'harness.loginFlow': async ({ id, openBrowser, method }, ctx) => {
+        this.requireLocal(ctx, 'login');
+        const entry = this.catalogEntry(id);
+        const homeMethod = method
+          ? resolveMethod(id, method)
+          : entry.auth.loginFlow
+            ? undefined
+            : entry.auth.methods.find((m) => m.kind === 'home');
+        if (homeMethod) return this.homeSignIn(entry, homeMethod, openBrowser, ctx);
+        const flow = entry.auth.loginFlow;
+        if (!flow)
+          throw new BeamhopError(
+            'unavailable',
+            entry.auth.methods.length
+              ? `${entry.displayName} can't be signed in from the app this way; use one of its login methods instead.`
+              : `${entry.displayName} can't be signed in from the app yet.`,
+          );
+        if (!this.scanFresh()) await this.scan();
+        const v = this.harnessViews().find((h) => h.id === id);
+        if (!v?.path || v.status === 'not-installed')
+          throw new BeamhopError('invalid_input', `${entry.displayName} is not installed`);
+        const deps = this.installer();
+        const host = { platform: deps.platform, env: deps.env, home: deps.home };
+        const actor = this.principal(ctx);
+        return this.jobs().start(
+          {
+            harness: id,
+            displayName: entry.displayName,
+            kind: 'login',
+            method: 'flow',
+            timeoutMs: (flow.timeoutSec ?? 300) * 1000,
+            onEnd: (job) => this.auditJob(job, actor),
+          },
+          loginBody(
+            entry,
+            flow,
+            deps,
+            {
+              binary: v.path,
+              storeLogin: async (method, value) => {
+                await this.storeHarnessLogin(id, method, value, ctx);
+                await checkLogin(d, id).catch(() => undefined);
+              },
+              loggedIn: () =>
+                !entry.auth.files.length ||
+                entry.auth.files.some((f) => {
+                  const p = expandPath(f, host);
+                  return !!p && fileExists(p);
+                }),
+            },
+            openBrowser,
+          ),
+        );
+      },
+      'harness.job.get': async ({ jobId, since }) => this.jobs().get(jobId, since),
+      'harness.job.list': async () => ({ jobs: this.jobs().list() }),
+      'harness.job.cancel': async ({ jobId }, ctx) => {
+        this.requireLocal(ctx, 'install');
+        return this.jobs().cancel(jobId);
       },
       'harness.add': async ({ id, command, args }, ctx) => {
         const hid = id.startsWith('acp:') ? id : `acp:${id}`;
@@ -943,6 +1350,18 @@ export class ApiHandlers {
 
       // ── policy ──
       'policy.get': async ({ name }) => this.effectivePolicy(name),
+      'sandbox.test': async ({ name }) => {
+        const a = d.agent(name);
+        const results = await probeHosts(d, a, await requiredHosts(d, a.harness));
+        return {
+          results: results.map(({ host, source, status, detail }) => ({
+            host,
+            source,
+            status,
+            ...(detail ? { detail } : {}),
+          })),
+        };
+      },
       'policy.set': async ({ name, profile, policy }, ctx) => {
         const prof = profile as 'strict' | 'workspace' | 'custom';
         if (!['strict', 'workspace', 'custom'].includes(prof))

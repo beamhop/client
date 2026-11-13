@@ -117,7 +117,7 @@ const uniq = <T>(xs: Iterable<T>): T[] => [...new Set(xs)];
 /** Partial policy accepted as overrides (same shape as the core schema input). */
 export type PolicyOverrides = {
   fs?: { read?: string[]; write?: string[]; deny?: string[] };
-  net?: { allow?: string[]; deny?: string[]; denyPrivateIps?: boolean };
+  net?: { allow?: string[]; deny?: string[]; denyPrivateIps?: boolean; mode?: 'restricted' | 'all' };
   secrets?: SandboxPolicyT['secrets'];
   env?: { passthrough?: string[] };
   proc?: { maxSessionMinutes?: number };
@@ -189,7 +189,7 @@ export const compilePolicy = (
   return SandboxPolicy.parse({
     // `own` comes only from the daemon's option: an override (or a custom profile) cannot set it.
     fs: { read: readSet, write: writeSet, deny, own },
-    net: { allow: netAllow, deny: netDeny, denyPrivateIps: true },
+    net: { allow: netAllow, deny: netDeny, denyPrivateIps: true, mode: o.net?.mode ?? base.net.mode },
     secrets: o.secrets ?? base.secrets,
     env: { passthrough: uniq(o.env?.passthrough ?? base.env.passthrough) },
     proc: { maxSessionMinutes: o.proc?.maxSessionMinutes ?? base.proc.maxSessionMinutes },

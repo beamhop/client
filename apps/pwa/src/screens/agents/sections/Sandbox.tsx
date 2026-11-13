@@ -3,13 +3,14 @@
  * then the profile as radio cards with a two-line reach preview each, learning mode (confirmed, since it
  * loosens enforcement), pending learning suggestions, and a hand-off to the full Policy editor.
  */
-import type { AgentView, SandboxProfileName } from '@beamhop/core';
-import { ArrowRight, ShieldCheck } from '@phosphor-icons/react';
+import { type AgentView, SandboxPolicy, type SandboxProfileName } from '@beamhop/core';
+import { ArrowRight, CheckCircle, ShieldCheck, Warning, XCircle } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useMutationApi } from '../../../api/index.ts';
 import { t } from '../../../i18n/index.ts';
-import { LinkButton } from '../../../ui/Button.tsx';
+import { Button, LinkButton } from '../../../ui/Button.tsx';
 import { Radio, RadioGroup, Switch } from '../../../ui/Choice.tsx';
+import { TextField } from '../../../ui/Field.tsx';
 import { Badge } from '../../../ui/Meta.tsx';
 import { ConfirmDialog } from '../../../ui/Sheet.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../../ui/States.tsx';
@@ -24,6 +25,237 @@ export const profilePreview = (p: SandboxProfileName, harness: string): string =
   if (p === 'strict') return t('agents.sandbox.strictPreview', { api });
   if (p === 'workspace') return t('agents.sandbox.workspacePreview', { api, count: WORKSPACE_HOSTS.length });
   return t('agents.sandbox.customPreview');
+};
+
+type NetworkProps = {
+  name: string;
+  profile: SandboxProfileName;
+  /** The agent's own policy overrides (what gets saved), not the compiled reach. */
+  raw: ReturnType<typeof SandboxPolicy.parse>;
+  mode: 'restricted' | 'all';
+  userAllow: string[];
+  required: { host: string; source: string }[];
+  blocked: { id: string; value: string }[];
+};
+
+const HOST = /^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+
+/** Network: allow-all switch, the agent's own allowlist, what the harness needs, blocked hosts, and a test. */
+const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked }: NetworkProps) => {
+  const save = useMutationApi('policy.set');
+  const apply = useMutationApi('policy.applySuggestion', {
+    invalidate: ['policy.suggestions', 'policy.get'],
+  });
+  const test = useMutationApi('sandbox.test');
+  const toast = useToast();
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [host, setHost] = useState('');
+  const [hostError, setHostError] = useState<string | undefined>();
+  const [results, setResults] = useState<
+    { host: string; source: string; status: string; detail?: string }[] | null
+  >(null);
+
+  const saveNet = (net: Partial<ReturnType<typeof SandboxPolicy.parse>['net']>) =>
+    save
+      .mutateAsync({ name, profile, policy: { ...raw, net: { ...raw.net, ...net } } })
+      .catch((e: Error) => toast.show({ tone: 'error', message: e.message }));
+
+  const addHost = () => {
+    const h = host.trim().toLowerCase();
+    if (!HOST.test(h)) return setHostError(t('agents.sandbox.hostInvalid'));
+    if (userAllow.includes(h)) return setHostError(t('agents.sandbox.hostDuplicate'));
+    setHostError(undefined);
+    setHost('');
+    void saveNet({ allow: [...userAllow, h] });
+  };
+
+  const runTest = () =>
+    test
+      .mutateAsync({ name })
+      .then((r) => setResults(r.results))
+      .catch((e: Error) => toast.show({ tone: 'error', message: e.message }));
+
+  const decide = (id: string, accept: boolean) =>
+    apply.mutateAsync({ id, accept }).catch((e: Error) => toast.show({ tone: 'error', message: e.message }));
+
+  return (
+    <>
+      <Block
+        id="sb-network"
+        title={t('agents.sandbox.network')}
+        description={t('agents.sandbox.networkHint', { name })}
+      >
+        <Switch
+          isSelected={mode === 'all'}
+          isDisabled={save.isPending}
+          onChange={(v) => (v ? setConfirmAll(true) : void saveNet({ mode: 'restricted' }))}
+          description={t('agents.sandbox.allowAllHint')}
+        >
+          {t('agents.sandbox.allowAll')}
+        </Switch>
+        {mode === 'all' && (
+          <p className="type-body-sm text-caution-text">{t('agents.sandbox.allowAllActive', { name })}</p>
+        )}
+      </Block>
+
+      <Block
+        id="sb-allowlist"
+        title={t('agents.sandbox.userAllow')}
+        description={t('agents.sandbox.userAllowHint')}
+      >
+        {userAllow.length === 0 ? (
+          <p className="type-body-sm text-ink-2">{t('agents.sandbox.userAllowNone')}</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {userAllow.map((h) => (
+              <li key={h} className="flex items-center justify-between gap-3 type-body-sm text-ink">
+                <code className="min-w-0 break-all">{h}</code>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  aria-label={t('agents.sandbox.removeHost', { host: h })}
+                  isDisabled={save.isPending}
+                  onPress={() => void saveNet({ allow: userAllow.filter((x) => x !== h) })}
+                >
+                  {t('agents.sandbox.remove')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addHost();
+          }}
+        >
+          <div className="min-w-0 flex-1">
+            <TextField
+              label={t('agents.sandbox.addHost')}
+              hideLabel
+              placeholder={t('agents.sandbox.hostPlaceholder')}
+              value={host}
+              onChange={(v) => {
+                setHost(v);
+                setHostError(undefined);
+              }}
+              errorMessage={hostError}
+              mono
+            />
+          </div>
+          <Button type="submit" variant="secondary" isDisabled={!host.trim() || save.isPending}>
+            {t('agents.sandbox.addHost')}
+          </Button>
+        </form>
+      </Block>
+
+      <Block
+        id="sb-blocked"
+        title={t('agents.sandbox.blocked')}
+        description={t('agents.sandbox.blockedHint')}
+      >
+        {blocked.length === 0 ? (
+          <p className="type-body-sm text-ink-2">{t('agents.sandbox.blockedNone')}</p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {blocked.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center justify-between gap-2">
+                <code className="min-w-0 break-all type-body-sm">{b.value}</code>
+                <span className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="allow"
+                    isDisabled={apply.isPending}
+                    onPress={() => void decide(b.id, true)}
+                  >
+                    {t('agents.sandbox.allow')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    isDisabled={apply.isPending}
+                    onPress={() => void decide(b.id, false)}
+                  >
+                    {t('agents.sandbox.reject')}
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Block>
+
+      <Block
+        id="sb-required"
+        title={t('agents.sandbox.required')}
+        description={t('agents.sandbox.requiredHint')}
+      >
+        {required.length === 0 ? (
+          <p className="type-body-sm text-ink-2">{t('agents.sandbox.requiredNone')}</p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {required.map((r) => (
+              <li
+                key={`${r.source}|${r.host}`}
+                className="flex flex-wrap justify-between gap-2 type-body-sm text-ink"
+              >
+                <code className="min-w-0 break-all">{r.host}</code>
+                <span className="text-ink-2">{r.source}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            icon={<Warning size={18} aria-hidden="true" />}
+            isDisabled={test.isPending}
+            onPress={() => void runTest()}
+          >
+            {t('agents.sandbox.test')}
+          </Button>
+          <span className="type-body-sm text-ink-2">{t('agents.sandbox.testHint')}</span>
+        </div>
+        {results && (
+          <ul className="flex flex-col gap-1">
+            {results.map((r) => (
+              <li
+                key={`${r.source}|${r.host}`}
+                className="flex flex-wrap items-center gap-2 type-body-sm text-ink"
+              >
+                {r.status === 'ok' ? (
+                  <CheckCircle size={16} aria-hidden="true" className="text-allow-text" />
+                ) : (
+                  <XCircle size={16} aria-hidden="true" className="text-stop-text" />
+                )}
+                <code className="min-w-0 break-all">{r.host}</code>
+                <span className="text-ink-2">
+                  {r.status === 'ok'
+                    ? t('agents.sandbox.testOk')
+                    : r.status === 'blocked'
+                      ? t('agents.sandbox.testBlocked')
+                      : t('agents.sandbox.testUnreachable', { detail: r.detail ?? '' })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Block>
+
+      <ConfirmDialog
+        isOpen={confirmAll}
+        onOpenChange={setConfirmAll}
+        title={t('agents.sandbox.allowAllTitle', { name })}
+        confirmLabel={t('agents.sandbox.allowAllConfirm')}
+        variant="primary"
+        isPending={save.isPending}
+        onConfirm={() => void saveNet({ mode: 'all' }).then(() => setConfirmAll(false))}
+      >
+        {t('agents.sandbox.allowAllBody', { name })}
+      </ConfirmDialog>
+    </>
+  );
 };
 
 export const SandboxSection = ({ agent }: { agent: AgentView }) => {
@@ -43,8 +275,11 @@ export const SandboxSection = ({ agent }: { agent: AgentView }) => {
 
   const setLearning = (on: boolean) => {
     if (!eff || !policy.data) return;
+    // Save only the agent's own overrides (plus the flag), not the compiled reach, so profile defaults
+    // are not frozen into the agent.
+    const raw = SandboxPolicy.parse(agent.config.sandbox.policy ?? {});
     set
-      .mutateAsync({ name, profile: policy.data.profile, policy: { ...eff, learning: on } })
+      .mutateAsync({ name, profile: policy.data.profile, policy: { ...raw, learning: on } })
       .then(() => {
         setConfirmLearn(false);
         toast.show({
@@ -98,6 +333,20 @@ export const SandboxSection = ({ agent }: { agent: AgentView }) => {
           ))}
         </RadioGroup>
       </Block>
+
+      {policy.data && (
+        <NetworkSection
+          name={name}
+          profile={policy.data.profile as SandboxProfileName}
+          raw={SandboxPolicy.parse(agent.config.sandbox.policy ?? {})}
+          mode={eff?.net.mode ?? 'restricted'}
+          userAllow={policy.data.userAllow ?? []}
+          required={policy.data.required ?? []}
+          blocked={(suggestions.data?.suggestions ?? [])
+            .filter((s) => s.kind === 'net.allow')
+            .map((s) => ({ id: s.id, value: s.value }))}
+        />
+      )}
 
       <Block id="sb-learning" title={t('agents.sandbox.learning')}>
         <Switch

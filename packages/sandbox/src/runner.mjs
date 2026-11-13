@@ -114,12 +114,17 @@ const loopbackForwardScript = (ports, socat) => {
 
 const main = async () => {
   const learning = cfg.learning === true;
-  const ask = learning
-    ? async ({ host, port }) => {
-        send({ line: `allow network-outbound ${host}:${port} (learning)`, allowed: true });
-        return true;
-      }
-    : undefined;
+  // Learning mode and "allow all" both let every host through the proxy; deny entries, metadata and
+  // private addresses are still enforced by srt before this callback is asked.
+  const allowAll = cfg.allowAll === true;
+  const ask =
+    learning || allowAll
+      ? async ({ host, port }) => {
+          const why = allowAll ? 'allow all' : 'learning';
+          send({ line: `allow network-outbound ${host}:${port} (${why})`, allowed: true });
+          return true;
+        }
+      : undefined;
   await SandboxManager.initialize(cfg.srt, ask, true);
 
   const store = SandboxManager.getSandboxViolationStore();

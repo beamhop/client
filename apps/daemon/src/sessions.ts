@@ -28,9 +28,11 @@ import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { sandboxGitWritePaths } from './git-ops.ts';
-import { sessionCredentials } from './harness-auth.ts';
+import { activeMethod, sessionCredentials } from './harness-auth.ts';
+import { decodeBlob, HomeLoginSync, homeEnv, homeOf } from './home-login.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
+import { unreachableRequired } from './sandbox-hosts.ts';
 import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
 import { addWorktree, gitTopLevel, type Worktree } from './worktree.ts';
 
@@ -83,6 +85,8 @@ interface Runtime {
   /** The session's own dirs carved out of `deny` (session dir, worktrees). */
   own: string[];
   offViolation?: () => void;
+  /** Subscription login copy in the session (saved back to the vault on token refresh). */
+  homeSync?: HomeLoginSync;
 }
 
 export interface ToolLogEntry {
@@ -163,6 +167,10 @@ export interface SubmitInput {
   fresh?: boolean;
 }
 
+/** Failure text that points at the network (a dropped or refused connection), not at the model. */
+const NETWORK_FAILURE =
+  /routing discovery|reconnect|connect|network|dns|tls|certificate|proxy|timed? ?out|fetch|sandbox/i;
+
 export class SessionManager {
   private readonly lives = new Map<string, LiveSession>();
   private readonly byThread = new Map<string, string>();
@@ -171,8 +179,29 @@ export class SessionManager {
   private readonly tokenToSession = new Map<string, string>();
   private readonly errors = new Map<string, string>();
   private readonly reservations = new Map<string, { usd: number; at: number }[]>();
+  /** Hosts the sandbox refused during the current turn of each session (for failure messages). */
+  private readonly blockedHosts = new Map<string, Set<string>>();
 
   constructor(private readonly d: Daemon) {}
+
+  /**
+   * A harness failure, with the sandbox's refusals named when there were any: the harness only sees a
+   * dropped connection, so the user needs the host to act on.
+   */
+  private async explainError(sessionId: string, agent: AgentConfig, message: string): Promise<string> {
+    const hosts = [...(this.blockedHosts.get(sessionId) ?? [])];
+    if (hosts.length > 0) {
+      const it = hosts.length === 1 ? 'it' : 'them';
+      return `${message}\nBlocked by the sandbox: ${hosts.join(', ')}. Allow ${it} under the agent's Sandbox settings, then send the message again.`;
+    }
+    // Nothing was refused by name, but a connection-level failure can still be the sandbox (for example a
+    // system TLS call it blocks silently). Probe the harness's hosts and name the ones that do not answer.
+    if (!NETWORK_FAILURE.test(message)) return message;
+    const bad = await unreachableRequired(this.d, agent).catch(() => []);
+    if (bad.length === 0) return message;
+    const list = bad.map((b) => `${b.host} (${b.detail ?? b.status})`).join(', ');
+    return `${message}\nCould not reach: ${list}. Run Test under the agent's Sandbox settings for details.`;
+  }
 
   live(id: string): LiveSession | undefined {
     return this.lives.get(id);
@@ -441,8 +470,32 @@ export class SessionManager {
     // Env-kind harness login (Copilot's token) or the agent's own secretEnv override. The harness can
     // read these values (DLP still redacts them from messages); broker-kind logins never reach it.
     const credentials = await sessionCredentials(d.secrets, agent, harnessId, plugin.displayName);
+    // Subscription login (ChatGPT plan, Google account…): its files go into the session's harness home and
+    // its own service is allowed; the harness talks to it directly, not through the broker.
+    let homeSync: HomeLoginSync | undefined;
+    const login = await activeMethod(d.secrets, harnessId);
+    if (login?.kind === 'home') {
+      const home = homeOf(login);
+      const blob = decodeBlob(await d.secrets.get(login.secret));
+      if (!blob)
+        throw new BeamhopError(
+          'unavailable',
+          `${plugin.displayName}'s ${login.label} sign-in is damaged; sign in again (beamhop harness login ${harnessId} --browser)`,
+        );
+      const dir = join(live.dir, home.env && home.env === plugin.homeEnv ? 'harness-home' : 'login-home');
+      homeSync = (
+        await HomeLoginSync.open(d.secrets, login, dir, blob, {
+          ...(home.transfer ? { bin: (await plugin.detect().catch(() => null))?.path } : {}),
+          onError: (e) =>
+            d.log.warn('could not save a refreshed sign-in', { harness: harnessId, error: errMsg(e) }),
+        })
+      ).start();
+      Object.assign(env, homeEnv(dir, home, blob));
+      for (const h of home.network)
+        if (!policy.net.deny.includes(h) && !policy.net.allow.includes(h)) policy.net.allow.push(h);
+    }
     let proxyToken: string | undefined;
-    if (d.llmProxy) {
+    if (d.llmProxy && !homeSync) {
       proxyToken = d.llmProxy.createSession(live.id);
       this.tokenToSession.set(proxyToken, live.id);
       Object.assign(env, envForHarness(harnessId, d.llmProxy.url, proxyToken));
@@ -463,7 +516,14 @@ export class SessionManager {
       const seen = new Set<string>();
       const offViolation = sandbox.onViolation?.((v) => {
         const k = `${v.kind}|${v.value}`;
-        if (policy.learning) d.store.policySuggestions.record(agent.name, v.kind, v.value);
+        // A refused host is always offered as a one-click allow; other denials only in learning mode.
+        const refused = v.kind === 'net.allow' && !v.allowed;
+        if (refused) {
+          const set = this.blockedHosts.get(live.id) ?? new Set<string>();
+          set.add(v.value);
+          this.blockedHosts.set(live.id, set);
+        }
+        if (policy.learning || refused) d.store.policySuggestions.record(agent.name, v.kind, v.value);
         if (seen.has(k)) return;
         seen.add(k);
         d.audit({
@@ -505,6 +565,7 @@ export class SessionManager {
         own: policy.fs.own,
         ...(proxyToken ? { proxyToken } : {}),
         ...(offViolation ? { offViolation } : {}),
+        ...(homeSync ? { homeSync } : {}),
       };
       live.runtime = rt;
       d.store.sessions.update(live.id, { harness: harnessId });
@@ -517,6 +578,7 @@ export class SessionManager {
         this.tokenToSession.delete(proxyToken);
       }
       await sandbox?.close().catch(() => {});
+      await homeSync?.stop().catch(() => {});
       this.errors.set(agent.name, errMsg(e));
       throw e;
     }
@@ -545,6 +607,7 @@ export class SessionManager {
       this.tokenToSession.delete(rt.proxyToken);
     }
     await rt.sandbox.close().catch(() => {});
+    await rt.homeSync?.stop().catch(() => {});
   }
 
   // ───────────────────────────── turns ─────────────────────────────
@@ -670,6 +733,7 @@ export class SessionManager {
       : undefined;
     let text = '';
     let error: string | undefined;
+    let retryNotice = false;
     let watchdog: NodeJS.Timeout | undefined;
     const pendingPerms: Promise<void>[] = [];
     const transcript = new AssistantStream(this, live.id);
@@ -717,7 +781,13 @@ export class SessionManager {
             break;
           case 'progress':
             streamer?.onProgress(ev.message);
-            this.event(live.id, { kind: 'progress', text: ev.message });
+            // Codex reports every retry of a dropped connection; show the first one only (the outcome
+            // follows as a single error or reply).
+            if (ev.message.startsWith('retrying:')) {
+              if (!retryNotice)
+                this.event(live.id, { kind: 'progress', text: 'Connection dropped, retrying…' });
+              retryNotice = true;
+            } else this.event(live.id, { kind: 'progress', text: ev.message });
             break;
           case 'tool_call': {
             transcript.close();
@@ -781,7 +851,7 @@ export class SessionManager {
           case 'error':
             transcript.close();
             error = ev.message;
-            this.event(live.id, { kind: 'error', text: ev.message });
+            this.event(live.id, { kind: 'error', text: await this.explainError(live.id, agent, ev.message) });
             break;
           case 'done':
             if (ev.resume) d.store.sessions.update(live.id, { resume: ev.resume });
@@ -791,8 +861,9 @@ export class SessionManager {
     } catch (e) {
       transcript.close();
       error = errMsg(e);
-      this.event(live.id, { kind: 'error', text: error });
+      this.event(live.id, { kind: 'error', text: await this.explainError(live.id, agent, error) });
     } finally {
+      this.blockedHosts.delete(live.id);
       if (watchdog) clearTimeout(watchdog);
       for (const l of locks) l();
       const stopped = abort.signal.aborted;

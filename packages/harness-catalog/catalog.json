@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026.11.13",
+  "revision": "2026.11.13.3",
   "harnesses": [
     {
       "id": "claude",
@@ -12,7 +12,17 @@
         "npm": "@anthropic-ai/claude-code",
         "brew": "claude-code",
         "winget": "Anthropic.ClaudeCode",
-        "url": "https://code.claude.com/docs/en/setup"
+        "url": "https://code.claude.com/docs/en/setup",
+        "native": {
+          "darwin": {
+            "kind": "script",
+            "url": "https://claude.ai/install.sh"
+          },
+          "linux": {
+            "kind": "script",
+            "url": "https://claude.ai/install.sh"
+          }
+        }
       },
       "installDirs": ["~/.claude/local", "~/.local/bin"],
       "configDirs": ["~/.claude"],
@@ -45,7 +55,15 @@
         "files": ["~/.claude/.credentials.json"],
         "keychain": ["darwin"],
         "login": "claude /login",
-        "note": "On macOS the OAuth login lives in the Keychain and cannot be verified from a file."
+        "note": "On macOS the OAuth login lives in the Keychain and cannot be verified from a file.",
+        "loginFlow": {
+          "args": ["setup-token"],
+          "kind": "browser",
+          "capture": {
+            "method": "claude-subscription",
+            "pattern": "sk-ant-oat01-[A-Za-z0-9_-]{20,}"
+          }
+        }
       },
       "versionRange": ">=2.0.0",
       "modes": {
@@ -81,6 +99,7 @@
       "displayName": "Codex CLI",
       "homepage": "https://developers.openai.com/codex/cli",
       "protocol": "codex-app-server",
+      "macosTrustd": true,
       "binaries": ["codex"],
       "install": {
         "npm": "@openai/codex",
@@ -90,6 +109,29 @@
       "configDirs": ["~/.codex"],
       "auth": {
         "methods": [
+          {
+            "id": "chatgpt",
+            "label": "ChatGPT plan",
+            "kind": "home",
+            "secret": "CODEX_CHATGPT_LOGIN",
+            "hint": "Sign in with the ChatGPT account that has your Plus, Pro, Business, Edu or Enterprise plan.",
+            "home": {
+              "env": "CODEX_HOME",
+              "files": ["auth.json"],
+              "seed": [
+                {
+                  "path": "config.toml",
+                  "content": "cli_auth_credentials_store = \"file\"\nforced_login_method = \"chatgpt\"\n"
+                }
+              ],
+              "network": ["chatgpt.com", "auth.openai.com"]
+            },
+            "signIn": {
+              "args": ["login", "-c", "cli_auth_credentials_store=\"file\""],
+              "headlessArgs": ["login", "--device-auth", "-c", "cli_auth_credentials_store=\"file\""],
+              "statusArgs": ["login", "status", "-c", "cli_auth_credentials_store=\"file\""]
+            }
+          },
           {
             "id": "openai-key",
             "label": "OpenAI API key",
@@ -109,8 +151,13 @@
           "args": ["app-server"],
           "note": "JSON-RPC 2.0 over stdio, newline-delimited, without the jsonrpc field. v2 thread/turn API."
         },
-        "headless": { "args": ["exec", "--json"] },
-        "acp": { "command": "codex-acp", "npm": "@agentclientprotocol/codex-acp" }
+        "headless": {
+          "args": ["exec", "--json"]
+        },
+        "acp": {
+          "command": "codex-acp",
+          "npm": "@agentclientprotocol/codex-acp"
+        }
       },
       "sources": [
         "https://developers.openai.com/codex/app-server",
@@ -158,7 +205,9 @@
           "args": ["--acp", "--secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN"],
           "note": "Public preview; stdio by default, TCP with --port. --secret-env-vars keeps the token out of the shells and MCP servers it starts, and redacts it from output."
         },
-        "headless": { "args": ["-p"] }
+        "headless": {
+          "args": ["-p"]
+        }
       },
       "sources": [
         "https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server",
@@ -172,11 +221,61 @@
       "homepage": "https://github.com/google-gemini/gemini-cli",
       "protocol": "acp",
       "binaries": ["gemini"],
-      "install": { "npm": "@google/gemini-cli", "brew": "gemini-cli" },
+      "install": {
+        "npm": "@google/gemini-cli",
+        "brew": "gemini-cli"
+      },
       "configDirs": ["~/.gemini"],
       "network": ["generativelanguage.googleapis.com"],
       "auth": {
         "methods": [
+          {
+            "id": "google-account",
+            "label": "Google account",
+            "kind": "home",
+            "secret": "GEMINI_GOOGLE_LOGIN",
+            "hint": "Sign in with Google (free Gemini Code Assist, or Google AI Pro/Ultra).",
+            "home": {
+              "env": "GEMINI_CLI_HOME",
+              "files": [".gemini/oauth_creds.json"],
+              "seed": [
+                {
+                  "path": ".gemini/settings.json",
+                  "content": "{\"security\":{\"auth\":{\"selectedType\":\"oauth-personal\"}}}\n"
+                }
+              ],
+              "network": [
+                "cloudcode-pa.googleapis.com",
+                "oauth2.googleapis.com",
+                "accounts.google.com",
+                "www.googleapis.com"
+              ]
+            },
+            "signIn": {
+              "args": ["--acp"],
+              "captureOpen": true,
+              "rpc": [
+                {
+                  "method": "initialize",
+                  "params": {
+                    "protocolVersion": 1,
+                    "clientCapabilities": {
+                      "fs": {
+                        "readTextFile": false,
+                        "writeTextFile": false
+                      }
+                    }
+                  }
+                },
+                {
+                  "method": "authenticate",
+                  "params": {
+                    "methodId": "oauth-personal"
+                  }
+                }
+              ]
+            }
+          },
           {
             "id": "gemini-key",
             "label": "Gemini API key",
@@ -197,8 +296,13 @@
       },
       "versionRange": ">=0.30.0",
       "modes": {
-        "acp": { "args": ["--acp"], "note": "Older releases used --experimental-acp." },
-        "headless": { "args": ["-p", "--output-format", "stream-json"] }
+        "acp": {
+          "args": ["--acp"],
+          "note": "Older releases used --experimental-acp."
+        },
+        "headless": {
+          "args": ["-p", "--output-format", "stream-json"]
+        }
       },
       "sources": [
         "https://geminicli.com/docs/cli/acp-mode/",
@@ -211,11 +315,89 @@
       "homepage": "https://opencode.ai",
       "protocol": "acp",
       "binaries": ["opencode"],
-      "install": { "npm": "opencode-ai", "brew": "sst/tap/opencode", "url": "https://opencode.ai/docs" },
+      "install": {
+        "npm": "opencode-ai",
+        "brew": "sst/tap/opencode",
+        "url": "https://opencode.ai/docs"
+      },
       "installDirs": ["~/.opencode/bin"],
       "configDirs": ["$XDG_CONFIG_HOME/opencode", "$XDG_DATA_HOME/opencode"],
       "auth": {
         "methods": [
+          {
+            "id": "chatgpt",
+            "label": "ChatGPT plan",
+            "kind": "home",
+            "secret": "OPENCODE_CHATGPT_LOGIN",
+            "hint": "Sign in with the ChatGPT account that has your Plus or Pro plan.",
+            "home": {
+              "env": "XDG_DATA_HOME",
+              "files": ["credentials.json"],
+              "extraEnv": {
+                "XDG_CONFIG_HOME": "{home}/config",
+                "XDG_STATE_HOME": "{home}/state",
+                "XDG_CACHE_HOME": "{home}/cache"
+              },
+              "network": ["auth.openai.com", "chatgpt.com", "api.openai.com"],
+              "transfer": {
+                "exportArgs": ["auth", "export", "openai", "--standalone"],
+                "importArgs": ["auth", "import", "{file}", "--standalone"],
+                "file": "credentials.json"
+              }
+            },
+            "signIn": {
+              "args": ["auth", "login", "openai", "--method", "chatgpt-browser", "--standalone"],
+              "headlessArgs": ["auth", "login", "openai", "--method", "chatgpt-headless", "--standalone"],
+              "timeoutSec": 900,
+              "captureOpen": true
+            }
+          },
+          {
+            "id": "github-copilot",
+            "label": "GitHub Copilot",
+            "kind": "home",
+            "secret": "OPENCODE_COPILOT_LOGIN",
+            "hint": "Sign in with the GitHub account that has Copilot (shows a code to confirm).",
+            "home": {
+              "env": "XDG_DATA_HOME",
+              "files": ["credentials.json"],
+              "extraEnv": {
+                "XDG_CONFIG_HOME": "{home}/config",
+                "XDG_STATE_HOME": "{home}/state",
+                "XDG_CACHE_HOME": "{home}/cache"
+              },
+              "network": ["github.com", "api.github.com", "api.githubcopilot.com", "*.githubcopilot.com"],
+              "transfer": {
+                "exportArgs": ["auth", "export", "github-copilot", "--standalone"],
+                "importArgs": ["auth", "import", "{file}", "--standalone"],
+                "file": "credentials.json"
+              }
+            },
+            "signIn": {
+              "args": [
+                "auth",
+                "login",
+                "github-copilot",
+                "--method",
+                "device",
+                "--answer",
+                "deploymentType=github.com",
+                "--standalone"
+              ],
+              "headlessArgs": [
+                "auth",
+                "login",
+                "github-copilot",
+                "--method",
+                "device",
+                "--answer",
+                "deploymentType=github.com",
+                "--standalone"
+              ],
+              "timeoutSec": 900,
+              "captureOpen": true
+            }
+          },
           {
             "id": "openrouter-key",
             "label": "OpenRouter API key",
@@ -255,8 +437,12 @@
       },
       "versionRange": ">=1.0.0",
       "modes": {
-        "acp": { "args": ["acp"] },
-        "headless": { "args": ["run", "--format", "json"] }
+        "acp": {
+          "args": ["acp"]
+        },
+        "headless": {
+          "args": ["run", "--format", "json"]
+        }
       },
       "sources": [
         "https://opencode.ai/docs/acp/",
@@ -269,10 +455,75 @@
       "homepage": "https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent",
       "protocol": "pi-rpc",
       "binaries": ["pi"],
-      "install": { "npm": "@mariozechner/pi-coding-agent" },
+      "install": {
+        "npm": "@earendil-works/pi-coding-agent"
+      },
       "configDirs": ["~/.pi/agent"],
       "auth": {
         "methods": [
+          {
+            "id": "chatgpt",
+            "label": "ChatGPT plan",
+            "kind": "home",
+            "secret": "PI_CHATGPT_LOGIN",
+            "hint": "Sign in with the ChatGPT account that has your Plus or Pro plan.",
+            "home": {
+              "env": "PI_CODING_AGENT_DIR",
+              "files": ["auth.json"],
+              "network": ["auth.openai.com", "chatgpt.com"]
+            },
+            "signIn": {
+              "args": [],
+              "helper": {
+                "kind": "pi-oauth",
+                "provider": "openai-codex"
+              },
+              "statusArgs": ["auth", "check", "--provider", "openai-codex", "--json", "--no-refresh"],
+              "timeoutSec": 900
+            }
+          },
+          {
+            "id": "github-copilot",
+            "label": "GitHub Copilot",
+            "kind": "home",
+            "secret": "PI_COPILOT_LOGIN",
+            "hint": "Sign in with the GitHub account that has Copilot (shows a code to confirm).",
+            "home": {
+              "env": "PI_CODING_AGENT_DIR",
+              "files": ["auth.json"],
+              "network": ["github.com", "api.github.com", "api.githubcopilot.com", "*.githubcopilot.com"]
+            },
+            "signIn": {
+              "args": [],
+              "helper": {
+                "kind": "pi-oauth",
+                "provider": "github-copilot"
+              },
+              "statusArgs": ["auth", "check", "--provider", "github-copilot", "--json", "--no-refresh"],
+              "timeoutSec": 900
+            }
+          },
+          {
+            "id": "kimi",
+            "label": "Kimi Code subscription",
+            "kind": "home",
+            "secret": "PI_KIMI_LOGIN",
+            "hint": "Sign in with your Kimi account (shows a code to confirm).",
+            "home": {
+              "env": "PI_CODING_AGENT_DIR",
+              "files": ["auth.json"],
+              "network": ["auth.kimi.com", "api.kimi.com"]
+            },
+            "signIn": {
+              "args": [],
+              "helper": {
+                "kind": "pi-oauth",
+                "provider": "kimi-coding"
+              },
+              "statusArgs": ["auth", "check", "--provider", "kimi-coding", "--json", "--no-refresh"],
+              "timeoutSec": 900
+            }
+          },
           {
             "id": "openrouter-key",
             "label": "OpenRouter API key",
@@ -316,8 +567,13 @@
           "args": ["--mode", "rpc"],
           "note": "JSONL over stdio; split on LF only. No built-in permission prompts."
         },
-        "headless": { "args": ["--mode", "json", "-p"] },
-        "acp": { "command": "pi-acp", "npm": "pi-acp" }
+        "headless": {
+          "args": ["--mode", "json", "-p"]
+        },
+        "acp": {
+          "command": "pi-acp",
+          "npm": "pi-acp"
+        }
       },
       "sources": [
         "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/rpc.md",
@@ -330,63 +586,62 @@
       "homepage": "https://cursor.com/cli",
       "protocol": "acp",
       "binaries": ["cursor-agent", "agent"],
-      "install": { "url": "https://cursor.com/docs/cli/installation" },
+      "install": {
+        "url": "https://cursor.com/docs/cli/installation",
+        "native": {
+          "darwin": {
+            "kind": "script",
+            "url": "https://cursor.com/install"
+          },
+          "linux": {
+            "kind": "script",
+            "url": "https://cursor.com/install"
+          }
+        }
+      },
       "installDirs": ["~/.local/bin"],
       "configDirs": ["~/.cursor"],
       "auth": {
         "env": ["CURSOR_API_KEY"],
         "files": [],
         "keychain": ["darwin", "linux", "win32"],
-        "login": "cursor-agent login"
+        "login": "cursor-agent login",
+        "methods": [
+          {
+            "id": "cursor-account",
+            "label": "Cursor account",
+            "kind": "home",
+            "secret": "CURSOR_ACCOUNT_LOGIN",
+            "hint": "Sign in with your Cursor account; pick the team in the browser.",
+            "home": {
+              "files": [".cursor/auth.json|cursor/auth.json"],
+              "extraEnv": {
+                "HOME": "{home}",
+                "XDG_CONFIG_HOME": "{home}",
+                "AGENT_CLI_CREDENTIAL_STORE": "file",
+                "NO_OPEN_BROWSER": "1"
+              },
+              "network": ["api2.cursor.sh", "api3.cursor.sh", "cursor.com", "repo42.cursor.sh"]
+            },
+            "signIn": {
+              "args": ["login"],
+              "headlessArgs": ["login"],
+              "statusArgs": ["status", "--format", "json"],
+              "timeoutSec": 1200
+            }
+          }
+        ]
       },
       "modes": {
-        "acp": { "args": ["acp"], "note": "Hidden command; auth method cursor_login." },
-        "headless": { "args": ["-p", "--output-format", "stream-json"] }
+        "acp": {
+          "args": ["acp"],
+          "note": "Hidden command; auth method cursor_login."
+        },
+        "headless": {
+          "args": ["-p", "--output-format", "stream-json"]
+        }
       },
       "sources": ["https://cursor.com/docs/cli/acp", "https://cursor.com/docs/cli/reference/parameters"]
-    },
-    {
-      "id": "goose",
-      "displayName": "goose",
-      "homepage": "https://goose-docs.ai",
-      "protocol": "acp",
-      "binaries": ["goose"],
-      "install": {
-        "brew": "block-goose-cli",
-        "url": "https://goose-docs.ai/docs/getting-started/installation"
-      },
-      "installDirs": ["~/.local/bin"],
-      "configDirs": ["$XDG_CONFIG_HOME/goose", "%APPDATA%/Block/goose/config"],
-      "auth": {
-        "env": ["GOOSE_PROVIDER"],
-        "files": ["$XDG_CONFIG_HOME/goose/config.yaml", "%APPDATA%/Block/goose/config/config.yaml"],
-        "login": "goose configure"
-      },
-      "versionRange": ">=1.8.0",
-      "modes": { "acp": { "args": ["acp"] }, "headless": { "args": ["run", "-t"] } },
-      "sources": [
-        "https://block.github.io/goose/docs/guides/acp-clients",
-        "https://www.mankier.com/1/goose-acp"
-      ]
-    },
-    {
-      "id": "qwen-code",
-      "displayName": "Qwen Code",
-      "homepage": "https://github.com/QwenLM/qwen-code",
-      "protocol": "acp",
-      "binaries": ["qwen"],
-      "install": { "npm": "@qwen-code/qwen-code", "brew": "qwen-code" },
-      "configDirs": ["~/.qwen"],
-      "auth": {
-        "env": ["OPENAI_API_KEY", "DASHSCOPE_API_KEY"],
-        "files": ["~/.qwen/oauth_creds.json"],
-        "login": "qwen"
-      },
-      "modes": { "acp": { "args": ["--acp"] }, "headless": { "args": ["-p"] } },
-      "sources": [
-        "https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed",
-        "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
-      ]
     },
     {
       "id": "auggie",
@@ -394,15 +649,47 @@
       "homepage": "https://docs.augmentcode.com/cli/overview",
       "protocol": "acp",
       "binaries": ["auggie"],
-      "install": { "npm": "@augmentcode/auggie" },
+      "install": {
+        "npm": "@augmentcode/auggie"
+      },
       "configDirs": ["~/.augment"],
       "auth": {
         "env": ["AUGMENT_SESSION_AUTH"],
         "files": ["~/.augment/session.json"],
-        "login": "auggie login"
+        "login": "auggie login",
+        "methods": [
+          {
+            "id": "augment-account",
+            "label": "Augment account",
+            "kind": "home",
+            "secret": "AUGMENT_SESSION_AUTH",
+            "hint": "Sign in with your Augment account.",
+            "home": {
+              "files": ["session.json"],
+              "asEnv": {
+                "var": "AUGMENT_SESSION_AUTH",
+                "file": "session.json"
+              },
+              "network": ["auth.augmentcode.com", "*.api.augmentcode.com"]
+            },
+            "signIn": {
+              "args": ["login", "--headless", "--augment-cache-dir", "{home}"],
+              "captureOpen": true,
+              "statusArgs": ["account", "status", "--json", "--augment-cache-dir", "{home}"],
+              "timeoutSec": 600
+            }
+          }
+        ]
       },
       "versionRange": ">=0.8.0",
-      "modes": { "acp": { "args": ["--acp"], "env": { "AUGMENT_DISABLE_AUTO_UPDATE": "1" } } },
+      "modes": {
+        "acp": {
+          "args": ["--acp"],
+          "env": {
+            "AUGMENT_DISABLE_AUTO_UPDATE": "1"
+          }
+        }
+      },
       "sources": [
         "https://docs.augmentcode.com/cli/acp",
         "https://www.augmentcode.com/changelog/auggie-cli-0-8-0-release-notes"
@@ -414,10 +701,44 @@
       "homepage": "https://github.com/MoonshotAI/kimi-cli",
       "protocol": "acp",
       "binaries": ["kimi"],
-      "install": { "npm": "@moonshot-ai/kimi-code" },
+      "install": {
+        "npm": "@moonshot-ai/kimi-code"
+      },
       "configDirs": ["~/.kimi"],
-      "auth": { "env": ["KIMI_API_KEY", "MOONSHOT_API_KEY"], "files": [], "login": "kimi login" },
-      "modes": { "acp": { "args": ["acp"] } },
+      "auth": {
+        "env": ["KIMI_API_KEY", "MOONSHOT_API_KEY"],
+        "files": [],
+        "login": "kimi login",
+        "methods": [
+          {
+            "id": "kimi-account",
+            "label": "Kimi Code subscription",
+            "kind": "home",
+            "secret": "KIMI_CODE_LOGIN",
+            "hint": "Sign in with your Kimi account (shows a code to confirm in the browser).",
+            "home": {
+              "env": "KIMI_CODE_HOME",
+              "files": [
+                "credentials/kimi-code.json|credentials/kimi-code-env-0e4f99c69cc27850.json",
+                "config.toml",
+                "device_id"
+              ],
+              "network": ["auth.kimi.com", "api.kimi.com"]
+            },
+            "signIn": {
+              "args": ["login", "--region", "global"],
+              "headlessArgs": ["login", "--region", "global"],
+              "captureOpen": true,
+              "timeoutSec": 900
+            }
+          }
+        ]
+      },
+      "modes": {
+        "acp": {
+          "args": ["acp"]
+        }
+      },
       "sources": ["https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"]
     },
     {
@@ -426,10 +747,59 @@
       "homepage": "https://cline.bot",
       "protocol": "acp",
       "binaries": ["cline"],
-      "install": { "npm": "cline" },
+      "install": {
+        "npm": "cline"
+      },
       "configDirs": ["~/.cline"],
-      "auth": { "env": [], "files": [], "login": "cline auth" },
-      "modes": { "acp": { "args": ["--acp"] } },
+      "auth": {
+        "env": [],
+        "files": [],
+        "login": "cline auth",
+        "methods": [
+          {
+            "id": "cline-account",
+            "label": "Cline account",
+            "kind": "home",
+            "secret": "CLINE_ACCOUNT_LOGIN",
+            "hint": "Sign in with your Cline account (shows a code to confirm in the browser).",
+            "home": {
+              "env": "CLINE_DATA_DIR",
+              "files": ["settings/providers.json"],
+              "extraEnv": {
+                "CLINE_DIR": "{home}"
+              },
+              "network": ["api.cline.bot", "api.workos.com"]
+            },
+            "signIn": {
+              "args": ["auth", "cline"],
+              "headlessArgs": ["auth", "cline"]
+            }
+          },
+          {
+            "id": "chatgpt",
+            "label": "ChatGPT plan",
+            "kind": "home",
+            "secret": "CLINE_CHATGPT_LOGIN",
+            "hint": "Sign in with the ChatGPT account that has your Plus or Pro plan.",
+            "home": {
+              "env": "CLINE_DATA_DIR",
+              "files": ["settings/providers.json"],
+              "extraEnv": {
+                "CLINE_DIR": "{home}"
+              },
+              "network": ["chatgpt.com", "auth.openai.com"]
+            },
+            "signIn": {
+              "args": ["auth", "openai-codex"]
+            }
+          }
+        ]
+      },
+      "modes": {
+        "acp": {
+          "args": ["--acp"]
+        }
+      },
       "sources": ["https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"]
     }
   ]
