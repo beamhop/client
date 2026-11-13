@@ -15,7 +15,7 @@ import { ChatsTeardrop, LinkSimple, Plus, Stop } from '@phosphor-icons/react';
 import { Outlet, useMatches, useNavigate } from '@tanstack/react-router';
 import { animate, motion, useMotionValue } from 'motion/react';
 import { useMemo, useRef, useState } from 'react';
-import { Link, ToggleButton, ToggleButtonGroup } from 'react-aria-components';
+import { Link } from 'react-aria-components';
 import type { LampState } from '../../api/derive.ts';
 import { harnessMonogram, sessionLamp, targetLabel, useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
@@ -30,6 +30,7 @@ import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { Button, IconButton } from '../../ui/Button.tsx';
 import { SegmentedControl } from '../../ui/Choice.tsx';
+import { FilterRail } from '../../ui/FilterRail.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { reduced, spring, useReduced } from '../../ui/motion.ts';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
@@ -184,20 +185,23 @@ const SessionRow = ({
               if (open) settle(0);
             }
           }}
-          className="flex min-h-16 min-w-0 flex-1 items-start gap-3 py-3 pl-4 outline-none data-[hovered]:bg-[color-mix(in_oklch,var(--bh-bg),var(--bh-ink)_3%)] data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus expanded:pl-5"
+          className="flex min-h-[76px] min-w-0 flex-1 items-start gap-3 py-3 pr-4 pl-4 outline-none data-[hovered]:bg-[color-mix(in_oklch,var(--bh-bg),var(--bh-ink)_3%)] data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus expanded:pl-5"
         >
           <span className="mt-[7px] shrink-0">
             <StatusDot state={lamp} hideLabel />
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="flex items-baseline gap-2">
-              <span className="min-w-0 flex-1 truncate type-body-strong text-ink">{s.title}</span>
+              <span className="line-clamp-2 min-w-0 flex-1 type-body-strong break-words text-ink">
+                {s.title}
+              </span>
               <span className="shrink-0 type-meta text-ink-3 tabular-nums">
                 {rowTime(s.lastActivityAt, now)}
               </span>
             </span>
             <MetaLine
               as="span"
+              className="pr-9"
               items={[
                 { value: where, truncate: 22 },
                 `thread ${s.threadId}`,
@@ -206,10 +210,15 @@ const SessionRow = ({
                 s.worktree ? { value: s.worktree.branch, truncate: 18 } : null,
               ]}
             />
-            {(s.status === 'running' || s.status === 'queued') && <LiveLine s={s} />}
+            {(s.status === 'running' || s.status === 'queued') && (
+              <span className="flex min-w-0 pr-9">
+                <LiveLine s={s} />
+              </span>
+            )}
           </span>
         </Link>
-        <div className="flex shrink-0 items-start pt-2.5 pr-1">
+        {/* Bottom-right, under the timestamp: the title keeps the full row width (two lines). */}
+        <div className="absolute right-1 bottom-0.5 flex">
           <OverflowMenu
             label={t('sessions.row.menu', { title: s.title })}
             className="text-ink-2"
@@ -267,36 +276,20 @@ const AgentRail = ({
   onChange: (a?: string) => void;
   counts: Record<string, number>;
 }) => (
-  <ToggleButtonGroup
-    aria-label={t('sessions.filter.agent')}
-    selectionMode="single"
-    disallowEmptySelection
-    selectedKeys={[value ?? '*']}
-    onSelectionChange={(keys) => {
-      const k = [...keys][0];
-      onChange(k === '*' || k === undefined ? undefined : String(k));
-    }}
-    className="-mx-gutter flex gap-1.5 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] expanded:-mx-5 expanded:px-5"
-  >
-    {[
-      { id: '*', name: t('sessions.filter.allAgents'), mono: undefined as string | undefined },
+  <FilterRail
+    label={t('sessions.filter.agent')}
+    value={value ?? '*'}
+    onChange={(k) => onChange(k === '*' ? undefined : k)}
+    options={[
+      { id: '*', label: t('sessions.filter.allAgents'), count: counts['*'] ?? 0 },
       ...agents.map((a) => ({
         id: a.config.name,
-        name: a.config.name,
-        mono: harnessMonogram(a.config.harness),
+        label: a.config.name,
+        count: counts[a.config.name] ?? 0,
+        lead: <LetterTile code={harnessMonogram(a.config.harness)} size={24} />,
       })),
-    ].map((o) => (
-      <ToggleButton
-        key={o.id}
-        id={o.id}
-        className="inline-flex h-11 shrink-0 items-center gap-2 rounded-md border border-line-strong bg-surface pr-3 pl-2 type-label text-ink-2 outline-none data-[hovered]:text-ink data-[selected]:border-ink data-[selected]:bg-ink data-[selected]:text-bg data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus pointer-fine:h-9"
-      >
-        {o.mono ? <LetterTile code={o.mono} size={22} /> : <span aria-hidden="true" className="w-1" />}
-        {o.name}
-        <span className="type-meta tabular-nums opacity-70">{counts[o.id] ?? 0}</span>
-      </ToggleButton>
-    ))}
-  </ToggleButtonGroup>
+    ]}
+  />
 );
 
 // ─────────── Screen ───────────

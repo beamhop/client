@@ -164,3 +164,43 @@ export const UntrustedQuote = ({
     <span className="mt-0.5 block">“{children}”</span>
   </blockquote>
 );
+
+/**
+ * Grouped list (the Channels / Agents rhythm): one surface card with hairline-separated rows.
+ * List screens use this so every mobile list has one shape — card, 16px row padding, 64px rows.
+ */
+export const ListGroup = ({
+  children,
+  className,
+  tone = 'surface',
+  ...rest
+}: {
+  children: ReactNode;
+  className?: string;
+  tone?: 'surface' | 'flare';
+  'aria-label'?: string;
+  'aria-labelledby'?: string;
+}) => (
+  <ul
+    {...rest}
+    className={cx(
+      'overflow-hidden rounded-lg border border-line',
+      tone === 'flare' ? 'bg-flare-wash' : 'bg-surface',
+      '[&>li]:border-b [&>li]:border-line [&>li:last-child]:border-b-0',
+      className,
+    )}
+  >
+    {children}
+  </ul>
+);
+
+/** Row link inside a ListGroup. `active` = the open detail (flare wash), like Channels. */
+export const listRowClass = (active?: boolean, extra?: string) =>
+  cx(
+    'relative flex min-h-16 items-center gap-3 px-4 py-3 outline-none',
+    'transition-colors duration-[var(--dur-fast)] hover:bg-sunken data-[hovered]:bg-sunken',
+    'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+    'data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus',
+    active && 'bg-flare-wash hover:bg-flare-wash data-[hovered]:bg-flare-wash',
+    extra,
+  );

@@ -16,7 +16,7 @@ import { cx } from '../../lib/cx.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
-import { LinkButton } from '../../ui/Button.tsx';
+import { BarAction, LinkButton } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Eyebrow, LetterTile, type MetaItem, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
@@ -175,15 +175,12 @@ export const ChannelsScreen = () => {
             )
           }
           actions={
-            <LinkButton
+            <BarAction
               href="/channels/add"
-              variant="primary"
-              size="sm"
-              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
-              aria-label={t('channels.list.addLabel')}
-            >
-              {t('channels.list.add')}
-            </LinkButton>
+              label={t('channels.list.add')}
+              ariaLabel={t('channels.list.addLabel')}
+              icon={<Plus size={20} weight="bold" aria-hidden="true" />}
+            />
           }
         >
           <div className="flex flex-col gap-5">

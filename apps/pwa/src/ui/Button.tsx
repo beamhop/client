@@ -14,6 +14,7 @@ import {
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
+import { useExpanded } from '../lib/media.ts';
 import { HopMeter } from './glyphs/index.tsx';
 
 export type ButtonVariant =
@@ -42,6 +43,8 @@ const VARIANT: Record<ButtonVariant, string> = {
     'bg-transparent text-stop-text border border-stop-text data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash',
 };
 
+const FILLED: ReadonlySet<ButtonVariant> = new Set(['primary', 'allow', 'destructive']);
+
 const SIZE: Record<ButtonSize, string> = {
   sm: 'h-11 pointer-fine:h-8 px-3 gap-1.5',
   md: 'h-12 pointer-fine:h-10 px-5 gap-2',
@@ -52,9 +55,14 @@ export const buttonClass = (variant: ButtonVariant = 'secondary', size: ButtonSi
   cx(
     'relative inline-flex shrink-0 select-none items-center justify-center rounded-md type-label whitespace-nowrap',
     'transition-[transform,background-color] duration-[var(--dur-fast)] ease-[var(--ease-out)] data-[pressed]:scale-[.98]',
-    'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45 data-[disabled]:saturate-50',
+    'data-[disabled]:cursor-not-allowed',
     '[&_svg]:shrink-0',
     VARIANT[variant],
+    // Filled buttons don't fade when disabled (a 45% flare reads as broken): they become an empty,
+    // dashed slot in ink-3 — "not armed yet" — and fill once the form is ready.
+    FILLED.has(variant)
+      ? 'data-[disabled]:border data-[disabled]:border-dashed data-[disabled]:border-line-strong data-[disabled]:bg-sunken data-[disabled]:text-ink-3'
+      : 'data-[disabled]:opacity-45 data-[disabled]:saturate-50',
     SIZE[size],
     extra,
   );
@@ -227,6 +235,76 @@ export const LinkButton = ({
     {children}
   </RACLink>
 );
+
+export interface BarActionProps {
+  /** Visible label on desktop; accessible name + tooltip on compact. */
+  label: string;
+  /** Full-label override for the accessible name (e.g. "Add a channel"). */
+  ariaLabel?: string;
+  /** Glyph at 20px (compact) — the desktop button reuses it at 16px via CSS. */
+  icon: ReactNode;
+  href?: string;
+  onPress?: () => void;
+  variant?: 'primary' | 'secondary';
+  isPending?: boolean;
+  isDisabled?: boolean;
+}
+
+/**
+ * The one screen-level action in a top bar ("New agent", "Add", "Scan"). Expanded: a labelled button
+ * in the pane header. Compact: a 44px icon button so the bar never holds more than pill · action · Stop
+ * (the label stays the accessible name). Same shape on every list screen.
+ */
+export const BarAction = ({
+  label,
+  ariaLabel,
+  icon,
+  href,
+  onPress,
+  variant = 'primary',
+  isPending,
+  isDisabled,
+}: BarActionProps) => {
+  const expanded = useExpanded();
+  if (expanded) {
+    const iconSm = <span className="inline-grid [&_svg]:size-4">{icon}</span>;
+    return href ? (
+      <LinkButton href={href} variant={variant} size="sm" icon={iconSm} aria-label={ariaLabel}>
+        {label}
+      </LinkButton>
+    ) : (
+      <Button
+        variant={variant}
+        size="sm"
+        icon={iconSm}
+        aria-label={ariaLabel}
+        onPress={onPress}
+        isPending={isPending}
+        isDisabled={isDisabled}
+      >
+        {label}
+      </Button>
+    );
+  }
+  const name = ariaLabel ?? label;
+  const cls = cx(
+    'inline-grid size-11 shrink-0 place-items-center rounded-md text-ink outline-none transition-colors duration-[var(--dur-fast)]',
+    'data-[hovered]:bg-sunken data-[pressed]:bg-sunken data-[disabled]:opacity-45',
+    'data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-[-2px] data-[focus-visible]:outline-focus',
+  );
+  return href ? (
+    <RACLink href={href} aria-label={name} className={cls}>
+      {icon}
+    </RACLink>
+  ) : (
+    <IconButton
+      label={isPending ? t('a11y.busy', { name }) : name}
+      icon={icon}
+      onPress={onPress}
+      isDisabled={isDisabled || isPending}
+    />
+  );
+};
 
 /** Inline text link (DESIGN §9.1). External links get ↗ and open in a new tab. */
 export const TextLink = ({

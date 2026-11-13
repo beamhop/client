@@ -65,7 +65,7 @@ test('stack/list shows the soonest request first with risk, countdown and decisi
     await expect(page).toHaveURL(/\/inbox\/apr_b72c/);
     await expect(page.getByRole('link', { name: /reviewer\s*git push origin beamhop\/842/ })).toBeVisible();
   }
-  await expect(pendingCount(page)).toContainText('07');
+  await expect(pendingCount(page)).toContainText('05');
   await axe(page);
 });
 
@@ -77,9 +77,9 @@ test('LOW request: allow once commits, toast offers undo, undo restores it', asy
   await allow.click();
   const region = page.getByRole('region', { name: 'Notifications' });
   await expect(region.getByText(/Allowed once/)).toBeVisible();
-  await expect(pendingCount(page)).toContainText('06');
+  await expect(pendingCount(page)).toContainText('04');
   await region.getByRole('button', { name: 'Undo' }).click();
-  await expect(pendingCount(page)).toContainText('07');
+  await expect(pendingCount(page)).toContainText('05');
 });
 
 test('HIGH request: Allow… opens the scope sheet; "always" shows the exact rule and relabels the button', async ({

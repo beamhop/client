@@ -7,7 +7,7 @@
  * machines still pay storage) https://www.costbench.com/software/developer-tools/flyio/hidden-costs/ ;
  * PaaS pricing compared https://fly.io/learn/paas-pricing-compared/ .
  */
-import { CloudArrowUp, Plus } from '@phosphor-icons/react';
+import { CaretRight, CloudArrowUp, Plus } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { deployMonogram, useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
@@ -15,7 +15,8 @@ import { cx } from '../../lib/cx.ts';
 import { shortDate } from '../../lib/format.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
-import { LinkButton } from '../../ui/Button.tsx';
+import { BarAction, LinkButton } from '../../ui/Button.tsx';
+import { ListGroup, listRowClass } from '../../ui/Card.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
@@ -40,33 +41,32 @@ export const DeployScreen = () => {
     const active = pathname === href;
     const destroyed = d.status === 'destroyed';
     return (
-      <li key={d.id}>
-        <Link
-          to={href}
-          aria-current={active ? 'page' : undefined}
-          className={cx(
-            'relative flex min-h-16 items-center gap-3 rounded-md px-2 py-2.5 outline-none focus-visible:outline-2 focus-visible:outline-focus',
-            active ? 'bg-flare-wash' : 'hover:bg-sunken',
-          )}
-        >
-          {destroyed && <span aria-hidden="true" className="hatch absolute inset-0 rounded-md text-ink-3" />}
-          <LetterTile code={deployMonogram(d.provider)} />
+      <li key={d.id} className="relative">
+        {destroyed && (
+          <span aria-hidden="true" className="hatch pointer-events-none absolute inset-0 text-ink-3" />
+        )}
+        <Link to={href} aria-current={active ? 'page' : undefined} className={listRowClass(active)}>
+          <LetterTile code={deployMonogram(d.provider)} className="mt-0.5 self-start" />
           <span className="relative flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className={cx('truncate type-title-3', destroyed ? 'text-ink-2' : 'text-ink')}>
-              {d.agent}{' '}
-              <span className="font-normal text-ink-2">
-                @ {d.provider} {d.region}
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className={cx('min-w-0 flex-1 truncate type-title-3', destroyed ? 'text-ink-2' : 'text-ink')}
+              >
+                {d.agent}
               </span>
+              <StatusDot state={deployLamp(d)} label={d.status} className="shrink-0" />
             </span>
-            <MetaLine
-              items={[
-                d.size?.split(' · ')[0],
+            <MetaLine items={[`${d.provider} ${d.region ?? ''}`.trim(), d.size?.split(' · ')[0]]} />
+            <span className="type-body-sm text-ink-2">
+              {[
                 d.monthlyCostUsd !== undefined && !destroyed && `${usd(d.monthlyCostUsd)}/mo`,
                 t('deploy.list.since', { date: shortDate(d.createdAt) }),
-              ]}
-            />
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
           </span>
-          <StatusDot state={deployLamp(d)} label={d.status} className="relative" />
+          <CaretRight size={16} className="relative shrink-0 text-ink-3" aria-hidden="true" />
         </Link>
       </li>
     );
@@ -90,14 +90,11 @@ export const DeployScreen = () => {
             ) : undefined
           }
           actions={
-            <LinkButton
+            <BarAction
               href="/deploy/new"
-              variant="primary"
-              size="sm"
-              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
-            >
-              {t('deploy.deploy.newCloudAgent')}
-            </LinkButton>
+              label={t('deploy.deploy.newCloudAgent')}
+              icon={<Plus size={20} weight="bold" aria-hidden="true" />}
+            />
           }
         >
           {q.isError ? (
@@ -127,15 +124,18 @@ export const DeployScreen = () => {
             </EmptyState>
           ) : (
             <div className="flex flex-col gap-4">
-              <ul aria-label={t('deploy.deploy.cloudAgents')} className="-mx-2 flex flex-col">
-                {live.map(row)}
-              </ul>
+              <section aria-labelledby="dep-live">
+                <Eyebrow id="dep-live" count={live.length}>
+                  {t('deploy.deploy.cloudAgents')}
+                </Eyebrow>
+                <ListGroup aria-labelledby="dep-live">{live.map(row)}</ListGroup>
+              </section>
               {gone.length > 0 && (
                 <section aria-labelledby="dep-gone">
                   <Eyebrow id="dep-gone" count={gone.length}>
                     {t('deploy.deploy.destroyed')}
                   </Eyebrow>
-                  <ul className="-mx-2 flex flex-col">{gone.map(row)}</ul>
+                  <ListGroup aria-labelledby="dep-gone">{gone.map(row)}</ListGroup>
                 </section>
               )}
               <CliStrip command="beamhop deploy list" />

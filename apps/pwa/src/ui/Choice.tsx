@@ -3,7 +3,7 @@
  */
 import { CaretDown, Check } from '@phosphor-icons/react';
 import { motion } from 'motion/react';
-import { type Key, type ReactNode, useContext } from 'react';
+import { type Key, type ReactNode, useContext, useRef } from 'react';
 import {
   Dialog,
   Label,
@@ -35,6 +35,7 @@ import {
 } from 'react-aria-components';
 import { cx } from '../lib/cx.ts';
 import { useExpanded } from '../lib/media.ts';
+import { useScrollEdges } from '../lib/scroll-edges.ts';
 import { descriptionClass, FieldErrorText, labelClass } from './Field.tsx';
 import { spring } from './motion.ts';
 
@@ -385,40 +386,41 @@ export interface TabsProps extends Omit<RACTabsProps, 'className' | 'children'> 
 }
 
 /** RAC Tabs with a scrollable list; selected tab = ink + 2px flare bar. Switching is instant. */
-export const Tabs = ({ label, tabs, panels = true, children, className, ...rest }: TabsProps) => (
-  <RACTabs {...rest} className={cx('flex flex-col', className)}>
-    <RACTabList
-      aria-label={label}
-      className="-mx-1 flex overflow-x-auto border-b border-line px-1 [scrollbar-width:none]"
-    >
+export const Tabs = ({ label, tabs, panels = true, children, className, ...rest }: TabsProps) => {
+  const rail = useRef<HTMLDivElement>(null);
+  useScrollEdges(rail, [tabs.length, rest.selectedKey]);
+  return (
+    <RACTabs {...rest} className={cx('flex flex-col', className)}>
+      <RACTabList ref={rail} aria-label={label} className="scroll-rail -mx-1 flex border-b border-line px-1">
+        {tabs.map((t) => (
+          <RACTab
+            key={t.id}
+            id={t.id}
+            href={t.href}
+            className="relative flex min-h-11 shrink-0 cursor-default items-center px-3 type-label text-ink-2 outline-none data-[hovered]:text-ink data-[selected]:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus"
+          >
+            {({ isSelected }) => (
+              <>
+                {t.label}
+                {isSelected && (
+                  <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 bg-flare" />
+                )}
+              </>
+            )}
+          </RACTab>
+        ))}
+      </RACTabList>
       {tabs.map((t) => (
-        <RACTab
+        <RACTabPanel
           key={t.id}
           id={t.id}
-          href={t.href}
-          className="relative flex min-h-11 shrink-0 cursor-default items-center px-3 type-label text-ink-2 outline-none data-[hovered]:text-ink data-[selected]:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus"
+          className="pt-4 outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
         >
-          {({ isSelected }) => (
-            <>
-              {t.label}
-              {isSelected && (
-                <span aria-hidden="true" className="absolute inset-x-3 -bottom-px h-0.5 bg-flare" />
-              )}
-            </>
-          )}
-        </RACTab>
+          {panels ? t.content : children}
+        </RACTabPanel>
       ))}
-    </RACTabList>
-    {tabs.map((t) => (
-      <RACTabPanel
-        key={t.id}
-        id={t.id}
-        className="pt-4 outline-none data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
-      >
-        {panels ? t.content : children}
-      </RACTabPanel>
-    ))}
-  </RACTabs>
-);
+    </RACTabs>
+  );
+};
 
 export type { Key };

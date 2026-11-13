@@ -33,7 +33,7 @@ import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { Screen } from '../../shell/Screen.tsx';
-import { Button, LinkButton } from '../../ui/Button.tsx';
+import { BarAction, Button, LinkButton } from '../../ui/Button.tsx';
 import { SegmentedControl } from '../../ui/Choice.tsx';
 import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
 import { TextField } from '../../ui/Field.tsx';
@@ -706,12 +706,12 @@ export const HarnessesScreen = () => {
         />
       }
       actions={
-        <Button
+        <BarAction
           variant="secondary"
-          size="sm"
+          label={t('harnesses.scan')}
           icon={
             <ArrowClockwise
-              size={16}
+              size={20}
               aria-hidden="true"
               className={cx(scanning && 'motion-safe:animate-spin')}
             />
@@ -719,9 +719,7 @@ export const HarnessesScreen = () => {
           isPending={scanning}
           isDisabled={offline}
           onPress={() => void scan()}
-        >
-          {t('harnesses.scan')}
-        </Button>
+        />
       }
     >
       {!expanded && (pull > 0 || scanning) && (

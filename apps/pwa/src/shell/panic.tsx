@@ -52,63 +52,92 @@ export const usePanicCounts = (enabled = true) => {
   };
 };
 
-type BoardRow = { label: string; done: boolean };
+type Counts = ReturnType<typeof usePanicCounts>;
+const LEDGER = ['sessions', 'schedules', 'channels', 'clouds'] as const;
+
+/**
+ * The manifest of what stops: one row per kind with the count, the noun and the verb. Before the press
+ * the boxes are empty; after it they tick one by one as each part confirms — the same rows, so the
+ * owner sees the plan turn into the result (DESIGN §1 "Unflappable": calm, specific).
+ */
+const Ledger = ({ counts, done }: { counts: Counts; done: number }) => (
+  <ul
+    aria-label={t('panic.panic.whatWillStop')}
+    className="flex flex-col overflow-hidden rounded-lg border border-line bg-surface"
+  >
+    {LEDGER.map((k, i) => {
+      const ticked = i < done;
+      return (
+        <li
+          key={k}
+          className="flex min-h-12 items-center gap-3 border-b border-line px-4 last:border-b-0"
+          data-done={ticked || undefined}
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              'grid size-5 shrink-0 place-items-center rounded-xs transition-colors duration-[var(--dur-fast)]',
+              ticked ? 'bg-ink text-bg' : 'border border-line-strong',
+            )}
+          >
+            {ticked && <Check size={12} weight="bold" />}
+          </span>
+          <span className="min-w-8 font-mono text-[15px] font-semibold text-ink tabular-nums">
+            {counts[k]}
+          </span>
+          <span className="min-w-0 flex-1 type-body-sm text-ink">
+            {t(`panic.ledger.${k}`, { count: counts[k] })}
+          </span>
+          <span className="type-meta text-ink-2">
+            {ticked ? t(`panic.ledger.${k}Done`) : t(`panic.ledger.${k}Verb`)}
+            <span className="sr-only">{ticked ? ` ${t('panic.ledger.confirmed')}` : ''}</span>
+          </span>
+        </li>
+      );
+    })}
+  </ul>
+);
 
 /** Confirm → pending → status board. Reused by the /panic page (inline) and the global sheet. */
-export const PanicConfirm = ({ onDone, inline }: { onDone?: () => void; inline?: boolean }) => {
-  const counts = usePanicCounts();
-  const [board, setBoard] = useState<BoardRow[] | null>(null);
+export const PanicConfirm = ({
+  onDone,
+  onStopped,
+  inline,
+}: {
+  onDone?: () => void;
+  /** Fires once the daemon confirmed (the sheet swaps its title and drops Cancel). */
+  onStopped?: () => void;
+  inline?: boolean;
+}) => {
+  const live = usePanicCounts();
+  const [snapshot, setSnapshot] = useState<Counts | null>(null);
+  const [done, setDone] = useState(0);
   const panic = useMutationApi('system.panic');
 
   const run = () => {
     haptic('warn');
-    const snapshot = counts;
+    const snap = live;
     panic.mutate(
       { reason: undefined },
       {
         onSuccess: () => {
-          const rows: BoardRow[] = [
-            { label: `Sessions killed ${snapshot.sessions}/${snapshot.sessions}`, done: false },
-            { label: `Schedules paused ${snapshot.schedules}/${snapshot.schedules}`, done: false },
-            { label: `Channels disconnected ${snapshot.channels}/${snapshot.channels}`, done: false },
-            { label: `Cloud daemons acknowledged ${snapshot.clouds}/${snapshot.clouds}`, done: false },
-          ];
-          setBoard(rows);
-          rows.forEach((_, i) => {
-            setTimeout(
-              () => setBoard((b) => b?.map((r, j) => (j <= i ? { ...r, done: true } : r)) ?? null),
-              180 * (i + 1),
-            );
+          setSnapshot(snap);
+          onStopped?.();
+          LEDGER.forEach((_, i) => {
+            setTimeout(() => setDone((d) => Math.max(d, i + 1)), 180 * (i + 1));
           });
-          announce(
-            `${t('panic.done')} ${snapshot.clouds} of ${snapshot.clouds} cloud daemons confirmed.`,
-            'assertive',
-          );
+          announce(`${t('panic.done')} ${t('panic.ledger.cloudsAck', { count: snap.clouds })}`, 'assertive');
         },
         onError: (e) => announce(`Couldn't stop everything: ${e.message}`, 'assertive'),
       },
     );
   };
 
-  if (board) {
+  if (snapshot) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="type-title-3 text-ink">{t('panic.done')}</p>
-        <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
-          {board.map((r) => (
-            <li key={r.label} className="flex min-h-11 items-center gap-3 px-4 type-meta text-ink">
-              <span
-                className={cx(
-                  'grid size-5 place-items-center rounded-sm',
-                  r.done ? 'bg-ink text-bg' : 'border border-line-strong',
-                )}
-              >
-                {r.done && <Check size={12} weight="bold" aria-hidden="true" />}
-              </span>
-              {r.label}
-            </li>
-          ))}
-        </ul>
+        {inline && <p className="type-title-3 text-ink">{t('panic.done')}</p>}
+        <Ledger counts={snapshot} done={done} />
         <p className="type-body-sm text-ink-2">{t('panic.panic.nothingRestartsUntilYou')}</p>
         {onDone && (
           <Button variant="secondary" fullWidth onPress={onDone}>
@@ -122,22 +151,8 @@ export const PanicConfirm = ({ onDone, inline }: { onDone?: () => void; inline?:
   return (
     <div className="flex flex-col gap-4">
       {inline && <h2 className="type-title-2 text-ink">{t('panic.title')}</h2>}
-      <p className="type-body text-ink-2">{t('panic.body', counts)}</p>
-      <ul className="grid grid-cols-2 gap-2 type-meta" aria-label={t('panic.panic.whatWillStop')}>
-        {(
-          [
-            ['sessions', counts.sessions],
-            ['schedules', counts.schedules],
-            ['channels', counts.channels],
-            [t('panic.panic.cloudDaemons'), counts.clouds],
-          ] as const
-        ).map(([k, n]) => (
-          <li key={k} className="flex items-baseline gap-2 rounded-md bg-sunken px-3 py-2">
-            <span className="font-display text-2xl leading-none font-bold text-ink tabular-nums">{n}</span>
-            <span className="text-ink-2">{k}</span>
-          </li>
-        ))}
-      </ul>
+      <p className="type-body text-ink-2">{t('panic.lead')}</p>
+      <Ledger counts={live} done={0} />
       <Button
         variant="destructive"
         size="lg"
@@ -148,30 +163,38 @@ export const PanicConfirm = ({ onDone, inline }: { onDone?: () => void; inline?:
       >
         {panic.isPending ? t('panic.stopping') : t('panic.button')}
       </Button>
+      <p className="type-meta text-ink-2">{t('panic.after')}</p>
     </div>
   );
 };
 
 export const PanicProvider = ({ children }: { children: ReactNode }) => {
-  const [isOpen, setOpen] = useState(false);
-  const value = useMemo(() => ({ open: () => setOpen(true) }), []);
+  const [isOpen, setOpenState] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    if (!v) setStopped(false);
+  };
+  const value = useMemo(() => ({ open: () => setOpenState(true) }), []);
   return (
     <Ctx.Provider value={value}>
       {children}
       <Sheet
         isOpen={isOpen}
         onOpenChange={setOpen}
-        title={t('panic.title')}
+        title={stopped ? t('panic.done') : t('panic.title')}
         role="alertdialog"
         focusTitle
         isDismissable={false}
         footer={
-          <Button variant="secondary" fullWidth onPress={() => setOpen(false)}>
-            {t('common.cancel')}
-          </Button>
+          stopped ? undefined : (
+            <Button variant="secondary" fullWidth onPress={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+          )
         }
       >
-        {isOpen && <PanicConfirm onDone={() => setOpen(false)} />}
+        {isOpen && <PanicConfirm onDone={() => setOpen(false)} onStopped={() => setStopped(true)} />}
       </Sheet>
     </Ctx.Provider>
   );

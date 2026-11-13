@@ -33,7 +33,7 @@ import {
 import { Outlet, useNavigate, useParams } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, ToggleButton, ToggleButtonGroup } from 'react-aria-components';
+import { Link } from 'react-aria-components';
 import { approvalTarget, RISK_LABEL, useApi, useMutationApi, useServerEvent } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
@@ -48,6 +48,7 @@ import { Button, IconButton, LinkButton } from '../../ui/Button.tsx';
 import { TicketCard } from '../../ui/Card.tsx';
 import { Checkbox } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
+import { FilterRail } from '../../ui/FilterRail.tsx';
 import { Badge, Eyebrow, Kbd, MetaLine, Readout, RiskTag } from '../../ui/Meta.tsx';
 import { reduced, spring, useReduced } from '../../ui/motion.ts';
 import { Banner, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
@@ -143,33 +144,17 @@ const FilterChips = ({
   onChange: (f: InboxFilter) => void;
 }) =>
   options.length <= 2 ? null : (
-    <ToggleButtonGroup
-      aria-label={t('inbox.filter.label')}
-      selectionMode="single"
-      disallowEmptySelection
-      selectedKeys={[value]}
-      onSelectionChange={(keys) => {
-        const k = [...keys][0];
-        if (k !== undefined) onChange(k as InboxFilter);
-      }}
-      className="-mx-gutter flex gap-2 overflow-x-auto px-gutter pb-1 [scrollbar-width:none] expanded:mx-0 expanded:flex-wrap expanded:px-0"
-    >
-      {options.map((o) => (
-        <ToggleButton
-          key={o.id}
-          id={o.id}
-          className={cx(
-            'bh-chip inline-flex h-11 shrink-0 items-center gap-1.5 rounded-sm border px-3 type-label outline-none pointer-fine:h-8',
-            'data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus',
-            'border-line-strong bg-surface text-ink data-[hovered]:bg-sunken',
-            'data-[selected]:border-ink data-[selected]:bg-ink data-[selected]:text-bg',
-          )}
-        >
-          {o.id.startsWith('agent:') ? <span className="font-mono text-[13px]">{o.label}</span> : o.label}
-          <span className="type-meta tabular-nums opacity-80">{o.count}</span>
-        </ToggleButton>
-      ))}
-    </ToggleButtonGroup>
+    <FilterRail
+      label={t('inbox.filter.label')}
+      value={value}
+      onChange={(k) => onChange(k as InboxFilter)}
+      options={options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        count: o.count,
+        mono: o.id.startsWith('agent:'),
+      }))}
+    />
   );
 
 // ─────────── Mobile stack ───────────
@@ -1052,11 +1037,11 @@ export const InboxScreen = () => {
     <span
       className="flex items-baseline gap-2"
       aria-label={t('inbox.pendingCount', {
-        count: data.q.isPending ? 0 : data.pending.length - data.waiting.length,
+        count: data.q.isPending ? 0 : allGroups.length,
       })}
       role="status"
     >
-      <Readout size="md">{pad2(data.q.isPending ? 0 : data.pending.length - data.waiting.length)}</Readout>
+      <Readout size="md">{pad2(data.q.isPending ? 0 : allGroups.length)}</Readout>
       <span className="type-micro text-ink-2" aria-hidden="true">
         {t('inbox.pending.short')}
       </span>
