@@ -290,6 +290,7 @@
   "policy.roleEdit.confirmResetBody": "Your changes to this role are dropped. People who have it keep it.",
   "policy.roleEdit.resetDone": "Reset · {name}",
   "policy.roleEdit.deleteHint": "Nobody has this role. Deleting it can't be undone.",
+  "policy.roleEdit.inUseBy": "{count, plural, one {In use by {list}.} other {In use by # grants or channels: {list}.}} Change those before deleting it.",
   "policy.roleEdit.inUse": "{count, plural, one {# person has} other {# people have}} this role. Revoke or change their grants before deleting it.",
   "policy.roleEdit.delete": "Delete role",
   "policy.roleEdit.confirmDelete": "Delete the {name} role?",

@@ -1,11 +1,13 @@
 import type { ApprovalView, PolicySuggestion } from '@beamhop/core';
 import { describe, expect, it } from 'vitest';
+import { approvalTarget } from '../../api/index.ts';
 import {
   afterRemoval,
   burstAgents,
   filterGroups,
   filterOptions,
   groupApprovals,
+  hostOf,
   isCredentialFile,
   isLockedPath,
   isMe,
@@ -135,6 +137,29 @@ describe('scope sheet rules', () => {
     const a = apr({ input: { command: 'git push origin beamhop/842' } });
     expect(ruleChoices(a).map((x) => x.value)).toEqual(['bash:git push origin beamhop/842', 'bash:git push']);
     expect(ruleLine(a, 'bash:git push')).toBe('+ approvals.auto: bash:git push');
+  });
+
+  it('a git.push (session.openPr) is a command allowed once, whatever its remote looks like', () => {
+    // beamhopd sends the remote as `remoteUrl`; a local path or scp-like remote is not a web URL.
+    for (const remoteUrl of ['/home/a/remotes/app.git', 'git@github.com:acme/app.git']) {
+      const a = apr({
+        tool: 'git.push',
+        risk: 'medium',
+        requestedBy: { principal: 'local:owner', displayName: 'owner', role: 'owner' },
+        input: { command: 'git push origin beamhop/x', remote: 'origin', remoteUrl, branch: 'beamhop/x' },
+      });
+      expect(reachOf(a)).toBe('command');
+      expect(scopeOptions(a)).toEqual(['once']);
+      expect(() => ruleChoices(a)).not.toThrow();
+    }
+  });
+
+  it('an unparsable url never throws (input is untrusted)', () => {
+    const a = apr({ tool: 'Fetch', input: { url: 'not a url' } });
+    expect(reachOf(a)).toBe('network');
+    expect(ruleChoices(a)[0]?.value).toBe(approvalTarget(a));
+    expect(hostOf('https://pypi.org/simple')).toBe('pypi.org');
+    expect(hostOf('/tmp/x.git')).toBeUndefined();
   });
 
   it('paths scope to the file or its folder', () => {

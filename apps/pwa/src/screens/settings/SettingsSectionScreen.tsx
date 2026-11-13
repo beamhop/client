@@ -9,6 +9,7 @@ import { Screen } from '../../shell/Screen.tsx';
 import { LinkButton } from '../../ui/Button.tsx';
 import { SegmentedControl, Switch } from '../../ui/Choice.tsx';
 import { EmptyState } from '../../ui/States.tsx';
+import { AboutSection } from './AboutSection.tsx';
 import { DangerSection } from './DangerSection.tsx';
 import { DevicesSection } from './DevicesSection.tsx';
 import { IdentitySection } from './IdentitySection.tsx';
@@ -28,6 +29,7 @@ const BODY: Record<string, () => ReactNode> = {
   notifications: NotificationsSection,
   updates: UpdatesSection,
   appearance: () => <AppearanceSettings />,
+  about: AboutSection,
   stop: DangerSection,
 };
 

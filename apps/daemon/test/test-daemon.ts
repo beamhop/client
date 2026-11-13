@@ -11,11 +11,14 @@
  *                         then answers `allowed: <command>` or `refused: <reason>`.
  *   - `STREAM <n>`      → n text chunks ~150 ms apart (`chunk-1 chunk-2 …`).
  *   - `HANG`            → `working…`, then waits until the session is cancelled (panic / stop).
+ *   - `WRITE <file> <text>` → writes <text> to <file> in the session's working directory (the
+ *                         worktree of a git mount), then answers `wrote <file>`.
  *   - anything else     → `reply: <text>`.
  *   Every turn also reports usage (1200 in / 300 out tokens, $0.02).
  */
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MemorySecretStore } from '@beamhop/broker';
 import { type InboundMsg, type InboundMsgInput, silentLogger } from '@beamhop/core';
@@ -55,6 +58,28 @@ export const scriptedHarness: Script = async function* (s, prompt) {
       yield { type: 'text', delta: `chunk-${i} ` };
       await sleep(150);
     }
+    yield { type: 'done', stopReason: 'end_turn' };
+    return;
+  }
+  const write = /^WRITE\s+(\S+)\s+(.+)$/s.exec(text);
+  if (write) {
+    const file = write[1]!;
+    // Plain relative names only: the script must not write outside the session's directory.
+    if (!/^[\w.-]+$/.test(file) || file.startsWith('.')) {
+      yield { type: 'text', delta: `refused: bad file name ${file}` };
+      yield { type: 'done', stopReason: 'end_turn' };
+      return;
+    }
+    writeFileSync(join(s.spec.cwd, file), `${write[2]!.trim()}\n`);
+    yield {
+      type: 'tool_call',
+      id: `w${s.prompts.length}`,
+      name: 'write',
+      input: { path: file },
+      title: `Write ${file}`,
+    };
+    yield { type: 'tool_result', id: `w${s.prompts.length}`, ok: true, output: 'ok' };
+    yield { type: 'text', delta: `wrote ${file}` };
     yield { type: 'done', stopReason: 'end_turn' };
     return;
   }
@@ -98,6 +123,12 @@ export interface TestDaemon {
   violate(v: { kind: 'net.allow' | 'fs.read' | 'fs.write'; value: string }): number;
   /** Advance the daemon clock and run housekeeping (approval expiry, schedules). */
   advance(ms: number): Promise<void>;
+  /**
+   * Give agent `bot` a read-write git mount: `~/code/app` (branch `main`, one commit, remote
+   * `origin` = the bare repository `~/remotes/app.git`). Sessions of `bot` then run on a worktree.
+   * Only call this with a throwaway home directory (the e2e server fakes HOME).
+   */
+  seedGit(): Promise<{ repo: string; remote: string; mount: string }>;
   /** Plain-JSON snapshot of what the fakes saw. */
   snapshot(): {
     sent: Record<string, { conversation: string; text: string; buttons: string[] }[]>;
@@ -119,6 +150,22 @@ export const SEED_OWNER = 'fake:alice';
 
 /** Fake channel provider credential that validates (built at runtime: no token-shaped literals). */
 export const GOOD_FAKE_TOKEN = ['go', 'od'].join('');
+
+/** `git` with a fixed identity and no user/system config (deterministic test repositories). */
+export const testGit = (cwd: string, ...args: string[]): string =>
+  execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: '1',
+      GIT_CONFIG_GLOBAL: process.platform === 'win32' ? 'NUL' : '/dev/null',
+      GIT_AUTHOR_NAME: 'Test',
+      GIT_AUTHOR_EMAIL: 'test@example.invalid',
+      GIT_COMMITTER_NAME: 'Test',
+      GIT_COMMITTER_EMAIL: 'test@example.invalid',
+    },
+  }).trim();
 
 export const startTestDaemon = async (opts: TestDaemonOptions = {}): Promise<TestDaemon> => {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'bh-e2e-real-')));
@@ -211,6 +258,23 @@ export const startTestDaemon = async (opts: TestDaemonOptions = {}): Promise<Tes
     advance: async (ms) => {
       clock.offset += ms;
       await d.tick();
+    },
+    seedGit: async () => {
+      const home = homedir();
+      const repo = join(home, 'code', 'app');
+      const remote = join(home, 'remotes', 'app.git');
+      mkdirSync(repo, { recursive: true });
+      mkdirSync(remote, { recursive: true });
+      testGit(remote, 'init', '-q', '--bare', '-b', 'main');
+      testGit(repo, 'init', '-q', '-b', 'main');
+      writeFileSync(join(repo, 'README.md'), '# app\n');
+      testGit(repo, 'add', '.');
+      testGit(repo, 'commit', '-q', '-m', 'initial commit');
+      testGit(repo, 'remote', 'add', 'origin', remote);
+      testGit(repo, 'push', '-q', 'origin', 'main');
+      const mount = '~/code/app';
+      await d.call('agent.update', { name: SEED_AGENT, patch: { mounts: [{ path: mount, mode: 'rw' }] } });
+      return { repo, remote, mount };
     },
     snapshot: () => ({
       sent: Object.fromEntries(

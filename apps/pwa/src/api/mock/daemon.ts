@@ -862,7 +862,7 @@ export class MockDaemon {
           input: {
             command: `git push ${p.remote} ${branch}`,
             remote: p.remote,
-            url,
+            remoteUrl: url,
             branch,
             base,
             compareUrl,

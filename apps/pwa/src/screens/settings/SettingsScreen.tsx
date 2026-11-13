@@ -15,6 +15,7 @@ import {
   DeviceMobile,
   type Icon,
   IdentificationBadge,
+  Info,
   Key,
   Palette,
   Stop,
@@ -84,6 +85,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     group: 'This app',
     icon: Palette,
   },
+  { id: 'about', title: 'About', slug: 'who you are to the daemon, version', group: 'This app', icon: Info },
   { id: 'stop', title: 'Stop everything', slug: 'kill switch and history', group: 'Kill switch', icon: Stop },
 ];
 
@@ -95,6 +97,7 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
   const identity = useApi('identity.get');
   const secrets = useApi('secret.list');
   const status = useApi('system.status');
+  const whoami = useApi('system.whoami');
   const [prefs] = useAppearance();
   const { panic } = usePanicState();
   const now = Date.now();
@@ -119,6 +122,8 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
     };
   }
   if (status.data) out.updates = { text: `beamhopd ${status.data.version} · up to date` };
+  if (whoami.data)
+    out.about = { text: `${whoami.data.principal} · ${whoami.data.role} · via ${whoami.data.via}` };
   out.appearance = {
     text: `${THEME_WORD[prefs.theme]} · contrast ${prefs.contrast} · motion ${prefs.motion}`,
   };

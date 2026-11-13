@@ -110,3 +110,34 @@ export const definePayload = (r: RoleDef): Record<string, unknown> => ({
   dlp: r.dlp,
   budget: r.budget,
 });
+
+/** Enough of an agent's config to see where it uses a role. */
+export interface RoleUser {
+  config: {
+    name: string;
+    grants?: Record<string, string>;
+    memberships?: { target: string; defaultRole: string }[];
+  };
+}
+
+/**
+ * Everywhere a role is in use, as the daemon checks it before `role.delete` (global grants, an
+ * agent's own grants and channel memberships' default role): `fake:bob`, `fake:bob on bot`,
+ * `bot on fk:dm`. Empty when the role can be deleted.
+ */
+export const roleUses = (
+  name: string,
+  grants: Record<string, string>,
+  agents: readonly RoleUser[],
+): string[] => {
+  const out = Object.entries(grants)
+    .filter(([, r]) => r === name)
+    .map(([p]) => p);
+  for (const a of agents) {
+    for (const [p, r] of Object.entries(a.config.grants ?? {}))
+      if (r === name) out.push(`${p} on ${a.config.name}`);
+    for (const m of a.config.memberships ?? [])
+      if (m.defaultRole === name) out.push(`${a.config.name} on ${m.target}`);
+  }
+  return out;
+};

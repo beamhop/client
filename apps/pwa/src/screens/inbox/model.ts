@@ -10,6 +10,8 @@ export type ApprovalInput = {
   command?: string;
   host?: string;
   url?: string;
+  /** `git.push` (session.openPr): where the branch goes (a URL, an scp-like address or a path). */
+  remoteUrl?: string;
   path?: string;
   diff?: string;
   why?: string;
@@ -154,12 +156,27 @@ export interface RuleChoice {
   value: string;
 }
 
+/** Host of a URL, or undefined when it doesn't parse (approval input is untrusted data). */
+export const hostOf = (url: string): string | undefined => {
+  try {
+    return new URL(url).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Requests for an action the daemon itself runs once approved (session.openPr's push): the daemon
+ * refuses "for the session" and "always" for them, so only "once" is offered.
+ */
+export const DAEMON_ACTION_TOOLS: readonly string[] = ['git.push'];
+
 /** The scopes an "always" rule can take for this request (Little Snitch: host vs domain). */
 export const ruleChoices = (a: ApprovalView): RuleChoice[] => {
   const i = inputOf(a);
   switch (reachOf(a)) {
     case 'network': {
-      const host = i.host ?? (i.url ? new URL(i.url).hostname : approvalTarget(a));
+      const host = i.host ?? (i.url ? hostOf(i.url) : undefined) ?? approvalTarget(a);
       const wide = wildcardFor(host);
       return [
         { id: 'exact', label: host, value: host },
@@ -213,6 +230,7 @@ export const scopeOptions = (a: ApprovalView): Array<'once' | 'session' | 'alway
   const r = reachOf(a);
   if (r === 'deploy' || r === 'access') return ['once'];
   if (a.quorum && a.quorum.needed > 1) return ['once'];
+  if (DAEMON_ACTION_TOOLS.includes(a.tool)) return ['once'];
   return ['once', 'session', 'always'];
 };
 

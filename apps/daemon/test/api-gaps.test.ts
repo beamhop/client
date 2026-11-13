@@ -622,6 +622,9 @@ describe('worktree merge and PR push', () => {
     expect(r).toMatchObject({ branch, base: 'main', remote: 'origin' });
     expect(r.compareUrl).toBeUndefined(); // a file:// remote has no web UI
     expect(r.approval).toMatchObject({ status: 'pending', tool: 'git.push', sessionId: session.id });
+    // The remote goes in `remoteUrl`: approval UIs read `url` as a web request (and parse it).
+    expect(r.approval.input).toMatchObject({ command: `git push origin ${branch}`, remoteUrl: remote });
+    expect(r.approval.input).not.toHaveProperty('url');
     expect(() => git(remote, 'rev-parse', `refs/heads/${branch}`)).toThrow();
     await expect(
       env!.client.call('approval.decide', { id: r.approval.id, allow: true, always: true }),
