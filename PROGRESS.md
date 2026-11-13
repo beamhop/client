@@ -23,3 +23,4 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 ## Log
 
 - 01:10 — Phase 0 done: bubblewrap/socat installed, monorepo + core contracts (11 tests green), conventions. Wave A launched (6 builders + design research).
+- 01:40 — MCP + Telegram merged (108 tests green). Design direction CARRIER delivered. PWA foundation started.
