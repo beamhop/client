@@ -98,7 +98,12 @@ export class ApprovalPolicy {
   /** Expire a pending approval whose deadline passed. Returns the (possibly) updated state. */
   expire(state: ApprovalState): ApprovalState {
     if (state.status !== 'pending' || this.now() < Date.parse(state.expiresAt)) return state;
-    return { ...state, status: 'expired', decidedAt: new Date(this.now()).toISOString(), decidedBy: 'system:timeout' };
+    return {
+      ...state,
+      status: 'expired',
+      decidedAt: new Date(this.now()).toISOString(),
+      decidedBy: 'system:timeout',
+    };
   }
 
   /** Effective approvals needed for this request (the requester's own vote doesn't count when quorum > 1). */

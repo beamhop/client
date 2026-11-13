@@ -81,7 +81,9 @@ describe('BudgetTracker daily budgets', () => {
     const b = new BudgetTracker({ now: clock().now });
     const budget = { dailyUsd: 10 };
     expect(b.record('k', { usd: 7 }, budget)).toEqual([]);
-    expect(b.record('k', { usd: 1 }, budget)).toEqual([{ key: 'k', metric: 'usd', threshold: 0.8, used: 8, limit: 10 }]);
+    expect(b.record('k', { usd: 1 }, budget)).toEqual([
+      { key: 'k', metric: 'usd', threshold: 0.8, used: 8, limit: 10 },
+    ]);
     expect(b.record('k', { usd: 1 }, budget)).toEqual([]);
     const crossed = b.record('k', { usd: 5 }, budget);
     expect(crossed.map((x) => x.threshold)).toEqual([1]);
@@ -112,7 +114,10 @@ describe('BudgetTracker daily budgets', () => {
     c.advance(9 * 60_000);
     expect(b.checkSession(start, { perSessionMinutes: 10 }).ok).toBe(true);
     c.advance(60_000);
-    expect(b.checkSession(start, { perSessionMinutes: 10 })).toMatchObject({ ok: false, reason: 'session_minutes' });
+    expect(b.checkSession(start, { perSessionMinutes: 10 })).toMatchObject({
+      ok: false,
+      reason: 'session_minutes',
+    });
   });
   it('admit checks all keys and refunds rate tokens when one fails', () => {
     const b = new BudgetTracker({ now: clock().now });
@@ -125,10 +130,19 @@ describe('BudgetTracker daily budgets', () => {
     // peer2's token was refunded
     expect(b.takeMessage(peer2.key, peer2.budget).ok).toBe(true);
     b.record(budgetKey.agent('x'), { usd: 3 });
-    expect(b.admit([{ key: budgetKey.agent('x'), budget: { dailyUsd: 3 } }])).toMatchObject({ reason: 'daily_usd' });
+    expect(b.admit([{ key: budgetKey.agent('x'), budget: { dailyUsd: 3 } }])).toMatchObject({
+      reason: 'daily_usd',
+    });
   });
   it('budget keys are distinct per scope', () => {
-    expect(new Set([budgetKey.agent('a'), budgetKey.role('a', 'user'), budgetKey.principal('a', 'p'), budgetKey.session('s')]).size).toBe(4);
+    expect(
+      new Set([
+        budgetKey.agent('a'),
+        budgetKey.role('a', 'user'),
+        budgetKey.principal('a', 'p'),
+        budgetKey.session('s'),
+      ]).size,
+    ).toBe(4);
     expect(utcDay(0)).toBe('1970-01-01');
   });
 });
@@ -136,12 +150,26 @@ describe('BudgetTracker daily budgets', () => {
 describe('checkMesh', () => {
   const config = { maxHops: 3, maxTurnsPerThread: 6 };
   it('human messages reset the thread', () => {
-    const r = checkMesh({ thread: { turns: 6, hops: 3, humanRequired: true }, hops: 0, config, fromHuman: true, now: 't' });
-    expect(r).toEqual({ action: 'allow', next: { turns: 0, hops: 0, humanRequired: false, lastHumanAt: 't' }, outgoingHops: 1 });
+    const r = checkMesh({
+      thread: { turns: 6, hops: 3, humanRequired: true },
+      hops: 0,
+      config,
+      fromHuman: true,
+      now: 't',
+    });
+    expect(r).toEqual({
+      action: 'allow',
+      next: { turns: 0, hops: 0, humanRequired: false, lastHumanAt: 't' },
+      outgoingHops: 1,
+    });
   });
   it('allows peers under the caps and counts turns', () => {
     const r = checkMesh({ thread: emptyMeshThread(), hops: 1, config, fromHuman: false });
-    expect(r).toEqual({ action: 'allow', next: { turns: 1, hops: 1, humanRequired: false }, outgoingHops: 2 });
+    expect(r).toEqual({
+      action: 'allow',
+      next: { turns: 1, hops: 1, humanRequired: false },
+      outgoingHops: 2,
+    });
   });
   it('drops at the hop cap and then requires a human', () => {
     const r = checkMesh({ thread: emptyMeshThread(), hops: 3, config, fromHuman: false });
@@ -156,11 +184,16 @@ describe('checkMesh', () => {
       expect(r.action).toBe('allow');
       thread = r.next;
     }
-    expect(checkMesh({ thread, hops: 1, config, fromHuman: false })).toMatchObject({ action: 'drop', reason: 'turn_cap' });
+    expect(checkMesh({ thread, hops: 1, config, fromHuman: false })).toMatchObject({
+      action: 'drop',
+      reason: 'turn_cap',
+    });
   });
   it('treats invalid hop values as over the cap', () => {
     for (const hops of [Number.NaN, -1, Number.POSITIVE_INFINITY])
-      expect(checkMesh({ thread: emptyMeshThread(), hops, config, fromHuman: false })).toMatchObject({ reason: 'hop_cap' });
+      expect(checkMesh({ thread: emptyMeshThread(), hops, config, fromHuman: false })).toMatchObject({
+        reason: 'hop_cap',
+      });
   });
 });
 
@@ -214,12 +247,21 @@ describe('pairing codes', () => {
   it('rejects expired, used, malformed, mismatched and over-attempted codes', () => {
     const rec = { code: 'ABC234', expiresAt: '2026-11-13T10:10:00Z' };
     const now = Date.parse('2026-11-13T10:05:00Z');
-    expect(verifyPairingCode('ABC234', rec, { now: Date.parse('2026-11-13T10:10:00Z') })).toEqual({ ok: false, reason: 'expired' });
-    expect(verifyPairingCode('ABC234', { ...rec, usedAt: 'x' }, { now })).toEqual({ ok: false, reason: 'used' });
+    expect(verifyPairingCode('ABC234', rec, { now: Date.parse('2026-11-13T10:10:00Z') })).toEqual({
+      ok: false,
+      reason: 'expired',
+    });
+    expect(verifyPairingCode('ABC234', { ...rec, usedAt: 'x' }, { now })).toEqual({
+      ok: false,
+      reason: 'used',
+    });
     expect(verifyPairingCode('ABC10O', rec, { now })).toEqual({ ok: false, reason: 'malformed' });
     expect(verifyPairingCode('ABC2345', rec, { now })).toEqual({ ok: false, reason: 'malformed' });
     expect(verifyPairingCode('ABC235', rec, { now })).toEqual({ ok: false, reason: 'mismatch' });
-    expect(verifyPairingCode('ABC234', { ...rec, attempts: 5 }, { now })).toEqual({ ok: false, reason: 'too_many_attempts' });
+    expect(verifyPairingCode('ABC234', { ...rec, attempts: 5 }, { now })).toEqual({
+      ok: false,
+      reason: 'too_many_attempts',
+    });
   });
   it('constant-time compare handles different lengths', () => {
     expect(constantTimeEqual('a', 'a')).toBe(true);

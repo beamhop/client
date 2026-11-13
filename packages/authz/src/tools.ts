@@ -39,14 +39,20 @@ export const toolNameVariants = (tool: string): string[] => {
 
 const CATEGORY_RULES: [ToolCategory, RegExp][] = [
   ['meta', /^(todo_?(write|read)|think|task|exit_plan_mode|switch_mode)$/],
-  ['shell', /(^|_)(bash|shell|sh|exec|execute|terminal|run_command|command|powershell|cmd|process|kill_shell)($|_)/],
+  [
+    'shell',
+    /(^|_)(bash|shell|sh|exec|execute|terminal|run_command|command|powershell|cmd|process|kill_shell)($|_)/,
+  ],
   ['delete', /(^|_)(delete|remove|rm|unlink|rmdir|trash)($|_)/],
   ['network', /(^|_)(web_?fetch|fetch|http|curl|wget|download|upload|request|browse|navigate)($|_)/],
   [
     'write',
     /(^|_)(write|edit|multi_?edit|notebook_?edit|apply_?patch|patch|create|move|rename|mkdir|str_replace|replace|insert|update|commit|push|merge)($|_)/,
   ],
-  ['read', /(^|_)(read|grep|glob|ls|list|search|view|cat|find|get|stat|history|members|web_search|status)($|_)/],
+  [
+    'read',
+    /(^|_)(read|grep|glob|ls|list|search|view|cat|find|get|stat|history|members|web_search|status)($|_)/,
+  ],
 ];
 
 const KIND_CATEGORY: Record<ToolKindHint, ToolCategory> = {

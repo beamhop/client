@@ -79,7 +79,8 @@ export const parseCommand = (text: string): ParsedCommand | null => {
     case 'mode': {
       if (!args[0]) return { ok: true, command: { name: n, args }, ...at };
       const mode = args[0].toLowerCase().replace(/^readonly$/, 'read-only');
-      if (!(SESSION_MODES as readonly string[]).includes(mode)) return fail('usage: /mode plan|auto|read-only');
+      if (!(SESSION_MODES as readonly string[]).includes(mode))
+        return fail('usage: /mode plan|auto|read-only');
       return { ok: true, command: { name: n, mode: mode as SessionMode, args }, ...at };
     }
     case 'pair': {
@@ -119,10 +120,14 @@ export const authorizeCommand = (
     (cmd.name === 'model' && cmd.model) ||
     (cmd.name === 'harness' && cmd.harness) ||
     (cmd.name === 'mode' && cmd.mode);
-  if (changes && !role.canReconfigure) return { allowed: false, reason: `role ${role.name} cannot reconfigure` };
+  if (changes && !role.canReconfigure)
+    return { allowed: false, reason: `role ${role.name} cannot reconfigure` };
   if (cmd.name === 'mode' && cmd.mode && role.name !== 'owner') {
     if (modeRank(cmd.mode as PermissionMode) > modeRank(role.permissionMode))
-      return { allowed: false, reason: `mode ${cmd.mode} is above the ${role.permissionMode} limit of ${role.name}` };
+      return {
+        allowed: false,
+        reason: `mode ${cmd.mode} is above the ${role.permissionMode} limit of ${role.name}`,
+      };
   }
   return { allowed: true };
 };

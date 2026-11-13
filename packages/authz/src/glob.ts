@@ -22,8 +22,11 @@ const toRegExp = (pattern: string, caseInsensitive: boolean): RegExp => {
   return re;
 };
 
-export const globMatch = (pattern: string, value: string, opts: { caseInsensitive?: boolean } = {}): boolean =>
-  toRegExp(pattern, opts.caseInsensitive ?? true).test(value.normalize('NFC'));
+export const globMatch = (
+  pattern: string,
+  value: string,
+  opts: { caseInsensitive?: boolean } = {},
+): boolean => toRegExp(pattern, opts.caseInsensitive ?? true).test(value.normalize('NFC'));
 
 export const anyGlobMatch = (patterns: readonly string[], values: readonly string[]): string | undefined => {
   for (const p of patterns) for (const v of values) if (globMatch(p, v)) return p;

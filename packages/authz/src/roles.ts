@@ -23,7 +23,8 @@ export const normalizePrincipal = (p: string): string => {
   return `${provider}:${CASE_INSENSITIVE_PROVIDERS.has(provider) ? id.toLowerCase() : id}`;
 };
 
-export const samePrincipal = (a: string, b: string): boolean => normalizePrincipal(a) === normalizePrincipal(b);
+export const samePrincipal = (a: string, b: string): boolean =>
+  normalizePrincipal(a) === normalizePrincipal(b);
 
 const includesPrincipal = (list: readonly string[], p: string): boolean => {
   const n = normalizePrincipal(p);

@@ -121,7 +121,15 @@ describe('ApprovalPolicy', () => {
 
   it('with quorum 1 an owner may approve their own request', () => {
     const { policy } = setup();
-    const s0 = policy.create({ id: 'x', agent: 'a', sessionId: 's', requestedBy: { principal: A, role: 'owner' }, tool: 'Read', title: 't', input: {} });
+    const s0 = policy.create({
+      id: 'x',
+      agent: 'a',
+      sessionId: 's',
+      requestedBy: { principal: A, role: 'owner' },
+      tool: 'Read',
+      title: 't',
+      input: {},
+    });
     expect(s0.risk).toBe('low');
     expect(must(policy.decide(s0, A, true)).status).toBe('approved');
   });

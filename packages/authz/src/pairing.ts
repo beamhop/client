@@ -67,5 +67,7 @@ export const verifyPairingCode = (
   if (now >= Date.parse(record.expiresAt)) return { ok: false, reason: 'expired' };
   const given = normalizePairingCode(input);
   if (!isWellFormedPairingCode(given)) return { ok: false, reason: 'malformed' };
-  return constantTimeEqual(given, normalizePairingCode(record.code)) ? { ok: true } : { ok: false, reason: 'mismatch' };
+  return constantTimeEqual(given, normalizePairingCode(record.code))
+    ? { ok: true }
+    : { ok: false, reason: 'mismatch' };
 };

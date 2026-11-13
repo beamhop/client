@@ -1,6 +1,13 @@
 import { DEFAULT_ROLES, type Membership, type RoleDef } from '@beamhop/core';
 import { describe, expect, it } from 'vitest';
-import { authorizeCommand, type Command, helpText, isAddressedTo, parseCommand, shouldTrigger } from '../src/index.ts';
+import {
+  authorizeCommand,
+  type Command,
+  helpText,
+  isAddressedTo,
+  parseCommand,
+  shouldTrigger,
+} from '../src/index.ts';
 
 const role = (name: string): RoleDef => DEFAULT_ROLES.find((r) => r.name === name)!;
 const cmd = (text: string): Command => {
@@ -21,7 +28,11 @@ describe('parseCommand', () => {
     expect(parseCommand('  /NeW  ')).toEqual({ ok: true, command: { name: 'new', args: [] } });
   });
   it('supports Telegram /cmd@botname', () => {
-    expect(parseCommand('/status@MyBot')).toEqual({ ok: true, command: { name: 'status', args: [] }, addressedTo: 'MyBot' });
+    expect(parseCommand('/status@MyBot')).toEqual({
+      ok: true,
+      command: { name: 'status', args: [] },
+      addressedTo: 'MyBot',
+    });
     expect(parseCommand('/approve@my_bot abc123')).toMatchObject({ ok: true, command: { id: 'abc123' } });
   });
   it('supports unicode bot names', () => {
@@ -50,7 +61,12 @@ describe('parseCommand', () => {
     expect(parseCommand('/pair')).toMatchObject({ ok: false });
   });
   it('reports unknown commands', () => {
-    expect(parseCommand('/frob x')).toEqual({ ok: false, name: 'frob', error: 'unknown command /frob', known: false });
+    expect(parseCommand('/frob x')).toEqual({
+      ok: false,
+      name: 'frob',
+      error: 'unknown command /frob',
+      known: false,
+    });
   });
   it('handles multi-line args', () => {
     expect(cmd('/model\nfoo')).toMatchObject({ model: 'foo' });
@@ -77,7 +93,10 @@ describe('authorizeCommand', () => {
   });
   it('approvals need canApprove even if listed', () => {
     const r = { ...role('user'), commands: [...role('user').commands, 'approve'] };
-    expect(authorizeCommand(r, cmd('/approve x'))).toMatchObject({ allowed: false, reason: expect.stringMatching(/approve/) });
+    expect(authorizeCommand(r, cmd('/approve x'))).toMatchObject({
+      allowed: false,
+      reason: expect.stringMatching(/approve/),
+    });
     expect(authorizeCommand(role('admin'), cmd('/approve x'))).toEqual({ allowed: true });
   });
   it('reconfiguring needs canReconfigure; showing does not', () => {
@@ -98,7 +117,11 @@ describe('authorizeCommand', () => {
 
 describe('shouldTrigger', () => {
   const dmMembership: Membership = { target: 'x:dm', defaultRole: 'viewer', triggers: ['dm'] };
-  const groupMembership: Membership = { target: 'x:group/1', defaultRole: 'user', triggers: ['mention', 'reply'] };
+  const groupMembership: Membership = {
+    target: 'x:group/1',
+    defaultRole: 'user',
+    triggers: ['mention', 'reply'],
+  };
   const base = { text: 'hi', mentionsAgent: false, replyToAgent: false, attachments: [] };
   const dm = { ...base, conversation: { kind: 'dm' as const, id: '1' } };
   const grp = { ...base, conversation: { kind: 'group' as const, id: '1' } };
@@ -109,18 +132,29 @@ describe('shouldTrigger', () => {
     expect(shouldTrigger(dm, dmMembership, null)).toEqual({ trigger: false, reason: 'no-role' });
   });
   it('DMs do not trigger when the membership disables dm', () => {
-    expect(shouldTrigger(dm, { ...dmMembership, triggers: ['mention'] }, user)).toMatchObject({ trigger: false });
+    expect(shouldTrigger(dm, { ...dmMembership, triggers: ['mention'] }, user)).toMatchObject({
+      trigger: false,
+    });
   });
   it('groups trigger only on mention or reply', () => {
     expect(shouldTrigger(grp, groupMembership, user)).toEqual({ trigger: false, reason: 'not-addressed' });
-    expect(shouldTrigger({ ...grp, mentionsAgent: true }, groupMembership, user)).toEqual({ trigger: true, via: 'mention' });
-    expect(shouldTrigger({ ...grp, replyToAgent: true }, groupMembership, user)).toEqual({ trigger: true, via: 'reply' });
+    expect(shouldTrigger({ ...grp, mentionsAgent: true }, groupMembership, user)).toEqual({
+      trigger: true,
+      via: 'mention',
+    });
+    expect(shouldTrigger({ ...grp, replyToAgent: true }, groupMembership, user)).toEqual({
+      trigger: true,
+      via: 'reply',
+    });
     expect(
       shouldTrigger({ ...grp, replyToAgent: true }, { ...groupMembership, triggers: ['mention'] }, user),
     ).toMatchObject({ trigger: false });
   });
   it('"all" triggers on everything', () => {
-    expect(shouldTrigger(grp, { ...groupMembership, triggers: ['all'] }, user)).toEqual({ trigger: true, via: 'all' });
+    expect(shouldTrigger(grp, { ...groupMembership, triggers: ['all'] }, user)).toEqual({
+      trigger: true,
+      via: 'all',
+    });
   });
   it('revoked memberships never trigger', () => {
     expect(shouldTrigger(dm, { ...dmMembership, revokedAt: '2026-01-01' }, role('owner'))).toEqual({
@@ -129,40 +163,68 @@ describe('shouldTrigger', () => {
     });
   });
   it('roles that cannot prompt are ignored', () => {
-    expect(shouldTrigger(dm, dmMembership, { ...user, canPrompt: false })).toEqual({ trigger: false, reason: 'cannot-prompt' });
+    expect(shouldTrigger(dm, dmMembership, { ...user, canPrompt: false })).toEqual({
+      trigger: false,
+      reason: 'cannot-prompt',
+    });
   });
   it('empty messages without attachments are ignored', () => {
-    expect(shouldTrigger({ ...dm, text: '  ' }, dmMembership, user)).toEqual({ trigger: false, reason: 'empty' });
+    expect(shouldTrigger({ ...dm, text: '  ' }, dmMembership, user)).toEqual({
+      trigger: false,
+      reason: 'empty',
+    });
     expect(
-      shouldTrigger({ ...dm, text: '', attachments: [{ name: 'a.png', mime: 'image/png' }] }, dmMembership, user),
+      shouldTrigger(
+        { ...dm, text: '', attachments: [{ name: 'a.png', mime: 'image/png' }] },
+        dmMembership,
+        user,
+      ),
     ).toEqual({ trigger: true, via: 'dm' });
   });
   it('commands: DMs always, groups when addressed or enabled', () => {
-    expect(shouldTrigger({ ...dm, text: '/status' }, dmMembership, user)).toMatchObject({ trigger: true, via: 'command' });
-    expect(shouldTrigger({ ...grp, text: '/status' }, groupMembership, user)).toMatchObject({ trigger: false });
-    expect(shouldTrigger({ ...grp, text: '/status@bot' }, groupMembership, user, { botNames: ['Bot'] })).toMatchObject({
+    expect(shouldTrigger({ ...dm, text: '/status' }, dmMembership, user)).toMatchObject({
+      trigger: true,
+      via: 'command',
+    });
+    expect(shouldTrigger({ ...grp, text: '/status' }, groupMembership, user)).toMatchObject({
+      trigger: false,
+    });
+    expect(
+      shouldTrigger({ ...grp, text: '/status@bot' }, groupMembership, user, { botNames: ['Bot'] }),
+    ).toMatchObject({
       trigger: true,
       via: 'command',
     });
     expect(
       shouldTrigger({ ...grp, text: '/status' }, { ...groupMembership, triggers: ['command'] }, user),
     ).toMatchObject({ trigger: true });
-    expect(shouldTrigger({ ...grp, text: '/status', mentionsAgent: true }, groupMembership, user)).toMatchObject({
+    expect(
+      shouldTrigger({ ...grp, text: '/status', mentionsAgent: true }, groupMembership, user),
+    ).toMatchObject({
       trigger: true,
     });
   });
   it('commands addressed to another bot are ignored', () => {
-    expect(shouldTrigger({ ...dm, text: '/status@other' }, dmMembership, user, { botNames: ['bot'] })).toEqual({
+    expect(
+      shouldTrigger({ ...dm, text: '/status@other' }, dmMembership, user, { botNames: ['bot'] }),
+    ).toEqual({
       trigger: false,
       reason: 'other-bot',
     });
   });
   it('unknown senders can only reach /pair', () => {
-    expect(shouldTrigger({ ...dm, text: '/pair ABCDEF' }, dmMembership, null)).toMatchObject({ trigger: true });
-    expect(shouldTrigger({ ...dm, text: '/status' }, dmMembership, null)).toEqual({ trigger: false, reason: 'no-role' });
+    expect(shouldTrigger({ ...dm, text: '/pair ABCDEF' }, dmMembership, null)).toMatchObject({
+      trigger: true,
+    });
+    expect(shouldTrigger({ ...dm, text: '/status' }, dmMembership, null)).toEqual({
+      trigger: false,
+      reason: 'no-role',
+    });
   });
   it('commands still work for roles that cannot prompt', () => {
-    expect(shouldTrigger({ ...dm, text: '/help' }, dmMembership, { ...user, canPrompt: false })).toMatchObject({
+    expect(
+      shouldTrigger({ ...dm, text: '/help' }, dmMembership, { ...user, canPrompt: false }),
+    ).toMatchObject({
       trigger: true,
     });
   });
