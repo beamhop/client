@@ -98,7 +98,13 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     group: 'app',
     icon: Palette,
   },
-  { id: 'about', title: t('settings.section.about'), slug: t('settings.settings.aboutSlug'), group: 'app', icon: Info },
+  {
+    id: 'about',
+    title: t('settings.section.about'),
+    slug: t('settings.settings.aboutSlug'),
+    group: 'app',
+    icon: Info,
+  },
   {
     id: 'stop',
     title: t('settings.section.stop'),
