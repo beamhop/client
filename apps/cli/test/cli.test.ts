@@ -227,4 +227,33 @@ describe('cli', () => {
     expect(out).toContain('Claude Code is not logged in (run `claude /login`)');
     expect(out).toContain('beamhop session start bot');
   });
+
+  it('alerts set parses the PWA-style flags', async () => {
+    const t = setup(async (_m, p) => p as Record<string, unknown>);
+    await t.run(
+      'alerts',
+      'set',
+      '--budget',
+      '70,95',
+      '--spike',
+      '5/10m',
+      '--heartbeat',
+      '15m',
+      '--no-nostr-dm',
+    );
+    expect(t.calls[0]).toEqual([
+      'alerts.set',
+      {
+        budgetWarn: 70,
+        budgetAlert: 95,
+        spikeEvents: 5,
+        spikeMinutes: 10,
+        heartbeatMinutes: 15,
+        nostrDm: false,
+      },
+    ]);
+    const u = setup(async () => ({}));
+    await u.run('alerts', 'set');
+    expect(u.err.join('')).toContain('nothing to change');
+  });
 });

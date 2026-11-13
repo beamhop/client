@@ -288,7 +288,7 @@ export const SetupSection = ({ agent }: { agent: AgentView }) => {
         id="setup-mounts"
         title={t('agents.setup.mounts', { count: c.mounts.length })}
         description={t('agents.setup.mountsHint')}
-        cli={`beamhop agent mount ${name} ${c.mounts[0]?.path ?? '~/code/app'} --${c.mounts[0]?.mode ?? 'ro'}`}
+        cli={`beamhop agent set ${name} 'mounts=[{"path":"${c.mounts[0]?.path ?? '~/code/app'}","mode":"${c.mounts[0]?.mode ?? 'ro'}"}]'`}
       >
         {c.mounts.length > 0 ? (
           <Rows label={t('agents.setup.mountsLabel')}>

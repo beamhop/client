@@ -48,6 +48,7 @@ Commands:
   schedule                         scheduled and event-driven prompts
   deploy                           run agents in the cloud (Hetzner, DigitalOcean, Fly.io, Render,
                                    Railway)
+  alerts                           alert thresholds (budget, security spikes, offline agents)
   audit [options]                  every decision, violation and config change, newest first
   usage [options]                  tokens and spend per agent
   device                           paired devices (phones, browsers)
@@ -125,6 +126,9 @@ Commands:
   - [`beamhop deploy apply`](#beamhop-deploy-apply)
   - [`beamhop deploy ls`](#beamhop-deploy-ls)
   - [`beamhop deploy destroy`](#beamhop-deploy-destroy)
+- [`beamhop alerts`](#beamhop-alerts)
+  - [`beamhop alerts show`](#beamhop-alerts-show)
+  - [`beamhop alerts set`](#beamhop-alerts-set)
 - [`beamhop audit`](#beamhop-audit)
 - [`beamhop usage`](#beamhop-usage)
 - [`beamhop device`](#beamhop-device)
@@ -1019,6 +1023,50 @@ tear down a deployment and its cloud resources
 
 Options:
   -h, --help  display help for command
+```
+
+## beamhop alerts
+
+```text
+Usage: beamhop alerts [options] [command]
+
+alert thresholds (budget, security spikes, offline agents)
+
+Options:
+  -h, --help      display help for command
+
+Commands:
+  show            show the current alert rules
+  set [options]   change alert rules, e.g. `beamhop alerts set --budget 80,100 --spike 5/10m
+                  --heartbeat 15m`
+  help [command]  display help for command
+```
+
+### beamhop alerts show
+
+```text
+Usage: beamhop alerts show [options]
+
+show the current alert rules
+
+Options:
+  -h, --help  display help for command
+```
+
+### beamhop alerts set
+
+```text
+Usage: beamhop alerts set [options]
+
+change alert rules, e.g. `beamhop alerts set --budget 80,100 --spike 5/10m --heartbeat 15m`
+
+Options:
+  --budget <warn,alert>     warn and alert at these % of the daily budget
+  --spike <events/minutes>  security spike: this many events within N minutes, e.g. 5/10m
+  --heartbeat <minutes>     a cloud agent is offline after this long without a heartbeat, e.g. 15m
+  --nostr-dm                also DM owners on their channels
+  --no-nostr-dm             alerts only as push / in the app
+  -h, --help                display help for command
 ```
 
 ## beamhop audit

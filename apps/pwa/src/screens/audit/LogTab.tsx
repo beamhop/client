@@ -223,7 +223,7 @@ export const LogTab = () => {
               </Button>
             ) : undefined
           }
-          cli="beamhop audit --since 24h"
+          cli="beamhop audit --limit 50"
         >
           {all.length ? t('audit.log.noMatchBody') : t('audit.log.emptyBody')}
         </EmptyState>

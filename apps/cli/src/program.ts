@@ -1139,6 +1139,67 @@ export const buildProgram = (deps: CliDeps): Command => {
       })),
     );
 
+  // ── alerts ─────────────────────────────────────────────
+  const alerts = program
+    .command('alerts')
+    .description('alert thresholds (budget, security spikes, offline agents)');
+  const alertsHuman = (r: Record<string, unknown>) =>
+    table(
+      Object.entries(r).map(([rule, value]) => ({ rule, value })),
+      ['rule', 'value'],
+    );
+  alerts
+    .command('show')
+    .description('show the current alert rules')
+    .action(
+      act(async (c) => {
+        const r = await c.call('alerts.get');
+        return { data: r, human: () => alertsHuman(r) };
+      }),
+    );
+  alerts
+    .command('set')
+    .description(
+      'change alert rules, e.g. `beamhop alerts set --budget 80,100 --spike 5/10m --heartbeat 15m`',
+    )
+    .option('--budget <warn,alert>', 'warn and alert at these % of the daily budget')
+    .option('--spike <events/minutes>', 'security spike: this many events within N minutes, e.g. 5/10m')
+    .option('--heartbeat <minutes>', 'a cloud agent is offline after this long without a heartbeat, e.g. 15m')
+    .option('--nostr-dm', 'also DM owners on their channels')
+    .option('--no-nostr-dm', 'alerts only as push / in the app')
+    .action(
+      act(
+        async (
+          c,
+          o: { budget?: string; spike?: string; heartbeat?: string; nostrDm?: boolean },
+          cmd: Command,
+        ) => {
+          const num = (v: string | undefined, what: string) => {
+            const n = Number.parseInt(String(v ?? '').replace(/m$/, ''), 10);
+            if (!Number.isFinite(n)) throw new Error(`${what}: expected a number, got "${v ?? ''}"`);
+            return n;
+          };
+          const patch: Record<string, unknown> = {};
+          if (o.budget !== undefined) {
+            const [warn, alert] = o.budget.split(',');
+            patch.budgetWarn = num(warn, '--budget');
+            if (alert !== undefined) patch.budgetAlert = num(alert, '--budget');
+          }
+          if (o.spike !== undefined) {
+            const [events, minutes] = o.spike.split('/');
+            patch.spikeEvents = num(events, '--spike');
+            if (minutes !== undefined) patch.spikeMinutes = num(minutes, '--spike');
+          }
+          if (o.heartbeat !== undefined) patch.heartbeatMinutes = num(o.heartbeat, '--heartbeat');
+          if (cmd.getOptionValueSource('nostrDm') === 'cli') patch.nostrDm = o.nostrDm;
+          if (!Object.keys(patch).length)
+            throw new Error('nothing to change: pass --budget, --spike, --heartbeat or --[no-]nostr-dm');
+          const r = await c.call('alerts.set', patch);
+          return { data: r, human: () => alertsHuman(r) };
+        },
+      ),
+    );
+
   // ── audit / usage ─────────────────────────────────────────────
   program
     .command('audit')

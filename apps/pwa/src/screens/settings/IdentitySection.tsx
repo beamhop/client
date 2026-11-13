@@ -326,8 +326,7 @@ export const IdentitySection = () => {
             </>
           ) : (
             <p className="type-body-sm text-ink-2">
-              {t('settings.identity.noOwnerKey')}{' '}
-              <code className="font-mono text-ink">beamhop identity create</code>.
+              {t('settings.identity.noOwnerKey')} <code className="font-mono text-ink">beamhop init</code>.
             </p>
           )}
         </div>

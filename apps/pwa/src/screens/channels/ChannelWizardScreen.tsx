@@ -1443,7 +1443,7 @@ export const ChannelWizardScreen = () => {
 const cliFor = (provider: string, d: ChannelDraft, step: string) => {
   const n = d.channel ?? d.name ?? DEFAULT_NAME[provider] ?? provider;
   if (step === 'pair') return `beamhop channel pair ${n}`;
-  if (step === 'join') return `beamhop agent join <agent> ${n}:dm --role viewer`;
+  if (step === 'join') return `beamhop join <agent> ${n}:dm --role viewer`;
   if (provider === 'telegram') return `beamhop channel add telegram --name ${n} --token-stdin`;
   if (provider === 'slack')
     return `beamhop channel add slack --name ${n} --app-token-stdin --bot-token-stdin`;

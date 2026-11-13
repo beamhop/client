@@ -92,7 +92,7 @@ export const StepIdentity = () => {
       step="identity"
       title={t('setup.setup.whoOwnsTheseAgents')}
       lede="Your owner key signs every change you make. Agents get their own keys."
-      cli="beamhop identity create"
+      cli="beamhop init"
       primary={
         have
           ? {
@@ -380,7 +380,7 @@ export const StepAgent = () => {
       step="agent"
       title={t('setup.setup.createYourFirstAgent')}
       lede="Pick what it's for; everything else is prefilled. You can change any of it later."
-      cli={`beamhop agent create ${name || '<name>'} --preset ${preset} --harness ${harness || '<harness>'}${folder ? ` --mount ${folder}:${mode}` : ''}`}
+      cli={`beamhop agent add ${name || '<name>'} --preset ${preset} --harness ${harness || '<harness>'}${folder ? ` --mount ${folder}:${mode}` : ''}`}
       primary={{
         label: `Create ${name || 'agent'}`,
         icon: <Plus size={16} weight="bold" aria-hidden="true" />,

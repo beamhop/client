@@ -226,7 +226,7 @@ export const StepHello = () => {
           ? `Your phone → ${upCount} relays → ${agent} → back, in ${((rtt ?? 0) / 1000).toFixed(1)} s.`
           : `${agent} just sent you a Nostr DM. Reply to it on your phone with anything.`
       }
-      cli={`beamhop hello ${agent ?? ''}`}
+      cli={`beamhop init --hello --agent-name ${agent ?? '<agent>'}`}
       primary={
         replied ? { label: t('setup.hello.goToHome'), onPress: () => void navigate({ to: '/' }) } : undefined
       }

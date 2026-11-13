@@ -270,7 +270,7 @@ export const ChannelsSection = ({ agent }: { agent: AgentView }) => {
         id="ch-members"
         title={t('agents.ch.title', { count: c.memberships.length })}
         description={t('agents.ch.hint', { name })}
-        cli={`beamhop agent join ${name} ${c.memberships[0]?.target ?? 'nostr:dm'} --role ${c.memberships[0]?.defaultRole ?? 'viewer'}`}
+        cli={`beamhop join ${name} ${c.memberships[0]?.target ?? 'nostr:dm'} --role ${c.memberships[0]?.defaultRole ?? 'viewer'}`}
       >
         {c.memberships.length > 0 ? (
           <Rows label={t('agents.ch.listLabel')}>
@@ -305,7 +305,7 @@ export const ChannelsSection = ({ agent }: { agent: AgentView }) => {
         id="ch-routes"
         title={t('agents.routes.title', { count: c.routes.length })}
         description={t('agents.routes.hint', { name })}
-        cli={`beamhop agent route ${name} ${c.routes[0]?.from ?? 'nostr:dm'} ${c.routes[0]?.to ?? 'acme:channel/C0DEPLOYS'}`}
+        cli={`beamhop agent set ${name} 'routes=[{"from":"${c.routes[0]?.from ?? 'nostr:dm'}","to":"${c.routes[0]?.to ?? 'acme:channel/C0DEPLOYS'}"}]'`}
       >
         {c.routes.length > 0 && (
           <Rows label={t('agents.routes.listLabel')}>

@@ -98,7 +98,7 @@ export const PolicyScreen = () => {
             ) : list.length === 0 ? (
               <EmptyState
                 title={t('policy.list.emptyTitle')}
-                cli="beamhop agent create"
+                cli="beamhop agent add <name> --harness <id>"
                 action={
                   <Link to="/agents/new" className="type-label underline">
                     {t('policy.list.emptyAction')}

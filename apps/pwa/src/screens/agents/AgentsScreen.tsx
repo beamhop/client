@@ -202,7 +202,7 @@ export const AgentsScreen = () => {
           {t('agents.new')}
         </LinkButton>
       }
-      cli="beamhop agent create reviewer --preset code-reviewer"
+      cli="beamhop agent add reviewer --harness claude --preset code-reviewer"
     >
       {t('agents.empty.body')}
     </EmptyState>

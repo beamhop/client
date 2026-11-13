@@ -635,7 +635,7 @@ const FirstAgent = () => {
       <LinkButton href="/agents/new" variant="primary" className="self-start">
         {t('home.first.cta')}
       </LinkButton>
-      <CliStrip command="beamhop agent create" />
+      <CliStrip command="beamhop agent add <name> --harness <id>" />
     </section>
   );
 };
