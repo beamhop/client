@@ -232,24 +232,26 @@ export const SecurityTab = ({ alertButton }: { alertButton: ReactNode }) => {
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate type-body-sm text-ink">{CAT_LABEL(c)}</span>
-                  <Sparkline
-                    values={b.values}
-                    spikeAt={spike}
-                    width={range === '24h' ? 96 : 84}
-                    label={t('audit.sec.sparkLabel', {
-                      cat: CAT_LABEL(c),
-                      count: evs.length,
-                      range: rangeWord,
-                    })}
-                    labels={b.values.map((_, i) =>
-                      range === '24h'
-                        ? clock(b.start + i * b.size)
-                        : when(b.start + i * b.size)
-                            .split(' ')
-                            .slice(0, 2)
-                            .join(' '),
-                    )}
-                  />
+                  <span className="relative shrink-0 overflow-hidden">
+                    <Sparkline
+                      values={b.values}
+                      spikeAt={spike}
+                      width={range === '24h' ? 96 : 84}
+                      label={t('audit.sec.sparkLabel', {
+                        cat: CAT_LABEL(c),
+                        count: evs.length,
+                        range: rangeWord,
+                      })}
+                      labels={b.values.map((_, i) =>
+                        range === '24h'
+                          ? clock(b.start + i * b.size)
+                          : when(b.start + i * b.size)
+                              .split(' ')
+                              .slice(0, 2)
+                              .join(' '),
+                      )}
+                    />
+                  </span>
                   <span
                     className={cx(
                       'w-8 text-right font-mono text-[13px] tabular-nums',

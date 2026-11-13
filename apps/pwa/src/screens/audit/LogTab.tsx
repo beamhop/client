@@ -267,8 +267,8 @@ export const LogTab = () => {
                 {t('audit.log.retryOlder')}
               </Button>
             ) : hasMore ? (
-              <Button variant="quiet" isPending={loading} onPress={() => void loadMore()}>
-                {t('audit.log.older')}
+              <Button variant="quiet" isDisabled={loading} onPress={() => void loadMore()}>
+                {loading ? t('audit.log.loading') : t('audit.log.older')}
               </Button>
             ) : (
               <p className="type-meta text-ink-3">{t('audit.log.end')}</p>

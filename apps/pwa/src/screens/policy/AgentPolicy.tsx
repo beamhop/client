@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useApi, useCall, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { middleTruncate, when } from '../../lib/format.ts';
+import { useExpanded } from '../../lib/media.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { Screen } from '../../shell/Screen.tsx';
 import { Button, IconButton, TextLink } from '../../ui/Button.tsx';
@@ -136,6 +137,7 @@ const Editor = ({
   const call = useCall();
   const navigate = useNavigate();
   const now = useNow(30_000);
+  const expanded = useExpanded();
   const search = useSearch({ strict: false }) as { allowHost?: string };
   const sugg = useApi('policy.suggestions', { name });
   const secrets = useApi('secret.list');
@@ -476,7 +478,24 @@ const Editor = ({
     </div>
   ) : undefined;
 
-  return <>{frame(body, footer)}</>;
+  if (expanded) return <>{frame(body, footer)}</>;
+  // Compact: the Screen footer would sit under the tab bar on a non-bare route, so the save bar is
+  // fixed just above it and the content gets matching bottom room.
+  return (
+    <>
+      {frame(
+        <>
+          {body}
+          {footer && <div aria-hidden="true" className="h-16" />}
+        </>,
+      )}
+      {footer && (
+        <div className="fixed inset-x-0 bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom))] z-30 border-t border-line bg-bg">
+          {footer}
+        </div>
+      )}
+    </>
+  );
 };
 
 // ─────────── Index ───────────
@@ -609,8 +628,11 @@ const ProfileSheet = ({
   onClose: () => void;
   onApply: (s: Snapshot) => void;
 }) => {
-  const next = target
-    ? { profile: target, policy: applyProfile(target, current.policy, agent.config.mounts) }
+  const [lastTarget, setLastTarget] = useState(target);
+  if (target && target !== lastTarget) setLastTarget(target);
+  const shown = target ?? lastTarget;
+  const next = shown
+    ? { profile: shown, policy: applyProfile(shown, current.policy, agent.config.mounts) }
     : null;
   const changes = next
     ? describeChanges(name, current, next).filter((c) => !c.text.startsWith('Profile'))
@@ -619,8 +641,8 @@ const ProfileSheet = ({
     <Sheet
       isOpen={!!target}
       onOpenChange={(o) => !o && onClose()}
-      title={target ? t('policy.profile.askTitle', { agent: name, profile: target }) : ''}
-      subtitle={target ? t(`policy.profile.${target}.blurb`) : undefined}
+      title={shown ? t('policy.profile.askTitle', { agent: name, profile: shown }) : ''}
+      subtitle={shown ? t(`policy.profile.${shown}.blurb`) : undefined}
       focusTitle
       footer={
         <div className="flex justify-end gap-2">
@@ -628,7 +650,7 @@ const ProfileSheet = ({
             {t('common.cancel')}
           </Button>
           <Button variant="primary" onPress={() => next && onApply(next)}>
-            {target ? t('policy.profile.use', { profile: target }) : ''}
+            {shown ? t('policy.profile.use', { profile: shown }) : ''}
           </Button>
         </div>
       }

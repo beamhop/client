@@ -31,10 +31,13 @@ export const LevelLamp = ({ e, className }: { e: AuditEvent; className?: string 
 };
 
 export const EventSheet = ({ event, onClose }: { event: AuditEvent | null; onClose: () => void }) => {
-  const e = event;
+  // Keep the last event while the sheet animates out, so the dialog never loses its name.
+  const [last, setLast] = useState(event);
+  if (event && event !== last) setLast(event);
+  const e = event ?? last;
   return (
     <Sheet
-      isOpen={!!e}
+      isOpen={!!event}
       onOpenChange={(o) => !o && onClose()}
       title={e?.summary ?? ''}
       subtitle={e ? `${e.type} · ${e.id}` : undefined}
@@ -292,7 +295,7 @@ export const ExportSheet = ({
             <Button
               variant="primary"
               className="self-start"
-              isPending={busy}
+              isDisabled={busy}
               onPress={async () => {
                 setBusy(true);
                 try {
@@ -305,7 +308,7 @@ export const ExportSheet = ({
                 }
               }}
             >
-              {t('audit.export.run')}
+              {busy ? t('audit.export.running') : t('audit.export.run')}
             </Button>
           )}
           <MetaLine items={[t('audit.export.retention')]} />

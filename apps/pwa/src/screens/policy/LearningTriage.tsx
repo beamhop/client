@@ -112,7 +112,7 @@ const SuggestionSlip = ({
                     size="sm"
                     icon={<X size={16} weight="bold" aria-hidden="true" />}
                     onPress={() => commit('left')}
-                    aria-label={t('policy.learn.keepAria', { value: s.value })}
+                    aria-label={`${t('policy.learn.keep')}: ${s.value}`}
                   >
                     {t('policy.learn.keep')}
                   </Button>
@@ -121,7 +121,7 @@ const SuggestionSlip = ({
                     size="sm"
                     icon={<Check size={16} weight="bold" aria-hidden="true" />}
                     onPress={() => commit('right')}
-                    aria-label={t('policy.learn.allowAria', { value: scope })}
+                    aria-label={`${verb === 'reach' ? t('policy.learn.allow') : t('policy.learn.allowRead')}: ${scope}`}
                   >
                     {verb === 'reach' ? t('policy.learn.allow') : t('policy.learn.allowRead')}
                   </Button>
