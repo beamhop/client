@@ -587,6 +587,8 @@ Usage: beamhop approve [options] <id>
 
 Options:
   --always             allow this tool for the rest of the session
+  --forever [rule]     save a permanent rule (e.g. "bash:npm test", "*.npmjs.org", "~/code/app/");
+                       without a value, the exact request
   --grant-role <role>  for access requests: role to grant
   -h, --help           display help for command
 ```

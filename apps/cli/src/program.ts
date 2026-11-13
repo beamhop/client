@@ -663,15 +663,21 @@ export const buildProgram = (deps: CliDeps): Command => {
   program
     .command('approve <id>')
     .option('--always', 'allow this tool for the rest of the session')
+    .option(
+      '--forever [rule]',
+      'save a permanent rule (e.g. "bash:npm test", "*.npmjs.org", "~/code/app/"); without a value, the exact request',
+    )
     .option('--grant-role <role>', 'for access requests: role to grant')
     .action(
-      act(async (c, id: string, o: { always?: boolean; grantRole?: string }) => ({
+      act(async (c, id: string, o: { always?: boolean; forever?: string | boolean; grantRole?: string }) => ({
         data: await c.call('approval.decide', {
           id,
           allow: true,
-          always: !!o.always,
+          always: o.forever !== undefined,
+          ...(o.always ? { session: true } : {}),
+          ...(typeof o.forever === 'string' ? { rule: o.forever } : {}),
           grantRole: o.grantRole,
-        }),
+        } as never),
         human: () => pc.green(`approved ${id}`),
       })),
     );
