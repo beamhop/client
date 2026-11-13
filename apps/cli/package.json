@@ -4,6 +4,12 @@
   "type": "module",
   "license": "Apache-2.0",
   "description": "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "build:sea": "node scripts/sea.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "docs:cli": "tsx ../../scripts/gen-cli-docs.ts"
+  },
   "bin": {
     "beamhop": "./src/main.ts"
   },
@@ -21,6 +27,8 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "@types/qrcode": "^1.5.6"
+    "@types/qrcode": "^1.5.6",
+    "esbuild": "^0.28.2",
+    "postject": "1.0.0-alpha.6"
   }
 }

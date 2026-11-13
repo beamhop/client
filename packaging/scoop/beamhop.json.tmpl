@@ -1,0 +1,33 @@
+{
+  "version": "{{VERSION}}",
+  "description": "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed.",
+  "homepage": "https://github.com/{{REPO}}",
+  "license": "Apache-2.0",
+  "notes": [
+    "Start the daemon with 'beamhop daemon', then run 'beamhop init'.",
+    "The sandbox on Windows is alpha; WSL2 is the fallback. Run 'beamhop doctor'."
+  ],
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/{{REPO}}/releases/download/v{{VERSION}}/beamhop-{{VERSION}}-windows-x64.zip",
+      "hash": "{{SHA256_WINDOWS_X64}}",
+      "extract_dir": "beamhop-{{VERSION}}-windows-x64"
+    }
+  },
+  "bin": "beamhop.exe",
+  "persist": [],
+  "checkver": {
+    "github": "https://github.com/{{REPO}}"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/{{REPO}}/releases/download/v$version/beamhop-$version-windows-x64.zip",
+        "extract_dir": "beamhop-$version-windows-x64"
+      }
+    },
+    "hash": {
+      "url": "$baseurl/SHA256SUMS"
+    }
+  }
+}

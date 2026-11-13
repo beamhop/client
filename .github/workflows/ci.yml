@@ -30,6 +30,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ripgrep
       - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-no-secrets.mjs
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run test
@@ -46,3 +47,19 @@ jobs:
       - run: pnpm --filter @beamhop/pwa run build
       - run: pnpm --filter @beamhop/pwa exec playwright install --with-deps chromium
       - run: pnpm --filter @beamhop/pwa run test:e2e
+  package:
+    # The npm bundle and the standalone binary build, smoke-tested the way users install them.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap socat ripgrep
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter beamhop run build
+      - run: pnpm --filter beamhop run smoke
+      - run: node apps/cli/scripts/sea.mjs --no-archive
+      - run: dist/standalone/beamhop-*-linux-x64/beamhop --version
