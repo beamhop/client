@@ -10,3 +10,4 @@ test-results/
 .beamhop-test/
 *.tsbuildinfo
 .DS_Store
+.claude/worktrees/
