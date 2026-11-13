@@ -27,6 +27,7 @@ const fakeDaemon = (over: Record<string, Handler> = {}) => {
           message: 'missing',
           fix: 'sudo apt install bubblewrap',
         },
+        { id: 'llm.keys', title: 'LLM API keys', status: 'warn', message: 'none set' },
       ],
     }),
     'harness.scan': () => ({
@@ -176,7 +177,17 @@ describe('beamhop init (headless)', () => {
     expect(text).toContain(AGENT_NPUB);
     expect(text).toContain(`AI agent operated by ${OWNER}`);
     expect(text).toContain('Next steps');
+    expect(text).toContain('beamhop secret set ANTHROPIC_API_KEY');
     expect(text).not.toMatch(/nsec1/);
+  });
+
+  it('--mount takes the `agent add` form (path:rw) and --profile is an alias of --sandbox', async () => {
+    const d = fakeDaemon();
+    const t = cli(d);
+    await t.run('init', '--yes', '--mount', '/tmp/app:rw', '--profile', 'strict');
+    const create = d.calls.find((c) => c[0] === 'agent.create')![1] as { config: Record<string, unknown> };
+    expect(create.config.mounts).toEqual([{ path: resolve('/tmp/app'), mode: 'rw' }]);
+    expect(create.config.sandbox).toEqual({ profile: 'strict' });
   });
 
   it('flags: import owner npub, pair a phone (QR + safety phrase), hello round trip', async () => {

@@ -190,4 +190,85 @@ describe('cli', () => {
     expect(t.calls[0]).toEqual(['system.panic', { reason: 'test' }]);
     expect(t.out.join('')).toContain('panic engaged');
   });
+
+  it('resume is a no-op outside panic', async () => {
+    const t = setup(async (m) => (m === 'system.status' ? { panic: false } : { ok: true }));
+    await t.run('resume');
+    expect(t.calls.map((c) => c[0])).toEqual(['system.status']);
+    expect(t.out.join('')).toContain('nothing to resume');
+  });
+
+  it('join warns when the channel does not exist', async () => {
+    const t = setup(async (m) => (m === 'channel.list' ? { channels: [] } : {}));
+    await t.run('join', 'bot', 'mybot:dm', '--role', 'owner');
+    expect(t.out.join('\n')).toContain('no channel named "mybot"');
+  });
+
+  it('agent add warns about a harness that is not ready and a missing mount', async () => {
+    const t = setup(async (m) =>
+      m === 'harness.list'
+        ? {
+            harnesses: [
+              {
+                id: 'claude',
+                displayName: 'Claude Code',
+                command: 'claude',
+                status: 'needs-login',
+                protocol: 'claude-sdk',
+                message: 'run `claude /login`',
+              },
+            ],
+          }
+        : { config: { name: 'bot', harness: 'claude', sandbox: { profile: 'workspace' } } },
+    );
+    await t.run('agent', 'add', 'bot', '--harness', 'claude', '--mount', '/does/not/exist-beamhop');
+    const out = t.out.join('\n');
+    expect(out).toContain('mount /does/not/exist-beamhop does not exist');
+    expect(out).toContain(
+      'Claude Code is not logged in (run `claude /login`); that is fine once beamhop holds',
+    );
+    expect(out).toContain('beamhop session start bot');
+  });
+
+  it('alerts set parses the PWA-style flags', async () => {
+    const t = setup(async (_m, p) => p as Record<string, unknown>);
+    await t.run(
+      'alerts',
+      'set',
+      '--budget',
+      '70,95',
+      '--spike',
+      '5/10m',
+      '--heartbeat',
+      '15m',
+      '--no-nostr-dm',
+    );
+    expect(t.calls[0]).toEqual([
+      'alerts.set',
+      {
+        budgetWarn: 70,
+        budgetAlert: 95,
+        spikeEvents: 5,
+        spikeMinutes: 10,
+        heartbeatMinutes: 15,
+        nostrDm: false,
+      },
+    ]);
+    const u = setup(async () => ({}));
+    await u.run('alerts', 'set');
+    expect(u.err.join('')).toContain('nothing to change');
+  });
+
+  it('session start warns when no model key is stored', async () => {
+    const t = setup(async (m) =>
+      m === 'secret.list' ? { backend: 'memory', secrets: [] } : { id: 'ses_1', agent: 'bot' },
+    );
+    await t.run('session', 'start', 'bot', 'hi');
+    expect(t.out.join('\n')).toContain('no model key is stored in beamhop');
+    const k = setup(async (m) =>
+      m === 'secret.list' ? { backend: 'memory', secrets: [{ name: 'OPENAI_API_KEY' }] } : { id: 'ses_1' },
+    );
+    await k.run('session', 'start', 'bot', 'hi');
+    expect(k.out.join('\n')).not.toContain('no model key');
+  });
 });

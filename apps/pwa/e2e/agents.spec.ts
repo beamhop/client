@@ -228,7 +228,7 @@ test('new agent: preset → harness → folders → review → create', async ({
   await expect(page.getByRole('heading', { name: 'Check and create' })).toBeVisible();
   await expect(
     page
-      .getByText('beamhop agent create qa --preset public-qa --harness gemini --mount ~/docs/public:ro')
+      .getByText('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro')
       .first(),
   ).toBeAttached();
   await page.getByRole('button', { name: 'Create qa', exact: true }).click();

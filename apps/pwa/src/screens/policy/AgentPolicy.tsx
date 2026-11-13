@@ -435,7 +435,7 @@ const Editor = ({
             />
           </Section>
           <PeopleSection agent={agent} />
-          <CliStrip command={`beamhop policy edit ${name}   # ~/.beamhop/agents/${name}.yaml`} />
+          <CliStrip command={`beamhop policy show ${name}   # edit ~/.beamhop/agents/${name}.yaml`} />
         </div>
       </div>
       <ProfileSheet

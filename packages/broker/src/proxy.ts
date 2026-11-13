@@ -298,13 +298,22 @@ export const createLlmProxy = async (opts: LlmProxyOptions): Promise<LlmProxy> =
       return json(res, 400, errorBody('invalid_request_error', 'ambiguous path'));
     }
 
-    if (opts.checkBudget && !(await opts.checkBudget(token))) {
-      return json(res, 429, errorBody('rate_limit_error', 'beamhop budget exceeded for this session'));
-    }
-
+    // The key comes first: a missing key must not burn budget reservations (and then surface as a
+    // misleading "budget exceeded" once the harness has retried a few times).
     const key = await opts.secrets.get(route.secretName);
     if (!key) {
-      return json(res, 503, errorBody('api_error', `no secret "${route.secretName}" configured in beamhop`));
+      return json(
+        res,
+        503,
+        errorBody(
+          'api_error',
+          `no secret "${route.secretName}" configured in beamhop; set it with \`beamhop secret set ${route.secretName}\``,
+        ),
+      );
+    }
+
+    if (opts.checkBudget && !(await opts.checkBudget(token))) {
+      return json(res, 429, errorBody('rate_limit_error', 'beamhop budget exceeded for this session'));
     }
 
     let body = await readBody(req, maxBytes);

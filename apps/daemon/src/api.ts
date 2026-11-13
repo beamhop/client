@@ -37,6 +37,42 @@ import { errMsg } from './util.ts';
 
 const OK = { ok: true as const };
 
+/**
+ * The doctor's harness line: a short summary (ready / needs login / not installed) and a fix that
+ * matches the situation — log in to an installed harness before suggesting a new install.
+ */
+export const harnessCheck = (hs: HarnessView[], brokerHasKey = false): DoctorCheck => {
+  const by = (s: HarnessView['status']) => hs.filter((h) => h.status === s);
+  const ready = by('ready');
+  const login = by('needs-login');
+  const missing = by('not-installed');
+  const other = hs.filter((h) => !['ready', 'needs-login', 'not-installed'].includes(h.status));
+  const message = hs.length
+    ? [
+        ready.length ? `ready: ${ready.map((h) => h.id).join(', ')}` : 'none ready',
+        login.length ? `needs login: ${login.map((h) => h.id).join(', ')}` : '',
+        ...other.map((h) => `${h.id}: ${h.status}`),
+        missing.length ? `${missing.length} not installed` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'no harness adapters installed';
+  if (ready.length) return { id: 'harness.any', title: 'Harnesses', status: 'ok', message };
+  // Installed but not logged in is fine when beamhop's broker holds the provider key.
+  if (login.length && brokerHasKey)
+    return {
+      id: 'harness.any',
+      title: 'Harnesses',
+      status: 'ok',
+      message: `${message} (they use the API key stored in beamhop)`,
+    };
+  const first = login[0];
+  const fix = first
+    ? `Log in to ${first.displayName} (${first.message?.startsWith('run ') ? first.message : `run \`${first.command} login\``}) and run \`beamhop harness scan\` — or give beamhop the provider key instead (see the LLM API keys check).`
+    : 'Install a harness (e.g. `npm i -g @anthropic-ai/claude-code`) and run `beamhop harness scan`. `beamhop harness ls` lists every supported one.';
+  return { id: 'harness.any', title: 'Harnesses', status: 'warn', message, fix };
+};
+
 const deepMerge = (a: unknown, b: unknown): unknown => {
   if (Array.isArray(b) || typeof b !== 'object' || b === null) return b === undefined ? a : b;
   if (typeof a !== 'object' || a === null || Array.isArray(a)) return b;
@@ -233,19 +269,14 @@ export class ApiHandlers {
           checks.push({ id: 'sandbox', title: 'Sandbox', status: 'fail', message: errMsg(e) });
         }
         const hs = await this.scan();
-        checks.push({
-          id: 'harness.any',
-          title: 'Harnesses',
-          status: hs.some((x) => x.status === 'ready') ? 'ok' : 'warn',
-          message: hs.length
-            ? hs.map((x) => `${x.id}: ${x.status}`).join(', ')
-            : 'no harness adapters installed',
-          ...(hs.some((x) => x.status === 'ready')
-            ? {}
-            : {
-                fix: 'Install a harness (e.g. `npm i -g @anthropic-ai/claude-code`) and run `beamhop harness scan`.',
-              }),
-        });
+        // Agents with `harnessAuth: api-key` (the default) reach their LLM only through the broker,
+        // which needs the provider key in beamhop's secret store.
+        const llmKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
+        const haveKeys = (await d.secrets.list().catch(() => []))
+          .map((s) => s.name)
+          .filter((n) => llmKeys.includes(n));
+        const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
+        checks.push(harnessCheck(hs, haveKeys.length > 0));
         for (const c of d.config.channels.list()) {
           const v = d.channels.view(c);
           checks.push({
@@ -271,6 +302,21 @@ export class ApiHandlers {
           ...(secretsBackend === 'memory'
             ? { fix: 'Install a keychain (libsecret) or set BEAMHOP_VAULT_PASSPHRASE.' }
             : {}),
+        });
+        checks.push({
+          id: 'llm.keys',
+          title: 'LLM API keys',
+          status: haveKeys.length ? 'ok' : keyAgents.length ? 'warn' : 'skip',
+          message: haveKeys.length
+            ? `set: ${haveKeys.join(', ')}`
+            : keyAgents.length
+              ? `none set; ${keyAgents.map((a) => a.name).join(', ')} cannot reach a model`
+              : 'none set (no agent needs one yet)',
+          ...(haveKeys.length
+            ? {}
+            : {
+                fix: 'beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY (or OPENAI_API_KEY / OPENROUTER_API_KEY for other harnesses)',
+              }),
         });
         if (d.isPanic())
           checks.push({
@@ -580,6 +626,13 @@ export class ApiHandlers {
       'membership.join': async ({ agent, membership }, ctx) => {
         const a = d.agent(agent);
         const { revokedAt: _r, ...m } = membership;
+        if (!effectiveRoleDef(m.defaultRole, d.global().roles as RoleOverride[]))
+          throw new BeamhopError(
+            'invalid_input',
+            `unknown role ${m.defaultRole}; one of: ${allRoleDefs(d.global().roles as RoleOverride[])
+              .map((r) => r.name)
+              .join(', ')}`,
+          );
         const memberships = [...a.memberships.filter((x) => x.target !== m.target), m];
         const v = this.saveAgent({ ...a, memberships });
         d.audit({
@@ -594,6 +647,11 @@ export class ApiHandlers {
       },
       'membership.leave': async ({ agent, target }, ctx) => {
         const a = d.agent(agent);
+        if (!a.memberships.some((x) => x.target === target))
+          throw new BeamhopError(
+            'not_found',
+            `${agent} is not a member of ${target}${a.memberships.length ? `; it is in ${a.memberships.map((x) => x.target).join(', ')}` : ''}`,
+          );
         const v = this.saveAgent({ ...a, memberships: a.memberships.filter((x) => x.target !== target) });
         d.audit({
           type: 'membership.leave',

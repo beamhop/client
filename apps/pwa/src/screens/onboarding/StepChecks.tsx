@@ -156,7 +156,7 @@ export const StepDoctor = () => {
           details={q.error}
           onRetry={() => void q.refetch()}
         >
-          {q.error.message} {tr('setup.checks.isRunning')} <code className="font-mono">beamhop start</code>
+          {q.error.message} {tr('setup.checks.isRunning')} <code className="font-mono">beamhop daemon</code>
         </ErrorState>
       ) : !q.data ? (
         <Skeleton variant="list" count={5} label={tr('setup.checks.runningChecks')} />

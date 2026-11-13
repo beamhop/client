@@ -84,7 +84,7 @@ export const UpdatesSection = () => {
           <p className="type-body-sm text-ink-2">{t('settings.updates.noCloudDaemonsThey')}</p>
         )}
       </Group>
-      <CliStrip command="beamhop update --check" />
+      <CliStrip command="beamhop status   # shows the local version" />
     </div>
   );
 };

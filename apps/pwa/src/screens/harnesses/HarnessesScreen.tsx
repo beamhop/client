@@ -519,7 +519,7 @@ const Details = ({
             {t(h.status === 'unsupported-version' ? 'harnesses.update' : 'harnesses.install')}
           </Button>
         )}
-      <CliStrip command={`beamhop harness show ${h.id}`} />
+      <CliStrip command="beamhop harness ls" />
     </div>
   );
 };

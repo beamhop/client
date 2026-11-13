@@ -172,7 +172,7 @@ describe('validators', () => {
         harness: 'gemini',
         mounts: [{ path: '~/docs/public', mode: 'ro', parallelUnsafe: false }],
       }),
-    ).toBe('beamhop agent create qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
+    ).toBe('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
   });
 });
 

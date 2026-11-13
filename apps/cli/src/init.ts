@@ -115,9 +115,9 @@ export interface InitResult {
 }
 
 const STATUS: Record<string, string> = {
-  ok: pc.green('●'),
-  warn: pc.yellow('●'),
-  fail: pc.red('●'),
+  ok: pc.green('✓'),
+  warn: pc.yellow('!'),
+  fail: pc.red('✗'),
   skip: pc.dim('○'),
   ready: pc.green('ready'),
   'needs-login': pc.yellow('needs login'),
@@ -218,9 +218,11 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   ui.info(pc.dim(`daemon ${status.version} · ${status.home}`));
 
   // ── 01 doctor ──
+  let needsKey = false;
   if (await want(o.doctor, 'Check the sandbox prerequisites?')) {
     ui.step('01 Doctor');
     const { checks } = await c.call('system.doctor');
+    needsKey = checks.some((k) => k.id === 'llm.keys' && k.status !== 'ok');
     for (const k of checks) {
       ui.info(`${STATUS[k.status] ?? '?'} ${k.title}  ${pc.dim(k.message)}`);
       if (k.fix && k.status !== 'ok') ui.info(`    ${pc.cyan('fix:')} ${k.fix}`);
@@ -238,8 +240,9 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   if (await want(o.harnesses, 'Look for agent harnesses (Claude Code, Codex, …)?')) {
     ui.step('02 Harnesses');
     all = (await c.call('harness.scan')).harnesses;
+    const width = Math.max(18, ...all.map((h) => h.displayName.length));
     for (const h of all)
-      ui.info(`${h.displayName.padEnd(18)} ${STATUS[h.status] ?? h.status}  ${pc.dim(harnessHint(h))}`);
+      ui.info(`${h.displayName.padEnd(width)} ${STATUS[h.status] ?? h.status}  ${pc.dim(harnessHint(h))}`);
     ready = all.filter((h) => h.status === 'ready');
     if (ready.length) ui.success(`${ready.length} ready.`);
     else
@@ -439,7 +442,19 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   ui.step('07 Next steps');
   ui.note(
     [
-      `Add Telegram, Slack or Discord   ${pc.cyan('beamhop channel add telegram')}`,
+      ...(needsKey
+        ? [
+            'Give agents a model key'.padEnd(34) +
+              pc.cyan('beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY'),
+          ]
+        : []),
+      ...(agentName
+        ? [
+            `Talk to ${agentName} right now`.padEnd(34) +
+              pc.cyan(`beamhop session start ${agentName} "hello"`),
+          ]
+        : []),
+      `Add Telegram, Slack or Discord    ${pc.cyan('beamhop channel add telegram --name mybot --token-env TG_TOKEN')}`,
       `Set up a NIP-05 handle            ${pc.cyan('beamhop identity nip05 --domain example.com')}`,
       `Move an agent to the cloud        ${pc.cyan(`beamhop deploy plan --agent ${agentName ?? '<name>'} --provider hetzner`)}`,
       ...(result.device ? [] : [`Pair a phone                      ${pc.cyan('beamhop device pair')}`]),

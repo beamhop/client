@@ -282,6 +282,14 @@ describe('createLlmProxy', () => {
     expect(seen).toHaveLength(0);
   });
 
+  it('a missing key is reported as such, not as an exhausted budget', async () => {
+    budgetOk = false;
+    const t = proxy.createSession();
+    const r = await fetch(`${proxy.url}/nokey/v1`, { headers: { 'x-beamhop-session': t } });
+    expect(r.status).toBe(503);
+    expect(await r.text()).toContain('beamhop secret set MISSING');
+  });
+
   // docs/security/REVIEW-wave-a.md — LLM-1: provider-side fetch/MCP tools are an exfil channel.
   it('LLM-1: refuses provider-side URL fetch / MCP / web tools by default', async () => {
     const t = proxy.createSession();

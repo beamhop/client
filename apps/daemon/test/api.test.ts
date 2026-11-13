@@ -2,9 +2,9 @@ import { createHmac } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClient, httpTransport, type RpcError, wsTransport } from '@beamhop/client';
-import { type Deployer, methods, paths } from '@beamhop/core';
+import { type Deployer, type HarnessView, methods, paths } from '@beamhop/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ALL_METHODS } from '../src/api.ts';
+import { ALL_METHODS, harnessCheck } from '../src/api.ts';
 import { makeEnv, ownerAlice, setupBot, type TestEnv, tmpHome, until } from './helpers.ts';
 
 let env: TestEnv | undefined;
@@ -32,6 +32,16 @@ describe('API coverage', () => {
     const doc = await env.client.call('system.doctor');
     expect(doc.checks.some((c) => c.id.startsWith('sandbox'))).toBe(true);
     expect(doc.checks.some((c) => c.id === 'harness.any')).toBe(true);
+    const keys = () =>
+      env!.client.call('system.doctor').then((r) => r.checks.find((c) => c.id === 'llm.keys'));
+    expect((await keys())?.status).toBe('skip');
+    await env.client.call('agent.create', { config: { name: 'k', harness: 'fake' } });
+    expect(await keys()).toMatchObject({
+      status: 'warn',
+      fix: expect.stringContaining('beamhop secret set'),
+    });
+    await env.client.call('secret.set', { name: 'ANTHROPIC_API_KEY', value: 'x'.repeat(8) });
+    expect(await keys()).toMatchObject({ status: 'ok', message: 'set: ANTHROPIC_API_KEY' });
     await env.client.call('system.panic', { reason: 'x' });
     expect((await env.client.call('system.status')).panic).toBe(true);
     expect(env.d.store.audit.query({ type: 'panic' })).toHaveLength(1);
@@ -152,6 +162,38 @@ describe('harnesses, channels, memberships', () => {
     expect(j.config.memberships[0]!.target).toBe('fk:group/1');
     const l = await env.client.call('membership.leave', { agent: 'a', target: 'fk:group/1' });
     expect(l.config.memberships).toHaveLength(0);
+    await expect(env.client.call('membership.leave', { agent: 'a', target: 'fk:group/1' })).rejects.toSatisfy(
+      (e) => code(e) === 'not_found',
+    );
+    await expect(
+      env.client.call('membership.join', {
+        agent: 'a',
+        membership: { target: 'fk:group/1', defaultRole: 'bogus' },
+      }),
+    ).rejects.toSatisfy(
+      (e) => code(e) === 'invalid_input' && /unknown role bogus/.test((e as Error).message),
+    );
+  });
+
+  it('doctor harness line: log in before installing', () => {
+    const h = (id: string, status: HarnessView['status'], message?: string): HarnessView => ({
+      id,
+      displayName: id,
+      command: id,
+      status,
+      protocol: 'acp',
+      ...(message ? { message } : {}),
+    });
+    const login = harnessCheck([
+      h('claude', 'needs-login', 'run `claude /login`'),
+      h('codex', 'not-installed'),
+    ]);
+    expect(login.status).toBe('warn');
+    expect(login.message).toBe('none ready · needs login: claude · 1 not installed');
+    expect(login.fix).toContain('Log in to claude (run `claude /login`)');
+    expect(harnessCheck([h('codex', 'not-installed')]).fix).toContain('Install a harness');
+    expect(harnessCheck([h('pi', 'ready')])).toMatchObject({ status: 'ok', message: 'ready: pi' });
+    expect(harnessCheck([h('claude', 'needs-login')], true).status).toBe('ok');
   });
 });
 

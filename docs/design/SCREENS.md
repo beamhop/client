@@ -128,7 +128,7 @@ Mobile "More" (`/more`) lists Channels, Harnesses, Policy, Deploy, Audit, Settin
 - Agent card tap → agent's latest session (live) or Agent detail if none. Overflow `…` on card: Open detail, New session, Stop agent, Move to cloud.
 - Card order: live → needs you → error → ready → stopped; ties by last activity.
 - Medium: 2-column card grid. "Needs you" strip becomes a horizontal row of up to 3 compact slips.
-- Empty (no agents): beam-line diagram `you ──── relays ──── (agent)` with "Create your first agent" + preset rows + CLI strip `beamhop agent create`.
+- Empty (no agents): beam-line diagram `you ──── relays ──── (agent)` with "Create your first agent" + preset rows + CLI strip `beamhop agent add`.
 
 ### Desktop
 ```

@@ -624,7 +624,7 @@ export const ChannelDetailScreen = () => {
           </div>
         </section>
 
-        <CliStrip command={`beamhop channel show ${c.config.name}`} />
+        <CliStrip command="beamhop channel ls" />
       </div>
 
       <ReplaceTokenSheet c={c} isOpen={replaceOpen} onOpenChange={setReplace} />
