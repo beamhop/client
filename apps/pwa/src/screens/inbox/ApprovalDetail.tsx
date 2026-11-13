@@ -19,9 +19,9 @@ import { Perforation } from '../../ui/glyphs/index.tsx';
 import { Eyebrow, MetaLine, RiskTag } from '../../ui/Meta.tsx';
 import { EmptyState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { useInbox } from './context.ts';
-import { inputOf, quorumOf, type SlipGroup } from './model.ts';
+import { useMe } from './me.ts';
+import { inputOf, quorumOf, type SlipGroup, whoDecided } from './model.ts';
 import { DecisionBar, SlipBody, slipTitle, TimesBadge } from './Slip.tsx';
-import { mineStore, useStore } from './store.ts';
 
 const Context = ({ a }: { a: ApprovalView }) => {
   const q = useApi(
@@ -72,16 +72,16 @@ const Context = ({ a }: { a: ApprovalView }) => {
   );
 };
 
-const STATUS_LINE = (a: ApprovalView): string =>
+const STATUS_LINE = (a: ApprovalView, me: ReadonlySet<string>): string =>
   a.status === 'expired'
     ? t('inbox.ghost.expired', { time: a.decidedAt ? when(a.decidedAt) : '' })
     : a.status === 'approved'
       ? t('inbox.detail.allowedBy', {
-          who: a.decidedBy ?? 'an owner',
+          who: whoDecided(me, a.decidedBy, 'an owner'),
           time: a.decidedAt ? when(a.decidedAt) : '',
         })
       : t('inbox.detail.deniedBy', {
-          who: a.decidedBy ?? 'an owner',
+          who: whoDecided(me, a.decidedBy, 'an owner'),
           time: a.decidedAt ? when(a.decidedAt) : '',
         });
 
@@ -91,7 +91,7 @@ export const ApprovalDetail = () => {
   const fallback = useApi('approval.list', { status: 'all' }, { enabled: !ctx });
   const now = useNow(1000);
   const expanded = useExpanded();
-  const mine = useStore(mineStore);
+  const me = useMe();
   const all = ctx?.all ?? fallback.data?.approvals ?? [];
   const a = all.find((x) => x.id === approvalId);
   const group: SlipGroup | undefined =
@@ -100,7 +100,7 @@ export const ApprovalDetail = () => {
   const loading = !a && (ctx ? ctx.all.length === 0 : fallback.isPending);
   const showSkeleton = useDelayedLoading(loading);
   const short = approvalId.replace(/^apr_/, '');
-  const quorum = a ? quorumOf(a, mine) : null;
+  const quorum = a ? quorumOf(a, me) : null;
   const pending = a?.status === 'pending';
   const waiting = !!quorum?.youVoted;
 
@@ -185,7 +185,7 @@ export const ApprovalDetail = () => {
               ) : (
                 <Clock size={16} weight="bold" aria-hidden="true" />
               )}
-              {STATUS_LINE(a)}
+              {STATUS_LINE(a, me)}
             </p>
           </>
         )}

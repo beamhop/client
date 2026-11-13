@@ -1,7 +1,7 @@
 /** Audit sheets: event detail, alert rules, export. */
 import type { AuditEvent } from '@beamhop/core';
 import { DownloadSimple, SealCheck } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCall } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { when } from '../../lib/format.ts';
@@ -92,8 +92,13 @@ export const AlertsSheet = ({
   isOpen: boolean;
   onOpenChange: (o: boolean) => void;
 }) => {
-  const [saved, save] = useAlertRules();
+  const { rules: saved, loaded, save, saving } = useAlertRules();
   const [r, setR] = useState<AlertRules>(saved);
+  // Start every edit from the daemon's rules (and pick them up once the first read lands).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on open / first load only
+  useEffect(() => {
+    if (isOpen) setR(saved);
+  }, [isOpen, loaded]);
   const toast = useToast();
   const set = <K extends keyof AlertRules>(k: K, v: AlertRules[K]) => setR((x) => ({ ...x, [k]: v }));
   const num =
@@ -115,11 +120,16 @@ export const AlertsSheet = ({
           </Button>
           <Button
             variant="primary"
-            onPress={() => {
-              save(r);
-              onOpenChange(false);
-              toast.show({ message: t('audit.alerts.saved'), tone: 'success' });
-            }}
+            isPending={saving}
+            onPress={() =>
+              void save(r).then(
+                () => {
+                  onOpenChange(false);
+                  toast.show({ message: t('audit.alerts.saved'), tone: 'success' });
+                },
+                (e: Error) => toast.show({ message: e.message, tone: 'error' }),
+              )
+            }
           >
             {t('audit.alerts.save')}
           </Button>
@@ -208,10 +218,9 @@ export const AlertsSheet = ({
             onChange={(v) => set('quietHours', v)}
             description={t('audit.alerts.quietDesc')}
           >
-            {t('audit.alerts.quiet')}
+            {t('audit.alerts.quiet', { start: r.quietStart, end: r.quietEnd })}
           </Switch>
         </fieldset>
-        <p className="type-meta text-ink-2">{t('audit.alerts.device')}</p>
         <CliStrip command={rulesCli(r)} />
       </div>
     </Sheet>

@@ -53,6 +53,7 @@ import { Banner, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States
 import { RouteLine, StatusDot } from '../../ui/Status.tsx';
 import { SwipeAction } from '../../ui/SwipeAction.tsx';
 import { InboxContext, type InboxContextValue, useInbox } from './context.ts';
+import { useMe } from './me.ts';
 import {
   afterRemoval,
   burstAgents,
@@ -60,12 +61,14 @@ import {
   filterOptions,
   groupApprovals,
   type InboxFilter,
+  isMe,
   quorumOf,
   type SlipGroup,
   spokenLabel,
   step,
   swipeMode,
   waitingOnOthers,
+  whoDecided,
 } from './model.ts';
 import { DecisionLayer } from './Sheets.tsx';
 import { DecisionBar, SlipBody, SlipSlug } from './Slip.tsx';
@@ -74,7 +77,6 @@ import {
   bumpVisits,
   hiddenStore,
   holdStore,
-  mineStore,
   openSheet,
   queuedIds,
   queueStore,
@@ -91,7 +93,7 @@ const DAY = 86_400_000;
 const useInboxData = () => {
   const q = useApi('approval.list', { status: 'all' });
   const suggestionsQ = useApi('policy.suggestions');
-  const mine = useStore(mineStore);
+  const me = useMe();
   const hidden = useStore(hiddenStore);
   const holds = useStore(holdStore);
   const queue = useStore(queueStore);
@@ -102,8 +104,8 @@ const useInboxData = () => {
     () => all.filter((a) => a.status === 'pending').sort((x, y) => x.expiresAt.localeCompare(y.expiresAt)),
     [all],
   );
-  const triage = pending.filter((a) => !hidden.has(a.id) && !queued.has(a.id) && !waitingOnOthers(a, mine));
-  const waiting = pending.filter((a) => waitingOnOthers(a, mine) && !hidden.has(a.id));
+  const triage = pending.filter((a) => !hidden.has(a.id) && !queued.has(a.id) && !waitingOnOthers(a, me));
+  const waiting = pending.filter((a) => waitingOnOthers(a, me) && !hidden.has(a.id));
   const queuedList = pending.filter((a) => queued.has(a.id));
   const recent = all
     .filter(
@@ -125,7 +127,7 @@ const useInboxData = () => {
     recent,
     lastDecision,
     suggestions,
-    mine,
+    me,
   };
 };
 
@@ -198,10 +200,10 @@ const useLongPress = (fn: () => void) => {
 
 const StackSlip = ({ g, now, peek }: { g: SlipGroup; now: number; peek: number }) => {
   const ctx = useInbox() as InboxContextValue;
-  const mine = useStore(mineStore);
+  const me = useMe();
   const reduce = useReduced();
   const returning = useStore(returningStore)[g.lead.id];
-  const quorum = quorumOf(g.lead, mine);
+  const quorum = quorumOf(g.lead, me);
   const press = useLongPress(() => ctx.act.details(g));
   const mode = swipeMode(g);
 
@@ -531,6 +533,7 @@ const STATUS_WORD: Record<ApprovalView['status'], string> = {
 
 const Recent = ({ list }: { list: ApprovalView[] }) => {
   const [open, setOpen] = useState(false);
+  const me = useMe();
   if (list.length === 0) return null;
   return (
     <section aria-labelledby="inbox-recent" className="mt-8">
@@ -555,7 +558,7 @@ const Recent = ({ list }: { list: ApprovalView[] }) => {
                     value: STATUS_WORD[a.status],
                     tone: a.status === 'approved' ? 'go' : a.status === 'denied' ? 'stop' : 'caution',
                   },
-                  a.decidedBy ? `by ${a.decidedBy}` : 'the agent was told',
+                  a.decidedBy ? `by ${whoDecided(me, a.decidedBy, '')}` : 'the agent was told',
                   a.decidedAt ? when(a.decidedAt) : undefined,
                 ]}
               />
@@ -568,7 +571,7 @@ const Recent = ({ list }: { list: ApprovalView[] }) => {
 };
 
 const Waiting = ({ list, now }: { list: ApprovalView[]; now: number }) => {
-  const mine = useStore(mineStore);
+  const me = useMe();
   if (list.length === 0) return null;
   return (
     <section aria-labelledby="inbox-waiting" className="mt-8">
@@ -577,7 +580,7 @@ const Waiting = ({ list, now }: { list: ApprovalView[]; now: number }) => {
       </Eyebrow>
       <ul className="-mx-2 flex flex-col">
         {list.map((a) => {
-          const q = quorumOf(a, mine);
+          const q = quorumOf(a, me);
           return (
             <MiniRow key={a.id} a={a} href={`/inbox/${a.id}`}>
               <MetaLine
@@ -777,6 +780,8 @@ export const InboxScreen = () => {
   // Decided elsewhere (2 s) and expired-while-open slips (stay until dismissed).
   const visible = useRef(new Set<string>());
   visible.current = new Set(data.triage.map((a) => a.id));
+  const meRef = useRef(data.me);
+  meRef.current = data.me;
   useServerEvent((e) => {
     if (e.type !== 'approval.updated' || e.approval.status === 'pending') return;
     const a = e.approval;
@@ -784,7 +789,7 @@ export const InboxScreen = () => {
     if (a.status === 'expired') {
       setGhosts((gs) => [...gs.filter((x) => x.a.id !== a.id), { a, kind: 'expired' }]);
       announce(t('inbox.ghost.expiredSpoken', { agent: a.agent, target: approvalTarget(a) }));
-    } else if (!mineStore.get().has(a.id)) {
+    } else if (!isMe(meRef.current, a.decidedBy)) {
       setGhosts((gs) => [...gs.filter((x) => x.a.id !== a.id), { a, kind: 'elsewhere' }]);
       setTimeout(() => setGhosts((gs) => gs.filter((x) => x.a.id !== a.id || x.kind !== 'elsewhere')), 2000);
     }
@@ -892,7 +897,7 @@ export const InboxScreen = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [navigate, undoLast]);
 
-  const ctx: InboxContextValue = { groups, all: data.all, mine: data.mine, now, act };
+  const ctx: InboxContextValue = { groups, all: data.all, me: data.me, now, act };
   const selectedGroups = groups.filter((g) => selected.has(g.key));
   const empty = groups.length === 0;
 

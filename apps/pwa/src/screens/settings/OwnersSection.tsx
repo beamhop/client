@@ -1,14 +1,12 @@
 /**
  * Settings → Owners & people (§6 multiple owners, linked identities, approval quorum).
- * - Owners: you + co-owners (`owner.add` / `owner.remove`; at least one owner always remains — the
- *   last owner's Remove is not offered and the reason is stated, never a disabled button).
- * - Approval quorum: how many owners must approve owner-level requests (deploys over the cost cap,
- *   owner changes).
+ * - Owners: `owner.list` (+ `owner.add` / `owner.remove`; at least one owner always remains — the
+ *   last owner's Remove is not offered and the reason is stated, never a disabled button). "You" is
+ *   the owner whose principal or linked person matches `system.whoami`.
+ * - Approval quorum: `approval.quorumGet` / `approval.quorumSet` — N of the approver pool.
  * - People with roles (global grants from `role.list`), role change (`role.grant`) and revoke.
- * - Linked identities: `principal.link` makes alice on Telegram and alice on Nostr one person.
- *
- * TODO(core): there is no `owner.list` / `config.get` yet, so co-owners added here, the quorum and the
- * linked identities are remembered on this device only (useLocalPref) and the CLI equivalent is shown.
+ * - Linked identities: `principal.list` / `principal.link` / `principal.unlink` make alice on
+ *   Telegram and alice on Nostr one person.
  */
 import { npubEncode, tryDecodePubkey } from '@beamhop/channel-nostr/keys';
 import { Crown, Link as LinkIcon, Plus, UserCircle } from '@phosphor-icons/react';
@@ -23,7 +21,7 @@ import { Badge, MetaLine } from '../../ui/Meta.tsx';
 import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { useToast } from '../../ui/Toast.tsx';
-import { Group, List, Row, RowMenu, useLocalPref } from './kit.tsx';
+import { Group, List, Row, RowMenu } from './kit.tsx';
 
 /** `npub1…`, hex, or `nostr:npub1…` → canonical `nostr:npub1…` principal, or null. */
 export const ownerPrincipal = (raw: string): string | null => {
@@ -50,7 +48,11 @@ const AddOwnerSheet = ({
   const submit = async () => {
     setTouched(true);
     if (!principal) return;
-    await add.mutateAsync({ principal });
+    try {
+      await add.mutateAsync({ principal });
+    } catch {
+      return; // shown below the field
+    }
     onAdded(principal);
     setRaw('');
     setTouched(false);
@@ -101,45 +103,49 @@ const AddOwnerSheet = ({
 };
 
 export const OwnersSection = () => {
-  const status = useApi('system.status');
+  const ownersQ = useApi('owner.list');
+  const whoami = useApi('system.whoami');
+  const quorumQ = useApi('approval.quorumGet');
+  const peopleQ = useApi('principal.list');
   const roles = useApi('role.list');
   const grant = useMutationApi('role.grant');
   const revoke = useMutationApi('role.revoke');
   const removeOwner = useMutationApi('owner.remove');
   const link = useMutationApi('principal.link');
+  const unlink = useMutationApi('principal.unlink');
+  const setQuorum = useMutationApi('approval.quorumSet');
   const toast = useToast();
-  const [prefs, setPrefs] = useLocalPref('bh.settings.owners', {
-    coOwners: [] as string[],
-    quorum: 1,
-    links: [] as Array<{ person: string; principal: string }>,
-  });
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<string>();
   const [person, setPerson] = useState('');
   const [linkRaw, setLinkRaw] = useState('');
-  const showSkeleton = useDelayedLoading(status.isPending || roles.isPending);
+  const queries = [ownersQ, quorumQ, peopleQ, roles];
+  const showSkeleton = useDelayedLoading(queries.some((q) => q.isPending));
 
-  if (status.isError || roles.isError) {
-    const err = status.error ?? roles.error;
+  const failed = queries.find((q) => q.isError);
+  if (failed) {
     return (
       <ErrorState
         title="Couldn't load owners and roles."
-        details={err}
+        details={failed.error}
         onRetry={() => {
-          void status.refetch();
-          void roles.refetch();
+          for (const q of queries) if (q.isError) void q.refetch();
         }}
       >
-        {err?.message}
+        {failed.error?.message}
       </ErrorState>
     );
   }
-  if (!status.data || !roles.data)
+  if (!ownersQ.data || !quorumQ.data || !peopleQ.data || !roles.data)
     return showSkeleton ? <Skeleton variant="list" count={4} label="Loading owners" /> : null;
 
-  const me = status.data.owner.npub ? `nostr:${status.data.owner.npub}` : undefined;
-  const owners = [...(me ? [me] : []), ...prefs.coOwners.filter((o) => o !== me)];
-  const quorum = Math.min(prefs.quorum, Math.max(1, owners.length));
+  const you = whoami.data;
+  const isYou = (o: { principal: string; person?: string }) =>
+    !!you && (o.principal === you.principal || (!!you.person && o.person === you.person));
+  const owners = ownersQ.data.owners;
+  const { quorum, approvers } = quorumQ.data;
+  const seats = Math.max(approvers, quorum, 1);
+  const people = Object.entries(peopleQ.data.people).sort(([a], [b]) => a.localeCompare(b));
   const grants = Object.entries(roles.data.grants).filter(([, r]) => r !== 'owner');
   const roleOptions = roles.data.roles.map((r) => ({
     id: r.name,
@@ -162,26 +168,40 @@ export const OwnersSection = () => {
             Add owner
           </Button>
         }
-        note={owners.length === 1 ? "You're the only owner. At least one owner always remains." : undefined}
+        note={
+          owners.length <= 1
+            ? owners.some(isYou)
+              ? "You're the only owner. At least one owner always remains."
+              : 'At least one owner always remains.'
+            : undefined
+        }
       >
         <List>
           {owners.map((o) => (
             <Row
-              key={o}
+              key={o.principal}
               leading={<Crown size={22} aria-hidden="true" />}
-              title={o === me ? 'You' : short(o)}
-              aside={o === me ? <Badge tone="outline">primary</Badge> : null}
-              slug={<MetaLine items={[{ value: o.replace(/^nostr:/, ''), truncate: 26 }, 'owner']} />}
+              title={isYou(o) ? 'You' : (o.person ?? short(o.principal))}
+              aside={isYou(o) ? <Badge tone="outline">you</Badge> : null}
+              slug={
+                <MetaLine
+                  items={[
+                    { value: o.principal.replace(/^nostr:/, ''), truncate: 26 },
+                    'owner',
+                    o.linked.length > 0 ? `+${o.linked.length} linked` : undefined,
+                  ]}
+                />
+              }
               actions={
-                owners.length > 1 && o !== me ? (
+                owners.length > 1 && !isYou(o) ? (
                   <RowMenu
-                    label={`Actions for ${short(o)}`}
+                    label={`Actions for ${short(o.principal)}`}
                     items={[
                       {
                         id: 'remove',
                         label: 'Remove owner…',
                         destructive: true,
-                        onAction: () => setRemoving(o),
+                        onAction: () => setRemoving(o.principal),
                       },
                     ]}
                   />
@@ -195,17 +215,33 @@ export const OwnersSection = () => {
       <Group
         title="Approval quorum"
         id="own-quorum"
-        note="Deploys over the cost cap and owner changes wait until this many owners approve. Agents' everyday approvals need one."
+        note="Requests wait until this many approvers say yes. Approvers are the owners plus people whose role can approve."
       >
-        {owners.length > 1 ? (
+        {seats > 1 ? (
           <SegmentedControl
-            label="Owners needed to approve"
+            label="Approvals needed"
             value={String(quorum)}
-            onChange={(v) => setPrefs({ quorum: Number(v) })}
-            options={owners.map((_, i) => ({ id: String(i + 1), label: `${i + 1} of ${owners.length}` }))}
+            onChange={(v) =>
+              void setQuorum
+                .mutateAsync({ quorum: Number(v) })
+                .then((r) =>
+                  toast.show({ message: `Quorum · ${r.quorum} of ${r.approvers}`, tone: 'success' }),
+                )
+                .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }))
+            }
+            options={Array.from({ length: seats }, (_, i) => ({
+              id: String(i + 1),
+              label: `${i + 1} of ${approvers}`,
+            }))}
           />
         ) : (
           <p className="type-body-sm text-ink">1 of 1 · add another owner to require two approvals.</p>
+        )}
+        {quorum > approvers && (
+          <p className="mt-2 type-body-sm text-caution-text">
+            {quorum} approvals are needed but only {approvers} can approve. Requests will expire until you add
+            an owner or lower the quorum.
+          </p>
         )}
       </Group>
 
@@ -273,16 +309,36 @@ export const OwnersSection = () => {
         id="own-links"
         note="One person, several accounts: alice on Telegram and alice on Nostr share one role and one budget."
       >
-        {prefs.links.length > 0 && (
+        {people.length > 0 && (
           <List>
-            {prefs.links.map((l) => (
-              <Row
-                key={`${l.person}-${l.principal}`}
-                leading={<LinkIcon size={20} aria-hidden="true" />}
-                title={l.person}
-                slug={<MetaLine items={[{ value: l.principal, truncate: 30 }]} />}
-              />
-            ))}
+            {people.flatMap(([name, principals]) =>
+              principals.map((principal) => (
+                <Row
+                  key={`${name}-${principal}`}
+                  leading={<LinkIcon size={20} aria-hidden="true" />}
+                  title={name}
+                  aside={you?.principal === principal ? <Badge tone="outline">this browser</Badge> : null}
+                  slug={<MetaLine items={[{ value: principal, truncate: 30 }]} />}
+                  actions={
+                    <RowMenu
+                      label={`Actions for ${principal}`}
+                      items={[
+                        {
+                          id: 'unlink',
+                          label: `Unlink from ${name}`,
+                          destructive: true,
+                          onAction: () =>
+                            void unlink
+                              .mutateAsync({ person: name, principal })
+                              .then(() => toast.show({ message: `Unlinked · ${principal}`, tone: 'success' }))
+                              .catch((e: Error) => toast.show({ message: e.message, tone: 'error' })),
+                        },
+                      ]}
+                    />
+                  }
+                />
+              )),
+            )}
           </List>
         )}
         <form
@@ -292,7 +348,6 @@ export const OwnersSection = () => {
             if (!person.trim() || !linkRaw.includes(':')) return;
             try {
               await link.mutateAsync({ person: person.trim(), principal: linkRaw.trim() });
-              setPrefs({ links: [...prefs.links, { person: person.trim(), principal: linkRaw.trim() }] });
               toast.show({ message: `Linked · ${linkRaw.trim()} → ${person.trim()}`, tone: 'success' });
               setLinkRaw('');
             } catch (err) {
@@ -326,13 +381,12 @@ export const OwnersSection = () => {
         </form>
       </Group>
 
-      <CliStrip command={`beamhop owner add npub1… && beamhop config set approvals.quorum ${quorum}`} />
+      <CliStrip command="beamhop owner add npub1…" />
 
       <AddOwnerSheet
         open={adding}
         onOpenChange={setAdding}
         onAdded={(p) => {
-          setPrefs({ coOwners: [...prefs.coOwners.filter((o) => o !== p), p] });
           toast.show({ message: `Added owner · ${short(p)}`, tone: 'success' });
         }}
       />
@@ -350,10 +404,6 @@ export const OwnersSection = () => {
             toast.show({ message: (e as Error).message, tone: 'error' });
             return;
           }
-          setPrefs({
-            coOwners: prefs.coOwners.filter((o) => o !== removing),
-            quorum: Math.min(quorum, owners.length - 1),
-          });
           toast.show({ message: `Removed owner · ${short(removing)}`, tone: 'success' });
           setRemoving(undefined);
         }}

@@ -664,5 +664,94 @@ export const createCli = (o: { name: string; preset?: string; harness?: string; 
     .filter(Boolean)
     .join(' ');
 
-/** Fake-but-shaped "is this a git repo" (no fs RPC yet): paths under ~/code/<x>. */
-export const looksGit = (p: string) => /^~\/code\/[^/]+$/.test(p);
+// ───────────────────────────── Instruction files ─────────────────────────────
+
+const normPath = (p: string): string => {
+  const out: string[] = [];
+  for (const seg of p.replace(/\/+$/, '').split('/')) {
+    if (seg === '..') out.pop();
+    else if (seg !== '.' && seg !== '') out.push(seg);
+  }
+  return (p.startsWith('/') ? '/' : '') + out.join('/');
+};
+const within = (p: string, root: string) => p === root || p.startsWith(`${root}/`);
+
+/** The read-write mount holding `path`, if any: instruction files are only writable there. */
+export const writableMount = (mounts: Mount[], path: string): Mount | undefined => {
+  const p = normPath(path);
+  return mounts.find((m) => m.mode === 'rw' && within(p, normPath(m.path)));
+};
+
+/**
+ * A git-style unified diff of one file (3 lines of context), for the preview before a write.
+ * Empty when nothing changed.
+ */
+export const unifiedDiff = (path: string, before: string, after: string, context = 3): string => {
+  if (before === after) return '';
+  const a = before.split('\n');
+  const b = after.split('\n');
+  // Trim the common head and tail, then LCS the middle (instruction files are small).
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  )
+    tail++;
+  const am = a.slice(head, a.length - tail);
+  const bm = b.slice(head, b.length - tail);
+  const ops: Array<{ k: ' ' | '-' | '+'; t: string }> = a.slice(0, head).map((t) => ({ k: ' ', t }));
+  if (am.length * bm.length > 4_000_000) {
+    for (const t of am) ops.push({ k: '-', t });
+    for (const t of bm) ops.push({ k: '+', t });
+  } else {
+    const L = Array.from({ length: am.length + 1 }, () => new Uint32Array(bm.length + 1));
+    for (let i = am.length - 1; i >= 0; i--)
+      for (let j = bm.length - 1; j >= 0; j--)
+        L[i]![j] = am[i] === bm[j] ? L[i + 1]![j + 1]! + 1 : Math.max(L[i + 1]![j]!, L[i]![j + 1]!);
+    let i = 0;
+    let j = 0;
+    while (i < am.length || j < bm.length) {
+      if (i < am.length && j < bm.length && am[i] === bm[j]) {
+        ops.push({ k: ' ', t: am[i]! });
+        i++;
+        j++;
+      } else if (j < bm.length && (i === am.length || L[i]![j + 1]! >= L[i + 1]![j]!)) {
+        ops.push({ k: '+', t: bm[j]! });
+        j++;
+      } else {
+        ops.push({ k: '-', t: am[i]! });
+        i++;
+      }
+    }
+  }
+  for (const t of a.slice(a.length - tail)) ops.push({ k: ' ', t });
+
+  // Group into hunks with `context` lines around each change.
+  const changed = ops.map((o, i) => (o.k === ' ' ? -1 : i)).filter((i) => i >= 0);
+  const out = [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`];
+  let k = 0;
+  while (k < changed.length) {
+    const start = Math.max(0, changed[k]! - context);
+    let end = Math.min(ops.length - 1, changed[k]! + context);
+    while (k + 1 < changed.length && changed[k + 1]! - context <= end + 1) {
+      k++;
+      end = Math.min(ops.length - 1, changed[k]! + context);
+    }
+    k++;
+    let oldStart = 1;
+    let newStart = 1;
+    for (let x = 0; x < start; x++) {
+      if (ops[x]!.k !== '+') oldStart++;
+      if (ops[x]!.k !== '-') newStart++;
+    }
+    const slice = ops.slice(start, end + 1);
+    const oldLen = slice.filter((o) => o.k !== '+').length;
+    const newLen = slice.filter((o) => o.k !== '-').length;
+    out.push(`@@ -${oldStart},${oldLen} +${newStart},${newLen} @@`);
+    for (const o of slice) out.push(`${o.k}${o.t}`);
+  }
+  return out.join('\n');
+};

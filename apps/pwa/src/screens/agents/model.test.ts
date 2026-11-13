@@ -1,5 +1,6 @@
 import { AgentConfig } from '@beamhop/core';
 import { describe, expect, it } from 'vitest';
+import { parseDiff } from '../../ui/CodeBlock.tsx';
 import {
   createCli,
   describeChanges,
@@ -10,11 +11,13 @@ import {
   reachOf,
   suggestName,
   toYaml,
+  unifiedDiff,
   validateMountPath,
   validateName,
   validateNip05,
   validatePrincipal,
   validateSpec,
+  writableMount,
 } from './model.ts';
 
 const base = AgentConfig.parse({
@@ -170,5 +173,56 @@ describe('validators', () => {
         mounts: [{ path: '~/docs/public', mode: 'ro', parallelUnsafe: false }],
       }),
     ).toBe('beamhop agent create qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
+  });
+});
+
+describe('instruction files', () => {
+  it('are writable only inside a read-write mount', () => {
+    const mounts = [
+      { path: '~/code/app', mode: 'rw' as const, parallelUnsafe: false },
+      { path: '~/notes', mode: 'ro' as const, parallelUnsafe: false },
+    ];
+    expect(writableMount(mounts, '~/code/app/CLAUDE.md')?.path).toBe('~/code/app');
+    expect(writableMount(mounts, '~/code/app/./sub/../AGENTS.md')?.path).toBe('~/code/app');
+    expect(writableMount(mounts, '~/notes/CLAUDE.md')).toBeUndefined();
+    expect(writableMount(mounts, '~/code/application/CLAUDE.md')).toBeUndefined();
+    expect(writableMount(mounts, '~/code/app/../site/CLAUDE.md')).toBeUndefined();
+  });
+
+  it('previews edits as a unified diff the DiffView can read', () => {
+    const before = [
+      '# app',
+      '',
+      '- one',
+      '- two',
+      '- three',
+      '- four',
+      '- five',
+      '- six',
+      '- seven',
+      '',
+    ].join('\n');
+    const after = before.replace('- two', '- TWO').replace('- seven', '- seven\n- eight');
+    const d = unifiedDiff('CLAUDE.md', before, after);
+    expect(d.split('\n').slice(0, 3)).toEqual([
+      'diff --git a/CLAUDE.md b/CLAUDE.md',
+      '--- a/CLAUDE.md',
+      '+++ b/CLAUDE.md',
+    ]);
+    const [file] = parseDiff(d);
+    expect(file).toMatchObject({ path: 'CLAUDE.md', added: 2, removed: 1 });
+    expect(file!.lines.filter((l) => l.kind === 'del').map((l) => l.text)).toEqual(['- two']);
+    expect(file!.lines.filter((l) => l.kind === 'add').map((l) => l.text)).toEqual(['- TWO', '- eight']);
+    expect(unifiedDiff('x', 'same', 'same')).toBe('');
+  });
+
+  it('splits far-apart changes into separate hunks with correct line numbers', () => {
+    const lines = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`);
+    const after = [...lines];
+    after[1] = 'changed 2';
+    after[27] = 'changed 28';
+    const d = unifiedDiff('f', lines.join('\n'), after.join('\n'));
+    const hunks = d.split('\n').filter((l) => l.startsWith('@@'));
+    expect(hunks).toEqual(['@@ -1,5 +1,5 @@', '@@ -25,6 +25,6 @@']);
   });
 });

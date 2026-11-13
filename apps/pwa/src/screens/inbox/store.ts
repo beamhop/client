@@ -1,7 +1,6 @@
 /**
- * Inbox client state that must outlive a component: which approvals *you* voted on (N-of-M
- * "waiting on others", "decided elsewhere"), the last undoable decision (U / Z from anywhere in
- * the inbox), the open decision sheet (scope / access / reason / help — opened from a swipe, a
+ * Inbox client state that must outlive a component: the last undoable decision (U / Z from
+ * anywhere in the inbox), the open decision sheet (scope / access / reason / help — opened from a swipe, a
  * button, a key or a toast action), the offline decision queue, and learning-mode holds
  * (suggestions are applied after the same 5 s undo window, client-side).
  */
@@ -43,20 +42,6 @@ const write = (key: string, v: unknown) => {
     /* private mode */
   }
 };
-
-// ─────────── Mine: approvals this device decided ───────────
-const MINE_KEY = 'bh.inbox.mine';
-export const mineStore = store<ReadonlySet<string>>(new Set(read<string[]>(MINE_KEY, [])));
-export const markMine = (ids: string[], on = true) =>
-  mineStore.set((prev) => {
-    const next = new Set(prev);
-    for (const id of ids) {
-      if (on) next.add(id);
-      else next.delete(id);
-    }
-    write(MINE_KEY, [...next].slice(-200));
-    return next;
-  });
 
 // ─────────── Last undoable decision ───────────
 export interface UndoEntry {

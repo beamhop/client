@@ -1,21 +1,26 @@
 /**
  * Settings → Updates (SCREENS §10, §12 updates). beamhop version, harness catalog auto-update,
- * explicit-confirm app updates, cloud daemons' versions.
- * TODO(core): `updates.catalogAuto` / `updates.appPrompt` have no API yet; kept on this device with the CLI shown.
+ * explicit-confirm app updates (`updates.get` / `updates.set`), cloud daemons' versions.
  */
-import { deployMonogram, useApi } from '../../api/index.ts';
+import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
 import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { Skeleton } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
-import { Group, List, Row, useLocalPref } from './kit.tsx';
+import { useToast } from '../../ui/Toast.tsx';
+import { Group, List, Row } from './kit.tsx';
 
 export const UpdatesSection = () => {
   const status = useApi('system.status');
   const deploys = useApi('deploy.list');
   const harnesses = useApi('harness.list');
-  const [u, set] = useLocalPref('bh.settings.updates', { catalogAuto: true, appPrompt: true });
+  const updates = useApi('updates.get');
+  const save = useMutationApi('updates.set');
+  const toast = useToast();
+  const u = updates.data;
+  const set = (patch: { catalogAuto?: boolean; appPrompt?: boolean }) =>
+    void save.mutateAsync(patch).catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
   const clouds = (deploys.data?.deployments ?? []).filter((d) => d.status !== 'destroyed');
 
   return (
@@ -35,22 +40,30 @@ export const UpdatesSection = () => {
       </Group>
 
       <Group title="Automatic" id="upd-auto">
-        <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
-          <Switch
-            isSelected={u.catalogAuto}
-            onChange={(v) => set({ catalogAuto: v })}
-            description={`Harness and channel definitions (${harnesses.data?.harnesses.length ?? '…'} harnesses). Signed; never changes your config.`}
-          >
-            Update the catalog automatically
-          </Switch>
-          <Switch
-            isSelected={u.appPrompt}
-            onChange={(v) => set({ appPrompt: v })}
-            description="beamhop itself never updates without you. Off: just a dot on Settings."
-          >
-            Ask me when a new version is out
-          </Switch>
-        </div>
+        {updates.isError ? (
+          <p className="type-body-sm text-stop-text">
+            Couldn't load update settings: {updates.error.message}
+          </p>
+        ) : !u ? (
+          <Skeleton variant="list" count={2} />
+        ) : (
+          <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
+            <Switch
+              isSelected={u.catalogAuto}
+              onChange={(v) => set({ catalogAuto: v })}
+              description={`Harness and channel definitions (${harnesses.data?.harnesses.length ?? '…'} harnesses). Signed; never changes your config.`}
+            >
+              Update the catalog automatically
+            </Switch>
+            <Switch
+              isSelected={u.appPrompt}
+              onChange={(v) => set({ appPrompt: v })}
+              description="beamhop itself never updates without you. Off: just a dot on Settings."
+            >
+              Ask me when a new version is out
+            </Switch>
+          </div>
+        )}
       </Group>
 
       <Group title="Cloud daemons" id="upd-cloud">

@@ -36,6 +36,8 @@ import { Badge, RiskTag } from '../../ui/Meta.tsx';
 import { spring, useReduced } from '../../ui/motion.ts';
 import { StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { useMe } from '../inbox/me.ts';
+import { whoDecided } from '../inbox/model.ts';
 import { useSmoothText } from './hooks.ts';
 import { OverflowMenu } from './Menu.tsx';
 import { type Block, type ChangesSummary, diffStats, duration, runSummary, type ToolItem } from './model.ts';
@@ -401,6 +403,7 @@ const InlineApproval = ({ ev, ctx }: { ev: SessionEventView; ctx: TranscriptCtx 
   const navigate = useNavigate();
   const call = useCall();
   const decide = useMutationApi('approval.decide');
+  const me = useMe();
   const target = a ? approvalTarget(a) : (ev.text ?? '');
   const shortId = (ev.approvalId ?? '').replace(/^apr_/, '');
   const run = (allow: boolean) => {
@@ -433,12 +436,12 @@ const InlineApproval = ({ ev, ctx }: { ev: SessionEventView; ctx: TranscriptCtx 
   const statusLine =
     status === 'approved'
       ? t('session.approval.statusAllowed', {
-          who: a?.decidedBy ?? 'you',
+          who: whoDecided(me, a?.decidedBy, 'an owner'),
           time: a?.decidedAt ? clock(a.decidedAt) : '',
         })
       : status === 'denied'
         ? t('session.approval.statusDenied', {
-            who: a?.decidedBy ?? 'you',
+            who: whoDecided(me, a?.decidedBy, 'an owner'),
             time: a?.decidedAt ? clock(a.decidedAt) : '',
           })
         : status === 'expired'

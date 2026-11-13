@@ -11,7 +11,9 @@ test('list shows cloud agents with cost and opens the detail', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Destroy…' })).toBeVisible();
 });
 
-test('move reviewer to Hetzner: provider → size → plan diff → deploy → apply timeline', async ({ page }) => {
+test('move reviewer to Hetzner: provider → size → files → plan diff → deploy → apply timeline', async ({
+  page,
+}) => {
   await open(page, '/deploy/new?agent=reviewer');
   await expect(page.getByRole('heading', { name: 'Move reviewer to the cloud' }).first()).toBeAttached();
   await expect(page.getByRole('radio', { name: /^reviewer/ })).toBeChecked();
@@ -25,6 +27,17 @@ test('move reviewer to Hetzner: provider → size → plan diff → deploy → a
   await page.getByRole('radio', { name: /cx32/ }).check({ force: true });
   await page.getByText('Helsinki (hel1)').click();
   await expect(page.getByRole('radio', { name: /Helsinki/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Continue · Files' }).click();
+
+  // Mount sync choices: the git repo (fs.list) defaults to a clone, a plain folder to a copy.
+  await expect(
+    page.getByRole('button', { name: /Clone from git.*How ~\/code\/app gets to the server/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Copy once.*How ~\/notes gets to the server/ }),
+  ).toBeVisible();
+  await page.getByText('Subscription login on the server').click();
+  await expect(page.getByRole('radio', { name: /Subscription login/ })).toBeChecked();
   await page.getByRole('button', { name: 'Continue · Plan' }).click();
 
   const plan = page.locator('[data-plan]').first();
@@ -53,6 +66,8 @@ test('PaaS: token goes to the keychain, sandbox warning must be acknowledged', a
   await page.getByRole('button', { name: 'Save token' }).click();
   await expect(page.getByText('token saved').first()).toBeVisible();
   await next.click();
+  await page.getByRole('button', { name: 'Continue · Files' }).click();
+  await expect(page.getByRole('radio', { name: /API key from this computer/ })).toBeChecked();
   await page.getByRole('button', { name: 'Continue · Plan' }).click();
   await expect(page.getByText(/filesystem isolation = container only/).first()).toBeVisible();
   const deploy = page.getByRole('button', { name: /^Deploy/ });

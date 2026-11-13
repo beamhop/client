@@ -80,6 +80,23 @@ test('channel detail: identity, owners, memberships with undo, remove', async ({
   await expect(page.getByRole('link', { name: /@reviewer_alice_bot/ })).toHaveCount(0);
 });
 
+test('channel detail: disconnect and reconnect with the Connected switch', async ({ page }) => {
+  await open(page, '/channels/tg');
+  const sw = page.getByRole('switch', { name: 'Connected' });
+  await expect(sw).toBeChecked();
+  await sw.click({ force: true });
+  await expect(sw).not.toBeChecked();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Disconnected · @reviewer_alice_bot'),
+  ).toBeVisible();
+  await expect(page.getByText(/Nobody can reach agents here/)).toBeVisible();
+  await sw.click({ force: true });
+  await expect(sw).toBeChecked();
+  await expect(
+    page.getByRole('region', { name: 'Notifications' }).getByText('Connected · @reviewer_alice_bot'),
+  ).toBeVisible();
+});
+
 test('nostr detail lists relays with latency and NIP-11', async ({ page }) => {
   await open(page, '/channels/nostr');
   await expect(page.getByRole('heading', { name: /Relays · 4/ })).toBeVisible();
