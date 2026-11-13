@@ -123,6 +123,11 @@ export class DevicePairing {
     if (!res.ok) return fail(res.reason, `pairing code ${res.reason}`);
     const pairingId = typeof res.record.data.pairingId === 'string' ? res.record.data.pairingId : undefined;
     const rec = pairingId ? d.store.kv.get<PairingRecord>(NS, pairingId) : undefined;
+    // A pairing cancelled on the computer (or expired) must not be completed with its code
+    // (review wave C PAIR-1).
+    const state = rec ? this.expireIfStale(rec).status : 'waiting';
+    if (state !== 'waiting')
+      return fail(`pairing-${state}`, 'this pairing was cancelled or has expired; start a new one');
     const name = (input.name || String(res.record.data.name ?? 'device')).slice(0, 80);
     // Re-pairing the same device replaces the old record and keeps its name (JOURNEYS 9).
     const old = d.store.devices.getByPubkey(npub) ?? d.store.devices.getByPubkey(hex);

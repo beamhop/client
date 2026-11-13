@@ -1113,7 +1113,8 @@ export class ApiHandlers {
       },
       'identity.ownerExport': async (_p, ctx) => {
         // Never over the Nostr control plane: only a client on this computer can see the key.
-        if (ctx.transport === 'nostr')
+        // Allowlist, not denylist (review wave C OWN-1): any future transport stays refused.
+        if (ctx.caller !== 'local' || !['direct', 'http', 'ws'].includes(ctx.transport))
           throw new BeamhopError('forbidden', 'the owner key can only be exported on this computer');
         const nsec = await d.identity.exportOwner();
         d.audit({

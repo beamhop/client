@@ -472,13 +472,13 @@ describe('deploy, audit, usage, devices, identity, data', () => {
     await expect(
       env.client.call('device.pushSubscribe', {
         id: dev.id,
-        subscription: { endpoint: 'https://push.example/x' },
+        subscription: { endpoint: 'https://fcm.googleapis.com/x' },
       }),
     ).rejects.toThrow(/keys/);
     await env.client.call('device.pushSubscribe', {
       id: dev.id,
       subscription: {
-        endpoint: 'https://push.example/x',
+        endpoint: 'https://fcm.googleapis.com/x',
         keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) },
       },
     });
