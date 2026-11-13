@@ -25,6 +25,9 @@ test('screenshot dark home + kitchen', async ({ page }, info) => {
     ['/', 'home-dark'],
     ['/_kitchen', 'kitchen-dark'],
     ['/inbox', 'inbox-dark'],
+    ['/sessions', 'sessions-dark'],
+    ['/sessions/ses_842', 'sessions_ses_842-dark'],
+    ['/sessions/ses_836', 'sessions_ses_836-dark'],
   ] as const) {
     await page.goto(`${path}?mock=1&still=1`);
     await expect(page.locator('#bh-main-content').first()).toBeVisible();
@@ -32,6 +35,14 @@ test('screenshot dark home + kitchen', async ({ page }, info) => {
     await page.waitForTimeout(600);
     await page.screenshot({ path: `screenshots/${info.project.name}/${name}.png` });
   }
+});
+
+test('screenshot ended session (merge / open PR)', async ({ page }, info) => {
+  await page.goto('/sessions/ses_836?mock=1&still=1');
+  await expect(page.locator('#bh-main-content').first()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `screenshots/${info.project.name}/sessions_ses_836.png` });
 });
 
 test('screenshot panic band', async ({ page }, info) => {

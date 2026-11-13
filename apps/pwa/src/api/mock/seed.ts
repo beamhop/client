@@ -544,6 +544,188 @@ export const seed = (now = Date.now()): MockState => {
     },
   ]);
 
+  // ─────────── Sessions screens (additive demo data) ───────────
+  // ses_836: a finished worktree session with edits, a failed tool and a retry → files changed, merge / PR.
+  // ses_s09: a long transcript (≈260 entries) to exercise "Load earlier" windowing.
+  ses({
+    id: 'ses_836',
+    agent: 'reviewer',
+    channel: 'tg',
+    conversationId: 'group/-100123',
+    threadId: '836',
+    title: 'bump zod to v4 and fix the type errors',
+    status: 'ended',
+    startedAt: ago(now, 60 * 26),
+    lastActivityAt: ago(now, 60 * 25.4),
+    worktree: { path: '~/.beamhop/worktrees/app/beamhop-836', branch: 'beamhop/836' },
+    usage: { inputTokens: 311_000, outputTokens: 14_200, usd: 0.74 },
+  });
+  {
+    const t0 = 60 * 26;
+    let n = 0;
+    const e = (minAgo: number, ev: Omit<SessionEventView, 'seq' | 'at'>): SessionEventView => ({
+      seq: ++n,
+      at: ago(now, minAgo),
+      ...ev,
+    });
+    const zodDiff = [
+      'diff --git a/package.json b/package.json',
+      '--- a/package.json',
+      '+++ b/package.json',
+      '@@ -14,7 +14,7 @@',
+      '   "dependencies": {',
+      '     "express": "^5.1.0",',
+      '-    "zod": "^3.23.8"',
+      '+    "zod": "^4.1.5"',
+      '   }',
+      'diff --git a/src/schema.ts b/src/schema.ts',
+      '--- a/src/schema.ts',
+      '+++ b/src/schema.ts',
+      '@@ -3,8 +3,8 @@ import { z } from "zod";',
+      ' export const User = z.object({',
+      '-  email: z.string().email(),',
+      '-  site: z.string().url().optional(),',
+      '+  email: z.email(),',
+      '+  site: z.url().optional(),',
+      '   name: z.string().min(1),',
+      ' });',
+    ].join('\n');
+    const errDiff = [
+      'diff --git a/src/errors.ts b/src/errors.ts',
+      '--- a/src/errors.ts',
+      '+++ b/src/errors.ts',
+      '@@ -9,5 +9,5 @@ export const toProblem = (e: unknown) => {',
+      '   if (e instanceof z.ZodError) {',
+      '-    return { status: 422, issues: e.errors };',
+      '+    return { status: 422, issues: e.issues };',
+      '   }',
+    ].join('\n');
+    events.set('ses_836', [
+      e(t0, { kind: 'user', from: alice, text: 'bump zod to v4 and fix the type errors' }),
+      e(t0 - 0.2, { kind: 'assistant', text: 'Checking where zod is used before bumping it.' }),
+      e(t0 - 0.3, {
+        kind: 'tool_call',
+        tool: { id: 'z1', name: 'Grep', title: 'Grep "from \'zod\'"', input: { pattern: "from 'zod'" } },
+      }),
+      e(t0 - 0.3, { kind: 'tool_result', tool: { id: 'z1', name: 'Grep', ok: true, output: '3 files' } }),
+      e(t0 - 0.4, {
+        kind: 'tool_call',
+        tool: { id: 'z2', name: 'Read', title: 'Read src/schema.ts', input: { path: 'src/schema.ts' } },
+      }),
+      e(t0 - 0.4, { kind: 'tool_result', tool: { id: 'z2', name: 'Read', ok: true, output: '41 lines' } }),
+      e(t0 - 0.5, {
+        kind: 'tool_call',
+        tool: { id: 'z3', name: 'Read', title: 'Read src/errors.ts', input: { path: 'src/errors.ts' } },
+      }),
+      e(t0 - 0.5, { kind: 'tool_result', tool: { id: 'z3', name: 'Read', ok: true, output: '27 lines' } }),
+      e(t0 - 0.9, {
+        kind: 'tool_call',
+        tool: {
+          id: 'z4',
+          name: 'Edit',
+          title: 'Edit 2 files +3 −3',
+          input: { files: ['package.json', 'src/schema.ts'] },
+        },
+      }),
+      e(t0 - 1.0, { kind: 'tool_result', tool: { id: 'z4', name: 'Edit', ok: true, diff: zodDiff } }),
+      e(t0 - 1.1, {
+        kind: 'tool_call',
+        tool: {
+          id: 'z5',
+          name: 'Bash',
+          title: 'Bash npm run typecheck',
+          input: { command: 'npm run typecheck' },
+        },
+      }),
+      e(t0 - 1.9, {
+        kind: 'tool_result',
+        tool: {
+          id: 'z5',
+          name: 'Bash',
+          ok: false,
+          output:
+            "src/errors.ts:11:43 - error TS2339: Property 'errors' does not exist on type 'ZodError<unknown>'.\n\nFound 1 error in src/errors.ts:11",
+        },
+      }),
+      e(t0 - 2.0, {
+        kind: 'assistant',
+        text: 'One break: `ZodError.errors` is gone in v4, it is `issues` now. Fixing that.',
+      }),
+      e(t0 - 2.2, {
+        kind: 'tool_call',
+        tool: { id: 'z6', name: 'Edit', title: 'Edit src/errors.ts +1 −1', input: { path: 'src/errors.ts' } },
+      }),
+      e(t0 - 2.2, { kind: 'tool_result', tool: { id: 'z6', name: 'Edit', ok: true, diff: errDiff } }),
+      e(t0 - 2.3, {
+        kind: 'tool_call',
+        tool: {
+          id: 'z7',
+          name: 'Bash',
+          title: 'Bash npm run typecheck && npm test',
+          input: { command: 'npm run typecheck && npm test' },
+        },
+      }),
+      e(t0 - 3.4, {
+        kind: 'tool_result',
+        tool: { id: 'z7', name: 'Bash', ok: true, output: 'tsc: 0 errors\n✓ 214 passing (39s)' },
+      }),
+      e(t0 - 3.5, {
+        kind: 'assistant',
+        text: 'Done. zod is on **4.1.5**; I switched to the new top-level `z.email()` / `z.url()` helpers and fixed the one break in `src/errors.ts`.\n\n- typecheck: 0 errors\n- tests: 214 passing\n\nThe change is committed on `beamhop/836`. Want me to open a PR?',
+      }),
+      e(t0 - 3.6, { kind: 'usage', text: '$0.74 · 325k tokens' }),
+      e(60 * 25.4, { kind: 'system', text: 'Session ended after 30 min idle.' }),
+    ]);
+  }
+  {
+    const lines = [
+      'Q3 planning — action items',
+      'Draft the migration note for the billing API',
+      'Ask Bob about the staging DB snapshot schedule',
+      'Move the weekly sync to Thursdays',
+      'Review the onboarding checklist with Dana',
+      'Close stale issues older than 90 days',
+    ];
+    const list: SessionEventView[] = [];
+    let n = 0;
+    const start = 60 * 74.5;
+    for (let i = 0; i < 64; i++) {
+      const m = start - i * 0.45;
+      list.push({
+        seq: ++n,
+        at: ago(now, m),
+        kind: 'user',
+        from: { principal: OWNER.principal, displayName: 'alice', role: 'owner' },
+        text:
+          i === 0 ? 'turn my meeting notes into a todo list' : `next note: ${lines[i % lines.length]} (${i})`,
+      });
+      list.push({
+        seq: ++n,
+        at: ago(now, m - 0.1),
+        kind: 'tool_call',
+        tool: {
+          id: `s${i}`,
+          name: 'Read',
+          title: `Read ~/notes/2026-11-${String((i % 28) + 1).padStart(2, '0')}.md`,
+          input: {},
+        },
+      });
+      list.push({
+        seq: ++n,
+        at: ago(now, m - 0.12),
+        kind: 'tool_result',
+        tool: { id: `s${i}`, name: 'Read', ok: true, output: `${20 + (i % 17)} lines` },
+      });
+      list.push({
+        seq: ++n,
+        at: ago(now, m - 0.2),
+        kind: 'assistant',
+        text: `Added to the list:\n- ${lines[i % lines.length]}\n- follow-up for item ${i + 1}`,
+      });
+    }
+    events.set('ses_s09', list);
+  }
+
   // ─────────── Approvals ───────────
   const approvals = new Map<string, ApprovalView>();
   const apr = (a: Omit<ApprovalView, 'kind'> & { kind?: ApprovalView['kind'] }) =>

@@ -1,0 +1,27 @@
+/* Sessions screens: the few things Tailwind utilities can't express. Reduced motion is handled globally (app.css). */
+
+/* Streaming caret ▍ blinks 1s steps(2) (DESIGN §8.3); static under reduced motion. */
+@keyframes bh-caret {
+  50% {
+    opacity: 0;
+  }
+}
+.stream-caret {
+  animation: bh-caret 1s steps(1, end) infinite;
+}
+
+/* Off-screen transcript blocks skip layout/paint (browser-level windowing for long transcripts). */
+.tx-block {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+/* New-row flash on the tick rail: the tick turns flare for a moment when an event lands. */
+@keyframes bh-tick-in {
+  from {
+    background-color: var(--bh-flare);
+  }
+}
+.tx-tick-new {
+  animation: bh-tick-in 1.2s var(--ease-out);
+}
