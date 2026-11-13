@@ -530,11 +530,46 @@ export class MockDaemon {
       const a = this.state.approvals.get(p.id) ?? fail('not_found', `No approval ${p.id}`);
       if (a.status !== 'pending')
         return fail('conflict', `Already ${a.status}${a.decidedBy ? ` by ${a.decidedBy}` : ''}`);
+      const at = new Date().toISOString();
+      const how = p.allow
+        ? p.always
+          ? `always allowed${p.rule ? ` (${p.rule})` : ''}`
+          : p.session
+            ? 'allowed for the session'
+            : p.grantRole
+              ? `allowed as ${p.grantRole}`
+              : 'allowed'
+        : `denied${p.reason ? ` ("${p.reason}")` : ''}`;
+      // N-of-M: an allow vote that doesn't reach the quorum keeps the request pending.
+      let votes = a.votes;
+      if (a.quorum && a.quorum.needed > 1) {
+        votes = [...(a.votes ?? []).filter((v) => v.by !== 'alice'), { by: 'alice', allow: p.allow, at }];
+        const yes = votes.filter((v) => v.allow).length;
+        if (p.allow && yes < a.quorum.needed) {
+          const next = this.putApproval({ ...a, votes });
+          this.commitTimers.set(
+            a.id,
+            setTimeout(() => {
+              this.commitTimers.delete(a.id);
+              this.audit({
+                agent: a.agent,
+                actor: 'alice',
+                type: 'approval.voted',
+                severity: 'info',
+                summary: `alice approved ${describeApproval(a)} (${yes} of ${a.quorum?.needed})`,
+                data: { approvalId: a.id },
+              });
+            }, UNDO_WINDOW_MS),
+          );
+          return next;
+        }
+      }
       const next = this.putApproval({
         ...a,
+        ...(votes ? { votes } : {}),
         status: p.allow ? 'approved' : 'denied',
         decidedBy: 'alice',
-        decidedAt: new Date().toISOString(),
+        decidedAt: at,
       });
       this.commitTimers.set(
         a.id,
@@ -545,8 +580,15 @@ export class MockDaemon {
             actor: 'alice',
             type: 'approval.decided',
             severity: 'info',
-            summary: `alice ${p.allow ? (p.always ? 'always allowed' : 'allowed') : 'denied'} ${describeApproval(a)}`,
-            data: { approvalId: a.id, always: p.always },
+            summary: `alice ${how} ${describeApproval(a)}`,
+            data: {
+              approvalId: a.id,
+              always: p.always,
+              session: p.session,
+              rule: p.rule,
+              reason: p.reason,
+              grantRole: p.grantRole,
+            },
           });
           this.onDecisionReleased?.(next);
         }, UNDO_WINDOW_MS),
@@ -559,7 +601,13 @@ export class MockDaemon {
       if (!t) return fail('conflict', 'The undo window has passed. The decision is in Audit.');
       clearTimeout(t);
       this.commitTimers.delete(p.id);
-      return this.putApproval({ ...a, status: 'pending', decidedBy: undefined, decidedAt: undefined });
+      return this.putApproval({
+        ...a,
+        status: 'pending',
+        decidedBy: undefined,
+        decidedAt: undefined,
+        ...(a.votes ? { votes: a.votes.filter((v) => v.by !== 'alice') } : {}),
+      });
     },
 
     // ── roles
@@ -634,15 +682,16 @@ export class MockDaemon {
       this.state.suggestions = this.state.suggestions.filter((x) => x.id !== p.id);
       if (p.accept) {
         const pol = this.state.policies.get(s.agent);
-        if (pol && s.kind === 'net.allow') pol.effective.net.allow.push(s.value);
-        if (pol && s.kind === 'fs.read') pol.effective.fs.read.push(s.value);
+        const value = p.value ?? s.value;
+        if (pol && s.kind === 'net.allow') pol.effective.net.allow.push(value);
+        if (pol && s.kind === 'fs.read') pol.effective.fs.read.push(value);
       }
       this.audit({
         agent: s.agent,
         actor: 'alice',
         type: 'policy.suggestion',
         severity: 'info',
-        summary: `alice ${p.accept ? 'allowed' : 'kept blocked'} ${s.value} for ${s.agent}`,
+        summary: `alice ${p.accept ? 'allowed' : 'kept blocked'} ${p.accept ? (p.value ?? s.value) : s.value} for ${s.agent}`,
       });
       return OK;
     },

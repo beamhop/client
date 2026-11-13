@@ -36,6 +36,8 @@ const inboxIndex = createRoute({ getParentRoute: () => inbox, path: '/' });
 const inboxItem = createRoute({
   getParentRoute: () => inbox,
   path: '$approvalId',
+  // Full-screen detail on compact: the decision bar is pinned where the tab bar would be.
+  staticData: { hideTabBar: true },
   component: lazy(() => import('./screens/inbox/ApprovalDetail.tsx'), 'ApprovalDetail'),
 });
 

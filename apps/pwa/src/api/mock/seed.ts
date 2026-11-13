@@ -804,6 +804,53 @@ export const seed = (now = Date.now()): MockState => {
     status: 'pending',
     kind: 'access-request',
   });
+  // Identical requests (same agent, tool, target) — the inbox collapses these into one slip `×3`.
+  for (const [id, minAgo, left] of [
+    ['apr_b72d', 5.2, 9.8],
+    ['apr_b72e', 3.1, 11.9],
+  ] as const) {
+    apr({
+      id,
+      agent: 'ci-bot',
+      sessionId: 'ses_d17',
+      requestedBy: { principal: 'slack:T01ACME/U02BOB', displayName: 'Bob', role: 'user' },
+      tool: 'Fetch',
+      title: 'Reach a new host',
+      input: {
+        host: 'registry.npmjs.org',
+        url: 'https://registry.npmjs.org/@acme%2ficons',
+        why: 'installing dependencies for the staging build',
+        channel: 'acme:channel/C0DEPLOYS',
+        rule: 'network → new host = ask',
+      },
+      risk: 'medium',
+      createdAt: ago(now, minAgo),
+      expiresAt: ahead(now, left),
+      status: 'pending',
+    });
+  }
+  // N-of-M: production deploys need 3 owners; bob already approved.
+  apr({
+    id: 'apr_e5d0',
+    agent: 'ci-bot',
+    sessionId: 'ses_d17',
+    requestedBy: { principal: 'slack:T01ACME/U02BOB', displayName: 'Bob', role: 'user' },
+    tool: 'Deploy',
+    title: 'Deploy to production',
+    input: {
+      command: 'fly deploy --app acme-prod --strategy rolling',
+      why: 'staging is green for 2 h; shipping #214',
+      channel: 'acme:channel/C0DEPLOYS',
+      rule: 'deploy → production = 3 owners',
+    },
+    risk: 'high',
+    kind: 'deploy',
+    createdAt: ago(now, 4.5),
+    expiresAt: ahead(now, 25.5),
+    status: 'pending',
+    quorum: { needed: 3, pool: 3 },
+    votes: [{ by: 'bob', allow: true, at: ago(now, 3.9) }],
+  });
   // Decided recently (24 h)
   const decided: Array<[string, string, string, ApprovalView['status'], ApprovalView['risk'], number]> = [
     ['apr_9f20', 'reviewer', 'git push origin beamhop/839', 'approved', 'high', 150],

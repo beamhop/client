@@ -1,13 +1,27 @@
 /**
- * Home — SCREENS §1. A basic real version built by the foundation to prove the data layer
- * (queries, live events, mutations with undo). The home builder may refine it (pull-to-refresh,
- * card overflow menu, empty-state presets, medium 3-slip row).
- * Owns: src/screens/home/**.
+ * Home — SCREENS §1. The first screen of the day: what needs me, what's running, what it costs,
+ * what happened since I last looked.
+ *
+ * - Briefing slug under the title: `Fri 13 Nov · 1 live · 3 need you · $5.82 today`.
+ * - Needs you: compact transmission slips with the same risk-scaled decisions as the Inbox
+ *   (LOW = Allow once in place, higher risk / access = the scope or role sheet in place, never a
+ *   detour), identical requests collapsed `×3`, plus waiting-on-others and learning counts.
+ * - Agents: live lamp + beam line that pulses while the agent streams, last activity, budget meter,
+ *   one-tap Stop on live agents (asymmetric friction: stopping is one tap).
+ * - Today: total spend against daily budgets + 14-day spend sparkline; month vs budgets.
+ * - Recent activity: the audit tail, with "new since 09:12" marks from your last visit.
+ * - Signals: security events, policy suggestions, catalog.
+ * Refresh button in the bar (pull-to-refresh alternative); every section has its own loading/error.
+ *
+ * Research used: Linear's "Inbox / My issues" first-screen pattern (one actionable queue first,
+ * then status); Vercel / Fly dashboards (spend-to-budget meters next to a short trend);
+ * "since you were last here" digests (Slack "All unreads", GitHub dashboard) — mark, don't hide.
  */
-import type { AgentView, ApprovalView, SessionView } from '@beamhop/core';
-import { Check, Plus, X } from '@phosphor-icons/react';
+import type { AgentView, ApprovalView, AuditEvent, SessionView } from '@beamhop/core';
+import { ArrowClockwise, Check, Plus, Stop, X } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { LampState } from '../../api/derive.ts';
 import {
   agentLamp,
@@ -17,144 +31,203 @@ import {
   sortByLamp,
   targetLabel,
   useApi,
-  useCall,
   useMutationApi,
   useServerEvent,
 } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
-import { countdown, since, usd } from '../../lib/format.ts';
-import { haptic } from '../../lib/haptics.ts';
-import { useExpanded } from '../../lib/media.ts';
+import { clock, countdown, shortDate, since, usd } from '../../lib/format.ts';
+import { useExpanded, useMediaQuery } from '../../lib/media.ts';
 import { useNow } from '../../lib/useNow.ts';
 import { usePanicState } from '../../shell/panic.tsx';
 import { Screen } from '../../shell/Screen.tsx';
-import { Button, LinkButton } from '../../ui/Button.tsx';
+import { Button, IconButton, LinkButton } from '../../ui/Button.tsx';
 import { Card, TicketCard } from '../../ui/Card.tsx';
-import { Eyebrow, LetterTile, MetaLine, RiskTag } from '../../ui/Meta.tsx';
-import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
+import { Sparkline } from '../../ui/Charts.tsx';
+import { CliStrip } from '../../ui/CliStrip.tsx';
+import { Badge, Eyebrow, LetterTile, MetaLine, RiskTag } from '../../ui/Meta.tsx';
+import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { RouteLine, SegmentedMeter, StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { groupApprovals, type SlipGroup, swipeMode, waitingOnOthers } from '../inbox/model.ts';
+import { DecisionLayer } from '../inbox/Sheets.tsx';
+import { hiddenStore, mineStore, openSheet, useStore } from '../inbox/store.ts';
+import { useDecisions } from '../inbox/useDecisions.tsx';
+
+const LAST_VISIT_KEY = 'bh.home.lastVisit';
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** The previous visit (read once per mount); this visit is stored for next time. */
+const useLastVisit = (): number | null => {
+  const [prev] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(LAST_VISIT_KEY));
+      return Number.isFinite(v) && v > 0 ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  useEffect(() => {
+    const save = () => {
+      try {
+        localStorage.setItem(LAST_VISIT_KEY, String(Date.now()));
+      } catch {
+        /* private mode */
+      }
+    };
+    window.addEventListener('pagehide', save);
+    return () => {
+      save();
+      window.removeEventListener('pagehide', save);
+    };
+  }, []);
+  return prev;
+};
 
 // ─────────── Needs you ───────────
-const SlipPreview = ({ a, now }: { a: ApprovalView; now: number }) => {
-  const toast = useToast();
+const SlipPreview = ({ g, now }: { g: SlipGroup; now: number }) => {
+  const { decide } = useDecisions();
   const navigate = useNavigate();
-  const decide = useMutationApi('approval.decide');
-  const call = useCall();
+  const a = g.lead;
   const left = new Date(a.expiresAt).getTime() - now;
-  const low = a.risk === 'low';
-  const target = approvalTarget(a);
-  const run = (allow: boolean) => {
-    haptic(allow ? 'confirm' : 'reject');
-    // mutateAsync, not mutate({onSuccess}): the slip unmounts as soon as the decision event lands,
-    // and per-call mutate callbacks never fire after unmount.
-    decide
-      .mutateAsync({ id: a.id, allow })
-      .then(() =>
-        toast.show({
-          message: (
-            <>
-              {allow ? 'Allowed once' : 'Denied'} · <span className="font-mono text-[0.9em]">{target}</span>
-            </>
-          ),
-          spoken: `${allow ? 'Allowed once' : 'Denied'}: ${target}`,
-          onUndo: async () => {
-            try {
-              await call('approval.undo', { id: a.id });
-            } catch (e) {
-              toast.show({ message: (e as Error).message, tone: 'error' });
-            }
-          },
-        }),
-      )
-      .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }));
+  const target = a.kind === 'access-request' ? t('home.needs.wantsToTalk') : approvalTarget(a);
+  const commit = swipeMode(g) === 'commit';
+  const [busy, setBusy] = useState<'allow' | 'deny' | null>(null);
+  const run = async (allow: boolean) => {
+    setBusy(allow ? 'allow' : 'deny');
+    await decide(g, allow);
+    setBusy(null);
+  };
+  const allow = () => {
+    if (a.kind === 'access-request') openSheet({ type: 'access', approval: a });
+    else if (!commit) openSheet({ type: 'scope', group: g });
+    else void run(true);
   };
   return (
-    <li>
+    <li className="min-w-0">
       <TicketCard
         compact
         decision={
           <div className="flex items-center gap-2">
             <span
               className={cx(
-                'min-w-0 flex-1 pl-1 type-meta',
+                'min-w-0 flex-1 truncate pl-1 type-meta',
                 left < 120_000 ? 'text-caution-text' : 'text-ink-2',
               )}
             >
-              Auto-denies in <span className="text-ink tabular-nums">{countdown(left)}</span>
+              <span className="hidden min-[400px]:inline">{t('inbox.slip.autoDenies')} </span>
+              <span className={cx('tabular-nums', left >= 120_000 && 'text-ink')}>{countdown(left)}</span>
             </span>
             <Button
               variant="deny"
               size="sm"
               icon={<X size={16} weight="bold" aria-hidden="true" />}
-              onPress={() => run(false)}
-              aria-label={`Deny ${a.agent}: ${target}`}
-              isPending={decide.isPending && decide.variables?.allow === false}
+              onPress={() => void run(false)}
+              isPending={busy === 'deny'}
+              aria-label={`${a.kind === 'access-request' ? t('inbox.btn.ignore') : t('inbox.btn.deny')} ${a.agent}: ${target}`}
             >
-              Deny
+              {a.kind === 'access-request' ? t('inbox.btn.ignore') : t('inbox.btn.deny')}
             </Button>
-            {low ? (
-              <Button
-                variant="allow"
-                size="sm"
-                icon={<Check size={16} weight="bold" aria-hidden="true" />}
-                onPress={() => run(true)}
-                aria-label={`Allow once ${a.agent}: ${target}`}
-                isPending={decide.isPending && decide.variables?.allow === true}
-              >
-                Allow once
-              </Button>
-            ) : (
-              <Button
-                variant="allow"
-                size="sm"
-                icon={<Check size={16} weight="bold" aria-hidden="true" />}
-                onPress={() => void navigate({ to: '/inbox/$approvalId', params: { approvalId: a.id } })}
-                aria-label={`Allow… ${a.agent}: ${target} (choose scope)`}
-              >
-                Allow…
-              </Button>
-            )}
+            <Button
+              variant="allow"
+              size="sm"
+              icon={<Check size={16} weight="bold" aria-hidden="true" />}
+              onPress={allow}
+              isPending={busy === 'allow'}
+              aria-label={
+                commit
+                  ? `${t('inbox.btn.allowOnce')} ${a.agent}: ${target}`
+                  : `${t('inbox.btn.allowScoped')} ${a.agent}: ${target} (${t('home.needs.chooseScope')})`
+              }
+            >
+              {commit ? t('inbox.btn.allowOnce') : t('inbox.btn.allowScoped')}
+            </Button>
           </div>
         }
       >
-        <div className="flex items-center gap-2">
-          <StatusDot state="needs-you" hideLabel />
-          <span className="shrink-0 type-label text-ink">{a.agent}</span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[13px] leading-5 text-ink" title={target}>
-            <span aria-hidden="true" className="text-ink-3">
-              ·{' '}
+        <button
+          type="button"
+          onClick={() => void navigate({ to: '/inbox/$approvalId', params: { approvalId: a.id } })}
+          className="-mx-1 -my-1 flex w-[calc(100%+8px)] min-w-0 flex-col gap-1 rounded-md px-1 py-1 text-left outline-none hover:bg-sunken focus-visible:outline-2 focus-visible:outline-focus"
+        >
+          <span className="flex w-full min-w-0 items-center gap-2">
+            <StatusDot state="needs-you" hideLabel />
+            <span className="shrink-0 type-label text-ink">{a.agent}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[13px] leading-5 text-ink" title={target}>
+              <span aria-hidden="true" className="text-ink-3">
+                ·{' '}
+              </span>
+              {target}
             </span>
-            {target}
+            {g.items.length > 1 && <Badge tone="outline">×{g.items.length}</Badge>}
+            <RiskTag risk={RISK_LABEL[a.risk]} />
           </span>
-          <RiskTag risk={RISK_LABEL[a.risk]} />
-        </div>
+          <span className="truncate pl-[18px] type-body-sm text-ink-2">{a.title}</span>
+        </button>
       </TicketCard>
     </li>
   );
 };
 
-const NeedsYou = ({ approvals, now }: { approvals: ApprovalView[]; now: number }) => {
+const NeedsYou = ({
+  pending,
+  now,
+  suggestions,
+}: {
+  pending: ApprovalView[];
+  now: number;
+  suggestions: number;
+}) => {
   const expanded = useExpanded();
-  const shown = approvals.slice(0, expanded ? 3 : 1);
+  const medium = useMediaQuery('(min-width: 37.5rem)');
+  const mine = useStore(mineStore);
+  const hidden = useStore(hiddenStore);
+  const waiting = pending.filter((a) => waitingOnOthers(a, mine));
+  const groups = groupApprovals(pending.filter((a) => !hidden.has(a.id) && !waitingOnOthers(a, mine)));
+  const shown = groups.slice(0, expanded || medium ? 3 : 1);
+  const more = groups.length - shown.length;
+  const extras = [
+    more > 0 ? t('home.needs.more', { count: more }) : null,
+    waiting.length > 0 ? t('home.needs.waiting', { count: waiting.length }) : null,
+    suggestions > 0 ? t('home.needs.learning', { count: suggestions }) : null,
+  ].filter(Boolean) as string[];
   return (
     <section aria-labelledby="home-needs">
-      <Eyebrow id="home-needs" count={approvals.length} href="/inbox">
-        Needs you
+      <Eyebrow id="home-needs" count={groups.length} href="/inbox">
+        {t('home.needs.title')}
       </Eyebrow>
-      {approvals.length === 0 ? (
-        <p className="type-body-sm text-ink-2">Inbox clear. Nothing is waiting on you.</p>
+      {groups.length === 0 ? (
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-4 py-3">
+          <StatusDot state="ready" hideLabel />
+          <p className="type-body-sm text-ink-2">
+            <span className="text-ink">{t('inbox.clear.title')}</span> {t('inbox.clear.short')}
+          </p>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {shown.map((a) => (
-            <SlipPreview key={a.id} a={a} now={now} />
+        <ul
+          className={cx(
+            'grid gap-2',
+            !expanded && medium && 'grid-cols-3',
+            !expanded && medium && shown.length < 3 && 'grid-cols-2',
+          )}
+        >
+          {shown.map((g) => (
+            <SlipPreview key={g.key} g={g} now={now} />
           ))}
         </ul>
       )}
-      {approvals.length > shown.length && (
-        <LinkButton href="/inbox" variant="quiet" size="sm" className="mt-1 -ml-3">
-          + {approvals.length - shown.length} more
-        </LinkButton>
+      {extras.length > 0 && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1 type-body-sm text-ink-2">
+          <LinkButton href="/inbox" variant="quiet" size="sm" className="-ml-3">
+            {extras[0]}
+          </LinkButton>
+          {extras.slice(1).map((x) => (
+            <span key={x} className="type-meta">
+              <span aria-hidden="true">· </span>
+              {x}
+            </span>
+          ))}
+        </p>
       )}
     </section>
   );
@@ -172,7 +245,10 @@ const AgentCard = ({
   session?: SessionView;
   channels: Parameters<typeof targetLabel>[1];
 }) => {
+  const toast = useToast();
+  const stop = useMutationApi('agent.stop');
   const live = session?.status === 'running';
+  const streaming = a.status === 'busy';
   const events = useApi(
     'session.events',
     { id: session?.id ?? '', afterSeq: 0 },
@@ -193,7 +269,7 @@ const AgentCard = ({
   const lastText = !live
     ? undefined
     : last?.kind === 'permission'
-      ? `waiting for approval: ${last.text ?? ''}`
+      ? t('home.agent.waiting', { what: last.text ?? '' })
       : last?.text;
   const membership = session
     ? `${session.channel}:${session.conversationId}`
@@ -201,20 +277,39 @@ const AgentCard = ({
   const budget = a.config.budgets.dailyUsd ?? 0;
   const href = session && live ? `/sessions/${session.id}` : `/agents/${a.config.name}`;
   const learning = a.config.sandbox.profile === 'custom' && a.config.public;
+  const word = lamp === 'needs-you' ? 'needs you' : learning && lamp === 'ready' ? 'learning' : undefined;
   return (
     <Card
       href={href}
-      linkLabel={`${a.config.name}, ${lamp === 'live' ? 'live' : lamp}. Open ${live ? 'live session' : 'agent'}`}
-      className="flex flex-col"
+      linkLabel={t(live ? 'home.agent.openLive' : 'home.agent.open', {
+        name: a.config.name,
+        state: word ?? lamp,
+      })}
+      className="flex h-full flex-col"
     >
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-3">
           <LetterTile code={harnessMonogram(a.config.harness)} />
           <h3 className="min-w-0 flex-1 truncate type-title-3 text-ink">{a.config.name}</h3>
-          <StatusDot
-            state={lamp}
-            label={lamp === 'needs-you' ? 'needs you' : learning && lamp === 'ready' ? 'learning' : undefined}
-          />
+          <StatusDot state={lamp} label={word} />
+          {streaming && (
+            <Button
+              variant="destructive-outline"
+              size="sm"
+              className="-my-1.5 pointer-fine:-my-1"
+              icon={<Stop size={14} weight="fill" aria-hidden="true" />}
+              aria-label={t('home.agent.stop', { name: a.config.name })}
+              isPending={stop.isPending}
+              onPress={() =>
+                stop
+                  .mutateAsync({ name: a.config.name })
+                  .then(() => toast.show({ message: t('home.agent.stopped', { name: a.config.name }) }))
+                  .catch((e: Error) => toast.show({ message: e.message, tone: 'error' }))
+              }
+            >
+              {t('home.agent.stopShort')}
+            </Button>
+          )}
         </div>
         <MetaLine
           items={[
@@ -230,16 +325,20 @@ const AgentCard = ({
               { label: a.config.name, kind: 'agent' },
             ]}
             pulse={pulse}
+            live={streaming}
             state={lamp === 'error' ? 'broken' : 'ok'}
+            reason={lamp === 'error' ? a.error : undefined}
           />
         )}
         <p className="flex items-baseline gap-3 type-body-sm text-ink-2">
-          <span className="min-w-0 flex-1 truncate">
+          <span className={cx('min-w-0 flex-1 truncate', lastText && 'text-ink')}>
             {lastText
               ? `“${lastText}”`
               : a.status === 'stopped'
-                ? 'stopped'
-                : `idle ${a.lastActivityAt ? since(a.lastActivityAt) : ''}`}
+                ? t('home.agent.stoppedLine')
+                : a.lastActivityAt
+                  ? t('home.agent.idle', { since: since(a.lastActivityAt) })
+                  : t('home.agent.never')}
           </span>
           {session && live && (
             <span className="shrink-0 type-meta">
@@ -247,7 +346,9 @@ const AgentCard = ({
             </span>
           )}
         </p>
-        {budget > 0 && (
+      </div>
+      {budget > 0 && (
+        <div className="mt-auto pt-3">
           <SegmentedMeter
             name={`${a.config.name} budget today`}
             value={a.usageToday.usd}
@@ -255,9 +356,157 @@ const AgentCard = ({
             label={`${usd(a.usageToday.usd)} / ${usd(budget)} today`}
             valueText={`${usd(a.usageToday.usd)} of ${usd(budget)} used today`}
           />
+        </div>
+      )}
+    </Card>
+  );
+};
+
+// ─────────── Today (budgets) ───────────
+const Spend = ({ agents }: { agents: AgentView[] }) => {
+  const usage = useApi('usage.query', { days: 30 });
+  const today = agents.reduce((s, a) => s + a.usageToday.usd, 0);
+  const daily = agents.reduce((s, a) => s + (a.config.budgets.dailyUsd ?? 0), 0);
+  const rows = usage.data?.rows ?? [];
+  const byDay = new Map<string, number>();
+  for (const r of rows) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.usd);
+  const days = [...byDay.keys()].sort().slice(-14);
+  const trend = days.map((d) => Math.round((byDay.get(d) ?? 0) * 100) / 100);
+  const month = rows.reduce((s, r) => s + r.usd, 0);
+  const monthBudget = daily * 30;
+  const near = agents.filter(
+    (a) => (a.config.budgets.dailyUsd ?? 0) > 0 && a.usageToday.usd / (a.config.budgets.dailyUsd ?? 1) >= 0.8,
+  );
+  return (
+    <section aria-labelledby="home-spend">
+      <Eyebrow id="home-spend" href="/audit">
+        {t('home.spend.title')}
+      </Eyebrow>
+      <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+        <div className="flex items-end justify-between gap-4">
+          <p className="flex flex-col">
+            <span className="font-mono text-[28px] leading-8 font-medium tabular-nums text-ink">
+              {usd(today)}
+            </span>
+            <span className="type-meta text-ink-2">{t('home.spend.today', { budget: usd(daily, 0) })}</span>
+          </p>
+          {trend.length > 1 && (
+            // The sparkline's sr-only data table is wider than the card: clip it (no page overflow).
+            <span className="relative block overflow-hidden">
+              <Sparkline
+                values={trend}
+                width={112}
+                height={28}
+                label={t('home.spend.trend', {
+                  days: trend.length,
+                  total: usd(trend.reduce((s, v) => s + v, 0)),
+                })}
+                labels={days.map((d) => shortDate(d))}
+              />
+            </span>
+          )}
+        </div>
+        <SegmentedMeter
+          name={t('home.spend.todayMeter')}
+          value={today}
+          max={daily}
+          label={`${Math.round((today / Math.max(daily, 0.01)) * 100)}% of daily`}
+          valueText={`${usd(today)} of ${usd(daily)} daily budgets used`}
+        />
+        {usage.data && (
+          <SegmentedMeter
+            name={t('home.spend.monthMeter')}
+            value={month}
+            max={monthBudget}
+            label={t('home.spend.month', { spent: usd(month), budget: usd(monthBudget, 0) })}
+            valueText={`${usd(month)} of ${usd(monthBudget, 0)} monthly budgets used`}
+          />
+        )}
+        {near.length > 0 && (
+          <p className="type-body-sm text-caution-text">
+            {t('home.spend.near', { names: near.map((a) => a.config.name).join(', '), count: near.length })}
+          </p>
         )}
       </div>
-    </Card>
+    </section>
+  );
+};
+
+// ─────────── Recent activity ───────────
+const SEVERITY_LAMP: Record<AuditEvent['severity'], LampState> = {
+  info: 'stopped',
+  warn: 'needs-you',
+  security: 'error',
+};
+
+const Recent = ({ lastVisit }: { lastVisit: number | null }) => {
+  const audit = useApi('audit.query', { limit: 30 });
+  const expanded = useExpanded();
+  const events = (audit.data?.events ?? []).slice(0, expanded ? 7 : 5);
+  const fresh = lastVisit
+    ? (audit.data?.events ?? []).filter((e) => new Date(e.at).getTime() > lastVisit).length
+    : 0;
+  return (
+    <section aria-labelledby="home-recent">
+      <Eyebrow
+        id="home-recent"
+        href="/audit?tab=log"
+        action={
+          lastVisit && fresh > 0 ? (
+            <span className="type-meta text-flare-text">
+              {t('home.recent.new', { count: fresh, time: clock(lastVisit) })}
+            </span>
+          ) : undefined
+        }
+      >
+        {t('home.recent.title')}
+      </Eyebrow>
+      {audit.isError ? (
+        <ErrorState
+          title={t('home.recent.error')}
+          onRetry={() => void audit.refetch()}
+          details={audit.error}
+        />
+      ) : events.length === 0 ? (
+        <p className="type-body-sm text-ink-2">{audit.isPending ? '' : t('home.recent.empty')}</p>
+      ) : (
+        <ol className="flex flex-col border-l border-line">
+          {events.map((e) => {
+            const isNew = !!lastVisit && new Date(e.at).getTime() > lastVisit;
+            return (
+              <li key={e.id} className="relative flex min-h-11 items-start gap-3 py-1.5 pl-4">
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'absolute top-[15px] left-0 h-px w-2.5',
+                    isNew ? 'bg-flare' : 'bg-line-strong',
+                  )}
+                />
+                <span className="w-11 shrink-0 pt-0.5 type-meta tabular-nums text-ink-2">{clock(e.at)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-start gap-2">
+                    {e.severity === 'info' ? (
+                      <span className="mt-[9px] size-1.5 shrink-0 rounded-full bg-ink-3">
+                        <span className="sr-only">info</span>
+                      </span>
+                    ) : (
+                      <StatusDot
+                        state={SEVERITY_LAMP[e.severity]}
+                        label={e.severity}
+                        hideLabel
+                        className="mt-[5px]"
+                      />
+                    )}
+                    <span className="min-w-0 type-body-sm text-ink">{e.summary}</span>
+                  </span>
+                  {isNew && <span className="sr-only">{t('home.recent.newMark')}</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </section>
   );
 };
 
@@ -266,54 +515,52 @@ const Signals = () => {
   const audit = useApi('audit.query', { severity: 'security', limit: 200 });
   const suggestions = useApi('policy.suggestions');
   const harnesses = useApi('harness.list');
+  const channels = useApi('channel.list');
   const today = new Date().toDateString();
   const sec = (audit.data?.events ?? []).filter((e) => new Date(e.at).toDateString() === today).length;
   const sug = suggestions.data?.suggestions.length ?? 0;
+  const broken = (channels.data?.channels ?? []).filter((c) => c.status === 'error');
   const rows: Array<{ lamp: LampState; text: string; href?: string; word: string }> = [
+    ...broken.map((c) => ({
+      lamp: 'error' as LampState,
+      word: 'error',
+      text: t('home.signals.channel', { name: c.config.name, error: c.error ?? 'error' }),
+      href: `/channels/${c.config.name}`,
+    })),
     {
       lamp: sec > 0 ? 'error' : 'ready',
       word: sec > 0 ? 'attention' : 'clear',
-      text: `${sec} security ${sec === 1 ? 'event' : 'events'} today`,
+      text: t('home.signals.security', { count: sec }),
       href: '/audit?tab=security',
     },
     {
       lamp: sug > 0 ? 'needs-you' : 'ready',
       word: sug > 0 ? 'needs you' : 'clear',
-      text: `Policy: ${sug} learning ${sug === 1 ? 'suggestion' : 'suggestions'}`,
+      text: t('home.signals.policy', { count: sug }),
       href: '/policy',
     },
     {
       lamp: 'stopped',
       word: 'info',
-      text: `Catalog updated · ${harnesses.data?.harnesses.length ?? 0} harnesses`,
+      text: t('home.signals.catalog', { count: harnesses.data?.harnesses.length ?? 0 }),
+      href: '/harnesses',
     },
   ];
   return (
     <section aria-labelledby="home-signals">
-      <Eyebrow id="home-signals">Signals</Eyebrow>
+      <Eyebrow id="home-signals">{t('home.signals.title')}</Eyebrow>
       <ul className="-mx-2 flex flex-col">
-        {rows.map((r) => {
-          const inner = (
-            <>
+        {rows.map((r) => (
+          <li key={r.text}>
+            <LinkRow href={r.href ?? '/'}>
               <StatusDot state={r.lamp} label={r.word} hideLabel />
               <span className="flex-1 type-body-sm text-ink">{r.text}</span>
-              {r.href && (
-                <span aria-hidden="true" className="font-mono text-ink-3">
-                  →
-                </span>
-              )}
-            </>
-          );
-          return (
-            <li key={r.text}>
-              {r.href ? (
-                <LinkRow href={r.href}>{inner}</LinkRow>
-              ) : (
-                <div className="flex min-h-11 items-center gap-3 px-2">{inner}</div>
-              )}
-            </li>
-          );
-        })}
+              <span aria-hidden="true" className="font-mono text-ink-3">
+                →
+              </span>
+            </LinkRow>
+          </li>
+        ))}
       </ul>
     </section>
   );
@@ -328,41 +575,73 @@ const LinkRow = ({ href, children }: { href: string; children: React.ReactNode }
         e.preventDefault();
         void navigate({ href });
       }}
-      className="flex min-h-11 items-center gap-3 rounded-md px-2 outline-none hover:bg-sunken"
+      className="flex min-h-11 items-center gap-3 rounded-md px-2 outline-none hover:bg-sunken focus-visible:outline-2 focus-visible:outline-focus"
     >
       {children}
     </a>
   );
 };
 
-const MonthSpend = ({ agents }: { agents: AgentView[] }) => {
-  const usage = useApi('usage.query', { days: 30 });
-  const total = (usage.data?.rows ?? []).reduce((a, r) => a + r.usd, 0);
-  const budgets = agents.reduce((a, x) => a + (x.config.budgets.dailyUsd ?? 0), 0) * 30;
-  if (!usage.data) return null;
+// ─────────── Empty (no agents) ───────────
+const FirstAgent = () => {
+  const presets = useApi('agent.presets');
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="type-micro text-ink-2">This month</span>
-      <SegmentedMeter
-        name="Spend this month against budgets"
-        value={total}
-        max={budgets}
-        label={`${usd(total)} of ${usd(budgets, 0)} budgets`}
-        valueText={`${usd(total)} of ${usd(budgets, 0)} monthly budgets`}
-      />
-    </div>
+    <section aria-labelledby="home-first" className="flex max-w-[560px] flex-col gap-5 py-4">
+      <div className="rounded-lg border border-line bg-surface p-4">
+        <RouteLine
+          nodes={[
+            { label: t('inbox.clear.you'), kind: 'device' },
+            { label: 'relays', kind: 'relay' },
+            { label: t('home.first.agent'), kind: 'agent' },
+          ]}
+          aria-label={t('home.first.route')}
+        />
+      </div>
+      <div>
+        <h2 id="home-first" className="type-title-2 text-ink">
+          {t('home.first.title')}
+        </h2>
+        <p className="mt-1 type-body text-ink-2">{t('home.first.body')}</p>
+      </div>
+      {(presets.data?.presets.length ?? 0) > 0 && (
+        <ul className="-mx-2 flex flex-col">
+          {presets.data?.presets.map((p) => (
+            <li key={p.id}>
+              <LinkRow href={`/agents/new?preset=${p.id}`}>
+                <span className="flex min-w-0 flex-1 flex-col py-1.5">
+                  <span className="type-label text-ink">{p.title}</span>
+                  <span className="type-body-sm text-ink-2">{p.description}</span>
+                </span>
+                <span aria-hidden="true" className="font-mono text-ink-3">
+                  →
+                </span>
+              </LinkRow>
+            </li>
+          ))}
+        </ul>
+      )}
+      <LinkButton href="/agents/new" variant="primary" className="self-start">
+        {t('home.first.cta')}
+      </LinkButton>
+      <CliStrip command="beamhop agent create" />
+    </section>
   );
 };
 
 // ─────────── Screen ───────────
 export const HomeScreen = () => {
   const now = useNow(1000);
+  const qc = useQueryClient();
   const agents = useApi('agent.list');
   const approvals = useApi('approval.list', { status: 'pending' });
   const sessions = useApi('session.list');
   const channels = useApi('channel.list');
+  const suggestions = useApi('policy.suggestions');
   const { panic } = usePanicState();
   const showSkeleton = useDelayedLoading(agents.isPending);
+  const lastVisit = useLastVisit();
+  const expanded = useExpanded();
+  const [refreshing, setRefreshing] = useState(false);
 
   const cards = useMemo(() => {
     const pending = approvals.data?.approvals ?? [];
@@ -382,69 +661,117 @@ export const HomeScreen = () => {
   }, [agents.data, approvals.data, sessions.data, panic]);
 
   const pending = approvals.data?.approvals ?? [];
+  const list = cards.map((c) => c.a);
+  const live = list.filter((a) => a.status === 'busy').length;
+  const spent = list.reduce((s, a) => s + a.usageToday.usd, 0);
+  const d = new Date(now);
+  const needs = groupApprovals(pending).length;
+  const briefing = agents.data ? (
+    <MetaLine
+      className="whitespace-normal"
+      items={[
+        expanded ? `${WEEKDAYS[d.getDay()]} ${shortDate(d)}` : shortDate(d),
+        live > 0 ? { value: `${live} live`, tone: 'flare' } : t('home.brief.quiet'),
+        needs > 0 ? { value: `${needs} need you`, tone: 'caution' } : t('home.brief.clear'),
+        `${usd(spent)} today`,
+      ]}
+    />
+  ) : undefined;
+
+  const refresh = async () => {
+    setRefreshing(true);
+    await qc.invalidateQueries({ queryKey: ['bh'] });
+    setRefreshing(false);
+  };
+
+  const sugCount = suggestions.data?.suggestions.length ?? 0;
 
   return (
-    <Screen title="Home" maxWidth="none">
-      {agents.isError ? (
-        <ErrorState
-          title="Couldn't load your agents."
-          details={agents.error}
-          onRetry={() => void agents.refetch()}
-        >
-          {agents.error.message}
-        </ErrorState>
-      ) : agents.isPending ? (
-        showSkeleton ? (
-          <Skeleton variant="cards" count={3} label="Loading agents" />
-        ) : null
-      ) : cards.length === 0 ? (
-        <EmptyState
-          title="Create your first agent."
-          cli="beamhop agent create"
-          action={
-            <LinkButton href="/agents/new" variant="primary">
-              New agent
-            </LinkButton>
-          }
-        >
-          An agent is a harness (Claude Code, Codex…) in a sandbox, reachable from your channels. You decide
-          what it can read and talk to.
-        </EmptyState>
-      ) : (
-        <div className="flex flex-col gap-8 expanded:grid expanded:grid-cols-[minmax(320px,400px)_1fr] expanded:items-start expanded:gap-8">
-          <div className="flex flex-col gap-8 expanded:sticky expanded:top-[72px]">
-            <NeedsYou approvals={pending} now={now} />
-            <div className="hidden expanded:flex expanded:flex-col expanded:gap-8">
-              <Signals />
-              <MonthSpend agents={cards.map((c) => c.a)} />
+    <>
+      <Screen
+        title={t('nav.home')}
+        maxWidth="none"
+        slug={briefing}
+        actions={
+          <IconButton
+            label={refreshing ? t('home.refreshing') : t('home.refresh')}
+            icon={
+              <ArrowClockwise
+                size={20}
+                className={cx(refreshing && 'animate-spin motion-reduce:animate-none')}
+              />
+            }
+            onPress={() => void refresh()}
+            isDisabled={refreshing}
+          />
+        }
+      >
+        {agents.isError ? (
+          <ErrorState title={t('home.error')} details={agents.error} onRetry={() => void agents.refetch()}>
+            {agents.error.message}
+          </ErrorState>
+        ) : agents.isPending ? (
+          showSkeleton ? (
+            <Skeleton variant="cards" count={3} label={t('home.loading')} />
+          ) : null
+        ) : cards.length === 0 ? (
+          <>
+            {pending.length > 0 && <NeedsYou pending={pending} now={now} suggestions={sugCount} />}
+            <FirstAgent />
+          </>
+        ) : (
+          <div className="flex flex-col gap-8 expanded:grid expanded:grid-cols-[minmax(320px,400px)_1fr] expanded:items-start expanded:gap-x-10">
+            <div className="flex flex-col gap-8 expanded:sticky expanded:top-[72px]">
+              <NeedsYou pending={pending} now={now} suggestions={sugCount} />
+              <div className="hidden expanded:flex expanded:flex-col expanded:gap-8">
+                <Spend agents={list} />
+                <Signals />
+              </div>
+            </div>
+            <div className="flex min-w-0 flex-col gap-8">
+              <section aria-labelledby="home-agents" className="min-w-0">
+                <Eyebrow
+                  id="home-agents"
+                  count={cards.length}
+                  href="/agents"
+                  action={
+                    <LinkButton
+                      href="/agents/new"
+                      variant="quiet"
+                      size="sm"
+                      icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+                    >
+                      {t('home.agents.new')}
+                    </LinkButton>
+                  }
+                >
+                  {t('home.agents.title')}
+                </Eyebrow>
+                <ul className="grid grid-cols-1 gap-3 medium:grid-cols-2 expanded:grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+                  {cards.map((c) => (
+                    <li key={c.a.config.name} className="min-w-0">
+                      <AgentCard
+                        a={c.a}
+                        lamp={c.lamp}
+                        session={c.session}
+                        channels={channels.data?.channels}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              <div className="flex flex-col gap-8 expanded:hidden">
+                <Spend agents={list} />
+              </div>
+              <Recent lastVisit={lastVisit} />
+              <div className="expanded:hidden">
+                <Signals />
+              </div>
             </div>
           </div>
-          <section aria-labelledby="home-agents" className="min-w-0">
-            <Eyebrow id="home-agents" count={cards.length} href="/agents">
-              Agents
-            </Eyebrow>
-            <ul className="grid grid-cols-1 gap-3 medium:grid-cols-2 expanded:grid-cols-[repeat(auto-fill,minmax(268px,1fr))]">
-              {cards.map((c) => (
-                <li key={c.a.config.name} className="min-w-0">
-                  <AgentCard a={c.a} lamp={c.lamp} session={c.session} channels={channels.data?.channels} />
-                </li>
-              ))}
-            </ul>
-            <LinkButton
-              href="/agents/new"
-              variant="secondary"
-              className="mt-4"
-              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
-            >
-              New agent
-            </LinkButton>
-          </section>
-          <div className="flex flex-col gap-8 expanded:hidden">
-            <Signals />
-            <MonthSpend agents={cards.map((c) => c.a)} />
-          </div>
-        </div>
-      )}
-    </Screen>
+        )}
+      </Screen>
+      <DecisionLayer />
+    </>
   );
 };
