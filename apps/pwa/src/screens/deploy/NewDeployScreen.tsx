@@ -1,38 +1,474 @@
 /**
- * TODO(deploy builder): New / Move to cloud wizard — SCREENS §8, JOURNEYS §7.
- * Route: /deploy/new. Stepper `01 Provider · 02 Size · 03 Harness & auth · 04 Mounts · 05 Plan · 06 Apply`;
- * terraform-style plan (+ create / ~ move / → clone / - stop, symbols AND words), primary `Deploy · €4.51/mo`.
- * Desktop: left form 640 + sticky Plan preview. Data: 'deploy.providers', 'deploy.options', 'deploy.plan', 'deploy.apply'.
+ * New cloud agent / Move to cloud — SCREENS §8, JOURNEYS §7.
+ * Steps: 01 Agent (move an existing local agent, or a new one) · 02 Provider (5 rows: VPS/PaaS
+ * trade-off, sandbox note, inline API token → keychain) · 03 Size & region (monthly cost right-aligned)
+ * · 04 Plan (terraform-style + ~ → - diff with words, warnings needing an explicit "I understand",
+ * estimated cost) → `Deploy · $4.90/mo` → deployment detail (apply timeline; leaving is safe).
+ * Desktop: left steps form (640) + sticky live Plan preview with the cost readout.
+ * Deep link: `/deploy/new?agent=reviewer` (Agent detail → Move to cloud) starts in move mode.
+ *
+ * Research used: Terraform/OpenTofu plan symbols; Vercel/Railway deploy timelines with phase logs;
+ * Fly per-second billing and storage while stopped
+ * (https://www.costbench.com/software/developer-tools/flyio/hidden-costs/).
  */
+import { ArrowLeft, ArrowRight, CloudArrowUp, LockSimple, Warning } from '@phosphor-icons/react';
+import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { cx } from '../../lib/cx.ts';
+import { haptic } from '../../lib/haptics.ts';
+import { useExpanded } from '../../lib/media.ts';
 import { Screen } from '../../shell/Screen.tsx';
-import { ScreenStub } from '../../shell/ScreenStub.tsx';
+import { Button, TextLink } from '../../ui/Button.tsx';
+import { Checkbox, Radio, RadioGroup } from '../../ui/Choice.tsx';
+import { CliStrip, CopyButton } from '../../ui/CliStrip.tsx';
+import { SecretField, TextField } from '../../ui/Field.tsx';
+import { Badge, Eyebrow, LetterTile, Readout } from '../../ui/Meta.tsx';
+import { ErrorState, Skeleton } from '../../ui/States.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
+import { useToast } from '../../ui/Toast.tsx';
+import { AGENT_NAME_RE, PROVIDER_INFO, providerTokenSecret, usd } from './model.ts';
+import { PlanDiff, TickRuler } from './PlanDiff.tsx';
 
-export const NewDeployScreen = () => (
-  <Screen
-    title="New cloud agent"
-    back={{ href: '/deploy', label: 'Deploy' }}
-    pane="detail"
-    maxWidth="form"
-    crumbs={[{ label: 'Deploy', href: '/deploy' }, { label: 'New' }]}
-  >
+const STEPS = ['Agent', 'Provider', 'Size', 'Plan'];
+type Mode = 'move' | 'new';
+
+interface Draft {
+  mode: Mode;
+  agent: string;
+  provider: string;
+  size?: string;
+  region?: string;
+}
+
+// ─────────── 01 Agent ───────────
+const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) => {
+  const agents = useApi('agent.list');
+  const local = (agents.data?.agents ?? []).filter((a) => a.location.kind === 'local');
+  const taken = (agents.data?.agents ?? []).some((a) => a.config.name === d.agent);
+  const nameBad = d.mode === 'new' && d.agent.length > 0 && (!AGENT_NAME_RE.test(d.agent) || taken);
+  return (
     <div className="flex flex-col gap-6">
-      <Stepper steps={['Provider', 'Size', 'Harness & auth', 'Mounts', 'Plan', 'Apply']} current={0} />
-      <ScreenStub
-        spec="SCREENS §8 · JOURNEYS §7"
-        owner="src/screens/deploy/"
-        outline={[
-          'Provider rows with one-line fit',
-          'Size & region with monthly estimate',
-          'Plan diff with symbols + words + cost readout',
-          'Apply timeline on a tick rail with live logs',
-        ]}
-        calls={[
-          { method: 'deploy.providers' },
-          { method: 'deploy.options', params: { provider: 'hetzner' } },
-        ]}
-        cli="beamhop deploy plan reviewer --provider hetzner --json"
-      />
+      <RadioGroup
+        label="What do you want to run in the cloud?"
+        variant="cards"
+        value={d.mode}
+        onChange={(v) => set({ mode: v as Mode, agent: v === 'move' ? (local[0]?.config.name ?? '') : '' })}
+      >
+        <Radio value="move" description="Same agent, same identity and memberships. It stops here and runs there.">
+          Move an agent to the cloud
+        </Radio>
+        <Radio value="new" description="A fresh agent that lives only on the server. Configure it after it's up.">
+          New cloud agent
+        </Radio>
+      </RadioGroup>
+      {d.mode === 'move' ? (
+        local.length ? (
+          <RadioGroup
+            label="Agent"
+            variant="cards"
+            value={d.agent || null}
+            onChange={(v) => set({ agent: v })}
+            description="Its key moves to the server's vault; API keys stay on this computer and are brokered."
+          >
+            {local.map((a) => (
+              <Radio
+                key={a.config.name}
+                value={a.config.name}
+                description={
+                  <span className="font-mono text-[12px]">
+                    {a.config.harness} · {a.config.sandbox.profile} · {a.config.mounts.length}{' '}
+                    {a.config.mounts.length === 1 ? 'mount' : 'mounts'}
+                  </span>
+                }
+              >
+                {a.config.name}
+              </Radio>
+            ))}
+          </RadioGroup>
+        ) : agents.isPending ? (
+          <Skeleton variant="list" count={1} />
+        ) : (
+          <p className="type-body-sm text-ink-2">Every agent already runs in the cloud. Start a new one instead.</p>
+        )
+      ) : (
+        <TextField
+          label="Agent name"
+          mono
+          value={d.agent}
+          onChange={(v) => set({ agent: v.toLowerCase() })}
+          placeholder="night-shift"
+          description="Lowercase letters, digits and dashes. It's also the agent's Nostr profile name."
+          isInvalid={nameBad}
+          errorMessage={taken ? `${d.agent} already exists.` : 'Use lowercase letters, digits and dashes.'}
+        />
+      )}
     </div>
-  </Screen>
-);
+  );
+};
+
+// ─────────── 02 Provider ───────────
+const TokenInline = ({ provider, name }: { provider: string; name: string }) => {
+  const [value, setValue] = useState('');
+  const set = useMutationApi('secret.set', { invalidate: ['deploy.providers'] });
+  const info = PROVIDER_INFO[provider];
+  return (
+    <div className="mt-1 mb-2 ml-9 flex flex-col gap-2 rounded-md border border-line bg-sunken p-3">
+      <SecretField
+        label={`${name} API token`}
+        value={value}
+        onChange={setValue}
+        description={info?.tokenHelp}
+      />
+      <p className="flex items-center gap-1.5 type-meta text-ink-2">
+        <LockSimple size={14} aria-hidden="true" /> Saved to this computer's keychain. It never leaves this machine.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          isDisabled={!value.trim()}
+          isPending={set.isPending}
+          onPress={() => set.mutate({ name: providerTokenSecret(provider), value: value.trim() })}
+        >
+          Save token
+        </Button>
+        {info && (
+          <TextLink href={info.tokenUrl} external className="type-body-sm">
+            Get a token
+          </TextLink>
+        )}
+      </div>
+      {set.isError && <p className="type-body-sm text-stop-text">{set.error.message}</p>}
+    </div>
+  );
+};
+
+const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) => {
+  const q = useApi('deploy.providers');
+  if (q.isError)
+    return (
+      <ErrorState title="Couldn't load providers." details={q.error} onRetry={() => void q.refetch()}>
+        {q.error.message}
+      </ErrorState>
+    );
+  if (!q.data) return <Skeleton variant="list" count={5} label="Loading providers" />;
+  const groups = [
+    { kind: 'vps' as const, title: 'VPS · your own server', note: 'Full sandbox. Fixed monthly price.' },
+    { kind: 'paas' as const, title: 'Platform · managed runtime', note: 'Less to run. The container or VM is the filesystem boundary.' },
+  ];
+  return (
+    <div className="flex flex-col gap-6">
+      <RadioGroup
+        label="Provider"
+        hideLabel
+        value={d.provider || null}
+        onChange={(v) => set({ provider: v, size: undefined, region: undefined })}
+      >
+        {groups.map((g) => (
+          <section key={g.kind} aria-label={g.title} className="flex flex-col">
+            <Eyebrow level={3}>{g.title}</Eyebrow>
+            <p className="-mt-2 mb-1 type-body-sm text-ink-2">{g.note}</p>
+            <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+              {q.data.providers
+                .filter((p) => p.kind === g.kind)
+                .map((p) => {
+                  const info = PROVIDER_INFO[p.id];
+                  return (
+                    <div key={p.id} className={cx('px-4', d.provider === p.id && 'bg-flare-wash')}>
+                      <Radio
+                        value={p.id}
+                        description={
+                          <span className="flex flex-col gap-1">
+                            <span className="font-mono text-[12px] leading-4 text-ink-2">{info?.fit ?? p.kind}</span>
+                            {d.provider === p.id && info && (
+                              <>
+                                <span>{info.sandboxNote}</span>
+                                <span>{info.billing}</span>
+                              </>
+                            )}
+                          </span>
+                        }
+                      >
+                        <span className="flex items-center gap-2">
+                          <LetterTile code={deployMonogram(p.id)} size={24} />
+                          {p.displayName}
+                          {p.configured ? (
+                            <Badge tone="go">token saved</Badge>
+                          ) : (
+                            <Badge tone="outline">needs token</Badge>
+                          )}
+                        </span>
+                      </Radio>
+                      {d.provider === p.id && !p.configured && <TokenInline provider={p.id} name={p.displayName} />}
+                    </div>
+                  );
+                })}
+            </div>
+          </section>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+};
+
+// ─────────── 03 Size & region ───────────
+const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) => {
+  const q = useApi('deploy.options', { provider: d.provider }, { enabled: !!d.provider });
+  useEffect(() => {
+    if (q.data && !d.size) set({ size: q.data.sizes[0]?.id, region: d.region ?? q.data.regions[0]?.id });
+  }, [q.data, d.size, d.region, set]);
+  if (q.isError)
+    return (
+      <ErrorState title="Couldn't load sizes." details={q.error} onRetry={() => void q.refetch()}>
+        {q.error.message}
+      </ErrorState>
+    );
+  if (!q.data) return <Skeleton variant="list" count={3} label="Loading sizes" />;
+  return (
+    <div className="flex flex-col gap-6">
+      <RadioGroup label="Size" variant="cards" value={d.size ?? null} onChange={(v) => set({ size: v })}>
+        {q.data.sizes.map((s) => (
+          <Radio key={s.id} value={s.id}>
+            <span className="flex items-baseline gap-3">
+              <span className="min-w-0 flex-1 font-mono text-[14px]" style={{ fontVariationSettings: '"wdth" 87.5' }}>
+                {s.label}
+              </span>
+              <span className="shrink-0 type-meta text-ink tabular-nums">{usd(s.monthlyUsd)}/mo</span>
+            </span>
+          </Radio>
+        ))}
+      </RadioGroup>
+      <p className="-mt-4 type-meta text-ink-2">Estimates from the provider's catalog prices. Bandwidth billed by the provider.</p>
+      <RadioGroup
+        label="Region"
+        value={d.region ?? null}
+        onChange={(v) => set({ region: v })}
+        description="Pick one close to you and your relays: approvals round-trip through it."
+      >
+        {q.data.regions.map((r) => (
+          <Radio key={r.id} value={r.id}>
+            {r.label}
+          </Radio>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+};
+
+// ─────────── 04 Plan ───────────
+const usePlan = (d: Draft, enabled: boolean) =>
+  useApi(
+    'deploy.plan',
+    { agent: d.agent, provider: d.provider, size: d.size, region: d.region, mode: d.mode },
+    { enabled: enabled && !!d.agent && !!d.provider, staleTime: 10_000 },
+  );
+
+const cliFor = (d: Draft) =>
+  `beamhop deploy plan ${d.agent || '<agent>'} --provider ${d.provider || '<provider>'}${d.size ? ` --size ${d.size}` : ''}${d.region ? ` --region ${d.region}` : ''}${d.mode === 'new' ? ' --new' : ''} --json`;
+
+const PlanBlock = ({
+  d,
+  compact,
+  ack,
+  setAck,
+}: {
+  d: Draft;
+  compact?: boolean;
+  ack?: boolean;
+  setAck?: (v: boolean) => void;
+}) => {
+  const plan = usePlan(d, true);
+  const sizes = useApi('deploy.options', { provider: d.provider }, { enabled: !!d.provider });
+  const sizeCost = sizes.data?.sizes.find((s) => s.id === d.size)?.monthlyUsd;
+  if (!d.provider || !d.agent)
+    return <p className="type-body-sm text-ink-2">Choose an agent and a provider to see what will change.</p>;
+  if (plan.isError)
+    return (
+      <ErrorState title="Couldn't plan this deploy." details={plan.error} onRetry={() => void plan.refetch()}>
+        {plan.error.message}
+      </ErrorState>
+    );
+  if (!plan.data) return <Skeleton variant="detail" count={2} label="Planning" />;
+  const cost = sizeCost ?? plan.data.monthlyCostUsd;
+  return (
+    <div className="flex flex-col gap-4" data-plan="">
+      <PlanDiff actions={plan.data.actions} />
+      {plan.data.warnings.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-md border-l-[3px] border-caution-text bg-caution-wash px-3 py-2.5">
+          {plan.data.warnings.map((w) => (
+            <p key={w} className="flex items-start gap-2 type-body-sm text-ink">
+              <Warning size={16} weight="bold" className="mt-0.5 shrink-0 text-caution-text" aria-hidden="true" />
+              <span>
+                <span className="font-mono text-caution-text">! sandbox</span> {w}
+              </span>
+            </p>
+          ))}
+          {setAck && (
+            <Checkbox isSelected={ack} onChange={setAck}>
+              I understand the sandbox is weaker on this provider
+            </Checkbox>
+          )}
+        </div>
+      )}
+      <TickRuler />
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="type-micro text-ink-2">Estimated</p>
+          <p className="type-meta text-ink-2">+ bandwidth · billed by {d.provider}</p>
+        </div>
+        {compact ? (
+          <p className="type-title-2 text-ink tabular-nums">{usd(cost)}/mo</p>
+        ) : (
+          <Readout size="md">{usd(cost)}/mo</Readout>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─────────── screen ───────────
+export const NewDeployScreen = () => {
+  const search = useSearch({ strict: false }) as { agent?: string; mode?: string };
+  const expanded = useExpanded();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [step, setStep] = useState(0);
+  const [ack, setAck] = useState(false);
+  const [d, setD] = useState<Draft>({
+    mode: search.mode === 'new' ? 'new' : 'move',
+    agent: search.agent ?? '',
+    provider: '',
+  });
+  const set = useMemo(() => (p: Partial<Draft>) => setD((x) => ({ ...x, ...p })), []);
+  const agents = useApi('agent.list');
+  const providers = useApi('deploy.providers');
+  const plan = usePlan(d, step === 3);
+  const apply = useMutationApi('deploy.apply', { invalidate: ['deploy.list', 'agent.list'] });
+
+  // Default the agent once agents load (move mode).
+  useEffect(() => {
+    if (d.mode === 'move' && !d.agent) {
+      const first = agents.data?.agents.find((a) => a.location.kind === 'local');
+      if (first) set({ agent: first.config.name });
+    }
+  }, [agents.data, d.mode, d.agent, set]);
+
+  const prov = providers.data?.providers.find((p) => p.id === d.provider);
+  const taken = (agents.data?.agents ?? []).some((a) => a.config.name === d.agent);
+  const canNext = [
+    d.mode === 'move' ? !!d.agent : AGENT_NAME_RE.test(d.agent) && !taken,
+    !!prov && prov.configured,
+    !!d.size && !!d.region,
+    !!plan.data && (plan.data.warnings.length === 0 || ack),
+  ][step];
+  const sizeCost = useApi('deploy.options', { provider: d.provider }, { enabled: !!d.provider }).data?.sizes.find(
+    (s) => s.id === d.size,
+  )?.monthlyUsd;
+  const cost = sizeCost ?? plan.data?.monthlyCostUsd;
+
+  const deploy = async () => {
+    try {
+      const dep = await apply.mutateAsync({ ...d });
+      haptic('confirm');
+      toast.show({ message: `Deploying · ${d.agent} to ${prov?.displayName ?? d.provider}`, tone: 'success' });
+      void navigate({ to: '/deploy/$deploymentId', params: { deploymentId: dep.id } });
+    } catch (e) {
+      haptic('error');
+      toast.show({ message: `Couldn't start the deploy: ${(e as Error).message}`, tone: 'error' });
+    }
+  };
+
+  const title = d.mode === 'move' ? (d.agent ? `Move ${d.agent} to the cloud` : 'Move to cloud') : 'New cloud agent';
+  const body = [
+    <AgentStep key="a" d={d} set={set} />,
+    <ProviderStep key="p" d={d} set={set} />,
+    <SizeStep key="s" d={d} set={set} />,
+    <div key="plan" className="flex flex-col gap-4">
+      <p className="type-body-sm text-ink-2">
+        Nothing is created until you press Deploy. Tap a row for its details.
+      </p>
+      <PlanBlock d={d} ack={ack} setAck={setAck} />
+      <div className="flex flex-wrap items-center gap-2">
+        <CopyButton value={cliFor(d)} label="Copy plan as CLI" />
+      </div>
+    </div>,
+  ][step];
+
+  const footer = (
+    <div className="flex items-center gap-2 px-gutter py-3 expanded:px-8">
+      {step > 0 && (
+        <Button
+          variant="secondary"
+          icon={<ArrowLeft size={16} aria-hidden="true" />}
+          onPress={() => setStep((s) => s - 1)}
+          aria-label={`Back to ${STEPS[step - 1]}`}
+        >
+          Back
+        </Button>
+      )}
+      <span className="flex-1" />
+      {step < 3 ? (
+        <Button
+          variant="primary"
+          isDisabled={!canNext}
+          onPress={() => setStep((s) => s + 1)}
+          icon={<ArrowRight size={16} weight="bold" aria-hidden="true" />}
+        >
+          Continue · {STEPS[step + 1]}
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          isDisabled={!canNext}
+          isPending={apply.isPending}
+          icon={<CloudArrowUp size={18} weight="bold" aria-hidden="true" />}
+          onPress={() => void deploy()}
+        >
+          Deploy{cost !== undefined ? ` · ${usd(cost)}/mo` : ''}
+        </Button>
+      )}
+    </div>
+  );
+
+  return (
+    <Screen
+      title={title}
+      back={{ href: '/deploy', label: 'Deploy' }}
+      pane="detail"
+      maxWidth="none"
+      crumbs={[{ label: 'Deploy', href: '/deploy' }, { label: d.mode === 'move' ? 'Move to cloud' : 'New' }]}
+      footer={footer}
+    >
+      <div
+        className={cx(
+          'flex flex-col gap-6',
+          expanded && 'grid grid-cols-[minmax(0,640px)_minmax(300px,1fr)] items-start gap-10',
+        )}
+      >
+        <div className="flex min-w-0 flex-col gap-6">
+          <Stepper
+            steps={STEPS}
+            current={step}
+            onStepPress={(i) => setStep(i)}
+            showLabels={expanded}
+          />
+          <h2 className="type-title-2 text-ink">
+            {['Which agent?', 'Where should it run?', 'How big, and where?', 'Review the plan'][step]}
+          </h2>
+          {body}
+          <CliStrip command={cliFor(d)} />
+        </div>
+        {expanded && step < 3 && (
+          <aside
+            aria-label="Plan preview"
+            className="sticky top-[88px] flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+          >
+            <Eyebrow level={2}>Plan preview</Eyebrow>
+            <PlanBlock d={d} compact />
+          </aside>
+        )}
+      </div>
+    </Screen>
+  );
+};

@@ -1,14 +1,35 @@
 /**
- * TODO(settings builder): Settings sections — SCREENS §10.
- * Route: /settings/$section. `appearance` is implemented by the foundation (theme/contrast/motion/haptics,
- * persisted in localStorage `bh.appearance`); everything else is a placeholder.
+ * Settings sections — SCREENS §10. Route: /settings/$section. Each section lives in its own file;
+ * `appearance` (theme/contrast/motion/haptics, persisted in `bh.appearance`) is from the foundation.
  */
 import { useParams } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 import { useAppearance } from '../../lib/appearance.ts';
 import { Screen } from '../../shell/Screen.tsx';
-import { ScreenStub } from '../../shell/ScreenStub.tsx';
+import { LinkButton } from '../../ui/Button.tsx';
 import { SegmentedControl, Switch } from '../../ui/Choice.tsx';
+import { EmptyState } from '../../ui/States.tsx';
+import { DangerSection } from './DangerSection.tsx';
+import { DevicesSection } from './DevicesSection.tsx';
+import { IdentitySection } from './IdentitySection.tsx';
+import { NotificationsSection } from './NotificationsSection.tsx';
+import { OwnersSection } from './OwnersSection.tsx';
+import { RetentionSection } from './RetentionSection.tsx';
+import { SecretsSection } from './SecretsSection.tsx';
 import { SETTINGS_SECTIONS } from './SettingsScreen.tsx';
+import { UpdatesSection } from './UpdatesSection.tsx';
+
+const BODY: Record<string, () => ReactNode> = {
+  devices: DevicesSection,
+  identity: IdentitySection,
+  owners: OwnersSection,
+  secrets: SecretsSection,
+  retention: RetentionSection,
+  notifications: NotificationsSection,
+  updates: UpdatesSection,
+  appearance: () => <AppearanceSettings />,
+  stop: DangerSection,
+};
 
 export const AppearanceSettings = () => {
   const [prefs, resolved, set] = useAppearance();
@@ -67,7 +88,8 @@ export const AppearanceSettings = () => {
 export const SettingsSectionScreen = () => {
   const { section } = useParams({ strict: false }) as { section: string };
   const meta = SETTINGS_SECTIONS.find((s) => s.id === section);
-  const title = meta?.title ?? section;
+  const title = meta?.title ?? 'Not found';
+  const Body = BODY[section];
   return (
     <Screen
       title={title}
@@ -76,23 +98,20 @@ export const SettingsSectionScreen = () => {
       maxWidth="form"
       crumbs={[{ label: 'Settings', href: '/settings' }, { label: title }]}
     >
-      {section === 'appearance' ? (
-        <AppearanceSettings />
+      {Body ? (
+        <Body />
       ) : (
-        <ScreenStub
-          spec={`SCREENS §10 · ${title}`}
-          owner="src/screens/settings/"
-          outline={[meta?.slug ?? 'Section content']}
-          calls={
-            section === 'devices'
-              ? [{ method: 'device.list' }]
-              : section === 'identity'
-                ? [{ method: 'identity.get' }, { method: 'role.list' }]
-                : section === 'retention'
-                  ? [{ method: 'secret.list' }]
-                  : []
+        <EmptyState
+          title={`There's no "${section}" section.`}
+          action={
+            <LinkButton href="/settings" variant="secondary">
+              All settings
+            </LinkButton>
           }
-        />
+        >
+          It may have moved. Settings has Devices, Identity, Owners, Secrets, Retention, Notifications, Updates,
+          Appearance and Stop everything.
+        </EmptyState>
       )}
     </Screen>
   );

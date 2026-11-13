@@ -713,15 +713,19 @@ export class MockDaemon {
     },
 
     // ── deploy
-    'deploy.providers': () => ({
-      providers: [
-        { id: 'hetzner', displayName: 'Hetzner Cloud', kind: 'vps' as const, configured: true },
-        { id: 'digitalocean', displayName: 'DigitalOcean', kind: 'vps' as const, configured: false },
-        { id: 'fly', displayName: 'Fly.io', kind: 'paas' as const, configured: true },
-        { id: 'render', displayName: 'Render', kind: 'paas' as const, configured: false },
-        { id: 'railway', displayName: 'Railway', kind: 'paas' as const, configured: false },
-      ],
-    }),
+    'deploy.providers': () => {
+      // A provider counts as configured once its API token is in the vault (`deploy/<id>/token`).
+      const has = (id: string) => this.state.secrets.some((s) => s.name === `deploy/${id}/token`);
+      return {
+        providers: [
+          { id: 'hetzner', displayName: 'Hetzner Cloud', kind: 'vps' as const, configured: true },
+          { id: 'digitalocean', displayName: 'DigitalOcean', kind: 'vps' as const, configured: has('digitalocean') },
+          { id: 'fly', displayName: 'Fly.io', kind: 'paas' as const, configured: true },
+          { id: 'render', displayName: 'Render', kind: 'paas' as const, configured: has('render') },
+          { id: 'railway', displayName: 'Railway', kind: 'paas' as const, configured: has('railway') },
+        ],
+      };
+    },
     'deploy.options': (p) => {
       const opts: Record<string, Result<'deploy.options'>> = {
         hetzner: {
