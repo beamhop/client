@@ -6,6 +6,7 @@
 - Tooling (root): `pnpm run typecheck` (single root tsc), `pnpm run lint` (biome; run `pnpm biome check --write <your dirs>` to autofix), `pnpm vitest run <your dir>`. All three must be green for your packages before you finish. Don't edit root config files (package.json, tsconfig*, biome.json, vitest*.ts) — if you need a change, explain it in your report.
 - Dependencies: add to *your* package.json, then `pnpm install` from the repo root. Prefer small, well-maintained deps.
 - Tests: vitest. Cover the happy path, error paths and security edges. No `.skip`. Unit tests must not hit the network; use fakes/recorded fixtures.
+- Fake secrets in tests: never write token-shaped literals (GitHub push protection rejects them). Build them at runtime, e.g. `["ghp", "x".repeat(36)].join("_")`.
 - Secrets: never print, log or commit secret values. Env available: `OPENROUTER_API_KEY` (cap total live LLM spend for your work at **$1**, use a cheap model such as `openai/gpt-5-mini`, `google/gemini-2.5-flash` or `qwen/qwen3-coder` — check availability), `NOSTR_NSEC` (do not use it for tests — generate throwaway keys).
 - Logging: use the `Logger` interface from core (`createLogger`, `silentLogger` in tests). Never log secrets (`redact`).
 - Cross-platform: code must work on Linux, macOS and Windows (path handling via `node:path`, no shell-specific syntax; guard platform-specific code by `process.platform`).
