@@ -10,5 +10,8 @@
     "@beamhop/core": "workspace:*",
     "@discordjs/rest": "^2.4.0",
     "discord.js": "^14.16.0"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
   }
 }

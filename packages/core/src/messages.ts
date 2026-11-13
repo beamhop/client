@@ -12,6 +12,26 @@ export const Attachment = z.object({
 });
 export type Attachment = z.infer<typeof Attachment>;
 
+const RESERVED_WIN = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
+
+/**
+ * A sender-supplied attachment name reduced to one safe path segment: last path component only,
+ * no control/format characters, no characters Windows forbids, no leading dot (no `..`, no hidden
+ * files), no reserved device names, at most 120 code points. Channel plugins apply it to
+ * `Attachment.name` so a hostile `../../.ssh/authorized_keys` cannot escape the session inbox.
+ */
+export const safeFileName = (name: string, fallback = 'file'): string => {
+  const last = name.split(/[/\\]/).pop() ?? '';
+  let s = last
+    .normalize('NFC')
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}:*?"<>|]/gu, '_')
+    .trim()
+    .replace(/[. ]+$/, '');
+  if (!s || /^\.+$/.test(s)) return fallback;
+  if (s.startsWith('.') || RESERVED_WIN.test(s)) s = `_${s}`;
+  return Array.from(s).slice(0, 120).join('');
+};
+
 /** Normalized inbound message from any channel (§5 "Common mapping"). */
 export const InboundMsg = z.object({
   id: z.string(),

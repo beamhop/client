@@ -79,7 +79,13 @@ export interface SlackConnDeps {
   self: SlackSelf;
   log: Logger;
   meshPeers?: string[];
-  fetch?: FetchLike;
+  /**
+   * Fetches `Attachment.url` for upload. There is deliberately no default: a plain `fetch` here
+   * runs on the host, outside the sandbox, so an agent-chosen URL (`http://127.0.0.1:<port>/…`,
+   * cloud metadata, LAN services) would be read and posted to Slack. The daemon passes a
+   * broker-backed fetch; without one, URL attachments are refused.
+   */
+  fetchAttachment?: FetchLike;
   readFile?: (path: string) => Promise<Uint8Array>;
   resolveNames?: boolean;
   now?: () => Date;
@@ -308,7 +314,12 @@ export class SlackConn implements ChannelConn {
     if (!withButtons) return forUpdate ? { text: chunk, blocks: [] } : { text: chunk };
     return {
       text: chunk,
-      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: chunk } }, ...buttonBlocks(buttons)],
+      // verbatim: Block Kit otherwise auto-parses plain-text mentions (@channel/@here) and channel
+      // names in mrkdwn text objects; only our own explicit <url|label> markup should be live.
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn', text: chunk, verbatim: true } },
+        ...buttonBlocks(buttons),
+      ],
     };
   }
 
@@ -330,6 +341,7 @@ export class SlackConn implements ChannelConn {
         ...this.payload(chunk, isLast, msg.buttons),
         thread_ts: threadTs,
         metadata,
+        link_names: false,
         unfurl_links: false,
         unfurl_media: false,
       });
@@ -382,7 +394,12 @@ export class SlackConn implements ChannelConn {
     if (a.localPath) {
       data = await (this.d.readFile ?? readFile)(a.localPath);
     } else if (a.url) {
-      const res = await (this.d.fetch ?? globalThis.fetch)(a.url);
+      if (!this.d.fetchAttachment)
+        throw new BeamhopError(
+          'invalid_input',
+          `attachment ${a.name}: URL attachments need a broker fetch (fetchAttachment); refusing to fetch from the host`,
+        );
+      const res = await this.d.fetchAttachment(a.url);
       if (!res.ok) throw new BeamhopError('unavailable', `attachment fetch failed: HTTP ${res.status}`);
       data = new Uint8Array(await res.arrayBuffer());
     } else {

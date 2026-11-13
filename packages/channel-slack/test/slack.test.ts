@@ -359,7 +359,10 @@ describe('slack outbound', () => {
       ],
     });
     const blocks = JSON.parse(http.byMethod('chat.postMessage')[0]?.args.blocks ?? '[]');
-    expect(blocks[0]).toEqual({ type: 'section', text: { type: 'mrkdwn', text: 'Run `rm -rf build`?' } });
+    expect(blocks[0]).toEqual({
+      type: 'section',
+      text: { type: 'mrkdwn', text: 'Run `rm -rf build`?', verbatim: true },
+    });
     expect(blocks[1].type).toBe('actions');
     expect(blocks[1].elements).toEqual([
       {

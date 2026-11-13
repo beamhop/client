@@ -1,5 +1,5 @@
 import type { ApprovalView } from '@beamhop/core';
-import { normalizePrincipal } from './roles.ts';
+import { linkedPeople, normalizePrincipal } from './roles.ts';
 import { classifyRisk, type Risk, type ToolKindHint } from './tools.ts';
 
 export const UNDO_WINDOW_MS = 30_000;
@@ -26,6 +26,12 @@ export interface ApprovalPolicyOptions {
    * `quorum`: denied once the remaining approvers can no longer reach the quorum.
    */
   denyMode?: 'veto' | 'quorum';
+  /**
+   * Linked identities (§5 "Common mapping", `BeamhopConfig.people`). Principals linked to the same
+   * person count as one approver: one vote per person, and a requester cannot approve their own
+   * request from a second linked account.
+   */
+  people?: Record<string, string[]>;
   now?: () => number;
 }
 
@@ -61,15 +67,26 @@ export class ApprovalPolicy {
   readonly undoWindowMs: number;
   readonly denyMode: 'veto' | 'quorum';
   private readonly now: () => number;
+  private readonly people: Record<string, string[]>;
+  /** Distinct identities (person or principal) among the approvers. */
+  private readonly approverIds: string[];
 
   constructor(opts: ApprovalPolicyOptions) {
+    this.people = opts.people ?? {};
     this.approvers = [...new Set(opts.approvers.map(normalizePrincipal))];
+    this.approverIds = [...new Set(this.approvers.map((a) => this.identity(a)))];
     const q = Math.floor(opts.quorum ?? 1);
-    this.quorum = Math.max(1, Math.min(Number.isFinite(q) ? q : 1, Math.max(1, this.approvers.length)));
+    this.quorum = Math.max(1, Math.min(Number.isFinite(q) ? q : 1, Math.max(1, this.approverIds.length)));
     this.timeoutMs = Math.max(1, opts.timeoutMinutes ?? 15) * 60_000;
     this.undoWindowMs = opts.undoWindowMs ?? UNDO_WINDOW_MS;
     this.denyMode = opts.denyMode ?? 'veto';
     this.now = opts.now ?? Date.now;
+  }
+
+  /** The voting identity of a principal: its linked person, or the principal itself. */
+  identity(principal: string): string {
+    const persons = linkedPeople(this.people, principal).sort();
+    return persons.length ? `person:${persons[0]}` : normalizePrincipal(principal);
   }
 
   isEligible(principal: string): boolean {
@@ -108,13 +125,13 @@ export class ApprovalPolicy {
 
   /** Effective approvals needed for this request (the requester's own vote doesn't count when quorum > 1). */
   private needed(state: ApprovalState): { needed: number; pool: number } {
-    const requester = normalizePrincipal(state.requestedBy.principal);
-    const requesterIsApprover = this.approvers.includes(requester);
+    const requester = this.identity(state.requestedBy.principal);
+    const requesterIsApprover = this.approverIds.includes(requester);
     if (this.quorum > 1 && requesterIsApprover) {
-      const pool = this.approvers.length - 1;
+      const pool = this.approverIds.length - 1;
       return { needed: Math.max(1, Math.min(this.quorum, pool)), pool: Math.max(1, pool) };
     }
-    return { needed: this.quorum, pool: this.approvers.length };
+    return { needed: this.quorum, pool: this.approverIds.length };
   }
 
   decide(state: ApprovalState, by: string, allow: boolean): DecideResult {
@@ -122,14 +139,14 @@ export class ApprovalPolicy {
     if (current.status === 'expired') return { ok: false, reason: 'expired', state: current };
     if (current.status !== 'pending') return { ok: false, reason: 'not_pending', state: current };
     if (!this.isEligible(by)) return { ok: false, reason: 'not_eligible', state: current };
-    const who = normalizePrincipal(by);
-    if (current.votes.some((v) => normalizePrincipal(v.by) === who))
+    const who = this.identity(by);
+    if (current.votes.some((v) => this.identity(v.by) === who))
       return { ok: false, reason: 'already_voted', state: current };
     const at = new Date(this.now()).toISOString();
     const votes = [...current.votes, { by, allow, at }];
     const { needed, pool } = this.needed(current);
-    const requester = normalizePrincipal(current.requestedBy.principal);
-    const counts = (v: ApprovalVote) => this.quorum === 1 || normalizePrincipal(v.by) !== requester;
+    const requester = this.identity(current.requestedBy.principal);
+    const counts = (v: ApprovalVote) => this.quorum === 1 || this.identity(v.by) !== requester;
     const approvals = votes.filter((v) => v.allow && counts(v));
     const denials = votes.filter((v) => !v.allow);
     let status: ApprovalState['status'] = 'pending';
@@ -159,10 +176,13 @@ export class ApprovalPolicy {
     if (state.status === 'expired') return { ok: false, reason: 'expired' };
     if (state.status !== 'approved' && state.status !== 'denied') return { ok: false, reason: 'not_decided' };
     if (!this.canUndo(state)) return { ok: false, reason: 'window_passed' };
-    const who = normalizePrincipal(by);
-    const deciders = (state.decidedBy ?? '').split(',').filter(Boolean).map(normalizePrincipal);
+    const who = this.identity(by);
+    const deciders = (state.decidedBy ?? '')
+      .split(',')
+      .filter(Boolean)
+      .map((d) => this.identity(d));
     if (!deciders.includes(who)) return { ok: false, reason: 'not_decider' };
-    const votes = state.votes.filter((v) => normalizePrincipal(v.by) !== who);
+    const votes = state.votes.filter((v) => this.identity(v.by) !== who);
     const { decidedAt: _a, decidedBy: _b, ...rest } = state;
     return { ok: true, state: { ...rest, votes, status: 'pending' } };
   }

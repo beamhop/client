@@ -17,6 +17,8 @@ export const SLACK_SECRET_BOT_TOKEN = 'botToken';
 
 export interface SlackPluginOptions extends SlackManifestOptions {
   fetch?: FetchLike;
+  /** Broker-backed fetch for outbound URL attachments (see `SlackConnDeps.fetchAttachment`). */
+  fetchAttachment?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   /** Build the Socket Mode client (defaults to `@slack/socket-mode`'s SocketModeClient). */
   socketFactory?: (appToken: string, log: Logger) => SlackSocketLike;
@@ -201,7 +203,7 @@ export const createSlackPlugin = (opts: SlackPluginOptions = {}): ChannelPlugin 
       log,
       meshPeers,
       resolveNames: ctx.settings.resolveNames !== false,
-      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      ...(opts.fetchAttachment ? { fetchAttachment: opts.fetchAttachment } : {}),
       ...(opts.readFile ? { readFile: opts.readFile } : {}),
       ...(opts.now ? { now: opts.now } : {}),
     });

@@ -38,6 +38,16 @@ interface Bucket {
   capacity: number;
 }
 
+/**
+ * Sanitize a spend amount: negative → 0 (no refunds through `record`), and NaN / non-numbers →
+ * Infinity, so a corrupt usage figure exhausts the budget instead of disabling it.
+ */
+const spend = (v: unknown): number => {
+  if (v === undefined || v === null) return 0;
+  if (typeof v !== 'number' || Number.isNaN(v)) return Number.POSITIVE_INFINITY;
+  return Math.max(0, v);
+};
+
 /** UTC calendar day for a timestamp, e.g. "2026-11-13". */
 export const utcDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
@@ -102,19 +112,25 @@ export class BudgetTracker {
   /** Seed today's usage (e.g. from the store after a restart). */
   load(key: string, usage: Omit<DailyUsage, 'day'> & { day?: string }): void {
     const day = usage.day ?? utcDay(this.now());
-    this.daily.set(key, { day, tokens: usage.tokens, usd: usage.usd, minutes: usage.minutes });
+    this.daily.set(key, {
+      day,
+      tokens: spend(usage.tokens),
+      usd: spend(usage.usd),
+      minutes: spend(usage.minutes),
+    });
   }
 
   /** Is there daily budget left for this key? */
   checkDaily(key: string, budget: Budget): BudgetCheck {
     const u = this.usage(key);
-    if (budget.dailyUsd !== undefined && u.usd >= budget.dailyUsd)
+    // Written as `!(used < limit)` so a NaN usage (or limit) fails closed instead of disabling the cap.
+    if (budget.dailyUsd !== undefined && !(u.usd < budget.dailyUsd))
       return {
         ok: false,
         reason: 'daily_usd',
         message: `daily budget of $${budget.dailyUsd} used ($${u.usd.toFixed(2)})`,
       };
-    if (budget.dailyTokens !== undefined && u.tokens >= budget.dailyTokens)
+    if (budget.dailyTokens !== undefined && !(u.tokens < budget.dailyTokens))
       return {
         ok: false,
         reason: 'daily_tokens',
@@ -127,7 +143,7 @@ export class BudgetTracker {
   checkSession(startedAtMs: number, budget: Budget): BudgetCheck {
     if (!budget.perSessionMinutes) return { ok: true };
     const minutes = (this.now() - startedAtMs) / 60_000;
-    if (minutes >= budget.perSessionMinutes)
+    if (!(minutes < budget.perSessionMinutes))
       return {
         ok: false,
         reason: 'session_minutes',
@@ -169,9 +185,9 @@ export class BudgetTracker {
     const before = this.usage(key);
     const after: DailyUsage = {
       day: before.day,
-      tokens: before.tokens + Math.max(0, delta.tokens ?? 0),
-      usd: before.usd + Math.max(0, delta.usd ?? 0),
-      minutes: before.minutes + Math.max(0, delta.minutes ?? 0),
+      tokens: before.tokens + spend(delta.tokens),
+      usd: before.usd + spend(delta.usd),
+      minutes: before.minutes + spend(delta.minutes),
     };
     this.daily.set(key, after);
     const out: ThresholdCrossing[] = [];

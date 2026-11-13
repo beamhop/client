@@ -162,4 +162,10 @@ CREATE TABLE dedupe (
 CREATE INDEX dedupe_seen ON dedupe(seen_at);
 `,
   },
+  {
+    version: 2,
+    name: 'pairing-attempts',
+    // Failed pairing guesses are counted against every live code (security review wave B, STORE-1).
+    sql: 'ALTER TABLE pairing_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;',
+  },
 ];

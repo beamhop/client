@@ -64,7 +64,12 @@ export interface DiscordConnDeps {
   self: DiscordSelf;
   log: Logger;
   meshPeers?: string[];
-  fetch?: (url: string) => Promise<Response>;
+  /**
+   * Fetches `Attachment.url` for upload. No default: a plain `fetch` runs on the host, outside the
+   * sandbox, so an agent-chosen URL (loopback, metadata, LAN) would be read and posted. The daemon
+   * passes a broker-backed fetch; without one, URL attachments are refused.
+   */
+  fetchAttachment?: (url: string) => Promise<Response>;
   readFile?: (path: string) => Promise<Uint8Array>;
   now?: () => Date;
 }
@@ -240,7 +245,12 @@ export class DiscordConn implements ChannelConn {
           name: a.name || basename(a.localPath),
         });
       } else if (a.url) {
-        const res = await (this.d.fetch ?? globalThis.fetch)(a.url);
+        if (!this.d.fetchAttachment)
+          throw new BeamhopError(
+            'invalid_input',
+            `attachment ${a.name}: URL attachments need a broker fetch (fetchAttachment); refusing to fetch from the host`,
+          );
+        const res = await this.d.fetchAttachment(a.url);
         if (!res.ok) throw new BeamhopError('unavailable', `attachment fetch failed: HTTP ${res.status}`);
         out.push({ attachment: Buffer.from(await res.arrayBuffer()), name: a.name || 'file' });
       } else {

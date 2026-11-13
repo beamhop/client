@@ -6,13 +6,15 @@ import {
   type RoleDef,
   type RoleName,
 } from '@beamhop/core';
+import { canonicalNostrId } from './nostr-key.ts';
 
 /** Providers whose ids are case-insensitive in practice (bech32/hex, numeric, upper-case ids). */
 const CASE_INSENSITIVE_PROVIDERS = new Set(['nostr', 'telegram', 'discord', 'slack']);
 
 /**
  * Canonical form of a principal for comparisons: trimmed, NFC-normalized, provider lower-cased,
- * and the id lower-cased for providers with case-insensitive ids.
+ * and the id lower-cased for providers with case-insensitive ids. Nostr keys are canonicalized to
+ * the npub form, so `nostr:<hex>`, `nostr:npub1…` and `nostr:nostr:npub1…` are the same principal.
  */
 export const normalizePrincipal = (p: string): string => {
   const s = p.trim().normalize('NFC');
@@ -20,6 +22,7 @@ export const normalizePrincipal = (p: string): string => {
   if (i <= 0) return s.toLowerCase();
   const provider = s.slice(0, i).toLowerCase();
   const id = s.slice(i + 1);
+  if (provider === 'nostr') return `nostr:${canonicalNostrId(id) ?? id.trim().toLowerCase()}`;
   return `${provider}:${CASE_INSENSITIVE_PROVIDERS.has(provider) ? id.toLowerCase() : id}`;
 };
 
@@ -44,7 +47,11 @@ const meshListHas = (list: readonly string[], principal: string): boolean => {
   const n = normalizePrincipal(principal);
   const bare = n.includes(':') ? n.slice(n.indexOf(':') + 1) : n;
   return list.some((entry) => {
-    const e = entry.includes(':') ? normalizePrincipal(entry) : entry.trim().toLowerCase();
+    const t = entry.trim();
+    // A bare npub / hex key means that Nostr principal, whichever form either side uses.
+    const nostr = t.includes(':') ? undefined : canonicalNostrId(t);
+    if (nostr) return n === `nostr:${nostr}`;
+    const e = t.includes(':') ? normalizePrincipal(t) : t.toLowerCase();
     return e === n || e === bare;
   });
 };

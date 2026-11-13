@@ -10,9 +10,18 @@
  * Mentions are never parsed from our content: every send uses `allowedMentions: { parse: [] }`.
  */
 
+/**
+ * Bounds for Markdown formatting. The inline passes are regex based and quadratic on a line full
+ * of unmatched openers (`**a **a …`), so a hostile or prompt-injected agent could stall the daemon
+ * with one large message. Longer lines, or longer messages, are sent unformatted (still escaped).
+ */
+export const MAX_FORMAT_LINE = 2_000;
+export const MAX_FORMAT_TOTAL = 200_000;
+
 const isTableSep = (line: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
 
 export const markdownToDiscord = (md: string): string => {
+  if (md.length > MAX_FORMAT_TOTAL) return md;
   const lines = md.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
   let inFence = false;
@@ -23,7 +32,7 @@ export const markdownToDiscord = (md: string): string => {
       out.push(line.replace(/^(\s*)~~~/, '$1```'));
       continue;
     }
-    if (inFence) {
+    if (inFence || line.length > MAX_FORMAT_LINE) {
       out.push(line);
       continue;
     }

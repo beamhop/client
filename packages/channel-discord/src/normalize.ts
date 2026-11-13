@@ -1,4 +1,4 @@
-import type { Attachment, InboundMsg } from '@beamhop/core';
+import { type Attachment, type InboundMsg, safeFileName } from '@beamhop/core';
 import { ChannelType, type Message, MessageType } from 'discord.js';
 
 /**
@@ -65,7 +65,7 @@ export const normalizeDiscordMessage = (message: Message, opts: NormalizeOptions
   const replyToAgent = message.reference?.messageId != null && message.mentions.repliedUser?.id === self.id;
 
   const attachments: Attachment[] = [...message.attachments.values()].map((a) => ({
-    name: a.name,
+    name: safeFileName(a.name),
     mime: a.contentType ?? 'application/octet-stream',
     size: a.size,
     // CDN URL (signed, expiring); fetched through the broker (PLAN §3.3).

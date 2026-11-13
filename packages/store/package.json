@@ -10,5 +10,8 @@
     "@beamhop/core": "workspace:*",
     "yaml": "^2.8.0",
     "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "fast-check": "^4.10.2"
   }
 }

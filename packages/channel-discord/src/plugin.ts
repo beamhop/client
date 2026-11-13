@@ -44,7 +44,8 @@ export interface DiscordPluginOptions {
   rest?: Partial<RESTOptions>;
   /** Prefill the invite URL in the wizard. */
   applicationId?: string;
-  fetch?: (url: string) => Promise<Response>;
+  /** Broker-backed fetch for outbound URL attachments (see `DiscordConnDeps.fetchAttachment`). */
+  fetchAttachment?: (url: string) => Promise<Response>;
   readFile?: (path: string) => Promise<Uint8Array>;
   readyTimeoutMs?: number;
   now?: () => Date;
@@ -202,7 +203,7 @@ export const createDiscordPlugin = (opts: DiscordPluginOptions = {}): ChannelPlu
       self: { id: user.id, name: user.globalName ?? user.username },
       log,
       meshPeers,
-      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      ...(opts.fetchAttachment ? { fetchAttachment: opts.fetchAttachment } : {}),
       ...(opts.readFile ? { readFile: opts.readFile } : {}),
       ...(opts.now ? { now: opts.now } : {}),
     });
