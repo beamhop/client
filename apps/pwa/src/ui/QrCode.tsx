@@ -1,6 +1,9 @@
 /**
  * QR display (JOURNEYS §1.04, §9): ink modules on surface, 4-module quiet zone, min 240px.
  * Rendered as our own SVG path from the `qrcode` module matrix (no innerHTML, follows theme).
+ * Modules are `ink-2` (≥7.9:1 on surface in both themes, plenty for a camera) so a 240px code doesn't
+ * outweigh the rest of the screen; high contrast switches them to pure `ink`. No frame on compact
+ * screens — the 4-module quiet zone is the frame.
  */
 import QRCode from 'qrcode';
 import { useMemo } from 'react';
@@ -35,10 +38,10 @@ export const QrCode = ({ value, label, size = 240, className }: QrCodeProps) => 
       height={size}
       viewBox={`0 0 ${n} ${n}`}
       shapeRendering="crispEdges"
-      className={cx('rounded-md border border-line bg-surface', className)}
+      className={cx('rounded-md bg-surface medium:border medium:border-line hc:border hc:border-line', className)}
     >
       <rect width={n} height={n} fill="var(--bh-surface)" />
-      <path d={path} fill="var(--bh-ink)" />
+      <path d={path} className="fill-ink-2 hc:fill-ink" />
     </svg>
   );
 };
