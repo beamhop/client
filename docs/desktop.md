@@ -74,6 +74,10 @@ keychain* (or `beamhop secret keychain on`), only that one key moves into the ke
 item to the program that created it, so the first time the other program (the app, or `node` for the CLI)
 reads it, macOS asks once: choose **Always Allow**.
 
+The app itself keeps out of the keychain: Electron would otherwise create a "beamhop Safe Storage" item to
+encrypt its cookies, and every rebuild (a new signature) would ask for your login password to read it. The
+app stores nothing that needs it. Set `BEAMHOP_DESKTOP_KEYCHAIN=1` to restore Electron's default.
+
 ## Build it yourself
 
 ```bash

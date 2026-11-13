@@ -32,12 +32,16 @@ import {
 import { fileAutostart, HIDDEN_FLAG, isFileAutostartEnabled, setFileAutostart } from './autostart.ts';
 import { type CliInstallContext, cliStatus, installCli, uninstallCli } from './cli-install.ts';
 import { CHANNELS } from './ipc.ts';
+import { keychainSwitches } from './keychain.ts';
 import { isAllowedPermission, isAppUrl, isSafeExternalUrl } from './links.ts';
 import { mergeShellEnv, resolveShellEnv } from './shell-env.ts';
 import { type DaemonState, DaemonSupervisor } from './supervisor.ts';
 
 const isMac = process.platform === 'darwin';
 const startHidden = process.argv.includes(HIDDEN_FLAG);
+
+// Before anything touches Chromium's storage: no keychain item, so no password prompt after a rebuild.
+for (const s of keychainSwitches(process.platform, process.env)) app.commandLine.appendSwitch(s);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
