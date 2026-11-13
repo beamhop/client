@@ -6,7 +6,7 @@ seriously — including "this is documented but worse than you think".
 ## Reporting a vulnerability
 
 **Please do not open a public issue.** Instead, use GitHub's private vulnerability reporting:
-**Security → Report a vulnerability** on <https://github.com/beamhop/beamhop>. Include:
+**Security → Report a vulnerability** on <https://github.com/beamhop/client>. Include:
 
 - what an attacker controls (a channel message, a file the agent reads, a peer agent, a local process…)
 - what they gain (sandbox escape, secret exfiltration, impersonation, spend, approval bypass…)

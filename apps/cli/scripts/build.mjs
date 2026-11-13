@@ -194,9 +194,9 @@ export const buildBundle = async ({ skipPwa = false } = {}) => {
     description: src.description,
     license: 'Apache-2.0',
     type: 'module',
-    homepage: 'https://github.com/beamhop/beamhop#readme',
-    repository: { type: 'git', url: 'git+https://github.com/beamhop/beamhop.git' },
-    bugs: { url: 'https://github.com/beamhop/beamhop/issues' },
+    homepage: 'https://github.com/beamhop/client#readme',
+    repository: { type: 'git', url: 'git+https://github.com/beamhop/client.git' },
+    bugs: { url: 'https://github.com/beamhop/client/issues' },
     keywords: [
       'ai',
       'agents',

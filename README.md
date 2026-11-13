@@ -38,7 +38,7 @@ beamhop join myagent mybot:dm --role owner
 ```
 
 Prefer a permanent install: `npm i -g beamhop`, or grab a binary from the
-[releases page](https://github.com/beamhop/beamhop/releases) (Homebrew, Scoop and winget manifests are
+[releases page](https://github.com/beamhop/client/releases) (Homebrew, Scoop and winget manifests are
 generated with every release).
 
 ## How it fits together

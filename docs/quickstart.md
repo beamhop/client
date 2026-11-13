@@ -9,7 +9,7 @@ From nothing to an agent that answers you on your phone.
 | npx (try it)           | `npx beamhop <command>`                                       | 22.12+      |
 | npm (recommended)      | `npm i -g beamhop`                                            | 22.12+      |
 | Homebrew (macOS/Linux) | `brew install beamhop/tap/beamhop`                            | no          |
-| Scoop (Windows)        | `scoop install https://github.com/beamhop/beamhop/releases/latest/download/beamhop.json`* | no |
+| Scoop (Windows)        | `scoop install https://github.com/beamhop/client/releases/latest/download/beamhop.json`* | no |
 | winget (Windows)       | `winget install beamhop.beamhop`*                             | no          |
 | Archive                | download `beamhop-<version>-<os>-<arch>.tar.gz` / `.zip` from the releases page | no |
 
@@ -21,7 +21,7 @@ Every release ships `SHA256SUMS` and a keyless cosign bundle for it. Verify an a
 ```bash
 sha256sum -c SHA256SUMS --ignore-missing
 cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-  --certificate-identity-regexp 'https://github.com/beamhop/beamhop/.github/workflows/release.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/beamhop/client/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

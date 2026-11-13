@@ -59,5 +59,5 @@ First public build.
 - Standalone binaries are a binary plus a `lib/` folder, not a single file (native modules and sandboxed
   helper scripts must exist on disk).
 
-[Unreleased]: https://github.com/beamhop/beamhop/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/beamhop/beamhop/releases/tag/v0.1.0
+[Unreleased]: https://github.com/beamhop/client/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/beamhop/client/releases/tag/v0.1.0

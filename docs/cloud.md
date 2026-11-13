@@ -87,7 +87,7 @@ linux/arm64, with SBOM and build provenance, and signed with keyless cosign. Ver
 
 ```bash
 cosign verify ghcr.io/beamhop/agent:0.1.0 \
-  --certificate-identity-regexp 'https://github.com/beamhop/beamhop/.github/workflows/release.yml@.*' \
+  --certificate-identity-regexp 'https://github.com/beamhop/client/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
