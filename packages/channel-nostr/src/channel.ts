@@ -642,7 +642,7 @@ class NostrConnection implements NostrConn {
       recipients.map(async (pk) => {
         const wrap = createWrap(createSeal(rumor, this.sk, pk), pk);
         const theirs = await this.dmRelaysFor(pk).catch(() => [] as string[]);
-        return this.pool.publish(wrap, { relays: [...new Set([...this.mainRelays, ...theirs])] });
+        return this.pool.publish(wrap, { relays: [...new Set([...this.mainRelays, ...theirs])], quorum: 1 });
       }),
     );
     for (const r of results) this.ensureDelivered(r, 'DM');
@@ -708,7 +708,7 @@ class NostrConnection implements NostrConn {
     }
     tags.push(...this.commonTags(msg));
     const ev = this.signMaybePow({ kind: 1, created_at: this.now(), tags, content: text });
-    const r = await this.pool.publish(ev, { relays: this.mainRelays });
+    const r = await this.pool.publish(ev, { relays: this.mainRelays, quorum: 1 });
     this.ensureDelivered(r, 'note');
     this.recordSent(ev.id, msg.threadId ?? msg.replyToId ?? ev.id);
     return { id: ev.id };
@@ -738,7 +738,7 @@ class NostrConnection implements NostrConn {
       ...this.commonTags(msg),
     ];
     const ev = finalizeEvent({ kind: job.kind + 1000, created_at: this.now(), tags, content: text }, this.sk);
-    const r = await this.pool.publish(ev, { relays: this.jobRelays(job) });
+    const r = await this.pool.publish(ev, { relays: this.jobRelays(job), quorum: 1 });
     this.ensureDelivered(r, 'job result');
     this.recordSent(ev.id, job.id);
     return { id: ev.id };
@@ -760,7 +760,7 @@ class NostrConnection implements NostrConn {
       },
       this.sk,
     );
-    return this.pool.publish(ev, { relays: this.jobRelays(job) });
+    return this.pool.publish(ev, { relays: this.jobRelays(job), quorum: 1 });
   }
 
   async publish(t: EventTemplate, relays?: string[]): Promise<PublishResult> {

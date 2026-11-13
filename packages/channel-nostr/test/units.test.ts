@@ -216,6 +216,18 @@ describe('relay pool', () => {
     pool.close();
   });
 
+  it('publish with quorum resolves on the first OK without waiting for slow relays', async () => {
+    const k = generateAgentKey();
+    // 10.255.255.1 is unroutable: the connect attempt hangs until its timeout.
+    const pool = new RelayPool({ relays: [A.url, 'ws://10.255.255.1:7777'], connectTimeoutMs: 5000 });
+    const ev = finalizeEvent({ kind: 1, created_at: now(), tags: [], content: 'q' }, k.secretKey);
+    const t0 = Date.now();
+    const res = await pool.publish(ev, { quorum: 1 });
+    expect(Date.now() - t0).toBeLessThan(2000);
+    expect(res.ok).toEqual([`${A.url}/`]);
+    pool.close();
+  });
+
   it('drops events with invalid signatures', async () => {
     const k = generateAgentKey();
     const pool = new RelayPool({ relays: [A.url] });

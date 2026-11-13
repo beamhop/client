@@ -156,7 +156,7 @@ export const createControlClient = (opts: ControlClientOptions): ControlClient =
         );
         pending.set(reqEventId, { rpcId, resolve: resolve as (v: unknown) => void, reject, timer });
       });
-      const pubs = await Promise.all(events.map((e) => pool.publish(e, { relays })));
+      const pubs = await Promise.all(events.map((e) => pool.publish(e, { relays, quorum: 1 })));
       if (pubs.some((p) => p.ok.length === 0)) {
         const p = pending.get(reqEventId);
         if (p) {

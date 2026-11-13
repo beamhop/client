@@ -75,7 +75,7 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
   const send = async (to: string, payload: unknown, replyTo?: string) => {
     const events = buildControlEvents(sk, to, payload, replyTo ? { replyTo } : {});
     for (const e of events) {
-      const r = await pool.publish(e, { relays });
+      const r = await pool.publish(e, { relays, quorum: 1 });
       if (!r.ok.length) log?.warn('control: reply not delivered to any relay', { failed: r.failed });
     }
   };

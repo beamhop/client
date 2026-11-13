@@ -360,18 +360,37 @@ export class RelayPool {
   }
 
   /** Publish to relays (default: all). Resolves with per-relay results; never rejects. */
-  async publish(event: Event, opts: { relays?: string[] } = {}): Promise<PublishResult> {
+  /**
+   * Publish to relays (default: all). Never rejects.
+   * With `quorum`, resolves as soon as that many relays accepted the event (the rest finish in the
+   * background); otherwise waits for every relay.
+   */
+  publish(event: Event, opts: { relays?: string[]; quorum?: number } = {}): Promise<PublishResult> {
     const urls = (opts.relays ?? this.relayUrls).map((r) => this.addRelay(r));
-    const results = await Promise.all(urls.map((u) => this.publishOne(u, event)));
     const res: PublishResult = { id: event.id, ok: [], failed: [] };
-    urls.forEach((u, i) => {
-      const r = results[i]!;
-      if (r === true) res.ok.push(u);
-      else res.failed.push({ relay: u, reason: r });
+    const snapshot = (): PublishResult => ({ id: res.id, ok: [...res.ok], failed: [...res.failed] });
+    return new Promise((resolve) => {
+      let pending = urls.length;
+      let done = false;
+      const settle = () => {
+        if (done) return;
+        if ((opts.quorum && res.ok.length >= opts.quorum) || pending === 0) {
+          done = true;
+          if (!res.ok.length)
+            this.log?.warn('publish failed on all relays', { kind: event.kind, failed: res.failed });
+          resolve(snapshot());
+        }
+      };
+      if (!urls.length) settle();
+      for (const u of urls) {
+        this.publishOne(u, event).then((r) => {
+          pending--;
+          if (r === true) res.ok.push(u);
+          else res.failed.push({ relay: u, reason: r });
+          settle();
+        });
+      }
     });
-    if (!res.ok.length)
-      this.log?.warn('publish failed on all relays', { kind: event.kind, failed: res.failed });
-    return res;
   }
 
   private async publishOne(url: string, event: Event): Promise<true | string> {
