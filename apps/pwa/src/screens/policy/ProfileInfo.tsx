@@ -61,7 +61,6 @@ export const ProfileCompare = () => {
       <p className="mb-6 max-w-[62ch] type-body text-ink-2">{t('policy.compare.lead')}</p>
       <div
         role="region"
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard reachable
         tabIndex={0}
         aria-label={t('policy.tableRegion')}
         className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus-visible:outline-2 focus-visible:outline-focus"

@@ -39,12 +39,11 @@ const CellMark = ({ c }: { c: Cell }) => (
 const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
   <div
     role="region"
-    // biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard reachable
     tabIndex={0}
     aria-label={t('policy.tableRegion')}
     className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus-visible:outline-2 focus-visible:outline-focus"
   >
-    <table className="w-full min-w-[40rem] border-collapse">
+    <table className="w-full min-w-[34rem] border-collapse">
       <caption className="sr-only">{t('policy.roles.caption')}</caption>
       <thead>
         <tr className="border-b border-line">
@@ -55,7 +54,7 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
             <th
               key={r.name}
               scope="col"
-              className="px-3 py-3 text-left font-mono text-[14px] font-medium text-ink"
+              className="px-1.5 py-3 text-left font-mono text-[14px] font-medium text-ink"
             >
               {r.name}
             </th>
@@ -65,11 +64,14 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
       <tbody>
         {ROLE_ACTIONS.map((a) => (
           <tr key={a.id} className="border-b border-line">
-            <th scope="row" className="px-4 py-2.5 text-left type-body-sm font-normal text-ink">
+            <th
+              scope="row"
+              className="w-36 min-w-32 py-2.5 pr-2 pl-3 text-left type-body-sm font-normal text-ink"
+            >
               {a.label}
             </th>
             {roles.map((r) => (
-              <td key={r.name} className="px-3 py-2.5">
+              <td key={r.name} className="px-1.5 py-2.5">
                 <CellMark c={cellFor(r, a)} />
               </td>
             ))}
@@ -80,7 +82,7 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
             {t('policy.roles.sandbox')}
           </th>
           {roles.map((r) => (
-            <td key={r.name} className="px-3 py-2.5 type-meta text-ink">
+            <td key={r.name} className="px-1.5 py-2.5 type-meta text-ink">
               {r.sandboxProfile}
             </td>
           ))}
@@ -90,7 +92,7 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
             {t('policy.roles.dlp')}
           </th>
           {roles.map((r) => (
-            <td key={r.name} className="px-3 py-2.5 type-meta text-ink-2">
+            <td key={r.name} className="px-1.5 py-2.5 type-meta text-ink-2">
               {r.dlp}
             </td>
           ))}
@@ -100,9 +102,9 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
             {t('policy.roles.limits')}
           </th>
           {roles.map((r) => (
-            <td key={r.name} className="px-3 py-2.5 align-top type-meta text-ink-2">
+            <td key={r.name} className="px-1.5 py-2.5 align-top type-meta text-ink-2">
               {limitsOf(r).map((l) => (
-                <span key={l} className="block whitespace-nowrap">
+                <span key={l} className="block">
                   {l}
                 </span>
               ))}

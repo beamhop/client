@@ -43,7 +43,7 @@ export const cellFor = (r: RoleDef, a: RoleAction): Cell => {
   return r.permissionMode === 'auto' ? 'auto' : 'ask';
 };
 
-export const CELL_WORD: Record<Cell, string> = { auto: 'Auto', ask: 'Asks owner', deny: 'Never' };
+export const CELL_WORD: Record<Cell, string> = { auto: 'Auto', ask: 'Ask', deny: 'Never' };
 
 export const DLP_WORD: Record<RoleDef['dlp'], string> = {
   block: 'Replies with secrets are blocked',
