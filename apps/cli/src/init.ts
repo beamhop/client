@@ -218,9 +218,11 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   ui.info(pc.dim(`daemon ${status.version} · ${status.home}`));
 
   // ── 01 doctor ──
+  let needsKey = false;
   if (await want(o.doctor, 'Check the sandbox prerequisites?')) {
     ui.step('01 Doctor');
     const { checks } = await c.call('system.doctor');
+    needsKey = checks.some((k) => k.id === 'llm.keys' && k.status !== 'ok');
     for (const k of checks) {
       ui.info(`${STATUS[k.status] ?? '?'} ${k.title}  ${pc.dim(k.message)}`);
       if (k.fix && k.status !== 'ok') ui.info(`    ${pc.cyan('fix:')} ${k.fix}`);
@@ -440,6 +442,12 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
   ui.step('07 Next steps');
   ui.note(
     [
+      ...(needsKey
+        ? [
+            'Give agents a model key'.padEnd(34) +
+              pc.cyan('beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY'),
+          ]
+        : []),
       ...(agentName
         ? [
             `Talk to ${agentName} right now`.padEnd(34) +

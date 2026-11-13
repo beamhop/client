@@ -27,6 +27,7 @@ const fakeDaemon = (over: Record<string, Handler> = {}) => {
           message: 'missing',
           fix: 'sudo apt install bubblewrap',
         },
+        { id: 'llm.keys', title: 'LLM API keys', status: 'warn', message: 'none set' },
       ],
     }),
     'harness.scan': () => ({
@@ -176,6 +177,7 @@ describe('beamhop init (headless)', () => {
     expect(text).toContain(AGENT_NPUB);
     expect(text).toContain(`AI agent operated by ${OWNER}`);
     expect(text).toContain('Next steps');
+    expect(text).toContain('beamhop secret set ANTHROPIC_API_KEY');
     expect(text).not.toMatch(/nsec1/);
   });
 
