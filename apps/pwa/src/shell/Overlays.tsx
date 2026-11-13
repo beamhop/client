@@ -307,41 +307,51 @@ export const CommandPalette = () => {
                 <Kbd>Esc</Kbd>
               </div>
             </SearchField>
-            <Menu
+            {/* The list scrolls in its own region: focus stays in the search field (virtual focus), so the
+                region itself takes a tab stop for keyboard scrolling (axe scrollable-region-focusable). */}
+            <div
+              role="region"
               aria-label={t('palette.results')}
-              onAction={(key) => {
-                const c = byId.get(String(key));
-                closeOverlay();
-                c?.run();
-              }}
-              renderEmptyState={() => (
-                <p className="px-4 py-6 type-body-sm text-ink-2">{t('palette.empty')}</p>
-              )}
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5 outline-none"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll it
+              tabIndex={0}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
             >
-              {sections.map((s) => (
-                <MenuSection key={s.id} id={s.id} className="pb-1">
-                  <Header className="px-2.5 pt-2 pb-1 type-micro text-ink-3">{s.title}</Header>
-                  {s.items.map((c) => (
-                    <MenuItem
-                      key={c.id}
-                      id={c.id}
-                      textValue={`${c.label} ${c.keywords ?? ''}`}
-                      className={cx(
-                        'flex min-h-11 cursor-default items-center gap-3 rounded-md px-2.5 outline-none',
-                        'data-[focused]:bg-sunken data-[pressed]:bg-sunken',
-                        c.tone === 'stop' ? 'text-stop-text' : 'text-ink',
-                      )}
-                    >
-                      <span className="grid w-7 shrink-0 place-items-center text-current">{c.icon}</span>
-                      <span className="min-w-0 flex-1 truncate type-body">{c.label}</span>
-                      {c.hint && <span className="shrink-0 type-meta text-ink-3">{c.hint}</span>}
-                      <ArrowRight size={14} aria-hidden="true" className="shrink-0 text-ink-3" />
-                    </MenuItem>
-                  ))}
-                </MenuSection>
-              ))}
-            </Menu>
+              <Menu
+                aria-label={t('palette.results')}
+                onAction={(key) => {
+                  const c = byId.get(String(key));
+                  closeOverlay();
+                  c?.run();
+                }}
+                renderEmptyState={() => (
+                  <p className="px-4 py-6 type-body-sm text-ink-2">{t('palette.empty')}</p>
+                )}
+                className="p-1.5 outline-none"
+              >
+                {sections.map((s) => (
+                  <MenuSection key={s.id} id={s.id} className="pb-1">
+                    <Header className="px-2.5 pt-2 pb-1 type-micro text-ink-3">{s.title}</Header>
+                    {s.items.map((c) => (
+                      <MenuItem
+                        key={c.id}
+                        id={c.id}
+                        textValue={`${c.label} ${c.keywords ?? ''}`}
+                        className={cx(
+                          'flex min-h-11 cursor-default items-center gap-3 rounded-md px-2.5 outline-none',
+                          'data-[focused]:bg-sunken data-[pressed]:bg-sunken',
+                          c.tone === 'stop' ? 'text-stop-text' : 'text-ink',
+                        )}
+                      >
+                        <span className="grid w-7 shrink-0 place-items-center text-current">{c.icon}</span>
+                        <span className="min-w-0 flex-1 truncate type-body">{c.label}</span>
+                        {c.hint && <span className="shrink-0 type-meta text-ink-3">{c.hint}</span>}
+                        <ArrowRight size={14} aria-hidden="true" className="shrink-0 text-ink-3" />
+                      </MenuItem>
+                    ))}
+                  </MenuSection>
+                ))}
+              </Menu>
+            </div>
           </Autocomplete>
           <p className="hidden shrink-0 items-center gap-3 border-t border-line px-4 py-2 type-meta text-ink-2 expanded:flex">
             <span>
@@ -380,6 +390,7 @@ export const ShortcutsSheet = () => {
       onOpenChange={(o) => !o && closeOverlay()}
       title={t('keys.title')}
       subtitle={t('keys.subtitle')}
+      readOnly
     >
       <div className="flex flex-col gap-6">
         {sectionsFor(pathname).map((s) => (

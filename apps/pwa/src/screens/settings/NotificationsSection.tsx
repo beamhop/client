@@ -9,8 +9,9 @@
 
 import type { PushCategory } from '@beamhop/core';
 import { Bell, BellSlash } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useApi, useBeamhop, useConnection } from '../../api/index.ts';
+import { methodKey, useApi, useBeamhop, useConnection } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
@@ -43,6 +44,7 @@ export const NotificationsSection = () => {
   const deviceId = usePushDeviceId();
   const prefs = usePushPrefs(deviceId);
   const toast = useToast();
+  const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string>();
   const [a, set] = useLocalPref('bh.settings.alerts', ALERT_DEFAULTS);
@@ -55,6 +57,8 @@ export const NotificationsSection = () => {
     try {
       const r = await turnOnPush(client, deviceId, { demo: conn.kind === 'mock' });
       refresh();
+      // The subscription lives on the daemon's device record: re-read it (push on/off).
+      await qc.invalidateQueries({ queryKey: methodKey('device.list') });
       if (r === 'granted') {
         haptic('confirm');
         toast.show({ message: t('settings.ntf.onToast'), tone: 'success' });

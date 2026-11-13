@@ -37,6 +37,8 @@ export interface SheetProps {
   role?: 'dialog' | 'alertdialog';
   /** Move initial focus to the title instead of the first control (read consequences first). */
   focusTitle?: boolean;
+  /** No focusable content (a reference sheet): the scroll body takes a tab stop so keys can scroll it. */
+  readOnly?: boolean;
   className?: string;
 }
 
@@ -52,6 +54,7 @@ export const Sheet = ({
   full,
   role = 'dialog',
   focusTitle,
+  readOnly,
   className,
 }: SheetProps) => {
   const expanded = useExpanded();
@@ -147,7 +150,17 @@ export const Sheet = ({
                       />
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 expanded:px-6">
+                  <div
+                    // Read-only sheets (nothing focusable inside) still scroll by keyboard.
+                    {...(readOnly
+                      ? {
+                          tabIndex: 0,
+                          role: 'region',
+                          'aria-label': typeof title === 'string' ? title : undefined,
+                        }
+                      : {})}
+                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus expanded:px-6"
+                  >
                     {children}
                   </div>
                   {footer && (
