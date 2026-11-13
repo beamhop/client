@@ -155,12 +155,12 @@ test('unknown agent shows a calm not-found state', async ({ page }) => {
 
 test('new agent: preset → harness → folders → review → create', async ({ page }) => {
   await open(page, '/agents/new');
-  await page.getByRole('radio', { name: /Public Q&A bot/ }).click({ force: true });
+  await page.getByText('Public Q&A bot', { exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('qa');
   await page.getByRole('button', { name: 'Continue · Harness' }).click();
   await expect(page.getByRole('heading', { name: 'Which harness runs it?' })).toBeVisible();
   await expect(page.getByRole('radio', { name: /Codex/ })).toBeDisabled();
-  await page.getByRole('radio', { name: /Gemini CLI/ }).click({ force: true });
+  await page.getByText('Gemini CLI', { exact: true }).click();
   await page.getByRole('button', { name: 'Continue · Folders' }).click();
   await page.getByRole('button', { name: 'Add folder' }).click();
   await page.getByRole('combobox', { name: 'Folder' }).fill('~/.ssh');

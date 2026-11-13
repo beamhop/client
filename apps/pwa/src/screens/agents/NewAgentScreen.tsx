@@ -108,7 +108,12 @@ const PresetStep = ({
                   </div>
                 </div>
                 {m && (
-                  <div className="mt-1 flex flex-col gap-1 border-t border-line pt-2 pl-9">
+                  <div
+                    className={cx(
+                      'mt-1 flex-col gap-1 border-t border-line pt-2 pl-9',
+                      isSelected ? 'flex' : 'hidden medium:flex',
+                    )}
+                  >
                     <dl className="flex flex-col gap-1">
                       <Fact k={t('agents.new.who')} v={m.who} />
                       <Fact k={t('agents.new.changes')} v={m.writes} />

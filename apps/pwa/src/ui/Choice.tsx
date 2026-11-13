@@ -312,10 +312,9 @@ export const Select = ({ label, hideLabel, description, options, className, ...r
         <SelectValue<SelectOption> className="flex min-w-0 flex-1 items-center gap-2 truncate type-body data-[placeholder]:text-ink-3">
           {({ selectedItem, defaultChildren }) =>
             selectedItem ? (
-              <>
-                {selectedItem.leading}
-                <span className="truncate">{selectedItem.label}</span>
-              </>
+              // The leading mark stays in the list only: visible text on the trigger must match its
+              // accessible name (WCAG 2.5.3), and monogram tiles are aria-hidden.
+              <span className="truncate">{selectedItem.label}</span>
             ) : (
               defaultChildren
             )
