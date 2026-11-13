@@ -109,10 +109,10 @@ export const PanicConfirm = ({ onDone, inline }: { onDone?: () => void; inline?:
             </li>
           ))}
         </ul>
-        <p className="type-body-sm text-ink-2">Nothing restarts until you review and resume.</p>
+        <p className="type-body-sm text-ink-2">{t('panic.panic.nothingRestartsUntilYou')}</p>
         {onDone && (
           <Button variant="secondary" fullWidth onPress={onDone}>
-            Close
+            {t('panic.panic.close')}
           </Button>
         )}
       </div>
@@ -123,13 +123,13 @@ export const PanicConfirm = ({ onDone, inline }: { onDone?: () => void; inline?:
     <div className="flex flex-col gap-4">
       {inline && <h2 className="type-title-2 text-ink">{t('panic.title')}</h2>}
       <p className="type-body text-ink-2">{t('panic.body', counts)}</p>
-      <ul className="grid grid-cols-2 gap-2 type-meta" aria-label="What will stop">
+      <ul className="grid grid-cols-2 gap-2 type-meta" aria-label={t('panic.panic.whatWillStop')}>
         {(
           [
             ['sessions', counts.sessions],
             ['schedules', counts.schedules],
             ['channels', counts.channels],
-            ['cloud daemons', counts.clouds],
+            [t('panic.panic.cloudDaemons'), counts.clouds],
           ] as const
         ).map(([k, n]) => (
           <li key={k} className="flex items-baseline gap-2 rounded-md bg-sunken px-3 py-2">
@@ -184,7 +184,7 @@ export const PanicButton = () => {
   if (panic) return null;
   return (
     <IconButton
-      label="Stop everything"
+      label={t('panic.button')}
       shortcut="⌘⇧."
       icon={<Stop size={20} weight="fill" />}
       variant="destructive-ghost"

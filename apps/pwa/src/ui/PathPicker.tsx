@@ -18,6 +18,7 @@ import {
   Button as RACButton,
   Text,
 } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { Button } from './Button.tsx';
 import { descriptionClass, inputShell, labelClass } from './Field.tsx';
@@ -140,7 +141,7 @@ export const PathPicker = ({
                 setBrowse(true);
               }}
             >
-              Browse
+              {t('ui.pathPicker.browse')}
             </Button>
           </ButtonContext.Provider>
         </div>
@@ -160,7 +161,9 @@ export const PathPicker = ({
                 <FolderSimple size={16} aria-hidden="true" className="text-ink-2" />
                 <span className="flex-1 truncate">{it.path}</span>
                 {it.recent && <span className="type-micro text-ink-3">recent</span>}
-                {(it as DirEntry).git && <GitBranch size={14} aria-label="git repository" />}
+                {(it as DirEntry).git && (
+                  <GitBranch size={14} aria-label={t('ui.pathPicker.gitRepository')} />
+                )}
               </ListBoxItem>
             )}
           </ListBox>
@@ -169,8 +172,8 @@ export const PathPicker = ({
       <Sheet
         isOpen={browse}
         onOpenChange={setBrowse}
-        title="Choose a folder"
-        subtitle="Only folders under your home directory"
+        title={t('ui.pathPicker.chooseAFolder')}
+        subtitle={t('ui.pathPicker.onlyFoldersUnderYour')}
         footer={
           <Button
             variant="primary"
@@ -184,7 +187,10 @@ export const PathPicker = ({
           </Button>
         }
       >
-        <nav aria-label="Folder path" className="mb-2 flex flex-wrap items-center gap-1 type-meta">
+        <nav
+          aria-label={t('ui.pathPicker.folderPath')}
+          className="mb-2 flex flex-wrap items-center gap-1 type-meta"
+        >
           {crumbs.map((c, i) => (
             <span key={c} className="inline-flex items-center gap-1">
               {i > 0 && <CaretRight size={12} aria-hidden="true" className="text-ink-3" />}
@@ -199,7 +205,9 @@ export const PathPicker = ({
           ))}
         </nav>
         <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
-          {cwdEntries.length === 0 && <li className="px-4 py-3 type-body-sm text-ink-2">No folders here.</li>}
+          {cwdEntries.length === 0 && (
+            <li className="px-4 py-3 type-body-sm text-ink-2">{t('ui.pathPicker.noFoldersHere')}</li>
+          )}
           {cwdEntries.map((e) => (
             <li key={e.path}>
               <RACButton

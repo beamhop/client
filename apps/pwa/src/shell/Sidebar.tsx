@@ -30,7 +30,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg',
         collapsed ? 'w-16' : 'w-60',
       )}
-      aria-label="Sidebar"
+      aria-label={t('ui.sidebar.sidebar')}
       data-sidebar={collapsed ? 'rail' : 'full'}
     >
       <div
@@ -42,7 +42,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </Link>
         )}
         <IconButton
-          label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          label={collapsed ? t('ui.sidebar.expandSidebar') : t('ui.sidebar.collapseSidebar')}
           shortcut="⌘\"
           icon={<SidebarSimple size={20} />}
           onPress={onToggle}
@@ -99,7 +99,9 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       {!collapsed && badge > 0 && (
                         <CountBadge
                           count={badge}
-                          label={badge === 1 ? 'approval waiting' : 'approvals waiting'}
+                          label={
+                            badge === 1 ? t('ui.sidebar.approvalWaiting') : t('ui.sidebar.approvalsWaiting')
+                          }
                         />
                       )}
                       {collapsed && badge > 0 && (
@@ -114,7 +116,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                             'size-1.5 rounded-full bg-caution-text',
                             collapsed && 'absolute top-2 right-2.5',
                           )}
-                          aria-label="has findings"
+                          aria-label={t('ui.sidebar.hasFindings')}
                           role="img"
                         />
                       )}
@@ -131,7 +133,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         {!panic &&
           (collapsed ? (
             <IconButton
-              label="Stop everything"
+              label={t('ui.sidebar.stopEverything')}
               shortcut="⌘⇧."
               icon={<Stop size={20} weight="fill" />}
               variant="destructive-ghost"

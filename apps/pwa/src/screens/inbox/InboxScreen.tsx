@@ -556,7 +556,7 @@ const Recent = ({ list }: { list: ApprovalView[] }) => {
                     value: STATUS_WORD[a.status],
                     tone: a.status === 'approved' ? 'go' : a.status === 'denied' ? 'stop' : 'caution',
                   },
-                  a.decidedBy ? `by ${a.decidedBy}` : 'the agent was told',
+                  a.decidedBy ? `by ${a.decidedBy}` : t('inbox.inbox.theAgentWasTold'),
                   a.decidedAt ? when(a.decidedAt) : undefined,
                 ]}
               />

@@ -9,6 +9,7 @@ import { tryDecodePubkey } from '@beamhop/channel-nostr/keys';
 import { Cpu, DownloadSimple, Key, LockSimple, MagnifyingGlass, SealCheck } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Checkbox, Tabs } from '../../ui/Choice.tsx';
@@ -38,7 +39,7 @@ const KeyLine = ({ value, label }: { value: string; label: string }) => (
     <code title={value} className="min-w-0 flex-1 truncate type-meta text-ink">
       {middleTruncate(value, 28)}
     </code>
-    <CopyButton value={value} label={`Copy ${label}`} compact />
+    <CopyButton value={value} label={t('settings.identity.copy', { label })} compact />
   </div>
 );
 
@@ -52,13 +53,13 @@ const BackupSheet = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
         if (!o) exp.reset();
         onOpenChange(o);
       }}
-      title="Export owner key backup"
+      title={t('settings.identity.exportOwnerKeyBackup')}
       isDismissable={false}
       focusTitle
       footer={
         exp.data ? (
           <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
-            I've stored it safely
+            {t('settings.identity.iVeStoredIt')}
           </Button>
         ) : (
           <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
@@ -69,27 +70,26 @@ const BackupSheet = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
               isPending={exp.isPending}
               onPress={() => exp.mutate({})}
             >
-              Reveal secret key
+              {t('settings.identity.revealSecretKey')}
             </Button>
             <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
-              Cancel
+              {t('settings.identity.cancel')}
             </Button>
           </div>
         )
       }
     >
       <div className="flex flex-col gap-3 type-body text-ink-2">
-        <p>
-          Anyone with this key can act as you: change roles, pair devices, approve requests. Put it in a
-          password manager, not in a chat or a note.
-        </p>
-        <p className="type-body-sm">Shown once, only on this computer. Never sent over Nostr.</p>
+        <p>{t('settings.identity.anyoneWithThisKey')}</p>
+        <p className="type-body-sm">{t('settings.identity.shownOnceOnlyOn')}</p>
         {exp.isError && (
-          <ErrorState title="Couldn't export the key." details={exp.error}>
+          <ErrorState title={t('settings.identity.couldnTExportThe')} details={exp.error}>
             {exp.error.message}
           </ErrorState>
         )}
-        {exp.data && <CodeBlock code={exp.data.nsec} label="Owner secret key (nsec)" wrap />}
+        {exp.data && (
+          <CodeBlock code={exp.data.nsec} label={t('settings.identity.ownerSecretKeyNsec')} wrap />
+        )}
       </div>
     </Sheet>
   );
@@ -151,9 +151,8 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
   return (
     <div className="flex flex-col gap-4">
       <p className="type-body-sm text-ink-2">
-        A NIP-05 handle lets people find an agent as{' '}
-        <span className="font-mono text-ink">reviewer@example.com</span> instead of a 63-character npub. You
-        host one small JSON file on your domain.
+        {t('settings.identity.nip05Lead')} <span className="font-mono text-ink">reviewer@example.com</span>{' '}
+        {t('settings.identity.nip05Tail')}
       </p>
       <form
         className="flex flex-col gap-4"
@@ -164,18 +163,18 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
         }}
       >
         <TextField
-          label="Domain"
+          label={t('settings.identity.domain')}
           mono
           value={raw}
           onChange={setRaw}
           onBlur={() => setTouched(true)}
           placeholder="example.com"
-          description="The domain you control. Handles become name@domain."
+          description={t('settings.identity.theDomainYouControl')}
           isInvalid={touched && raw.length > 0 && !valid}
-          errorMessage="That doesn't look like a domain, e.g. example.com."
+          errorMessage={t('settings.identity.thatDoesnTLook')}
         />
         <fieldset className="flex flex-col">
-          <legend className="type-label text-ink">Agents to include</legend>
+          <legend className="type-label text-ink">{t('settings.identity.agentsToInclude')}</legend>
           {withKeys.map((a) => (
             <Checkbox
               key={a.name}
@@ -205,11 +204,11 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
           isPending={gen.isPending}
           isDisabled={!Object.keys(names).length}
         >
-          Generate nostr.json
+          {t('settings.identity.generateNostrJson')}
         </Button>
       </form>
       {gen.isError && (
-        <ErrorState title="Couldn't generate nostr.json." details={gen.error}>
+        <ErrorState title={t('settings.identity.couldnTGenerateNostr')} details={gen.error}>
           {gen.error.message}
         </ErrorState>
       )}
@@ -223,10 +222,10 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
             icon={<DownloadSimple size={16} aria-hidden="true" />}
             onPress={() => download(gen.data.json)}
           >
-            Download nostr.json
+            {t('settings.identity.downloadNostrJson')}
           </Button>
           <Tabs
-            label="Hosting"
+            label={t('settings.identity.hosting')}
             tabs={Object.entries(gen.data.snippets).map(([id, code]) => ({
               id,
               label: { static: 'Static host', nginx: 'nginx', cloudflare: 'Cloudflare Pages' }[id] ?? id,
@@ -234,7 +233,7 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
             }))}
           />
           <div className="flex flex-col gap-2">
-            <span className="type-label text-ink">Check handles</span>
+            <span className="type-label text-ink">{t('settings.identity.checkHandles')}</span>
             {Object.entries(names).map(([n, hex]) => {
               const c = checks[n];
               return (
@@ -251,11 +250,14 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
                       setChecks((s) => ({ ...s, [n]: r }));
                     }}
                   >
-                    Check {n}@{domain}
+                    {t('settings.identity.checkHandle', { handle: `${n}@${domain}` })}
                   </Button>
                   {c && c !== 'busy' && (
                     <span role="status" className="flex items-center gap-2">
-                      <StatusDot state={c.ok ? 'ready' : 'error'} label={c.ok ? 'resolves' : 'not yet'} />
+                      <StatusDot
+                        state={c.ok ? 'ready' : 'error'}
+                        label={c.ok ? 'resolves' : t('settings.identity.notYet')}
+                      />
                       <span className="type-body-sm text-ink-2">{c.text}</span>
                     </span>
                   )}
@@ -278,17 +280,23 @@ export const IdentitySection = () => {
 
   if (q.isError)
     return (
-      <ErrorState title="Couldn't load identities." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={t('settings.identity.couldnTLoadIdentities')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
   if (q.isPending)
-    return showSkeleton ? <Skeleton variant="detail" count={3} label="Loading identities" /> : null;
+    return showSkeleton ? (
+      <Skeleton variant="detail" count={3} label={t('settings.identity.loadingIdentities')} />
+    ) : null;
   const id = q.data;
 
   return (
     <div className="flex flex-col gap-8">
-      <Group title="Owner key" id="id-owner">
+      <Group title={t('settings.identity.ownerKey')} id="id-owner">
         <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
           {id.npub ? (
             <>
@@ -296,16 +304,15 @@ export const IdentitySection = () => {
                 <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-ink text-bg">
                   <Key size={16} weight="bold" aria-hidden="true" />
                 </span>
-                <span className="type-title-3 text-ink">You</span>
+                <span className="type-title-3 text-ink">{t('settings.identity.you')}</span>
                 <Badge tone={id.ownerKeyHeld ? 'neutral' : 'outline'}>
-                  {id.ownerKeyHeld ? 'in OS keychain' : 'your own signer'}
+                  {id.ownerKeyHeld
+                    ? t('settings.identity.inOsKeychain')
+                    : t('settings.identity.yourOwnSigner')}
                 </Badge>
               </div>
-              <KeyLine value={id.npub} label="owner npub" />
-              <p className="type-body-sm text-ink-2">
-                Signs role changes, pairings and control messages. Agents have their own keys, so a leaked
-                agent key never lets anyone act as you.
-              </p>
+              <KeyLine value={id.npub} label={t('settings.identity.ownerNpub')} />
+              <p className="type-body-sm text-ink-2">{t('settings.identity.signsRoleChangesPairings')}</p>
               {id.ownerKeyHeld && (
                 <Button
                   variant="secondary"
@@ -313,13 +320,13 @@ export const IdentitySection = () => {
                   icon={<LockSimple size={16} aria-hidden="true" />}
                   onPress={() => setBackup(true)}
                 >
-                  Export backup…
+                  {t('settings.identity.exportBackup')}
                 </Button>
               )}
             </>
           ) : (
             <p className="type-body-sm text-ink-2">
-              No owner key yet. Create one in setup, or run{' '}
+              {t('settings.identity.noOwnerKey')}{' '}
               <code className="font-mono text-ink">beamhop identity create</code>.
             </p>
           )}
@@ -328,20 +335,20 @@ export const IdentitySection = () => {
 
       {id.daemonNpub && (
         <Group
-          title="This daemon"
+          title={t('settings.identity.thisDaemon')}
           id="id-daemon"
-          note="Paired devices send encrypted control messages to this key. It isn't an owner."
+          note={t('settings.identity.pairedDevicesSendEncrypted')}
         >
           <div className="rounded-lg border border-line bg-surface px-4 py-3">
-            <KeyLine value={id.daemonNpub} label="daemon npub" />
+            <KeyLine value={id.daemonNpub} label={t('settings.identity.daemonNpub')} />
           </div>
         </Group>
       )}
 
       <Group
-        title="Agents"
+        title={t('settings.identity.agents')}
         id="id-agents"
-        note="Attested: your owner key signed that this agent is yours, so Nostr clients can show who operates it."
+        note={t('settings.identity.attestedYourOwnerKey')}
       >
         <List>
           {id.agents.map((a) => (
@@ -356,20 +363,26 @@ export const IdentitySection = () => {
                     attested
                   </span>
                 ) : (
-                  <span className="type-meta text-ink-2">not attested</span>
+                  <span className="type-meta text-ink-2">{t('settings.identity.notAttested')}</span>
                 )
               }
               slug={
                 <MetaLine
                   items={[
-                    a.npub ? { value: a.npub, truncate: 22 } : 'no key yet',
+                    a.npub ? { value: a.npub, truncate: 22 } : t('settings.identity.noKeyYet'),
                     a.nip05 && { value: a.nip05, tone: 'ink' },
                   ]}
                 />
               }
               actions={
                 <span className="flex items-center">
-                  {a.npub && <CopyButton value={a.npub} label={`Copy ${a.name} npub`} compact />}
+                  {a.npub && (
+                    <CopyButton
+                      value={a.npub}
+                      label={t('settings.identity.copyNpub', { name: a.name })}
+                      compact
+                    />
+                  )}
                   {!a.attested && (
                     <Button
                       variant="quiet"
@@ -392,7 +405,7 @@ export const IdentitySection = () => {
                         }
                       }}
                     >
-                      Publish
+                      {t('settings.identity.publish')}
                     </Button>
                   )}
                 </span>
@@ -402,7 +415,7 @@ export const IdentitySection = () => {
         </List>
       </Group>
 
-      <Group title="NIP-05 handles" id="id-nip05">
+      <Group title={t('settings.identity.nip05Handles')} id="id-nip05">
         <Nip05 agents={id.agents} />
       </Group>
 

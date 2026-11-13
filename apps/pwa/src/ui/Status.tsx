@@ -5,6 +5,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import type { LampState } from '../api/derive.ts';
+import { t as tr } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { HopMeter, Lamp } from './glyphs/index.tsx';
 import { useReduced } from './motion.ts';
@@ -222,7 +223,7 @@ export const RouteLine = ({
     <div className={cx('min-w-0', className)}>
       <div
         role="img"
-        aria-label={`Route: ${label}${state === 'broken' ? ', broken' : state === 'blocked' ? ', blocked by policy' : ''}`}
+        aria-label={`Route: ${label}${state === 'broken' ? tr('ui.status.broken') : state === 'blocked' ? tr('ui.status.blockedByPolicy') : ''}`}
         className="flex min-w-0 items-center gap-2 type-meta text-ink-2"
       >
         {nodes.map((n, i) => (

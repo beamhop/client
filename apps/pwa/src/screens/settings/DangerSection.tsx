@@ -4,6 +4,7 @@
  */
 import { ArrowRight, Stop } from '@phosphor-icons/react';
 import { useApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { when } from '../../lib/format.ts';
 import { usePanicSheet, usePanicState } from '../../shell/panic.tsx';
 import { Button, LinkButton } from '../../ui/Button.tsx';
@@ -40,12 +41,12 @@ export const DangerSection = () => {
         <div className="relative flex flex-col gap-3 pl-4">
           <h2 className="flex items-center gap-2 type-title-2 text-ink">
             <Stop size={22} weight="fill" className="text-stop-text" aria-hidden="true" />
-            {panic ? 'Everything is stopped' : 'Stop everything'}
+            {panic ? t('settings.danger.everythingIsStopped') : t('settings.section.stop')}
           </h2>
           <p className="type-body text-ink-2">
             {panic
-              ? `Since ${since ? when(since) : 'just now'}. Nothing restarts until you review what was running.`
-              : 'One press, one confirm. Use it when something looks wrong and you want it to stop now, before you understand why.'}
+              ? `Since ${since ? when(since) : t('settings.danger.justNow')}. Nothing restarts until you review what was running.`
+              : t('settings.danger.onePressOneConfirm')}
           </p>
           {panic ? (
             <LinkButton
@@ -54,7 +55,7 @@ export const DangerSection = () => {
               icon={<ArrowRight size={16} weight="bold" aria-hidden="true" />}
               className="self-start"
             >
-              Review & resume
+              {t('settings.danger.reviewResume')}
             </LinkButton>
           ) : (
             <Button
@@ -64,20 +65,20 @@ export const DangerSection = () => {
               icon={<Stop size={18} weight="fill" aria-hidden="true" />}
               onPress={open}
             >
-              Stop everything
+              {t('settings.section.stop')}
             </Button>
           )}
           <p className="type-meta text-ink-2">
-            Also:{' '}
+            {t('settings.danger.also')}{' '}
             <span className="pointer-coarse:hidden">
-              <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> anywhere ·{' '}
+              <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> {t('settings.danger.anywhere')}{' '}
             </span>
-            Stop in the top bar · from any paired phone
+            {t('settings.danger.topBar')}
           </p>
         </div>
       </div>
 
-      <Group title="What stops" id="dz-stops">
+      <Group title={t('settings.danger.whatStops')} id="dz-stops">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 type-body-sm">
           {STOPS.map(([k, v]) => (
             <div key={k} className="contents">
@@ -88,20 +89,21 @@ export const DangerSection = () => {
         </dl>
       </Group>
 
-      <Group title="Resuming" id="dz-resume">
-        <p className="type-body-sm text-ink-2">
-          Resume is a review, never automatic: you see what was running and recent security events, then pick
-          what comes back. Nothing is pre-checked for you.
-        </p>
+      <Group title={t('settings.danger.resuming')} id="dz-resume">
+        <p className="type-body-sm text-ink-2">{t('settings.danger.resumeIsAReview')}</p>
       </Group>
 
-      <Group title="History" id="dz-history">
+      <Group title={t('settings.danger.history')} id="dz-history">
         {events.length ? (
           <List>
             {events.map((e) => (
               <Row
                 key={e.id}
-                title={e.type === 'panic' ? 'Stopped everything' : 'Resumed after review'}
+                title={
+                  e.type === 'panic'
+                    ? t('settings.danger.stoppedEverything')
+                    : t('settings.danger.resumedAfterReview')
+                }
                 slug={
                   <MetaLine
                     items={[
@@ -115,7 +117,7 @@ export const DangerSection = () => {
             ))}
           </List>
         ) : (
-          <p className="type-body-sm text-ink-2">Never used. Good.</p>
+          <p className="type-body-sm text-ink-2">{t('settings.danger.neverUsedGood')}</p>
         )}
       </Group>
       <CliStrip command="beamhop panic" />

@@ -4,6 +4,7 @@
  * TODO(core): `updates.catalogAuto` / `updates.appPrompt` have no API yet; kept on this device with the CLI shown.
  */
 import { deployMonogram, useApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { LetterTile, MetaLine } from '../../ui/Meta.tsx';
@@ -27,33 +28,33 @@ export const UpdatesSection = () => {
               <p className="type-title-3 text-ink">beamhopd {status.data.version}</p>
               <MetaLine items={[status.data.home, `up ${Math.round(status.data.uptimeSec / 3600)} h`]} />
             </div>
-            <StatusDot state="ready" label="up to date" />
+            <StatusDot state="ready" label={t('settings.updates.upToDate')} />
           </div>
         ) : (
           <Skeleton variant="list" count={1} />
         )}
       </Group>
 
-      <Group title="Automatic" id="upd-auto">
+      <Group title={t('settings.updates.automatic')} id="upd-auto">
         <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
           <Switch
             isSelected={u.catalogAuto}
             onChange={(v) => set({ catalogAuto: v })}
-            description={`Harness and channel definitions (${harnesses.data?.harnesses.length ?? '…'} harnesses). Signed; never changes your config.`}
+            description={t('settings.updates.catalogDesc', { count: harnesses.data?.harnesses.length ?? 0 })}
           >
-            Update the catalog automatically
+            {t('settings.updates.updateTheCatalogAutomatically')}
           </Switch>
           <Switch
             isSelected={u.appPrompt}
             onChange={(v) => set({ appPrompt: v })}
             description="beamhop itself never updates without you. Off: just a dot on Settings."
           >
-            Ask me when a new version is out
+            {t('settings.updates.askMeWhenA')}
           </Switch>
         </div>
       </Group>
 
-      <Group title="Cloud daemons" id="upd-cloud">
+      <Group title={t('settings.updates.cloudDaemons')} id="upd-cloud">
         {clouds.length ? (
           <List>
             {clouds.map((d) => (
@@ -62,12 +63,12 @@ export const UpdatesSection = () => {
                 leading={<LetterTile code={deployMonogram(d.provider)} />}
                 title={`${d.agent} @ ${d.provider} ${d.region ?? ''}`}
                 slug={<MetaLine items={[`beamhopd ${status.data?.version ?? '…'}`, d.status]} />}
-                aside={<StatusDot state="ready" label="same version" hideLabel />}
+                aside={<StatusDot state="ready" label={t('settings.updates.sameVersion')} hideLabel />}
               />
             ))}
           </List>
         ) : (
-          <p className="type-body-sm text-ink-2">No cloud daemons. They follow this computer's version.</p>
+          <p className="type-body-sm text-ink-2">{t('settings.updates.noCloudDaemonsThey')}</p>
         )}
       </Group>
       <CliStrip command="beamhop update --check" />

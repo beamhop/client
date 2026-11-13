@@ -153,7 +153,7 @@ export const AppShell = () => {
             {showRail && railHidden && (
               <div className="border-l border-line px-2 py-3">
                 <IconButton
-                  label="Show approvals rail"
+                  label={t('ui.appShell.showApprovalsRail')}
                   icon={<CaretDoubleLeft size={18} />}
                   onPress={() => {
                     setRailHidden(false);

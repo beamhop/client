@@ -7,6 +7,7 @@ import type { AgentView } from '@beamhop/core';
 import { DownloadSimple, Trash } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t as tr } from '../../i18n/index.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
@@ -30,7 +31,7 @@ const EditRetention = ({ agent, onClose }: { agent: AgentView; onClose: () => vo
     <Sheet
       isOpen
       onOpenChange={(o) => !o && onClose()}
-      title={`Retention · ${agent.config.name}`}
+      title={tr('settings.retention.title', { name: agent.config.name })}
       footer={
         <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button
@@ -54,32 +55,32 @@ const EditRetention = ({ agent, onClose }: { agent: AgentView; onClose: () => vo
               }
             }}
           >
-            Save
+            {tr('settings.retention.save')}
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={onClose}>
-            Cancel
+            {tr('settings.identity.cancel')}
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-5">
         <NumberField
-          label="Keep transcripts for"
+          label={tr('settings.retention.keepTranscriptsFor')}
           unit="days"
           minValue={1}
           maxValue={3650}
           value={t}
           onChange={(v) => Number.isFinite(v) && setT(v)}
-          description="Messages, tool calls and outputs. Older sessions are deleted nightly."
+          description={tr('settings.retention.messagesToolCallsAnd')}
         />
         <NumberField
-          label="Keep audit log for"
+          label={tr('settings.retention.keepAuditLogFor')}
           unit="days"
           minValue={30}
           maxValue={3650}
           value={a}
           onChange={(v) => Number.isFinite(v) && setA(v)}
-          description="Who allowed what. At least 30 days."
+          description={tr('settings.retention.whoAllowedWhatAt')}
         />
       </div>
     </Sheet>
@@ -119,7 +120,7 @@ const PurgeSheet = ({
     <Sheet
       isOpen={open}
       onOpenChange={(o) => (o ? onOpenChange(o) : close())}
-      title="Purge data?"
+      title={tr('settings.retention.purgeData')}
       subtitle={what}
       isDismissable={false}
       role="alertdialog"
@@ -149,28 +150,27 @@ const PurgeSheet = ({
               }
             }}
           >
-            Purge {agent === ALL ? 'everything' : agent}
+            {agent === ALL
+              ? tr('settings.retention.purgeAll')
+              : tr('settings.retention.purgeAgent', { agent })}
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={close}>
-            Cancel
+            {tr('settings.identity.cancel')}
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-5">
-        <p className="type-body text-ink-2">
-          Transcripts and audit entries are deleted from this computer for good. Export first if you might
-          need them. Cloud daemons purge on their next heartbeat.
-        </p>
+        <p className="type-body text-ink-2">{tr('settings.retention.transcriptsAndAuditEntries')}</p>
         <RadioGroup
-          label="Agent"
+          label={tr('settings.retention.agent')}
           value={agent}
           onChange={(k) => {
             setAgent(k);
             setTyped('');
           }}
         >
-          <Radio value={ALL}>All agents</Radio>
+          <Radio value={ALL}>{tr('settings.retention.allAgents')}</Radio>
           {agents.map((a) => (
             <Radio key={a.config.name} value={a.config.name}>
               {a.config.name}
@@ -178,8 +178,13 @@ const PurgeSheet = ({
           ))}
         </RadioGroup>
         <div className="flex flex-col gap-1.5">
-          <span className="type-label text-ink">Data older than</span>
-          <SegmentedControl label="Data older than" value={age} onChange={setAge} options={[...AGES]} />
+          <span className="type-label text-ink">{tr('settings.retention.dataOlderThan')}</span>
+          <SegmentedControl
+            label={tr('settings.retention.dataOlderThan')}
+            value={age}
+            onChange={setAge}
+            options={[...AGES]}
+          />
         </div>
         <TypeToConfirm expected={expected} value={typed} onChange={setTyped} />
       </div>
@@ -196,21 +201,24 @@ export const RetentionSection = () => {
 
   if (q.isError)
     return (
-      <ErrorState title="Couldn't load agents." details={q.error} onRetry={() => void q.refetch()}>
+      <ErrorState
+        title={tr('settings.retention.couldnTLoadAgents')}
+        details={q.error}
+        onRetry={() => void q.refetch()}
+      >
         {q.error.message}
       </ErrorState>
     );
   if (q.isPending)
-    return showSkeleton ? <Skeleton variant="list" count={4} label="Loading retention" /> : null;
+    return showSkeleton ? (
+      <Skeleton variant="list" count={4} label={tr('settings.retention.loadingRetention')} />
+    ) : null;
   const agents = q.data.agents;
 
   return (
     <div className="flex flex-col gap-8">
-      <p className="type-body-sm text-ink-2">
-        Defaults: transcripts 30 days, audit log 1 year. Everything is encrypted at rest; the key is in your
-        OS keychain.
-      </p>
-      <Group title="Per agent" id="ret-agents">
+      <p className="type-body-sm text-ink-2">{tr('settings.retention.defaultsTranscripts30Days')}</p>
+      <Group title={tr('settings.retention.perAgent')} id="ret-agents">
         <List>
           {agents.map((a) => (
             <Row
@@ -229,9 +237,9 @@ export const RetentionSection = () => {
                   variant="quiet"
                   size="sm"
                   onPress={() => setEditing(a)}
-                  aria-label={`Edit retention for ${a.config.name}`}
+                  aria-label={tr('settings.retention.editFor', { name: a.config.name })}
                 >
-                  Edit
+                  {tr('settings.retention.edit')}
                 </Button>
               }
             />
@@ -239,11 +247,8 @@ export const RetentionSection = () => {
         </List>
       </Group>
 
-      <Group title="Export" id="ret-export">
-        <p className="type-body-sm text-ink-2">
-          One archive with config (no secrets), transcripts and the audit log, saved on the computer running
-          beamhop.
-        </p>
+      <Group title={tr('settings.retention.export')} id="ret-export">
+        <p className="type-body-sm text-ink-2">{tr('settings.retention.oneArchiveWithConfig')}</p>
         <Button
           variant="secondary"
           className="mt-2 self-start"
@@ -251,28 +256,28 @@ export const RetentionSection = () => {
           isPending={exp.isPending}
           onPress={() => exp.mutate({})}
         >
-          Export all data
+          {tr('settings.retention.exportAllData')}
         </Button>
         {exp.data && (
           <div role="status" className="mt-2 flex items-center gap-2 rounded-md bg-go-wash py-1 pr-1 pl-3">
-            <span className="min-w-0 flex-1 truncate type-meta text-go-text">Saved · {exp.data.path}</span>
-            <CopyButton value={exp.data.path} label="Copy path" compact />
+            <span className="min-w-0 flex-1 truncate type-meta text-go-text">
+              {tr('settings.retention.saved', { path: exp.data.path })}
+            </span>
+            <CopyButton value={exp.data.path} label={tr('settings.retention.copyPath')} compact />
           </div>
         )}
         {exp.isError && <p className="mt-2 type-body-sm text-stop-text">{exp.error.message}</p>}
       </Group>
 
-      <Group title="Purge" id="ret-purge">
-        <p className="type-body-sm text-ink-2">
-          Delete transcripts and audit entries now, before retention would.
-        </p>
+      <Group title={tr('settings.retention.purge')} id="ret-purge">
+        <p className="type-body-sm text-ink-2">{tr('settings.retention.deleteTranscriptsAndAudit')}</p>
         <Button
           variant="destructive-outline"
           className="mt-2 self-start"
           icon={<Trash size={16} aria-hidden="true" />}
           onPress={() => setPurging(true)}
         >
-          Purge…
+          {tr('settings.retention.purge2')}
         </Button>
       </Group>
 

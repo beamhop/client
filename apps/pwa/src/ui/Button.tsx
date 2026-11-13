@@ -250,6 +250,6 @@ export const TextLink = ({
         ↗
       </span>
     )}
-    {external && <span className="sr-only"> (opens in a new tab)</span>}
+    {external && <span className="sr-only"> {t('ui.button.opensInANew')}</span>}
   </RACLink>
 );

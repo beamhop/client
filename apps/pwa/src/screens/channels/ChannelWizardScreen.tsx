@@ -76,7 +76,14 @@ import {
 } from './providers.ts';
 
 /** Kept for the router/kitchen: the common 6-step frame (JOURNEYS §4). */
-export const WIZARD_STEPS = ['Create', 'Credentials', 'Validate', 'Connect', 'Pair', 'Join'];
+export const WIZARD_STEPS = [
+  t('channels.channelWizard.create'),
+  t('channels.channelWizard.credentials'),
+  t('channels.channelWizard.validate'),
+  t('channels.channelWizard.connect'),
+  t('channels.detail.pair'),
+  t('channels.channelWizard.join'),
+];
 
 type Phase = 'idle' | 'validating' | 'invalid' | 'valid' | 'adding' | 'connecting' | 'connected' | 'failed';
 
@@ -1026,7 +1033,7 @@ const RelayStep = ({ ctx }: { ctx: Ctx }) => {
       </RadioGroup>
       {keyMode === 'own' && (
         <SecretField
-          label="Group key (nsec)"
+          label={t('channels.channelWizard.groupKeyNsec')}
           format={/^nsec1[02-9ac-hj-np-z]{58}$/}
           formatLabel="Looks like an nsec"
           value={nsec}

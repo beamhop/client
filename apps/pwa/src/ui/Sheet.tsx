@@ -8,6 +8,7 @@ import { X } from '@phosphor-icons/react';
 import { AnimatePresence, motion, useDragControls } from 'motion/react';
 import { type ReactNode, useRef } from 'react';
 import { Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { haptic } from '../lib/haptics.ts';
 import { useExpanded } from '../lib/media.ts';
@@ -138,7 +139,12 @@ export const Sheet = ({
                         </Heading>
                         {subtitle && <div className="mt-0.5 type-meta text-ink-2">{subtitle}</div>}
                       </div>
-                      <IconButton label="Close" icon={<X size={20} />} onPress={close} tooltip={false} />
+                      <IconButton
+                        label={t('ui.sheet.close')}
+                        icon={<X size={20} />}
+                        onPress={close}
+                        tooltip={false}
+                      />
                     </div>
                   </div>
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 expanded:px-6">

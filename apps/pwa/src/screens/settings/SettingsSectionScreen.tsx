@@ -4,6 +4,7 @@
  */
 import { useParams } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { t } from '../../i18n/index.ts';
 import { useAppearance } from '../../lib/appearance.ts';
 import { Screen } from '../../shell/Screen.tsx';
 import { LinkButton } from '../../ui/Button.tsx';
@@ -36,23 +37,30 @@ export const AppearanceSettings = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <span className="type-label text-ink">Theme</span>
+        <span className="type-label text-ink">{t('settings.settingsSection.theme')}</span>
         <SegmentedControl
-          label="Theme"
+          label={t('settings.settingsSection.theme')}
           value={prefs.theme}
           onChange={(theme) => set({ theme })}
           options={[
             { id: 'system', label: 'System' },
             { id: 'light', label: 'Paper' },
-            { id: 'dark', label: 'Night shift' },
+            { id: 'dark', label: t('settings.settingsSection.nightShift') },
           ]}
         />
-        <p className="type-meta text-ink-2">Showing {resolved.theme === 'dark' ? 'Night shift' : 'Paper'}.</p>
+        <p className="type-meta text-ink-2">
+          {t('settings.settingsSection.showing', {
+            theme:
+              resolved.theme === 'dark'
+                ? t('settings.settingsSection.nightShift')
+                : t('settings.settingsSection.paper'),
+          })}
+        </p>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="type-label text-ink">Contrast</span>
+        <span className="type-label text-ink">{t('settings.settingsSection.contrast')}</span>
         <SegmentedControl
-          label="Contrast"
+          label={t('settings.settingsSection.contrast')}
           value={prefs.contrast}
           onChange={(contrast) => set({ contrast })}
           options={[
@@ -62,9 +70,9 @@ export const AppearanceSettings = () => {
         />
       </div>
       <div className="flex flex-col gap-2">
-        <span className="type-label text-ink">Motion</span>
+        <span className="type-label text-ink">{t('settings.settingsSection.motion')}</span>
         <SegmentedControl
-          label="Motion"
+          label={t('settings.settingsSection.motion')}
           value={prefs.motion}
           onChange={(motion) => set({ motion })}
           options={[
@@ -76,11 +84,11 @@ export const AppearanceSettings = () => {
       <Switch
         isSelected={prefs.haptics}
         onChange={(haptics) => set({ haptics })}
-        description="Short vibrations when a swipe commits. Android and iPhone (Safari 18+) only."
+        description={t('settings.settingsSection.shortVibrationsWhenA')}
       >
-        Haptics
+        {t('settings.settingsSection.haptics')}
       </Switch>
-      <p className="type-body-sm text-ink-2">Text size follows your system setting.</p>
+      <p className="type-body-sm text-ink-2">{t('settings.settingsSection.textSizeFollowsYour')}</p>
     </div>
   );
 };
@@ -102,15 +110,14 @@ export const SettingsSectionScreen = () => {
         <Body />
       ) : (
         <EmptyState
-          title={`There's no "${section}" section.`}
+          title={t('settings.settingsSection.noSection', { section })}
           action={
             <LinkButton href="/settings" variant="secondary">
-              All settings
+              {t('settings.settingsSection.allSettings')}
             </LinkButton>
           }
         >
-          It may have moved. Settings has Devices, Identity, Owners, Secrets, Retention, Notifications,
-          Updates, Appearance and Stop everything.
+          {t('settings.settingsSection.itMayHaveMoved')}
         </EmptyState>
       )}
     </Screen>

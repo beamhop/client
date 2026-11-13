@@ -7,6 +7,7 @@
 import { ArrowLeft, ArrowRight } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { Wordmark } from '../../shell/Wordmark.tsx';
@@ -61,9 +62,9 @@ export const StepFrame = ({
           variant="secondary"
           icon={<ArrowLeft size={16} aria-hidden="true" />}
           onPress={() => go(prev)}
-          aria-label={`Back to ${STEP_LABEL[prev]}`}
+          aria-label={t('a11y.backTo', { label: STEP_LABEL[prev] })}
         >
-          {expanded ? 'Back' : ''}
+          {expanded ? t('setup.frame.back') : ''}
         </Button>
       )}
       <span className="flex-1" />
@@ -91,7 +92,9 @@ export const StepFrame = ({
     <div className="flex flex-col gap-2">
       {expanded && (
         <p className="type-micro text-ink-2">
-          {step === 'next' ? 'Done' : `${String(i + 1).padStart(2, '0')} · ${STEP_LABEL[step]}`}
+          {step === 'next'
+            ? t('setup.frame.done')
+            : `${String(i + 1).padStart(2, '0')} · ${STEP_LABEL[step]}`}
         </p>
       )}
       <h1 className="type-title-1 text-ink">{title}</h1>
@@ -112,11 +115,11 @@ export const StepFrame = ({
       <div className="grid min-h-svh grid-cols-[280px_1fr]">
         <aside
           className="sticky top-0 flex h-svh flex-col border-r border-line px-6 py-6"
-          aria-label="Setup progress"
+          aria-label={t('setup.frame.setupProgress')}
         >
           <Wordmark />
           <p className="mt-8 type-meta text-ink-2">
-            {step === 'next' ? 'Setup complete' : `Step ${i + 1} of ${SETUP_STEPS.length}`}
+            {step === 'next' ? t('setup.frame.setupComplete') : `Step ${i + 1} of ${SETUP_STEPS.length}`}
             {done > 0 && step !== 'next' ? ` · ${done} done` : ''}
           </p>
           <Stepper
@@ -126,9 +129,7 @@ export const StepFrame = ({
             current={Math.min(i, SETUP_STEPS.length)}
             onStepPress={(n) => go(SETUP_STEPS[n]!)}
           />
-          <p className="mt-auto type-body-sm text-ink-2">
-            Everything here can be changed later. Leave any time; setup resumes where you stopped.
-          </p>
+          <p className="mt-auto type-body-sm text-ink-2">{t('setup.frame.everythingHereCanBe')}</p>
         </aside>
         <main className="min-w-0 px-10 py-14" id="bh-main-content">
           <div className="max-w-[640px]">

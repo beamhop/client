@@ -43,7 +43,11 @@ const MiniDiff = ({ diff }: { diff: string }) => {
         <span className="text-go-text">+{add}</span>
         <span className="text-stop-text">−{del}</span>
       </p>
-      <pre className="overflow-x-auto px-3 pb-2 type-code" tabIndex={0} aria-label="Change preview">
+      <pre
+        className="overflow-x-auto px-3 pb-2 type-code"
+        tabIndex={0}
+        aria-label={t('inbox.slip.changePreview')}
+      >
         {lines.map((l, n) => (
           <span
             // biome-ignore lint/suspicious/noArrayIndexKey: diff lines are positional
@@ -121,7 +125,7 @@ export const QuorumRow = ({ q }: { q: QuorumState }) => (
             <Square size={16} className="text-ink-3" aria-hidden="true" />
           )}
           <span className={s.done ? 'text-ink' : 'text-ink-2'}>{s.name}</span>
-          <span className="sr-only">{s.done ? 'approved' : 'not yet'}</span>
+          <span className="sr-only">{s.done ? 'approved' : t('inbox.slip.notYet')}</span>
         </li>
       ))}
     </ul>
@@ -171,7 +175,7 @@ export const TimesBadge = ({ n }: { n: number }) =>
   n > 1 ? (
     <Badge tone="outline" className="translate-y-[-1px]">
       ×{n}
-      <span className="sr-only"> identical requests, one decision applies to all</span>
+      <span className="sr-only"> {t('inbox.slip.identicalRequestsOneDecision')}</span>
     </Badge>
   ) : null;
 
@@ -269,7 +273,7 @@ export const DecisionBar = ({
         icon={<Check size={16} weight="bold" aria-hidden="true" />}
         onPress={onAllow}
         isPending={pending === 'allow'}
-        aria-label={`${label}${scoped ? ' (choose scope)' : ''}: ${g.lead.agent}, ${target}`}
+        aria-label={`${label}${scoped ? t('inbox.slip.chooseScope') : ''}: ${g.lead.agent}, ${target}`}
       >
         {label}
       </Button>

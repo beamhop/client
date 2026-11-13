@@ -6,6 +6,7 @@
 import { CaretRight } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Button as RACButton } from 'react-aria-components';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { groupPlan, PLAN_SYMBOL, type PlanAction, type PlanTone, planCounts, planTone } from './model.ts';
 
@@ -17,11 +18,11 @@ const TONE_TEXT: Record<PlanTone, string> = {
   warn: 'text-caution-text',
 };
 const GROUP_LABEL: Record<PlanTone, string> = {
-  add: 'Create',
-  change: 'Change',
-  move: 'Transfer',
-  remove: 'Remove',
-  warn: 'Check',
+  add: t('deploy.plan.add'),
+  change: t('deploy.plan.change'),
+  move: t('deploy.plan.move'),
+  remove: t('deploy.plan.remove'),
+  warn: t('deploy.plan.warn'),
 };
 
 const PlanRow = ({ a }: { a: PlanAction }) => {
@@ -72,7 +73,10 @@ export const PlanDiff = ({ actions, label = 'Plan' }: { actions: PlanAction[]; l
     <div className="flex flex-col gap-3" aria-label={label} role="group">
       <p className="type-meta text-ink-2">{summary}</p>
       {groupPlan(actions).map((g) => (
-        <section key={g.tone} aria-label={`${GROUP_LABEL[g.tone]}: ${g.rows.length}`}>
+        <section
+          key={g.tone}
+          aria-label={t('deploy.plan.group', { group: GROUP_LABEL[g.tone], count: g.rows.length })}
+        >
           <ul className="flex flex-col">
             {g.rows.map((a, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: rows may repeat; position is identity

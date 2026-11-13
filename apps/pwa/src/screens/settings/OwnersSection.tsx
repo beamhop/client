@@ -14,6 +14,7 @@ import { npubEncode, tryDecodePubkey } from '@beamhop/channel-nostr/keys';
 import { Crown, Link as LinkIcon, Plus, UserCircle } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { Button } from '../../ui/Button.tsx';
 import { SegmentedControl } from '../../ui/Choice.tsx';
@@ -60,7 +61,7 @@ const AddOwnerSheet = ({
     <Sheet
       isOpen={open}
       onOpenChange={onOpenChange}
-      title="Add an owner"
+      title={t('settings.owners.addAnOwner')}
       footer={
         <div className="grid gap-2 expanded:grid-cols-2 expanded:[&>*:first-child]:order-2">
           <Button
@@ -70,29 +71,26 @@ const AddOwnerSheet = ({
             isPending={add.isPending}
             onPress={() => void submit()}
           >
-            Add owner
+            {t('settings.owners.addOwner')}
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
-            Cancel
+            {t('settings.identity.cancel')}
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="type-body-sm text-ink-2">
-          Owners can do everything you can: change sandboxes, add owners, approve deploys and stop everything.
-          The change is signed with your owner key and logged.
-        </p>
+        <p className="type-body-sm text-ink-2">{t('settings.owners.ownersCanDoEverything')}</p>
         <TextField
-          label="Their Nostr public key"
+          label={t('settings.owners.theirNostrPublicKey')}
           mono
           value={raw}
           onChange={setRaw}
           onBlur={() => setTouched(true)}
           placeholder="npub1…"
-          description="Ask them for their npub. Never their nsec."
+          description={t('settings.owners.askThemForTheir')}
           isInvalid={touched && !principal}
-          errorMessage="That isn't an npub or a 64-character hex key."
+          errorMessage={t('settings.owners.thatIsnTAn')}
         />
         {add.isError && <p className="type-body-sm text-stop-text">{add.error.message}</p>}
       </div>
@@ -123,7 +121,7 @@ export const OwnersSection = () => {
     const err = status.error ?? roles.error;
     return (
       <ErrorState
-        title="Couldn't load owners and roles."
+        title={t('settings.owners.couldnTLoadOwners')}
         details={err}
         onRetry={() => {
           void status.refetch();
@@ -135,7 +133,9 @@ export const OwnersSection = () => {
     );
   }
   if (!status.data || !roles.data)
-    return showSkeleton ? <Skeleton variant="list" count={4} label="Loading owners" /> : null;
+    return showSkeleton ? (
+      <Skeleton variant="list" count={4} label={t('settings.owners.loadingOwners')} />
+    ) : null;
 
   const me = status.data.owner.npub ? `nostr:${status.data.owner.npub}` : undefined;
   const owners = [...(me ? [me] : []), ...prefs.coOwners.filter((o) => o !== me)];
@@ -150,7 +150,7 @@ export const OwnersSection = () => {
   return (
     <div className="flex flex-col gap-8">
       <Group
-        title="Owners"
+        title={t('settings.owners.owners')}
         id="own-owners"
         action={
           <Button
@@ -159,27 +159,27 @@ export const OwnersSection = () => {
             icon={<Plus size={16} weight="bold" aria-hidden="true" />}
             onPress={() => setAdding(true)}
           >
-            Add owner
+            {t('settings.owners.addOwner')}
           </Button>
         }
-        note={owners.length === 1 ? "You're the only owner. At least one owner always remains." : undefined}
+        note={owners.length === 1 ? t('settings.owners.youReTheOnly') : undefined}
       >
         <List>
           {owners.map((o) => (
             <Row
               key={o}
               leading={<Crown size={22} aria-hidden="true" />}
-              title={o === me ? 'You' : short(o)}
+              title={o === me ? t('settings.identity.you') : short(o)}
               aside={o === me ? <Badge tone="outline">primary</Badge> : null}
               slug={<MetaLine items={[{ value: o.replace(/^nostr:/, ''), truncate: 26 }, 'owner']} />}
               actions={
                 owners.length > 1 && o !== me ? (
                   <RowMenu
-                    label={`Actions for ${short(o)}`}
+                    label={t('settings.actionsFor', { name: short(o) })}
                     items={[
                       {
                         id: 'remove',
-                        label: 'Remove owner…',
+                        label: t('settings.owners.removeOwner'),
                         destructive: true,
                         onAction: () => setRemoving(o),
                       },
@@ -193,26 +193,26 @@ export const OwnersSection = () => {
       </Group>
 
       <Group
-        title="Approval quorum"
+        title={t('settings.owners.approvalQuorum')}
         id="own-quorum"
-        note="Deploys over the cost cap and owner changes wait until this many owners approve. Agents' everyday approvals need one."
+        note={t('settings.owners.deploysOverTheCost')}
       >
         {owners.length > 1 ? (
           <SegmentedControl
-            label="Owners needed to approve"
+            label={t('settings.owners.ownersNeededToApprove')}
             value={String(quorum)}
             onChange={(v) => setPrefs({ quorum: Number(v) })}
             options={owners.map((_, i) => ({ id: String(i + 1), label: `${i + 1} of ${owners.length}` }))}
           />
         ) : (
-          <p className="type-body-sm text-ink">1 of 1 · add another owner to require two approvals.</p>
+          <p className="type-body-sm text-ink">{t('settings.owners.1Of1Add')}</p>
         )}
       </Group>
 
       <Group
-        title="People with roles"
+        title={t('settings.owners.peopleWithRoles')}
         id="own-people"
-        note="Global roles apply to every agent unless an agent overrides them."
+        note={t('settings.owners.globalRolesApplyTo')}
       >
         {grants.length ? (
           <List>
@@ -225,7 +225,7 @@ export const OwnersSection = () => {
                 actions={
                   <span className="flex items-center gap-1">
                     <RowMenu
-                      label={`Actions for ${short(principal)}`}
+                      label={t('settings.actionsFor', { name: short(principal) })}
                       items={[
                         ...roleOptions
                           .filter((r) => r.id !== role && r.id !== 'owner')
@@ -245,7 +245,7 @@ export const OwnersSection = () => {
                           })),
                         {
                           id: 'revoke',
-                          label: 'Revoke role',
+                          label: t('settings.owners.revokeRole'),
                           destructive: true,
                           onAction: () =>
                             void revoke
@@ -262,16 +262,14 @@ export const OwnersSection = () => {
             ))}
           </List>
         ) : (
-          <p className="type-body-sm text-ink-2">
-            Nobody else has a role yet. Grant one from an agent's Access tab.
-          </p>
+          <p className="type-body-sm text-ink-2">{t('settings.owners.nobodyElseHasA')}</p>
         )}
       </Group>
 
       <Group
-        title="Linked identities"
+        title={t('settings.owners.linkedIdentities')}
         id="own-links"
-        note="One person, several accounts: alice on Telegram and alice on Nostr share one role and one budget."
+        note={t('settings.owners.onePersonSeveralAccounts')}
       >
         {prefs.links.length > 0 && (
           <List>
@@ -301,14 +299,14 @@ export const OwnersSection = () => {
           }}
         >
           <TextField
-            label="Person"
+            label={t('settings.owners.person')}
             value={person}
             onChange={setPerson}
             placeholder="alice"
             className="medium:w-40"
           />
           <TextField
-            label="Account"
+            label={t('settings.owners.account')}
             mono
             value={linkRaw}
             onChange={setLinkRaw}
@@ -321,7 +319,7 @@ export const OwnersSection = () => {
             isPending={link.isPending}
             isDisabled={!person.trim() || !linkRaw.includes(':')}
           >
-            Link
+            {t('settings.owners.link')}
           </Button>
         </form>
       </Group>
@@ -339,8 +337,8 @@ export const OwnersSection = () => {
       <ConfirmDialog
         isOpen={!!removing}
         onOpenChange={(o) => !o && setRemoving(undefined)}
-        title={`Remove ${removing ? short(removing) : ''} as owner?`}
-        confirmLabel="Remove owner"
+        title={t('settings.owners.removeTitle', { name: removing ? short(removing) : '' })}
+        confirmLabel={t('settings.owners.removeOwner2')}
         isPending={removeOwner.isPending}
         onConfirm={async () => {
           if (!removing) return;
@@ -358,8 +356,7 @@ export const OwnersSection = () => {
           setRemoving(undefined);
         }}
       >
-        They lose owner rights on every agent right away. Their devices stay paired until you remove them in
-        Devices.
+        {t('settings.owners.theyLoseOwnerRights')}
       </ConfirmDialog>
     </div>
   );

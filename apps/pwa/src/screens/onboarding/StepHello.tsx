@@ -11,6 +11,7 @@ import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-aria-components';
 import { useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { countdown } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -47,7 +48,7 @@ const VerticalBeam = ({
   return (
     <div
       role="img"
-      aria-label={`Route: ${agent}, then ${relays.length} relays, then your phone. ${phase === 'done' ? 'Reply received.' : phase === 'waiting' ? 'Message delivered to the relays, waiting for your reply.' : 'Sending.'}`}
+      aria-label={`${t('setup.hello.route', { agent: agent ?? '', relays: relays.length })} ${phase === 'done' ? t('setup.hello.replyReceived') : phase === 'waiting' ? t('setup.hello.messageDeliveredToThe') : t('setup.hello.sending')}`}
       className="relative pl-1"
     >
       <span aria-hidden="true" className="absolute top-3 bottom-3 left-[13px] w-px bg-line-strong" />
@@ -81,7 +82,11 @@ const VerticalBeam = ({
                 {r.replace(/^wss?:\/\//, '')}
               </span>
               <span className={cx('type-meta', ok ? 'text-go-text' : 'text-stop-text')}>
-                {ok ? (phase === 'sending' ? 'connecting' : '✓ relayed') : '■ offline'}
+                {ok
+                  ? phase === 'sending'
+                    ? 'connecting'
+                    : t('setup.hello.relayed')
+                  : t('setup.hello.offline')}
               </span>
             </li>
           );
@@ -93,7 +98,7 @@ const VerticalBeam = ({
               phase === 'done' ? 'bg-ink' : 'bg-surface',
             )}
           />
-          <span className="flex-1 type-title-3 text-ink">your phone</span>
+          <span className="flex-1 type-title-3 text-ink">{t('setup.hello.yourPhone')}</span>
           {phase === 'done' ? (
             <StatusDot state="ready" label="replied" />
           ) : (
@@ -106,26 +111,26 @@ const VerticalBeam = ({
 };
 
 export const NextSteps = ({ agent }: { agent?: string }) => (
-  <nav aria-label="Next steps">
+  <nav aria-label={t('setup.hello.nextSteps')}>
     <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
       {[
         {
           href: '/channels/add',
           icon: Plugs,
-          title: 'Add Telegram, Slack or Discord',
-          slug: 'let people reach your agents where they already are',
+          title: t('setup.hello.addTelegramSlackOr'),
+          slug: t('setup.hello.letPeopleReachYour'),
         },
         {
           href: '/settings/identity',
           icon: IdentificationBadge,
-          title: 'Set up a NIP-05 handle on your domain',
-          slug: 'reviewer@example.com instead of an npub',
+          title: t('setup.hello.setUpANip'),
+          slug: t('setup.hello.reviewerExampleComInstead'),
         },
         {
           href: agent ? `/deploy/new?agent=${agent}` : '/deploy/new',
           icon: CloudArrowUp,
-          title: agent ? `Move ${agent} to the cloud` : 'Run an agent in the cloud',
-          slug: 'answers while this computer sleeps · from $4.90/mo',
+          title: agent ? `Move ${agent} to the cloud` : t('setup.hello.runAnAgentIn'),
+          slug: t('setup.hello.answersWhileThisComputer'),
         },
       ].map((r) => (
         <li key={r.href}>
@@ -203,31 +208,33 @@ export const StepHello = () => {
     return (
       <StepFrame
         step="hello"
-        title="Say hello from your phone"
+        title={t('setup.hello.sayHelloFromYour')}
         lede="There's no agent to say hello yet."
-        primary={{ label: 'Create an agent', onPress: () => go('agent') }}
-        skip={{ label: 'Finish setup', onPress: () => go('next') }}
+        primary={{ label: t('setup.hello.createAnAgent'), onPress: () => go('agent') }}
+        skip={{ label: t('setup.hello.finishSetup'), onPress: () => go('next') }}
       >
-        <p className="type-body-sm text-ink-2">Step 05 creates one in under a minute.</p>
+        <p className="type-body-sm text-ink-2">{t('setup.hello.step05CreatesOne')}</p>
       </StepFrame>
     );
 
   return (
     <StepFrame
       step="hello"
-      title={replied ? 'It works.' : 'Say hello from your phone'}
+      title={replied ? t('setup.hello.itWorks') : t('setup.hello.sayHelloFromYour')}
       lede={
         replied
           ? `Your phone → ${upCount} relays → ${agent} → back, in ${((rtt ?? 0) / 1000).toFixed(1)} s.`
           : `${agent} just sent you a Nostr DM. Reply to it on your phone with anything.`
       }
       cli={`beamhop hello ${agent ?? ''}`}
-      primary={replied ? { label: 'Go to Home', onPress: () => void navigate({ to: '/' }) } : undefined}
+      primary={
+        replied ? { label: t('setup.hello.goToHome'), onPress: () => void navigate({ to: '/' }) } : undefined
+      }
       skip={
         replied
           ? undefined
           : {
-              label: 'Finish without testing',
+              label: t('setup.hello.finishWithoutTesting'),
               onPress: () => {
                 update((p) => markSkipped(p, 'hello'));
                 go('next');
@@ -237,19 +244,19 @@ export const StepHello = () => {
     >
       {hello.isError ? (
         <ErrorState
-          title="Couldn't send the hello."
+          title={t('setup.hello.couldnTSendThe')}
           details={hello.error}
           onRetry={() => agent && hello.mutate({ agent })}
         >
-          {hello.error.message} Check your network, or add a relay in Channels → Nostr.
+          {hello.error.message} {t('setup.hello.checkNetwork')}
         </ErrorState>
       ) : !agent || !channels.data ? (
-        <Skeleton variant="detail" count={2} label="Preparing" />
+        <Skeleton variant="detail" count={2} label={t('setup.hello.preparing')} />
       ) : (
         <>
           {upCount === 0 && (
-            <ErrorState title="No relay is reachable.">
-              Check your network or add a relay in Channels → Nostr. The hello waits until one answers.
+            <ErrorState title={t('setup.hello.noRelayIsReachable')}>
+              {t('setup.hello.checkYourNetworkOr')}
             </ErrorState>
           )}
           <VerticalBeam
@@ -261,9 +268,13 @@ export const StepHello = () => {
           {replied ? (
             <>
               {st?.text && (
-                <UntrustedQuote label={`${st.from ?? 'your phone'} replied`}>{st.text}</UntrustedQuote>
+                <UntrustedQuote
+                  label={t('setup.hello.replied', { from: st.from ?? t('setup.hello.yourPhone') })}
+                >
+                  {st.text}
+                </UntrustedQuote>
               )}
-              <h2 className="type-micro text-ink-2">Next</h2>
+              <h2 className="type-micro text-ink-2">{t('setup.hello.next')}</h2>
               <NextSteps agent={agent} />
             </>
           ) : (
@@ -271,16 +282,16 @@ export const StepHello = () => {
               <div
                 className="flex items-baseline gap-3"
                 role="timer"
-                aria-label={`Waiting for your reply, ${Math.floor(elapsed / 1000)} seconds`}
+                aria-label={t('setup.hello.waitingSeconds', { s: Math.floor(elapsed / 1000) })}
               >
-                <span className="type-body-sm text-ink-2">Waiting for your reply…</span>
+                <span className="type-body-sm text-ink-2">{t('setup.hello.waitingForYourReply')}</span>
                 <Readout size="md" tone={elapsed > STILL_WAITING_MS ? 'caution' : 'ink'}>
                   {countdown(elapsed)}
                 </Readout>
               </div>
               {elapsed > STILL_WAITING_MS && (
                 <p className="type-body-sm text-ink" role="status">
-                  Still waiting. Did the message arrive on your phone?
+                  {t('setup.hello.stillWaitingDidThe')}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2">
@@ -290,18 +301,16 @@ export const StepHello = () => {
                   isPending={hello.isPending}
                   onPress={() => agent && hello.mutate({ agent })}
                 >
-                  Resend
+                  {t('setup.hello.resend')}
                 </Button>
                 {agentView?.config.identity.npub && (
                   <CopyButton
                     value={agentView.config.identity.npub}
-                    label={`Copy ${agent}'s npub for another Nostr app`}
+                    label={t('setup.hello.copyNpub', { agent })}
                   />
                 )}
               </div>
-              <p className="type-body-sm text-ink-2">
-                No phone paired? Open any Nostr app, start a DM with {agent}'s npub, and say hi.
-              </p>
+              <p className="type-body-sm text-ink-2">{t('setup.hello.noPhone', { agent })}</p>
             </div>
           )}
         </>
@@ -318,23 +327,23 @@ export const StepNext = () => {
   return (
     <StepFrame
       step="next"
-      title="You're set up"
+      title={t('setup.hello.youReSetUp')}
       lede={
         progress.helloMs
           ? `Round trip verified in ${(progress.helloMs / 1000).toFixed(1)} s. Here's what usually comes next.`
-          : "Here's what usually comes next."
+          : t('setup.hello.hereSWhatUsually')
       }
-      primary={{ label: 'Go to Home', onPress: () => void navigate({ to: '/' }) }}
+      primary={{ label: t('setup.hello.goToHome'), onPress: () => void navigate({ to: '/' }) }}
     >
       {skipped.length > 0 && (
         <section aria-labelledby="setup-skipped" className="flex flex-col gap-2">
           <h2 id="setup-skipped" className="type-micro text-ink-2">
-            Skipped · {skipped.length}
+            {t('setup.hello.skipped', { count: skipped.length })}
           </h2>
           <div className="flex flex-wrap gap-2">
             {skipped.map((s) => (
               <Button key={s} variant="secondary" size="sm" onPress={() => go(s)}>
-                Finish {STEP_LABEL[s]}
+                {t('setup.hello.finish', { step: STEP_LABEL[s] })}
               </Button>
             ))}
           </div>

@@ -355,7 +355,7 @@ const AfterPair = ({ device }: { device: DeviceView }) => {
               <ol className="mt-3 flex flex-col gap-2 type-body-sm text-ink">
                 <li className="flex items-center gap-2">
                   <span className="type-micro text-ink-3">1</span> {t('pair.install.ios1')}
-                  <Export size={18} aria-label="Share" className="text-ink" />
+                  <Export size={18} aria-label={t('pair.pair.share')} className="text-ink" />
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="type-micro text-ink-3">2</span> {t('pair.install.ios2')}

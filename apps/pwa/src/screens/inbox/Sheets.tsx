@@ -191,7 +191,7 @@ const AccessSheet = ({
   const [busy, setBusy] = useState(false);
   const who = approval.requestedBy.displayName ?? approval.requestedBy.principal;
   const offered = (roles.data?.roles ?? []).filter((r) => r.name !== 'owner' && r.name !== 'agent');
-  const list = offered.length > 0 ? offered : [{ name: 'viewer', description: 'Read-only Q&A.' }];
+  const list = offered.length > 0 ? offered : [{ name: 'viewer', description: t('inbox.sheets.readOnlyQA') }];
   // Least privilege first.
   const order = ['viewer', 'user', 'admin'];
   const sorted = [...list].sort((x, y) => order.indexOf(x.name) - order.indexOf(y.name));

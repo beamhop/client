@@ -65,15 +65,15 @@ const ResumeReview = ({ since }: { since?: string }) => {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <p className="type-micro text-ink-2">Stopped at</p>
+        <p className="type-micro text-ink-2">{t('panic.panic.stoppedAt')}</p>
         <Readout tone="stop">{since ? clock(since) : '—'}</Readout>
         <p className="mt-2 type-body text-ink-2">
-          {t('panic.resumeBody')} Nothing is selected until you choose.
+          {t('panic.resumeBody')} {t('panic.nothingSelected')}
         </p>
       </div>
       <section aria-labelledby="resume-agents">
         <Eyebrow id="resume-agents" count={agents.data?.agents.length}>
-          Agents
+          {t('panic.panic.agents')}
         </Eyebrow>
         {agents.isPending ? (
           <Skeleton count={3} />
@@ -96,7 +96,7 @@ const ResumeReview = ({ since }: { since?: string }) => {
       </section>
       <section aria-labelledby="resume-schedules">
         <Eyebrow id="resume-schedules" count={schedules.data?.schedules.length}>
-          Schedules
+          {t('panic.panic.schedules')}
         </Eyebrow>
         <div className="divide-y divide-line rounded-lg border border-line bg-surface px-4">
           {schedules.data?.schedules.map((s) => (
@@ -110,16 +110,14 @@ const ResumeReview = ({ since }: { since?: string }) => {
             </Checkbox>
           ))}
         </div>
-        <p className="mt-2 type-meta text-ink-2">
-          Channels reconnect when you resume. Cloud daemons follow the agents you select.
-        </p>
+        <p className="mt-2 type-meta text-ink-2">{t('panic.panic.channelsReconnectWhenYou')}</p>
       </section>
       <section aria-labelledby="resume-security">
         <Eyebrow id="resume-security" count={recent.length}>
-          Security events since 1 h before
+          {t('panic.panic.securityEventsSince1')}
         </Eyebrow>
         {recent.length === 0 ? (
-          <p className="type-body-sm text-ink-2">No security events in that window.</p>
+          <p className="type-body-sm text-ink-2">{t('panic.panic.noSecurityEventsIn')}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {recent.map((e) => (
@@ -135,8 +133,8 @@ const ResumeReview = ({ since }: { since?: string }) => {
         )}
       </section>
       <TextField
-        label="Note for the audit log"
-        description="Why you stopped, what you checked. Optional."
+        label={t('panic.panic.noteForTheAudit')}
+        description={t('panic.panic.whyYouStoppedWhat')}
         multiline
         rows={3}
         value={note}

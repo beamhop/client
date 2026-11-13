@@ -5,6 +5,7 @@
 import { DotsThree } from '@phosphor-icons/react';
 import { type ReactNode, useSyncExternalStore } from 'react';
 import { Menu, MenuItem, MenuTrigger, Popover } from 'react-aria-components';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { IconButton } from '../../ui/Button.tsx';
 import { TextField } from '../../ui/Field.tsx';
@@ -189,7 +190,7 @@ export const TypeToConfirm = ({
     description={
       value && !confirmMatches(value, expected)
         ? `Doesn't match "${expected}" yet.`
-        : 'Exact spelling, case-sensitive.'
+        : t('settings.kit.exactSpellingCaseSensitive')
     }
   />
 );

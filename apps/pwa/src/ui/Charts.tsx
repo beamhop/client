@@ -5,6 +5,7 @@
  * finger), ←/→ move between bars, and `View as table` renders an accessible table.
  */
 import { useId, useMemo, useState } from 'react';
+import { t as tr } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { announce } from '../lib/live.ts';
 import { Button } from './Button.tsx';
@@ -255,7 +256,10 @@ export const BarChart = ({
             </span>
           </div>
           {legend && (
-            <ul className="flex flex-col divide-y divide-line border-y border-line" aria-label="Series">
+            <ul
+              className="flex flex-col divide-y divide-line border-y border-line"
+              aria-label={tr('ui.charts.series')}
+            >
               {series.map((s, i) => (
                 <li key={s.id}>
                   <button
@@ -292,7 +296,7 @@ export const BarChart = ({
             <thead>
               <tr className="border-b border-line bg-sunken text-ink-2">
                 <th scope="col" className="px-3 py-2 text-left font-normal">
-                  Day
+                  {tr('ui.charts.day')}
                 </th>
                 {series.map((s) => (
                   <th key={s.id} scope="col" className="px-3 py-2 text-right font-normal">
@@ -300,7 +304,7 @@ export const BarChart = ({
                   </th>
                 ))}
                 <th scope="col" className="px-3 py-2 text-right font-normal">
-                  Total
+                  {tr('ui.charts.total')}
                 </th>
               </tr>
             </thead>
@@ -325,7 +329,7 @@ export const BarChart = ({
         </div>
       )}
       <Button variant="quiet" size="sm" className="self-start" onPress={() => setAsTable((t) => !t)}>
-        {asTable ? 'View as chart' : 'View as table'}
+        {asTable ? tr('ui.charts.viewAsChart') : tr('ui.charts.viewAsTable')}
       </Button>
     </div>
   );

@@ -8,6 +8,7 @@ import { ArrowSquareOut, Stop, Trash } from '@phosphor-icons/react';
 import { useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 import { deployMonogram, useApi, useMutationApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { clock, shortDate, when } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
@@ -55,29 +56,33 @@ export const DeploymentScreen = () => {
   const back = { href: '/deploy', label: 'Deploy' };
   if (q.isError)
     return (
-      <Screen title="Deployment" back={back} pane="detail">
-        <ErrorState title="Couldn't load this deployment." details={q.error} onRetry={() => void q.refetch()}>
+      <Screen title={t('deploy.deployment.deployment')} back={back} pane="detail">
+        <ErrorState
+          title={t('deploy.deployment.couldnTLoadThis')}
+          details={q.error}
+          onRetry={() => void q.refetch()}
+        >
           {q.error.message}
         </ErrorState>
       </Screen>
     );
   if (!d)
     return (
-      <Screen title="Deployment" back={back} pane="detail">
+      <Screen title={t('deploy.deployment.deployment')} back={back} pane="detail">
         {q.isPending ? (
           showSkeleton ? (
-            <Skeleton variant="detail" count={3} label="Loading deployment" />
+            <Skeleton variant="detail" count={3} label={t('deploy.deployment.loadingDeployment')} />
           ) : null
         ) : (
           <EmptyState
-            title="No deployment with that id."
+            title={t('deploy.deployment.noDeploymentWithThat')}
             action={
               <LinkButton href="/deploy" variant="secondary">
-                All deployments
+                {t('deploy.deployment.allDeployments')}
               </LinkButton>
             }
           >
-            It may have been destroyed and cleaned up, or the link is from another daemon.
+            {t('deploy.deployment.itMayHaveBeen')}
           </EmptyState>
         )}
       </Screen>
@@ -109,7 +114,11 @@ export const DeploymentScreen = () => {
           <div className="relative flex items-center gap-3">
             <LetterTile code={deployMonogram(d.provider)} />
             <h2 id="dep-route" className="min-w-0 flex-1 truncate type-title-3 text-ink">
-              {destroyed ? 'Destroyed' : d.status === 'provisioning' ? 'Setting up the server' : 'Route'}
+              {destroyed
+                ? t('deploy.deploy.destroyed')
+                : d.status === 'provisioning'
+                  ? t('deploy.deployment.settingUpTheServer')
+                  : t('deploy.deployment.route')}
             </h2>
             {d.monthlyCostUsd !== undefined && !destroyed && (
               <span className="type-meta text-ink">{usd(d.monthlyCostUsd)}/mo</span>
@@ -124,14 +133,14 @@ export const DeploymentScreen = () => {
             ]}
             live={d.status === 'provisioning'}
             state={d.status === 'error' ? 'broken' : 'ok'}
-            reason={d.status === 'error' ? 'The server stopped answering heartbeats.' : undefined}
+            reason={d.status === 'error' ? t('deploy.deployment.theServerStoppedAnswering') : undefined}
           />
           {info && !destroyed && <p className="relative type-body-sm text-ink-2">{info.sandboxNote}</p>}
         </section>
 
         {(d.status === 'provisioning' || d.status === 'error') && (
           <section aria-labelledby="dep-apply" className="flex flex-col gap-2">
-            <Eyebrow id="dep-apply">Apply</Eyebrow>
+            <Eyebrow id="dep-apply">{t('deploy.deployment.apply')}</Eyebrow>
             <ol className="tick-rail ml-1 flex flex-col pl-5" aria-live="polite">
               {phases.map((p) => (
                 <li key={p.name} className="relative flex min-h-9 items-center gap-3">
@@ -165,27 +174,28 @@ export const DeploymentScreen = () => {
                 </li>
               ))}
             </ol>
-            <p className="type-body-sm text-ink-2">
-              You can leave this screen. It runs on the daemon, and you'll get a notification when it's done.
-            </p>
+            <p className="type-body-sm text-ink-2">{t('deploy.deployment.youCanLeaveThis')}</p>
           </section>
         )}
 
         <section aria-labelledby="dep-facts">
-          <Eyebrow id="dep-facts">Details</Eyebrow>
+          <Eyebrow id="dep-facts">{t('deploy.deployment.details')}</Eyebrow>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 medium:grid-cols-3">
-            <Fact k="Provider" v={d.provider} />
-            <Fact k="Region" v={d.region ?? '—'} />
-            <Fact k="Size" v={d.size ?? '—'} />
-            <Fact k="Estimate" v={d.monthlyCostUsd !== undefined ? `${usd(d.monthlyCostUsd)}/mo` : '—'} />
+            <Fact k={t('deploy.step.provider')} v={d.provider} />
+            <Fact k={t('deploy.newDeploy.region')} v={d.region ?? '—'} />
+            <Fact k={t('deploy.step.size')} v={d.size ?? '—'} />
             <Fact
-              k="Agent"
+              k={t('deploy.deployment.estimate')}
+              v={d.monthlyCostUsd !== undefined ? `${usd(d.monthlyCostUsd)}/mo` : '—'}
+            />
+            <Fact
+              k={t('deploy.step.agent')}
               v={agent.data ? `${agent.data.config.harness} · ${agent.data.status}` : d.agent}
             />
           </dl>
           {!destroyed && (
             <div className="mt-4 flex items-baseline gap-3">
-              <span className="type-micro text-ink-2">Month to date</span>
+              <span className="type-micro text-ink-2">{t('deploy.deployment.monthToDate')}</span>
               <Readout size="md">{usd(monthToDate(d, now))}</Readout>
             </div>
           )}
@@ -193,12 +203,12 @@ export const DeploymentScreen = () => {
 
         <section aria-labelledby="dep-log" className="flex flex-col gap-2">
           <Eyebrow id="dep-log" count={log.data?.events.length}>
-            Activity
+            {t('deploy.deployment.activity')}
           </Eyebrow>
           {log.data?.events.length ? (
             <div
               role="log"
-              aria-label={`Activity for ${d.agent}`}
+              aria-label={t('deploy.deployment.activityFor', { agent: d.agent })}
               tabIndex={0}
               className="max-h-72 overflow-y-auto rounded-md bg-sunken py-2 outline-none focus-visible:outline-2 focus-visible:outline-focus"
             >
@@ -227,7 +237,7 @@ export const DeploymentScreen = () => {
               </ol>
             </div>
           ) : (
-            <p className="type-body-sm text-ink-2">No activity logged for {d.agent} yet.</p>
+            <p className="type-body-sm text-ink-2">{t('deploy.deployment.noActivity', { agent: d.agent })}</p>
           )}
           <LinkButton
             href={`/audit?tab=log`}
@@ -236,13 +246,13 @@ export const DeploymentScreen = () => {
             className="-ml-3 self-start"
             icon={<ArrowSquareOut size={16} aria-hidden="true" />}
           >
-            Full audit log
+            {t('deploy.deployment.fullAuditLog')}
           </LinkButton>
         </section>
 
         {!destroyed && (
           <section aria-labelledby="dep-actions" className="flex flex-col gap-3">
-            <Eyebrow id="dep-actions">Actions</Eyebrow>
+            <Eyebrow id="dep-actions">{t('deploy.deployment.actions')}</Eyebrow>
             <div className="flex flex-wrap gap-2">
               {running && (
                 <Button
@@ -250,7 +260,7 @@ export const DeploymentScreen = () => {
                   icon={<Stop size={16} weight="fill" aria-hidden="true" />}
                   onPress={() => setStopping(true)}
                 >
-                  Stop {d.agent}
+                  {t('deploy.deployment.stopAgent', { agent: d.agent })}
                 </Button>
               )}
               <Button
@@ -258,12 +268,11 @@ export const DeploymentScreen = () => {
                 icon={<Trash size={16} aria-hidden="true" />}
                 onPress={() => setDestroying(true)}
               >
-                Destroy…
+                {t('deploy.deployment.destroy')}
               </Button>
             </div>
             <p className="type-body-sm text-ink-2">
-              Any paired phone can see status and stop it. Creating or destroying servers needs the computer
-              that holds the {d.provider} token.
+              {t('deploy.deployment.whoCan', { provider: d.provider })}
             </p>
           </section>
         )}
@@ -273,8 +282,8 @@ export const DeploymentScreen = () => {
       <ConfirmDialog
         isOpen={stopping}
         onOpenChange={setStopping}
-        title={`Stop ${d.agent}?`}
-        confirmLabel={`Stop ${d.agent}`}
+        title={t('deploy.deployment.stopTitle', { agent: d.agent })}
+        confirmLabel={t('deploy.deployment.stopAgent', { agent: d.agent })}
         isPending={stop.isPending}
         onConfirm={async () => {
           await stop.mutateAsync({ name: d.agent });
@@ -285,7 +294,7 @@ export const DeploymentScreen = () => {
           });
         }}
       >
-        Its sessions end now. The server stays up (and billed) so you can start it again; Destroy removes it.
+        {t('deploy.deployment.itsSessionsEndNow')}
       </ConfirmDialog>
 
       <Sheet
@@ -294,7 +303,7 @@ export const DeploymentScreen = () => {
           setDestroying(o);
           if (!o) setTyped('');
         }}
-        title={`Destroy ${d.agent} on ${d.provider}?`}
+        title={t('deploy.deployment.destroyTitle', { agent: d.agent, provider: d.provider })}
         subtitle={`${d.region ?? ''} · ${d.size ?? ''}`}
         isDismissable={false}
         role="alertdialog"
@@ -321,29 +330,31 @@ export const DeploymentScreen = () => {
                 }
               }}
             >
-              Destroy {d.agent}
+              {t('deploy.deployment.destroyAgent', { agent: d.agent })}
             </Button>
             <Button variant="secondary" size="lg" fullWidth onPress={() => setDestroying(false)}>
-              Cancel
+              {t('deploy.deployment.cancel')}
             </Button>
           </div>
         }
       >
         <div className="flex flex-col gap-4">
           <p className="type-body text-ink-2">
-            This deletes the server and everything on it. It can't be undone.
-            {d.monthlyCostUsd ? ` Billing stops: ${usd(d.monthlyCostUsd)}/mo.` : ''}
+            {t('deploy.deployment.destroyBody')}
+            {d.monthlyCostUsd
+              ? ` ${t('deploy.deployment.billingStops', { cost: usd(d.monthlyCostUsd) })}`
+              : ''}
           </p>
           <PlanDiff
-            label="Destroy plan"
+            label={t('deploy.deployment.destroyPlan')}
             actions={[
               {
                 op: 'destroy',
                 resource: 'server',
                 detail: `${d.provider} ${d.size ?? ''} · ${d.region ?? ''}`,
               },
-              { op: 'delete', resource: 'firewall', detail: 'and its rules' },
-              { op: 'delete', resource: 'disk', detail: 'worktrees and caches on the server' },
+              { op: 'delete', resource: 'firewall', detail: t('deploy.deployment.andItsRules') },
+              { op: 'delete', resource: 'disk', detail: t('deploy.deployment.worktreesAndCachesOn') },
               {
                 op: 'keep',
                 resource: 'identity',
@@ -352,7 +363,7 @@ export const DeploymentScreen = () => {
               {
                 op: 'keep',
                 resource: 'transcripts',
-                detail: 'already synced here, kept until retention ends',
+                detail: t('deploy.deployment.alreadySyncedHereKept'),
               },
             ]}
           />

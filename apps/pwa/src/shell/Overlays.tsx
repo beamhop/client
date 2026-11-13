@@ -128,7 +128,7 @@ const usePaletteSections = (enabled: boolean): Section[] => {
                   id: 'allow-next',
                   label: t('palette.allowNext', { agent: next.agent, what: approvalTarget(next) }),
                   keywords: 'approve next approval allow once',
-                  hint: 'low risk',
+                  hint: t('ui.overlays.lowRisk'),
                   icon: icon(Check),
                   run: allowNext(next),
                 }
@@ -239,7 +239,7 @@ const usePaletteSections = (enabled: boolean): Section[] => {
           id: `agent-stop-${name}`,
           label: t('palette.stopAgent', { name }),
           keywords: `agent stop ${name}`,
-          hint: 'agent stop',
+          hint: t('ui.overlays.agentStop'),
           icon: icon(Stop),
           run: () => {
             call('agent.stop', { name })

@@ -15,6 +15,7 @@ import {
   Text,
   TextField,
 } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { descriptionClass, inputShell, labelClass } from './Field.tsx';
 
@@ -100,7 +101,7 @@ export const ChipGroup = ({
               {ICON[v]}
               <span>{it.label}</span>
               {it.note && <span>{it.note}</span>}
-              {v === 'locked' && <span className="sr-only">(locked, always blocked)</span>}
+              {v === 'locked' && <span className="sr-only">{t('ui.chip.lockedAlwaysBlocked')}</span>}
             </span>
             {removable && (
               <RACButton

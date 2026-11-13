@@ -22,6 +22,7 @@ import {
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useApi } from '../../api/index.ts';
+import { t } from '../../i18n/index.ts';
 import { useAppearance } from '../../lib/appearance.ts';
 import { cx } from '../../lib/cx.ts';
 import { middleTruncate } from '../../lib/format.ts';
@@ -40,51 +41,69 @@ export interface SettingsSectionMeta {
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-  { id: 'devices', title: 'Devices', slug: 'paired phones and browsers', group: 'Trust', icon: DeviceMobile },
+  {
+    id: 'devices',
+    title: 'Devices',
+    slug: t('settings.settings.pairedPhonesAndBrowsers'),
+    group: 'Trust',
+    icon: DeviceMobile,
+  },
   {
     id: 'identity',
-    title: 'Identity & NIP-05',
-    slug: 'owner key, agent keys, handles',
+    title: t('settings.section.identity'),
+    slug: t('settings.settings.ownerKeyAgentKeys'),
     group: 'Trust',
     icon: IdentificationBadge,
   },
   {
     id: 'owners',
-    title: 'Owners & people',
-    slug: 'co-owners, quorum, linked accounts',
+    title: t('settings.section.owners'),
+    slug: t('settings.settings.coOwnersQuorumLinked'),
     group: 'Trust',
     icon: Crown,
   },
-  { id: 'secrets', title: 'Secrets', slug: 'API keys and tokens, by name', group: 'Trust', icon: Key },
+  {
+    id: 'secrets',
+    title: 'Secrets',
+    slug: t('settings.settings.apiKeysAndTokens'),
+    group: 'Trust',
+    icon: Key,
+  },
   {
     id: 'retention',
-    title: 'Retention & data',
-    slug: 'transcripts 30 d · audit 1 y',
+    title: t('settings.section.retention'),
+    slug: t('settings.settings.transcripts30DAudit'),
     group: 'Data',
     icon: ClockCounterClockwise,
   },
   {
     id: 'notifications',
     title: 'Notifications',
-    slug: 'push, alerts, Nostr DM fallback',
+    slug: t('settings.settings.pushAlertsNostrDm'),
     group: 'This app',
     icon: Bell,
   },
   {
     id: 'updates',
     title: 'Updates',
-    slug: 'beamhop, catalog, cloud daemons',
+    slug: t('settings.settings.beamhopCatalogCloudDaemons'),
     group: 'This app',
     icon: ArrowsClockwise,
   },
   {
     id: 'appearance',
     title: 'Appearance',
-    slug: 'theme, contrast, motion, haptics',
+    slug: t('settings.settings.themeContrastMotionHaptics'),
     group: 'This app',
     icon: Palette,
   },
-  { id: 'stop', title: 'Stop everything', slug: 'kill switch and history', group: 'Kill switch', icon: Stop },
+  {
+    id: 'stop',
+    title: t('settings.section.stop'),
+    slug: t('settings.settings.killSwitchAndHistory'),
+    group: 'Kill switch',
+    icon: Stop,
+  },
 ];
 
 const THEME_WORD = { system: 'System', light: 'Paper', dark: 'Night shift' } as const;
@@ -122,7 +141,8 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
   out.appearance = {
     text: `${THEME_WORD[prefs.theme]} · contrast ${prefs.contrast} · motion ${prefs.motion}`,
   };
-  if (panic) out.stop = { text: 'everything is stopped', flag: <Badge tone="stop">stopped</Badge> };
+  if (panic)
+    out.stop = { text: t('settings.settings.everythingIsStopped'), flag: <Badge tone="stop">stopped</Badge> };
   if (typeof Notification !== 'undefined')
     out.notifications = {
       text: `push ${Notification.permission === 'granted' ? 'on' : 'off'} on this device`,
@@ -139,8 +159,8 @@ export const SettingsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       list={
-        <Screen title="Settings" pane="list">
-          <nav aria-label="Settings sections" className="flex flex-col gap-4">
+        <Screen title={t('settings.settings.settings')} pane="list">
+          <nav aria-label={t('settings.settings.settingsSections')} className="flex flex-col gap-4">
             {groups.map((g) => (
               <section key={g} aria-labelledby={`set-${g.replace(/\s/g, '')}`}>
                 <Eyebrow id={`set-${g.replace(/\s/g, '')}`}>{g}</Eyebrow>
