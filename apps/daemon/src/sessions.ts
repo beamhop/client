@@ -27,6 +27,7 @@ import { mcpReadPaths } from '@beamhop/mcp';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
+import { sandboxGitWritePaths } from './git-ops.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
 import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
@@ -385,7 +386,10 @@ export class SessionManager {
     if (!plugin) throw new BeamhopError('unavailable', `harness "${harnessId}" is not installed`);
     const { mounts, worktrees } = await this.prepareMounts(live, agent);
     const o = (agent.sandbox.policy ?? {}) as NonNullable<Parameters<typeof compilePolicy>[2]>;
-    const extraWrite = profile === 'strict' ? [] : [live.dir, ...worktrees.map((w) => join(w.repo, '.git'))];
+    // Only objects, beamhop/* refs and the worktree's own admin dir: never the repo's config or
+    // hooks, which unsandboxed git (the owner's, or the daemon's merge/PR) would run (wave C GIT-1).
+    const gitWrite = (await Promise.all(worktrees.map((w) => sandboxGitWritePaths(w.path, w.repo)))).flat();
+    const extraWrite = profile === 'strict' ? [] : [live.dir, ...gitWrite];
     const policy = compilePolicy(
       profile,
       mounts.map((m) => ({ path: m.path, mode: m.mode })),
