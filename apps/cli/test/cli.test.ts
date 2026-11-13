@@ -258,4 +258,17 @@ describe('cli', () => {
     await u.run('alerts', 'set');
     expect(u.err.join('')).toContain('nothing to change');
   });
+
+  it('session start warns when no model key is stored', async () => {
+    const t = setup(async (m) =>
+      m === 'secret.list' ? { backend: 'memory', secrets: [] } : { id: 'ses_1', agent: 'bot' },
+    );
+    await t.run('session', 'start', 'bot', 'hi');
+    expect(t.out.join('\n')).toContain('no model key is stored in beamhop');
+    const k = setup(async (m) =>
+      m === 'secret.list' ? { backend: 'memory', secrets: [{ name: 'OPENAI_API_KEY' }] } : { id: 'ses_1' },
+    );
+    await k.run('session', 'start', 'bot', 'hi');
+    expect(k.out.join('\n')).not.toContain('no model key');
+  });
 });

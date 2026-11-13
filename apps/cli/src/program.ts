@@ -76,6 +76,9 @@ const parseKv = (pairs: string[] = []): Record<string, string> => {
 
 const collect = (v: string, prev: string[] = []) => [...prev, v];
 
+/** Provider keys the LLM broker injects (see packages/broker DEFAULT_ROUTES). */
+const LLM_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
+
 /** `~/code/app:rw` → { mount: '~/code/app', mountMode: 'rw' } (the suffix is optional). */
 const splitMount = (m: string): { mount: string; mountMode?: 'ro' | 'rw' } => {
   const match = /^(.*?):(ro|rw)$/.exec(m);
@@ -742,9 +745,23 @@ export const buildProgram = (deps: CliDeps): Command => {
     .action(
       act(async (c, agentName: string, text: string[]) => {
         const s = await c.call('session.start', { agent: agentName, text: text.join(' ') });
+        const noKey = await c
+          .call('secret.list')
+          .then((r) => !r?.secrets?.some((x) => LLM_KEYS.includes(x.name)))
+          .catch(() => false);
         return {
           data: s,
-          human: () => `started ${s.id} — follow with ${pc.bold(`beamhop session show ${s.id}`)}`,
+          human: () =>
+            [
+              `started ${s.id} — follow with ${pc.bold(`beamhop session show ${s.id}`)}`,
+              ...(noKey
+                ? [
+                    pc.yellow(
+                      `! no model key is stored in beamhop, so the agent will not get an answer from its model: beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY (or ${LLM_KEYS.slice(1).join(' / ')})`,
+                    ),
+                  ]
+                : []),
+            ].join('\n'),
         };
       }),
     );
