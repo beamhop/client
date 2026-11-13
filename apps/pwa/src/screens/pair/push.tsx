@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { apiKey, useApi, useBeamhop, useConnection, useDaemons } from '../../api/index.ts';
 import { enablePush, LOCAL_BROWSER_DEVICE, type PushApi, setPushPref } from '../../api/push.ts';
+import { useInstall } from '../../lib/install.ts';
 import { useThisDevice } from '../settings/DevicesSection.tsx';
 
 export type PushPermission = 'granted' | 'denied' | 'default' | 'unsupported';
@@ -143,30 +144,8 @@ export const usePushPrefs = (deviceId: string | undefined) => {
   return { ...q, set, isOn };
 };
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-/** Android/Chromium install prompt, captured so our own button can show it. */
+/** Android/Chromium install prompt (captured at boot by lib/install.ts), for our own button. */
 export const useInstallPrompt = () => {
-  const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null);
-  useEffect(() => {
-    const on = (e: Event) => {
-      e.preventDefault();
-      setEvt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', on);
-    return () => window.removeEventListener('beforeinstallprompt', on);
-  }, []);
-  return {
-    available: !!evt,
-    prompt: async () => {
-      if (!evt) return false;
-      await evt.prompt();
-      const choice = await evt.userChoice;
-      setEvt(null);
-      return choice.outcome === 'accepted';
-    },
-  };
+  const { available, prompt } = useInstall();
+  return { available, prompt };
 };

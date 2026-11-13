@@ -11,6 +11,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BeamhopProvider, createRuntime, loadMock, resolveConnection } from './api/index.ts';
 import { initAppearance, useAppearance } from './lib/appearance.ts';
+// Side effect: captures beforeinstallprompt before any screen asks for it.
+import './lib/install.ts';
 import { createAppRouter } from './router.tsx';
 import { LiveRegions } from './shell/AppShell.tsx';
 

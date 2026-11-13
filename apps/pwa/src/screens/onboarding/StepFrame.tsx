@@ -76,11 +76,15 @@ export const StepFrame = ({
       {primary && (
         <Button
           variant="primary"
-          size={expanded ? 'md' : 'lg'}
+          size="md"
           isDisabled={primary.disabled}
           isPending={primary.pending}
           onPress={primary.onPress}
-          icon={primary.icon ?? <ArrowRight size={16} weight="bold" aria-hidden="true" />}
+          // Compact with Back + Skip + primary: drop the arrow so all three fit at 320–390px.
+          icon={
+            primary.icon ??
+            (expanded || !skip ? <ArrowRight size={16} weight="bold" aria-hidden="true" /> : undefined)
+          }
         >
           {primary.label}
         </Button>

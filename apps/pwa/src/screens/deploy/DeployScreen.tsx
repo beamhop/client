@@ -16,6 +16,7 @@ import { shortDate } from '../../lib/format.ts';
 import { Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { LinkButton } from '../../ui/Button.tsx';
+import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { StatusDot } from '../../ui/Status.tsx';
@@ -61,7 +62,7 @@ export const DeployScreen = () => {
               items={[
                 d.size?.split(' · ')[0],
                 d.monthlyCostUsd !== undefined && !destroyed && `${usd(d.monthlyCostUsd)}/mo`,
-                `since ${shortDate(d.createdAt)}`,
+                t('deploy.list.since', { date: shortDate(d.createdAt) }),
               ]}
             />
           </span>
@@ -82,8 +83,8 @@ export const DeployScreen = () => {
             live.length > 0 ? (
               <MetaLine
                 items={[
-                  `${live.length} cloud ${live.length === 1 ? 'agent' : 'agents'}`,
-                  `${usd(monthly)}/mo est.`,
+                  t('deploy.list.count', { count: live.length }),
+                  t('deploy.list.monthly', { cost: usd(monthly) }),
                 ]}
               />
             ) : undefined
@@ -137,6 +138,7 @@ export const DeployScreen = () => {
                   <ul className="-mx-2 flex flex-col">{gone.map(row)}</ul>
                 </section>
               )}
+              <CliStrip command="beamhop deploy list" />
             </div>
           )}
         </Screen>

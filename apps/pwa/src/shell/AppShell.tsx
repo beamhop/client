@@ -133,9 +133,9 @@ export const AppShell = () => {
   return (
     <>
       <SkipLink />
-      <div className="flex h-dvh overflow-hidden" data-shell="expanded">
+      <div className="flex h-dvh overflow-hidden pt-safe" data-shell="expanded">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
-        <div className={cx('flex h-dvh min-w-0 flex-1 flex-col', collapsed ? 'ml-16' : 'ml-60')}>
+        <div className={cx('flex h-full min-w-0 flex-1 flex-col', collapsed ? 'ml-16' : 'ml-60')}>
           <StatusStrip />
           <ShellBanners />
           <div className="flex min-h-0 flex-1">

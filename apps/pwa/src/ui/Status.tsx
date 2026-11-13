@@ -267,7 +267,9 @@ export const RouteLine = ({
             )}
             <span className="flex min-w-0 shrink items-center gap-1.5">
               {n.kind !== 'relay' && <NodeMark kind={n.kind} filled={flash && i === dest} />}
-              <span className={cx('truncate', n.kind === 'agent' && 'text-ink')}>{n.label}</span>
+              <span className={cx('min-w-0 truncate', n.kind === 'agent' && 'text-ink')} title={n.label}>
+                {n.label}
+              </span>
             </span>
           </Fragment>
         ))}

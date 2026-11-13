@@ -27,7 +27,7 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   return (
     <aside
       className={cx(
-        'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg',
+        'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-line bg-bg pt-safe pb-safe',
         collapsed ? 'w-16' : 'w-60',
       )}
       aria-label={t('ui.sidebar.sidebar')}
