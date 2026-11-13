@@ -1,0 +1,162 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderCloudInit > matches snapshot 1`] = `
+"#cloud-config
+users:
+  - name: beamhop
+    gecos: beamhop daemon
+    shell: /bin/bash
+    lock_passwd: true
+    groups:
+      - systemd-journal
+disable_root: true
+ssh_pwauth: false
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - xz-utils
+  - git
+  - rsync
+  - bubblewrap
+  - socat
+  - ripgrep
+  - ufw
+  - apparmor
+  - unattended-upgrades
+write_files:
+  - path: /usr/local/sbin/beamhop-install-node
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      # Installs Node.js from the official tarball (https://nodejs.org/dist/) and verifies its SHA-256.
+      set -eu
+      DIST="\${1:-latest-v22.x}"
+      case "$(dpkg --print-architecture)" in
+        amd64) NARCH=x64 ;;
+        arm64) NARCH=arm64 ;;
+        *) echo "unsupported architecture" >&2; exit 1 ;;
+      esac
+      TMP="$(mktemp -d)"
+      cd "$TMP"
+      curl -fsSLO --retry 5 "https://nodejs.org/dist/$DIST/SHASUMS256.txt"
+      FILE="$(grep -oE "node-v2[2-9]\\.[0-9]+\\.[0-9]+-linux-$NARCH\\.tar\\.xz" SHASUMS256.txt | head -n 1)"
+      [ -n "$FILE" ] || { echo "no Node 22+ tarball found in $DIST" >&2; exit 1; }
+      curl -fsSLO --retry 5 "https://nodejs.org/dist/$DIST/$FILE"
+      grep " $FILE\\$" SHASUMS256.txt | sha256sum -c -
+      tar -xJf "$FILE" -C /usr/local --strip-components=1 --no-same-owner
+      cd /
+      rm -rf "$TMP"
+      node --version
+  - path: /etc/apparmor.d/beamhop-bwrap
+    permissions: "0644"
+    content: |
+      abi <abi/4.0>,
+      include <tunables/global>
+
+      profile beamhop-bwrap /usr/bin/bwrap flags=(unconfined) {
+        userns,
+        include if exists <local/beamhop-bwrap>
+      }
+  - path: /etc/beamhop/beamhopd.env
+    permissions: "0644"
+    content: |
+      BEAMHOP_HOME=/home/beamhop/.beamhop
+      XDG_CONFIG_HOME=/home/beamhop/.beamhop/xdg/config
+      XDG_CACHE_HOME=/home/beamhop/.beamhop/xdg/cache
+      XDG_DATA_HOME=/home/beamhop/.beamhop/xdg/data
+      XDG_STATE_HOME=/home/beamhop/.beamhop/xdg/state
+      npm_config_cache=/home/beamhop/.beamhop/xdg/cache/npm
+      NODE_ENV=production
+      BEAMHOP_AGENT=reviewer
+      BEAMHOP_VERSION=1.2.3
+      BEAMHOP_OWNER_NPUB=npub1qpzry9x8gf2tvdw0s3jn54khce6mua7lqpzry9x8gf2tvdw0s3jn54khce
+      BEAMHOP_DAEMON_NSEC_REF=agent.reviewer.nsec
+      BEAMHOP_AWAIT_PROVISIONING=1
+      BEAMHOP_HARNESSES=claude,codex
+      BEAMHOP_SANDBOX_FS=srt
+      BEAMHOP_PROVISIONING_PUBKEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      BEAMHOP_DEPLOY_PROVIDER=hetzner
+  - path: /etc/systemd/system/beamhopd.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=beamhop daemon (agent reviewer)
+      Documentation=https://beamhop.dev
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=beamhop
+      Group=beamhop
+      EnvironmentFile=/etc/beamhop/beamhopd.env
+      ExecStart=/usr/local/bin/beamhop daemon --foreground
+      Restart=always
+      RestartSec=5
+      # Hardening. RestrictNamespaces= is intentionally absent: srt's bubblewrap needs user namespaces.
+      NoNewPrivileges=yes
+      ProtectSystem=strict
+      ReadWritePaths=/home/beamhop/.beamhop
+      PrivateTmp=yes
+      ProtectKernelModules=yes
+      UMask=0077
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - - /usr/local/sbin/beamhop-install-node
+    - latest-v22.x
+  - - npm
+    - install
+    - --global
+    - --no-fund
+    - --no-audit
+    - beamhop@1.2.3
+    - "@anthropic-ai/claude-code"
+    - "@openai/codex"
+  - - sh
+    - -c
+    - if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then apparmor_parser -r /etc/apparmor.d/beamhop-bwrap; fi
+  - - install
+    - -d
+    - -o
+    - beamhop
+    - -g
+    - beamhop
+    - -m
+    - "0700"
+    - /home/beamhop/.beamhop
+  - - install
+    - -d
+    - -o
+    - beamhop
+    - -g
+    - beamhop
+    - -m
+    - "0700"
+    - /home/beamhop/.beamhop/workspaces
+  - - ufw
+    - default
+    - deny
+    - incoming
+  - - ufw
+    - default
+    - allow
+    - outgoing
+  - - sh
+    - -c
+    - systemctl disable --now ssh.socket ssh.service >/dev/null 2>&1 || true
+  - - ufw
+    - --force
+    - enable
+  - - systemctl
+    - daemon-reload
+  - - systemctl
+    - enable
+    - --now
+    - beamhopd.service
+final_message: beamhop 1.2.3 installed; beamhopd is awaiting provisioning over Nostr.
+"
+`;

@@ -1,0 +1,14 @@
+{
+  "name": "@beamhop/deploy",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Cloud deployers (Hetzner, DigitalOcean, Fly.io, Render, Railway) for beamhop agents",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@beamhop/core": "workspace:*",
+    "yaml": "^2.8.1"
+  }
+}
