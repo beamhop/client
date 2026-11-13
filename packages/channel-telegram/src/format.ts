@@ -64,8 +64,37 @@ export const isBalanced = (html: string): boolean => {
   return stack.length === 0;
 };
 
-/** Convert agent Markdown to Telegram HTML. Output is always tag-balanced. */
-export const markdownToTelegramHtml = (md: string): string => {
+const ZWJ = '\u200D';
+/** `@name` at a word start (not `a@b`, not `/@x` in a URL path, not `@@`). */
+const MENTION = /(^|[^\w@/\u200D])@(?=[A-Za-z0-9_])/g;
+
+/**
+ * Telegram turns any plain `@username` into a mention that pings that user, and this cannot be
+ * disabled (review wave B R-B6). Agent output is untrusted, so a zero-width joiner is inserted
+ * after every `@` that would start a mention, in text outside tags and outside `<code>`/`<pre>`
+ * (Telegram does not link mentions inside code). Attribute values (hrefs) are left alone.
+ */
+export const neutralizeMentions = (html: string): string => {
+  let code = 0;
+  return html
+    .split(/(<[^>]*>)/)
+    .map((part) => {
+      if (part.startsWith('<')) {
+        const m = /^<(\/?)(code|pre)\b/i.exec(part);
+        if (m) code = Math.max(0, code + (m[1] ? -1 : 1));
+        return part;
+      }
+      return code > 0 ? part : part.replace(MENTION, `$1@${ZWJ}`);
+    })
+    .join('');
+};
+
+/** Convert agent Markdown to Telegram HTML. Output is always tag-balanced; mentions are neutralized. */
+export const markdownToTelegramHtml = (md: string): string =>
+  // The placeholder sentinel never reaches the output, not even through the escaped fallbacks.
+  neutralizeMentions(renderMarkdown(md.replace(/\uE000/g, '')));
+
+const renderMarkdown = (md: string): string => {
   if (md.length > MAX_FORMAT_TOTAL) return escapeHtml(md);
   // The placeholder sentinel never reaches the output, not even inside code blocks.
   const lines = md

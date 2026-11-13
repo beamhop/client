@@ -24,7 +24,7 @@ import {
   terminate,
   truncate,
 } from '@beamhop/harness-kit';
-import { autoDecision, chooseOption, mapSessionUpdate, toAcpMcpServers } from './mapping.ts';
+import { autoDecision, chooseOption, deriveToolName, mapSessionUpdate, toAcpMcpServers } from './mapping.ts';
 
 export interface AcpHarnessOptions {
   id: string;
@@ -85,10 +85,12 @@ export const startAcpSession = async (
     })
     .onRequest(acp.methods.client.session.requestPermission, async ({ params, signal }) => {
       const tc = params.toolCall;
-      const kind = tc.kind ?? undefined;
-      const key = `${tc.name ?? kind ?? 'tool'}`;
+      // ACP tool calls usually have no name: derive a stable one from kind/title/rawInput so
+      // beamhop's checkTool patterns (and "always allow") work the same across ACP harnesses.
+      const tool = deriveToolName(tc);
+      const key = tool;
       const cancelled: acp.RequestPermissionResponse = { outcome: { outcome: 'cancelled' } };
-      let decision: PermissionDecision | undefined = autoDecision(spec.permissionMode, kind);
+      let decision: PermissionDecision | undefined = autoDecision(spec.permissionMode, tool);
       if (!decision && broker.isAlwaysAllowed(key)) decision = { allow: true, always: true };
       if (!decision) {
         if (!turn) return cancelled;
@@ -96,9 +98,9 @@ export const startAcpSession = async (
         emit({
           type: 'permission_request',
           id,
-          tool: tc.name ?? kind ?? 'tool',
+          tool,
           input: tc.rawInput ?? null,
-          title: tc.title ?? `${tc.name ?? kind ?? 'tool'} ${tc.toolCallId}`,
+          title: tc.title ?? `${tool} ${tc.toolCallId}`,
           options: params.options.map((o) => o.name),
         });
         const onAbort = () => {

@@ -202,6 +202,7 @@ class NostrConnection implements NostrConn {
   private readonly dmRelayCache = new LruMap<string, { relays: string[]; at: number }>(500);
   private readonly publicLimiter: RateLimiter;
   private readonly removedHandlers = new Set<(conversationId: string) => void>();
+  private readonly relayKeys = new Map<string, Promise<string | undefined>>();
   private readonly subs: PoolSub[] = [];
   private readonly mainRelays: string[];
   private readonly groups: (NostrGroupRef & { conv: string; relayUrl: string })[];
@@ -364,6 +365,58 @@ class NostrConnection implements NostrConn {
     }
   }
 
+  /** The relay's own key (NIP-11 `pubkey`), which signs NIP-29 group metadata. Cached per relay. */
+  private relayKey(relayUrl: string): Promise<string | undefined> {
+    let p = this.relayKeys.get(relayUrl);
+    if (!p) {
+      p = fetchRelayInfo(relayUrl, {
+        ...(this.deps.fetch ? { fetch: this.deps.fetch } : {}),
+        timeoutMs: 6000,
+      })
+        .then((i) => (typeof i.pubkey === 'string' && /^[0-9a-f]{64}$/.test(i.pubkey) ? i.pubkey : undefined))
+        .catch(() => undefined);
+      p.then((k) => {
+        if (!k) this.relayKeys.delete(relayUrl); // retry next time
+      });
+      this.relayKeys.set(relayUrl, p);
+    }
+    return p;
+  }
+
+  /**
+   * NIP-29 removal (kind 9001) is honored only from a group admin (review wave B R-B4): the author
+   * must be the relay key itself or listed in the group's admin list (kind 39001, `d` = group id),
+   * which must in turn be signed by the relay key. Anything else (a lax relay accepting 9001 from any
+   * member, a forged admin list) is ignored, so members cannot kick the agent.
+   */
+  private async checkRemoval(g: { id: string; conv: string; relayUrl: string }, ev: Event): Promise<void> {
+    const relayPk = await this.relayKey(g.relayUrl);
+    if (!relayPk) {
+      this.log.warn('ignoring group removal: relay publishes no NIP-11 pubkey, admins unknown', {
+        group: g.conv,
+      });
+      return;
+    }
+    let admin = ev.pubkey === relayPk;
+    if (!admin) {
+      const lists = (
+        await this.pool.query([{ kinds: [39001], authors: [relayPk], '#d': [g.id] }], {
+          relays: [g.relayUrl],
+          timeoutMs: 6000,
+        })
+      ).filter((e) => e.kind === 39001 && e.pubkey === relayPk && tagValue(e.tags, 'd') === g.id);
+      const latest = lists.sort((a, b) => b.created_at - a.created_at)[0];
+      admin = !!latest && tagValues(latest.tags, 'p').includes(ev.pubkey);
+    }
+    if (this.closed) return;
+    if (!admin) {
+      this.log.warn('ignoring group removal by a non-admin', { group: g.conv, author: ev.pubkey });
+      return;
+    }
+    this.log.info('removed from group', { group: g.conv });
+    for (const fn of this.removedHandlers) fn(g.conv);
+  }
+
   private threadFor(id: string, refs: { root?: string; reply?: string }, fallback: string): string {
     const t = refs.root ?? (refs.reply ? this.threadOf.get(refs.reply) : undefined) ?? fallback;
     this.threadOf.set(id, t);
@@ -433,10 +486,10 @@ class NostrConnection implements NostrConn {
     this.rememberRecent(g.conv, ev.id);
 
     if (ev.kind === 9000 || ev.kind === 9001) {
-      if (ev.kind === 9001 && tagValues(ev.tags, 'p').includes(this.pubkey)) {
-        this.log.info('removed from group', { group: g.conv });
-        for (const fn of this.removedHandlers) fn(g.conv);
-      }
+      if (ev.kind === 9001 && tagValues(ev.tags, 'p').includes(this.pubkey))
+        void this.checkRemoval(g, ev).catch((err) =>
+          this.log.warn('could not verify group removal', { group: g.conv, error: String(err) }),
+        );
       return;
     }
     const refs = threadRefs(ev.tags);

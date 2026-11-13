@@ -26,6 +26,11 @@ export interface MeshProvider {
   /** Return true when the inbound message answers a pending ask (it is then not routed further). */
   onInbound?(conn: ChannelConn, msg: InboundMsg): boolean;
   subscribe?(filter: unknown, onEvent: (ev: unknown) => void): () => void;
+  /**
+   * Is this principal a known peer agent (published capability card or a valid owner attestation)?
+   * Used when a Nostr peer drops the `hops` tag (review wave B R-B1). Must be cheap (cached).
+   */
+  isKnownAgent?(principal: string): Promise<boolean>;
 }
 
 interface NostrLike extends ChannelConn {
@@ -53,10 +58,16 @@ type NostrMod = {
   decodePubkey: (k: string) => string;
   npubEncode: (hex: string) => string;
   CAPABILITY_CARD_KIND: number;
+  ATTESTATION_KIND: number;
+  verifyAttestation: (ev: never, expect?: { agentPubkey?: string }) => { ok: boolean };
 };
+
+const KNOWN_TTL_MS = 10 * 60_000;
+const KNOWN_MAX = 2000;
 
 export class NostrMesh implements MeshProvider {
   private readonly asks = new Map<string, { resolve: (t: string) => void }[]>();
+  private readonly known = new Map<string, { value: boolean; at: number; pending?: Promise<boolean> }>();
 
   constructor(
     private readonly d: Daemon,
@@ -191,6 +202,56 @@ export class NostrMesh implements MeshProvider {
         resolve({ status: 'cancelled' });
       });
     });
+  }
+
+  async isKnownAgent(principal: string): Promise<boolean> {
+    if (!principal.startsWith('nostr:')) return false;
+    let hex: string;
+    try {
+      hex = this.mod.decodePubkey(principal.slice(6));
+    } catch {
+      return false;
+    }
+    const now = Date.now();
+    const hit = this.known.get(hex);
+    if (hit?.pending) return hit.pending;
+    if (hit && now - hit.at < KNOWN_TTL_MS) return hit.value;
+    let c: NostrLike;
+    try {
+      c = this.conn();
+    } catch {
+      return false;
+    }
+    const pending = c.pool
+      .query(
+        [
+          { kinds: [this.mod.CAPABILITY_CARD_KIND], authors: [hex], limit: 5 },
+          { kinds: [this.mod.ATTESTATION_KIND], '#d': [`beamhop-agent:${hex}`], limit: 5 },
+        ],
+        { timeoutMs: 3000 },
+      )
+      .then(
+        (evs) =>
+          evs.some(
+            (e) =>
+              (e.kind === this.mod.CAPABILITY_CARD_KIND &&
+                e.pubkey === hex &&
+                !!this.mod.parseCapabilityCard(e as never)) ||
+              (e.kind === this.mod.ATTESTATION_KIND &&
+                this.mod.verifyAttestation(e as never, { agentPubkey: hex }).ok),
+          ),
+        () => false,
+      );
+    this.known.set(hex, { value: false, at: now, pending });
+    const value = await pending;
+    this.known.delete(hex);
+    this.known.set(hex, { value, at: Date.now() });
+    while (this.known.size > KNOWN_MAX) {
+      const first = this.known.keys().next().value;
+      if (first === undefined) break;
+      this.known.delete(first);
+    }
+    return value;
   }
 
   subscribe(filter: unknown, onEvent: (ev: unknown) => void): () => void {

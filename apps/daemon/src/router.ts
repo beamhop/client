@@ -9,8 +9,10 @@ import {
   checkMesh,
   globMatch,
   helpText,
+  isAddressedTo,
   normalizePrincipal,
   parseCommand,
+  resolveRole,
   resolveRoleDetailed,
   shouldTrigger,
 } from '@beamhop/authz';
@@ -25,7 +27,7 @@ import {
 } from '@beamhop/core';
 import { meshThreadKey } from '@beamhop/store';
 import type { Daemon } from './daemon.ts';
-import { errMsg } from './util.ts';
+import { errMsg, personBudgetKey } from './util.ts';
 
 export interface HistoryEntry {
   id: string;
@@ -41,6 +43,16 @@ const HISTORY_MAX = 200;
 const UNKNOWN_SENDER_AUDIT_MS = 60 * 60_000;
 const PAIR_FAIL_LIMIT = 5;
 const PAIR_FAIL_WINDOW_MS = 10 * 60_000;
+const SEEN_AGENTS_MAX = 5000;
+
+/** Does a mesh allow/block list name this principal? Bare keys in the list mean Nostr keys. */
+export const meshListIncludes = (list: readonly string[], principal: string): boolean => {
+  const p = normalizePrincipal(principal);
+  return list.some((e) => {
+    const entry = e.includes(':') ? e : `nostr:${e}`;
+    return normalizePrincipal(entry) === p;
+  });
+};
 
 /** Normalize a channel target for comparisons (channel + kind lower-case, id verbatim). */
 const normTarget = (t: string): string => {
@@ -80,6 +92,8 @@ export const matchMembership = (
 export class Router {
   private readonly unknownSeen = new Map<string, number>();
   private readonly pairFails = new Map<string, number[]>();
+  /** Principals that sent a peer (hops) message before. */
+  private readonly seenAgents = new Set<string>();
 
   constructor(private readonly d: Daemon) {}
 
@@ -101,7 +115,9 @@ export class Router {
   async handle(conn: ChannelConn, msg: InboundMsg): Promise<void> {
     const d = this.d;
     if (d.isPanic()) return;
-    if (!d.store.dedupe.firstSeen(msg.channel || conn.name, msg.id)) return;
+    // Long-term replay guard (review wave B NOS-1/R-B8): channel-level dedupe is in-memory and
+    // bounded; the store remembers message ids for 30 days. Keyed by our channel name.
+    if (!d.store.dedupe.firstSeen(conn.name, msg.id)) return;
     if (normalizePrincipal(msg.from.principal) === normalizePrincipal(conn.self.principal)) return;
     const channel = conn.name;
     // Agent-bound connection (`nostr@reviewer`): only that agent is reachable through it, and its
@@ -123,11 +139,7 @@ export class Router {
       parsed?.ok &&
       (parsed.command.name === 'pair' || parsed.command.name === 'approve' || parsed.command.name === 'deny')
     ) {
-      if (
-        parsed.addressedTo &&
-        !botNames.some((b) => b.toLowerCase().replace(/^@/, '') === parsed.addressedTo?.toLowerCase())
-      )
-        return;
+      if (!isAddressedTo(parsed, botNames)) return;
       const addressed = isDm || msg.mentionsAgent || msg.replyToAgent || !!parsed.addressedTo;
       if (!addressed) return;
       if (parsed.command.name === 'pair') return this.pair(conn, msg, parsed.command.code);
@@ -135,6 +147,10 @@ export class Router {
     }
 
     const g = d.authzGlobal();
+    const peerHint = msg.from.isBot || msg.hops > 0;
+    if (peerHint) this.rememberAgent(msg.from.principal);
+    let knownAgent: Promise<boolean> | undefined;
+    const isKnownAgent = () => (knownAgent ??= this.knownAgent(msg.from.principal));
     let recorded = false;
     for (const agent of d.config.agents.list()) {
       if (bound && agent.name !== bound.agent) continue;
@@ -154,7 +170,9 @@ export class Router {
         });
       }
       if (d.isAgentStopped(agent.name)) continue;
-      const isPeer = msg.from.isBot || msg.hops > 0;
+      // A Nostr peer that drops the hops tag is still an agent when we know it as one (R-B1).
+      const isPeer =
+        peerHint || meshListIncludes(agent.mesh.allow, msg.from.principal) || (await isKnownAgent());
       const res = resolveRoleDetailed({
         principal: msg.from.principal,
         agent,
@@ -186,6 +204,30 @@ export class Router {
       } catch (e) {
         d.log.error('routing failed', { agent: agent.name, error: errMsg(e) });
       }
+    }
+  }
+
+  private rememberAgent(principal: string): void {
+    const p = normalizePrincipal(principal);
+    this.seenAgents.delete(p);
+    this.seenAgents.add(p);
+    if (this.seenAgents.size > SEEN_AGENTS_MAX) {
+      const first = this.seenAgents.values().next().value;
+      if (first !== undefined) this.seenAgents.delete(first);
+    }
+  }
+
+  /** Known peer agent: seen with a hops tag before, or published as an agent (capability card / attestation). */
+  private async knownAgent(principal: string): Promise<boolean> {
+    const p = normalizePrincipal(principal);
+    if (!p.startsWith('nostr:')) return false;
+    if (this.seenAgents.has(p)) return true;
+    // Owners are humans by definition; skip the relay lookup for them.
+    if (this.d.ownerPrincipals().includes(p)) return false;
+    try {
+      return (await this.d.mesh?.isKnownAgent?.(p)) === true;
+    } catch {
+      return false;
     }
   }
 
@@ -251,6 +293,8 @@ export class Router {
       { key: budgetKey.agent(agent.name), budget: agent.budgets },
       { key: budgetKey.principal(agent.name, normalizePrincipal(principal)), budget: role.budget },
     ];
+    const personKey = personBudgetKey(agent.name, d.global().people, principal);
+    if (personKey) entries.push({ key: personKey, budget: role.budget });
     if (isPeer)
       entries.push({
         key: budgetKey.peer(agent.name, normalizePrincipal(principal)),
@@ -411,7 +455,7 @@ export class Router {
     id: string,
   ): Promise<void> {
     try {
-      const a = await this.d.approvals.decide(id, msg.from.principal, allow, {});
+      const a = await this.d.approvals.decideFromChannel(id, msg.from.principal, allow);
       await this.plainReply(conn, msg, `${allow ? '✅ Approved' : '🚫 Denied'}: ${a.title} (\`${a.id}\`)`);
     } catch (e) {
       if (msg.conversation.kind === 'dm' || msg.mentionsAgent)
@@ -419,9 +463,20 @@ export class Router {
     }
   }
 
+  /**
+   * Button presses (Telegram/Slack/Discord). The presser is authenticated by the platform but the
+   * button id is not (Telegram `callback_data` can be forged, review wave B R-B2): it is parsed
+   * strictly and authorized exactly like the equivalent command.
+   */
   async handleButton(conn: ChannelConn, press: ButtonPress): Promise<void> {
-    const [action, ...rest] = press.buttonId.split(':');
-    const id = rest.join(':');
+    if (this.d.isPanic()) return;
+    const m = /^(approve|deny|details):([A-Za-z0-9_-]{1,80})$/.exec(press.buttonId);
+    if (!m) {
+      this.d.log.debug('ignoring unknown button', { channel: conn.name });
+      return;
+    }
+    const action = m[1] as 'approve' | 'deny' | 'details';
+    const id = m[2] as string;
     const reply = async (text: string) => {
       const dm = this.d.store.kv.get<{ channel: string; conversationId: string }>(
         'dm',
@@ -438,7 +493,7 @@ export class Router {
     };
     if (action === 'approve' || action === 'deny') {
       try {
-        const a = await this.d.approvals.decide(id, press.principal, action === 'approve', {});
+        const a = await this.d.approvals.decideFromChannel(id, press.principal, action === 'approve');
         await reply(
           `${action === 'approve' ? '✅ Approved' : '🚫 Denied'}: ${a.title} — /undo within 30 s via the PWA`,
         );
@@ -448,9 +503,21 @@ export class Router {
       return;
     }
     if (action === 'details') {
+      // Like `/details`, plus: the session id comes from the button, so only an approver of that
+      // agent (who was sent the card) may read another conversation's session.
       const s = this.d.sessions.live(id);
-      const isOwner = this.d.ownerPrincipals().includes(normalizePrincipal(press.principal));
-      if (s && isOwner) await reply(this.d.sessions.detailsText(id));
+      if (!s) return;
+      let agent: AgentConfig;
+      try {
+        agent = this.d.agent(s.agent);
+      } catch {
+        return;
+      }
+      const role = resolveRole({ principal: press.principal, agent, global: this.d.authzGlobal() });
+      const def = role ? this.d.roleDef(role) : null;
+      const allowed = authorizeCommand(def, { name: 'details', args: [] }).allowed && !!def?.canApprove;
+      const approver = this.d.approvals.approvers(agent).includes(normalizePrincipal(press.principal));
+      if (allowed && approver) await reply(this.d.sessions.detailsText(id));
     }
   }
 

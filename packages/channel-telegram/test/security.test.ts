@@ -231,3 +231,62 @@ describe('markdownToTelegramHtml (fuzzed)', () => {
     expect(performance.now() - t0).toBeLessThan(2_000);
   });
 });
+
+describe('R-B6: plain @username mentions in agent output are neutralized', () => {
+  const ZWJ = '‍';
+  /** Would Telegram see a mention entity? (`@` at a word start directly followed by a name char.) */
+  const pings = (html: string): boolean => {
+    let code = 0;
+    for (const part of html.split(/(<[^>]*>)/)) {
+      if (part.startsWith('<')) {
+        const m = /^<(\/?)(code|pre)\b/.exec(part);
+        if (m) code += m[1] ? -1 : 1;
+        continue;
+      }
+      if (code === 0 && /(^|[^\w@/‍])@[A-Za-z0-9_]/.test(part)) return true;
+    }
+    return false;
+  };
+
+  it('inserts a zero-width joiner after mention-starting @', () => {
+    expect(markdownToTelegramHtml('ping @durov now')).toBe(`ping @${ZWJ}durov now`);
+    expect(markdownToTelegramHtml('@everyone hi')).toBe(`@${ZWJ}everyone hi`);
+    expect(markdownToTelegramHtml('**@admin**')).toBe(`<b>@${ZWJ}admin</b>`);
+    expect(markdownToTelegramHtml('(@a_b) and "@c"')).toContain(`(@${ZWJ}a_b)`);
+    expect(markdownToTelegramHtml('[hi @x](https://t.me/x)')).toBe(
+      `<a href="https://t.me/x">hi @${ZWJ}x</a>`,
+    );
+  });
+
+  it('leaves e-mail addresses, URL paths, code and hrefs alone', () => {
+    expect(markdownToTelegramHtml('mail bob@example.com')).toBe('mail bob@example.com');
+    expect(markdownToTelegramHtml('see https://medium.com/@writer')).toBe('see https://medium.com/@writer');
+    expect(markdownToTelegramHtml('run `npm i @scope/pkg`')).toBe('run <code>npm i @scope/pkg</code>');
+    expect(markdownToTelegramHtml('```\n@raw\n```')).toBe('<pre>@raw</pre>');
+    expect(markdownToTelegramHtml('[x](https://example.com/@me)')).toBe(
+      '<a href="https://example.com/@me">x</a>',
+    );
+    expect(markdownToTelegramHtml('/approve@beambot abc')).toBe('/approve@beambot abc');
+  });
+
+  it('also covers the unformatted fallbacks (long lines, huge messages)', () => {
+    const long = `@victim ${'a'.repeat(3000)}`;
+    expect(markdownToTelegramHtml(long).startsWith(`@${ZWJ}victim`)).toBe(true);
+    const huge = `@victim ${'b '.repeat(120_000)}`;
+    expect(markdownToTelegramHtml(huge).startsWith(`@${ZWJ}victim`)).toBe(true);
+  });
+
+  it('never leaves a pingable mention outside code (fuzzed)', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom('@', 'a', '_', ' ', '*', '`', '\n', '/', '(', '[', ']', 'x', '.', '‍'), {
+          maxLength: 60,
+        }),
+        (cs) => {
+          expect(pings(markdownToTelegramHtml(cs.join('')))).toBe(false);
+        },
+      ),
+      { numRuns: 500 },
+    );
+  });
+});

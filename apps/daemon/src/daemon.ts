@@ -17,10 +17,13 @@ import {
 import {
   applyDlp,
   createLlmProxy,
+  createSafeFetch,
   createSecretStore,
   type DlpMode,
   type LlmProxy,
   type LlmRoute,
+  type SafeFetcher,
+  type SafeFetchOptions,
 } from '@beamhop/broker';
 import {
   type AgentConfig,
@@ -119,6 +122,8 @@ export interface DaemonOptions {
   /** WebSocket constructor for the control plane (tests: `ws`; default: $HTTPS_PROXY-aware or global). */
   nostrWebSocket?: unknown;
   env?: NodeJS.ProcessEnv;
+  /** Options for the SSRF-safe host-side fetch (attachment downloads/uploads). Tests stub DNS here. */
+  fetch?: SafeFetchOptions;
 }
 
 export interface AuditInput {
@@ -171,6 +176,10 @@ export class Daemon {
   mcpBridge!: McpBridge<McpCtx>;
   mesh: MeshProvider | undefined;
   apiToken = '';
+  /** SSRF-safe fetch for every host-side download/upload of a channel- or agent-chosen URL. */
+  readonly fetcher: SafeFetcher;
+  /** Daemon-owned copies made by `openConfinedFile` (channel_send_file): the only files sent out. */
+  readonly confinedOutbound = new Set<string>();
   private readonly listeners = new Set<(e: ServerEvent) => void>();
   private releaseLock: (() => void) | undefined;
   private timer: NodeJS.Timeout | undefined;
@@ -210,6 +219,7 @@ export class Daemon {
     this.identity = new IdentityManager(this);
     this.pairing = new DevicePairing(this);
     this.mesh = opts.mesh;
+    this.fetcher = createSafeFetch(opts.fetch);
     this.sandboxFactory =
       opts.sandbox ??
       ((policy, o) => {
@@ -260,6 +270,7 @@ export class Daemon {
           registry: this.registry,
           secrets: this.secrets,
           log: this.log,
+          fetchAttachment: (url) => this.fetcher.fetch(url),
           provisioning: async () => this.provisioningInfo(),
         });
         this.log.info('plugins loaded', { loaded });
@@ -653,6 +664,21 @@ export class Daemon {
       if (!res.ok) return '⚠️ This message was withheld because it looked like it contained a secret.';
       return res.text;
     };
+    // Outbound files only as daemon-owned copies produced via openConfinedFile (wave A MCP-1, wave B
+    // SSRF-1): no agent- or channel-chosen URLs, file ids or arbitrary host paths.
+    for (const a of msg.attachments ?? []) {
+      if (a.url !== undefined || !a.localPath || !this.confinedOutbound.has(a.localPath)) {
+        this.audit({
+          type: 'attachment.refused',
+          severity: 'security',
+          summary: `Refused outbound attachment ${a.name} from ${ctx.agent}: not a confined file`,
+          actor: `agent:${ctx.agent}`,
+          agent: ctx.agent,
+          data: { channel: conn.name, recipient: ctx.recipient },
+        });
+        throw new BeamhopError('forbidden', `attachment ${a.name} is not a confined session file`);
+      }
+    }
     const text = await check(msg.markdown);
     if (text === undefined) return undefined;
     const sent = await conn.send({ ...msg, markdown: text });

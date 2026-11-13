@@ -345,6 +345,9 @@ importers:
         specifier: workspace:*
         version: link:../harness-kit
     devDependencies:
+      '@beamhop/authz':
+        specifier: workspace:*
+        version: link:../authz
       opencode-ai:
         specifier: 1.19.5
         version: 1.19.5
