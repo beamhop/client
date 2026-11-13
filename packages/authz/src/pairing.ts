@@ -71,3 +71,64 @@ export const verifyPairingCode = (
     ? { ok: true }
     : { ok: false, reason: 'mismatch' };
 };
+
+export const PAIRING_FAIL_LIMIT = 5;
+export const PAIRING_FAIL_GLOBAL_LIMIT = 20;
+export const PAIRING_FAIL_WINDOW_MS = 10 * 60_000;
+
+export type PairingLimit = { ok: true } | { ok: false; retryAfterMs: number; scope: 'sender' | 'global' };
+
+/**
+ * Brute-force guard for pairing codes. Codes are stored hashed and looked up by hash, so a wrong
+ * guess cannot be charged to one code; instead failures are counted per sender and globally in a
+ * sliding window. Once either limit is hit, every attempt (even a correct one) is refused until
+ * the window moves on. With a 31^6 code space and 20 global failures per 10 minutes, guessing a
+ * live code is out of reach.
+ */
+export class PairingLimiter {
+  private readonly bySender = new Map<string, number[]>();
+  private global: number[] = [];
+  constructor(
+    private readonly opts: {
+      perSender?: number;
+      global?: number;
+      windowMs?: number;
+      now?: () => number;
+    } = {},
+  ) {}
+
+  private get windowMs(): number {
+    return this.opts.windowMs ?? PAIRING_FAIL_WINDOW_MS;
+  }
+  private now(): number {
+    return this.opts.now ? this.opts.now() : Date.now();
+  }
+  private prune(list: number[]): number[] {
+    const t = this.now();
+    return list.filter((s) => t - s < this.windowMs);
+  }
+
+  /** May `sender` attempt a pairing now? */
+  check(sender: string): PairingLimit {
+    this.global = this.prune(this.global);
+    const mine = this.prune(this.bySender.get(sender) ?? []);
+    if (mine.length) this.bySender.set(sender, mine);
+    else this.bySender.delete(sender);
+    const retry = (list: number[]) => this.windowMs - (this.now() - (list[0] ?? this.now()));
+    if (mine.length >= (this.opts.perSender ?? PAIRING_FAIL_LIMIT))
+      return { ok: false, retryAfterMs: retry(mine), scope: 'sender' };
+    if (this.global.length >= (this.opts.global ?? PAIRING_FAIL_GLOBAL_LIMIT))
+      return { ok: false, retryAfterMs: retry(this.global), scope: 'global' };
+    return { ok: true };
+  }
+
+  /** Record a failed attempt. */
+  fail(sender: string): void {
+    const t = this.now();
+    this.global.push(t);
+    const mine = this.bySender.get(sender) ?? [];
+    mine.push(t);
+    this.bySender.set(sender, mine);
+    if (this.bySender.size > 10_000) this.bySender.delete(this.bySender.keys().next().value as string);
+  }
+}

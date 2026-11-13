@@ -452,8 +452,11 @@ describe('deploy, audit, usage, devices, identity, data', () => {
 
   it('device pairing with codes and QR URI; remove', async () => {
     env = await makeEnv();
+    const { npubEncode, decodePairingPayload } = await import('@beamhop/channel-nostr');
     const start = await env.client.call('device.pairStart', { name: 'Phone' });
-    expect(start.uri).toMatch(/^beamhop:\/\/pair\?code=/);
+    expect(start.uri).toMatch(/^https:\/\/app\.beamhop\.dev\/pair#[A-Za-z0-9_-]+$/);
+    expect(start.link).toMatch(/^beamhop:\/\/pair#/);
+    expect(decodePairingPayload(start.uri).code).toBe(start.code);
     await expect(
       env.client.call('device.pairComplete', { code: 'WRONG1', pubkey: 'a'.repeat(64), name: 'x' }),
     ).rejects.toSatisfy((e) => code(e) === 'unauthorized');
@@ -462,15 +465,17 @@ describe('deploy, audit, usage, devices, identity, data', () => {
       pubkey: 'a'.repeat(64),
       name: 'Phone',
     });
+    const npub = npubEncode('a'.repeat(64));
+    expect(dev.pubkey).toBe(npub);
     expect((await env.client.call('device.list')).devices).toHaveLength(1);
-    expect(env.d.controlAllowlist()).toContain('a'.repeat(64));
+    expect(env.d.controlAllowlist()).toContain(npub);
     await env.client.call('device.pushSubscribe', {
       id: dev.id,
       subscription: { endpoint: 'https://push.example/x' },
     });
     expect((await env.client.call('device.list')).devices[0]!.pushEnabled).toBe(true);
     await env.client.call('device.remove', { id: dev.id });
-    expect(env.d.controlAllowlist()).not.toContain('a'.repeat(64));
+    expect(env.d.controlAllowlist()).not.toContain(npub);
     await expect(
       env.client.call('device.pairComplete', { code: start.code, pubkey: 'b'.repeat(64), name: 'x' }),
     ).rejects.toThrow(/used/);

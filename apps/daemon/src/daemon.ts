@@ -49,8 +49,10 @@ import {
   isInternalSecret,
   readDeployEnv,
 } from './home.ts';
+import { CONTROL_KEY_REF, IdentityManager, loadNostr } from './identity.ts';
 import { createMcpHandlers, type McpCtx } from './mcp-handlers.ts';
 import { loadNostrMesh, type MeshProvider } from './mesh.ts';
+import { DevicePairing } from './pairing.ts';
 import { loadBuiltinPlugins, PluginRegistry, type PluginRegistryInit } from './registry.ts';
 import { Router } from './router.ts';
 import { type ApiServer, startApiServer } from './rpc-server.ts';
@@ -59,6 +61,8 @@ import { SessionManager } from './sessions.ts';
 import { errMsg } from './util.ts';
 
 export const VERSION = '0.1.0';
+/** Control-plane methods an unpaired device may call. */
+export const PUBLIC_CONTROL_METHODS: readonly string[] = ['device.pairComplete'];
 /** The principal used for the local control plane (CLI, local PWA). Always an owner. */
 export const LOCAL_OWNER = 'local:owner';
 
@@ -103,6 +107,8 @@ export interface DaemonOptions {
   lock?: boolean;
   /** Start the Nostr control plane when the nostr package is available (default false). */
   controlPlane?: boolean;
+  /** WebSocket constructor for the control plane (tests: `ws`; default: $HTTPS_PROXY-aware or global). */
+  nostrWebSocket?: unknown;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -149,6 +155,8 @@ export class Daemon {
   readonly router: Router;
   readonly scheduler: Scheduler;
   readonly apiHandlers: ApiHandlers;
+  readonly identity: IdentityManager;
+  readonly pairing: DevicePairing;
   api: ApiServer | undefined;
   llmProxy: LlmProxy | undefined;
   mcpBridge!: McpBridge<McpCtx>;
@@ -165,7 +173,14 @@ export class Daemon {
   /** Agents stopped via agent.stop (persisted in kv). */
   readonly sandboxFactory: SandboxFactory;
   control:
-    | { setAllowlist(p: string[]): void; notify(e: ServerEvent): Promise<void>; close(): void }
+    | {
+        npub: string;
+        pubkey: string;
+        ready(): Promise<void>;
+        setAllowlist(p: string[]): void;
+        notify(e: ServerEvent): Promise<void>;
+        close(): void;
+      }
     | undefined;
 
   constructor(opts: DaemonOptions) {
@@ -183,6 +198,8 @@ export class Daemon {
     this.router = new Router(this);
     this.scheduler = new Scheduler(this);
     this.apiHandlers = new ApiHandlers(this);
+    this.identity = new IdentityManager(this);
+    this.pairing = new DevicePairing(this);
     this.mesh = opts.mesh;
     this.sandboxFactory =
       opts.sandbox ??
@@ -279,6 +296,11 @@ export class Daemon {
         await this.channels.startAll();
         this.scheduler.start();
       }
+      // Agents with their own Nostr keys use the default agent-keyed `nostr` channel.
+      if (this.config.agents.list().some((a) => a.identity.nostrKeyRef))
+        await this.identity
+          .ensureDefaultChannel()
+          .catch((e) => this.log.warn('default nostr channel failed', { error: errMsg(e) }));
       // §3.1: discovery runs at daemon start (in the background).
       if (!this.opts.plugins || this.opts.loadBuiltins)
         void this.apiHandlers.scan().catch((e) => this.log.warn('harness scan failed', { error: errMsg(e) }));
@@ -326,6 +348,7 @@ export class Daemon {
 
   /** Periodic housekeeping; tests call it directly with an advanced clock. */
   async tick(): Promise<void> {
+    this.pairing.tick();
     await this.approvals.tick();
     await this.sessions.tick();
     await this.scheduler.tick();
@@ -366,30 +389,44 @@ export class Daemon {
     }
   }
 
-  private async startControlPlane(): Promise<void> {
-    let mod: Record<string, unknown>;
-    try {
-      mod = (await import(/* @vite-ignore */ '@beamhop/channel-nostr')) as Record<string, unknown>;
-    } catch {
-      return;
-    }
-    const createControlServer = mod.createControlServer as (o: unknown) => NonNullable<Daemon['control']>;
-    const generateAgentKey = mod.generateAgentKey as () => { nsec: string };
-    const ref = this.deployEnv.daemonNsecRef ?? 'beamhop.control.nsec';
+  /** The daemon's control-plane key (created on first use; QR payloads carry its pubkey). */
+  async controlKey(): Promise<{ nsec: string; npub: string; pubkey: string }> {
+    const m = await loadNostr();
+    if (!m) throw new BeamhopError('unavailable', 'the Nostr control plane needs @beamhop/channel-nostr');
+    const ref = this.deployEnv.daemonNsecRef ?? CONTROL_KEY_REF;
     let nsec = await this.secrets.get(ref);
     if (!nsec) {
-      nsec = generateAgentKey().nsec;
+      nsec = m.generateAgentKey().nsec;
       await this.secrets.set(ref, nsec);
+      this.invalidateSecretCache();
     }
+    const pubkey = m.pubkeyOf(m.decodeSecretKey(nsec));
+    return { nsec, pubkey, npub: m.npubEncode(pubkey) };
+  }
+
+  private async startControlPlane(): Promise<void> {
+    const mod = await loadNostr();
+    if (!mod) return;
+    const { nsec } = await this.controlKey();
     const { proxyWebSocket } = await import('./net.ts');
-    this.control = createControlServer({
+    const WebSocket = this.opts.nostrWebSocket ?? proxyWebSocket();
+    this.control = mod.createControlServer({
       key: nsec,
       allowlist: this.controlAllowlist(),
       relays: this.global().nostr.relays,
       log: this.log.child({ component: 'control' }),
-      ...(proxyWebSocket() ? { WebSocket: proxyWebSocket() } : {}),
-      handle: (req: unknown, ctx: { senderNpub: string }) =>
-        this.dispatch(req, { caller: `nostr:${ctx.senderNpub}`, transport: 'nostr' }),
+      ...(WebSocket ? { WebSocket: WebSocket as never } : {}),
+      // Unpaired devices may only complete a pairing (rate-limited before decryption).
+      publicMethods: [...PUBLIC_CONTROL_METHODS],
+      handle: (req, ctx) => {
+        if (!ctx.allowlisted && !PUBLIC_CONTROL_METHODS.includes(req.method))
+          return {
+            jsonrpc: '2.0',
+            id: req.id,
+            error: { code: -32001, message: 'this device is not paired', data: { code: 'unauthorized' } },
+          };
+        return this.dispatch(req, { caller: `nostr:${ctx.senderNpub}`, transport: 'nostr' });
+      },
     });
     this.listeners.add((e) => void this.control?.notify(e).catch(() => {}));
   }
@@ -399,7 +436,7 @@ export class Daemon {
     const g = this.global();
     const owners = g.owners.filter((p) => p.startsWith('nostr:')).map((p) => p.slice(6));
     if (g.nostr.ownerNpub) owners.push(g.nostr.ownerNpub);
-    const devices = this.store.devices.list().map((d) => d.pubkey);
+    const devices = this.pairing.activeDevices().map((d) => d.pubkey);
     return [...new Set([...owners, ...devices])];
   }
 
@@ -568,7 +605,8 @@ export class Daemon {
     const values: string[] = [];
     for (const { name } of await this.secrets.list()) {
       const v = await this.secrets.get(name);
-      if (v && v.length >= 8 && !isInternalSecret(name)) values.push(v);
+      // Nostr secret keys are always withheld, including the daemon's own (owner, control plane).
+      if (v && v.length >= 8 && (!isInternalSecret(name) || name.endsWith('.nsec'))) values.push(v);
     }
     if (this.apiToken) values.push(this.apiToken);
     this.secretCache = { at: this.now(), values };

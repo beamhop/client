@@ -13,6 +13,7 @@ const io: CliIO = {
     return Buffer.concat(chunks).toString('utf8');
   },
   env: process.env,
+  interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
 };
 
 const program = buildProgram({

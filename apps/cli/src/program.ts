@@ -2,6 +2,16 @@ import type { BeamhopClient } from '@beamhop/client';
 import { RpcError } from '@beamhop/client';
 import { Command, Option } from 'commander';
 import pc from 'picocolors';
+import {
+  clackPrompter,
+  headlessPrompter,
+  InitCancelled,
+  type InitOptions,
+  type Prompter,
+  pairPhone,
+  runInit,
+  terminalQr,
+} from './init.ts';
 
 export interface CliIO {
   out(line: string): void;
@@ -9,6 +19,8 @@ export interface CliIO {
   /** Read all of stdin (for secrets). */
   readStdin(): Promise<string>;
   env: Record<string, string | undefined>;
+  /** True when stdin/stdout are a terminal (wizards prompt; otherwise they take defaults). */
+  interactive?: boolean;
   /** Set when a command fails, so main() can exit non-zero. */
   exitCode?: number;
 }
@@ -20,6 +32,10 @@ export interface CliDeps {
   runDaemon?(opts: { port?: number; open?: boolean }): Promise<void>;
   /** URL of the local API for `beamhop ui`. */
   uiUrl?(): Promise<string>;
+  /** Prompter for interactive wizards (default: @clack/prompts). */
+  prompter?(): Promise<Prompter>;
+  /** Injected wait for wizard polling (tests). */
+  sleep?(ms: number): Promise<void>;
 }
 
 type Row = Record<string, unknown>;
@@ -104,6 +120,81 @@ export const buildProgram = (deps: CliDeps): Command => {
         } else io.err(`${pc.red('error')} ${(e as Error).message}`);
       }
     };
+
+  // ── first run ─────────────────────────────────────────────
+  program
+    .command('init')
+    .description('first-run setup: doctor, harnesses, owner key, phone, first agent, hello (§9A)')
+    .option(
+      '-y, --yes',
+      'no questions: accept defaults (pairing and the hello test only with --pair / --hello)',
+    )
+    .option('--owner-npub <npub>', 'use your existing Nostr key; the daemon keeps only the npub')
+    .option('--export-nsec', 'show the new owner nsec once (backup)')
+    .option('--no-doctor', 'skip the doctor step')
+    .option('--no-harnesses', 'skip harness discovery')
+    .option('--no-identity', 'skip the owner identity step')
+    .option('--pair', 'pair a phone (QR code)')
+    .option('--no-pair', 'skip phone pairing')
+    .option('--no-agent', 'skip creating the first agent')
+    .option('--hello', 'send the hello DM and wait for your reply')
+    .option('--no-hello', 'skip the hello round trip')
+    .option('--agent-name <name>', 'first agent name')
+    .option('--harness <id>', 'harness for the first agent')
+    .option('--preset <id>', 'agent preset (personal-assistant, code-reviewer, team-dev-bot, public-qa)')
+    .option('--mount <path>', 'folder the first agent may use')
+    .addOption(new Option('--mount-mode <mode>', 'folder access').choices(['ro', 'rw']))
+    .addOption(new Option('--sandbox <profile>').choices(['strict', 'workspace']))
+    .option('--device-name <name>', 'name for the paired phone')
+    .option('--pair-timeout <seconds>', 'how long to wait for the phone', Number)
+    .option('--hello-timeout <seconds>', 'how long to wait for your reply', Number)
+    .action(async (raw: Record<string, unknown>, cmd: Command) => {
+      const src = (k: string) => cmd.getOptionValueSource(k);
+      // `--no-x` flags default to true in commander; only explicit choices count as flags.
+      const flag = (k: string): boolean | undefined => (src(k) === 'cli' ? (raw[k] as boolean) : undefined);
+      const o: InitOptions = {
+        yes: raw.yes === true,
+        ...(raw.ownerNpub ? { ownerNpub: String(raw.ownerNpub) } : {}),
+        ...(raw.exportNsec ? { exportNsec: true } : {}),
+        ...Object.fromEntries(
+          (['doctor', 'harnesses', 'identity', 'pair', 'agent', 'hello'] as const)
+            .map((k) => [k, flag(k)] as const)
+            .filter(([, v]) => v !== undefined),
+        ),
+        ...(raw.agentName ? { agentName: String(raw.agentName) } : {}),
+        ...(raw.harness ? { harness: String(raw.harness) } : {}),
+        ...(raw.preset ? { preset: String(raw.preset) } : {}),
+        ...(raw.mount ? { mount: String(raw.mount) } : {}),
+        ...(raw.mountMode ? { mountMode: raw.mountMode as 'ro' | 'rw' } : {}),
+        ...(raw.sandbox ? { sandbox: raw.sandbox as 'strict' | 'workspace' } : {}),
+        ...(raw.deviceName ? { deviceName: String(raw.deviceName) } : {}),
+        ...(raw.pairTimeout ? { pairTimeout: Number(raw.pairTimeout) } : {}),
+        ...(raw.helloTimeout ? { helloTimeout: Number(raw.helloTimeout) } : {}),
+      };
+      try {
+        const c = await deps.client();
+        const interactive = !o.yes && io.interactive === true;
+        const ui = interactive ? await (deps.prompter ?? clackPrompter)() : headlessPrompter(io.out);
+        const res = await runInit({ client: c, ui, ...(deps.sleep ? { sleep: deps.sleep } : {}) }, o);
+        if (json()) io.out(JSON.stringify(res, null, 2));
+      } catch (e) {
+        if (e instanceof InitCancelled) {
+          io.exitCode = 130;
+          return;
+        }
+        io.exitCode = 1;
+        if (
+          e instanceof Error &&
+          /ECONNREFUSED|fetch failed|no API token/.test(
+            `${e.message} ${(e as { cause?: Error }).cause?.message ?? ''}`,
+          )
+        )
+          io.err(
+            `${pc.red('error')} beamhop daemon is not running. Start it with ${pc.bold('beamhop daemon')}, then run ${pc.bold('beamhop init')}.`,
+          );
+        else io.err(`${pc.red('error')} ${(e as Error).message}`);
+      }
+    });
 
   // ── system ─────────────────────────────────────────────
   program
@@ -914,17 +1005,39 @@ export const buildProgram = (deps: CliDeps): Command => {
   );
   device
     .command('pair')
+    .description('pair a phone: QR code for the hosted app, then confirm the safety phrase here')
     .option('--name <name>', 'device name', 'New device')
-    .action(
-      act(async (c, o: { name: string }) => {
-        const p = await c.call('device.pairStart', { name: o.name });
-        return {
-          data: p,
-          human: () =>
-            `Open on your phone:\n${pc.bold(p.uri)}\ncode ${pc.bold(p.code)} ${pc.dim(`(expires ${p.expiresAt})`)}`,
-        };
-      }),
-    );
+    .option('--no-wait', 'print the QR / link and exit (confirm later with the code)')
+    .option('--timeout <seconds>', 'how long to wait for the phone', Number, 120)
+    .action(async (o: { name: string; wait: boolean; timeout: number }) => {
+      try {
+        const c = await deps.client();
+        if (json() || !o.wait) {
+          const p = await c.call('device.pairStart', { name: o.name });
+          if (json()) io.out(JSON.stringify(p, null, 2));
+          else
+            io.out(
+              `${await terminalQr(p.uri)}\nOpen on your phone:\n${pc.bold(p.uri)}${p.link ? `\n${pc.dim(p.link)}` : ''}\ncode ${pc.bold(p.code)} ${pc.dim(`(expires ${p.expiresAt})`)}`,
+            );
+          return;
+        }
+        const ui =
+          io.interactive === true ? await (deps.prompter ?? clackPrompter)() : headlessPrompter(io.out);
+        const dev = await pairPhone(
+          {
+            client: c,
+            ui,
+            sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+            now: Date.now,
+          },
+          { name: o.name, timeoutS: o.timeout },
+        );
+        if (!dev) io.exitCode = 1;
+      } catch (e) {
+        io.exitCode = e instanceof InitCancelled ? 130 : 1;
+        if (!(e instanceof InitCancelled)) io.err(`${pc.red('error')} ${(e as Error).message}`);
+      }
+    });
   device.command('rm <id>').action(
     act(async (c, id: string) => ({
       data: await c.call('device.remove', { id }),

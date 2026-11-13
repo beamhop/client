@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
-  "description": "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord \u2014 sandboxed.",
+  "description": "Join your AI agent harnesses to Nostr, Telegram, Slack and Discord — sandboxed.",
   "bin": {
     "beamhop": "./src/main.ts"
   },
@@ -13,9 +13,14 @@
   "dependencies": {
     "@beamhop/client": "workspace:*",
     "@beamhop/core": "workspace:*",
+    "@beamhop/daemon": "workspace:*",
+    "@clack/prompts": "^1.9.0",
     "commander": "^14.0.0",
     "picocolors": "^1.1.1",
-    "yaml": "^2.8.0",
-    "@beamhop/daemon": "workspace:*"
+    "qrcode": "^1.5.4",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }

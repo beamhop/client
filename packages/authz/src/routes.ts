@@ -1,6 +1,15 @@
 import type { Route } from '@beamhop/core';
 import { globMatch } from './glob.ts';
 
+/**
+ * Agent-bound connections of a shared channel are named `<channel>@<agent>` (e.g. the default
+ * `nostr` channel runs one connection per agent key). For routing they are the channel itself.
+ */
+export const baseChannelName = (connName: string): string => {
+  const at = connName.indexOf('@');
+  return at < 0 ? connName : connName.slice(0, at);
+};
+
 /** Channel name and kind are case-insensitive; conversation ids keep their case. */
 const normTarget = (t: string): string => {
   const s = t.trim().normalize('NFC');
@@ -10,7 +19,7 @@ const normTarget = (t: string): string => {
   const slash = rest.indexOf('/');
   const kind = slash < 0 ? rest : rest.slice(0, slash);
   const id = slash < 0 ? '' : rest.slice(slash);
-  return `${s.slice(0, colon).toLowerCase()}:${kind.toLowerCase()}${id}`;
+  return `${baseChannelName(s.slice(0, colon)).toLowerCase()}:${kind.toLowerCase()}${id}`;
 };
 
 const matches = (pattern: string, target: string): boolean =>

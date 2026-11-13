@@ -7,5 +7,7 @@ export * from './keys.ts';
 export * from './lru.ts';
 export * from './markdown.ts';
 export * from './nip11.ts';
+export * from './pairing.ts';
 export * from './pool.ts';
 export * from './tags.ts';
+export * from './wordlist.ts';
