@@ -6,21 +6,21 @@
  * read-only by default, live exposure summary, `Create <name>`.
  */
 import { npubEncode, tryDecodePubkey } from '@beamhop/channel-nostr/keys';
-import { Check, Key, Plus } from '@phosphor-icons/react';
-import { useEffect, useMemo, useState } from 'react';
+import { Check, Key } from '@phosphor-icons/react';
+import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
-import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
+import { Radio, RadioGroup } from '../../ui/Choice.tsx';
 import { CopyButton } from '../../ui/CliStrip.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { Badge, LetterTile, MetaLine } from '../../ui/Meta.tsx';
-import { PathPicker } from '../../ui/PathPicker.tsx';
 import { ErrorState, Skeleton } from '../../ui/States.tsx';
-import { AGENT_NAME_RE } from '../deploy/model.ts';
+import { useCreateAgent } from '../agents/CreateAgentForm.tsx';
 import { PairingPanel } from '../pair/PairingPanel.tsx';
 import { markDone, markSkipped, useSetupProgress } from './progress.ts';
 import { StepFrame, useGoStep } from './StepFrame.tsx';
@@ -262,13 +262,6 @@ export const StepPhone = () => {
 };
 
 // ─────────── 05 Agent ───────────
-const PRESET_NAME: Record<string, string> = {
-  'personal-assistant': 'assistant',
-  'code-reviewer': 'reviewer',
-  'team-dev-bot': 'devbot',
-  'public-qa': 'helpdesk',
-};
-
 export const freeName = (base: string, taken: string[]) => {
   if (!taken.includes(base)) return base;
   let i = 2;
@@ -277,48 +270,22 @@ export const freeName = (base: string, taken: string[]) => {
 };
 
 export const StepAgent = () => {
-  const presets = useApi('agent.presets');
-  const harnesses = useApi('harness.list');
   const agents = useApi('agent.list');
   const status = useApi('system.status');
-  const create = useMutationApi('agent.create');
   const [progress, update] = useSetupProgress();
   const go = useGoStep();
-  const taken = useMemo(() => (agents.data?.agents ?? []).map((a) => a.config.name), [agents.data]);
-  const ready = (harnesses.data?.harnesses ?? []).filter((h) => h.status === 'ready');
-  const [preset, setPreset] = useState('code-reviewer');
-  const [name, setName] = useState('');
-  const [nameTouched, setNameTouched] = useState(false);
-  const [harness, setHarness] = useState('');
-  const [folder, setFolder] = useState('~/code/app');
-  const [mode, setMode] = useState<'ro' | 'rw'>('ro');
+  const navigate = useNavigate();
   const existing = progress.agent
     ? agents.data?.agents.find((a) => a.config.name === progress.agent)
     : undefined;
-
-  useEffect(() => {
-    if (!nameTouched && agents.data) setName(freeName(PRESET_NAME[preset] ?? 'agent', taken));
-  }, [preset, taken, nameTouched, agents.data]);
-  useEffect(() => {
-    if (!harness && ready[0]) setHarness(ready[0].id);
-  }, [ready, harness]);
-
-  const p = presets.data?.presets.find((x) => x.id === preset);
-  const profile = ((p?.config.sandbox as { profile?: string } | undefined)?.profile ?? 'workspace') as string;
-  const nameOk = AGENT_NAME_RE.test(name) && !taken.includes(name);
-
-  const submit = async () => {
-    try {
-      const a = await create.mutateAsync({
-        preset,
-        config: { name, harness, mounts: folder ? [{ path: folder, mode }] : [] },
-      });
-      haptic('confirm');
-      update((x) => markDone(x, 'agent', { agent: a.config.name }));
-    } catch {
-      haptic('error');
-    }
-  };
+  const c = useCreateAgent({
+    onCreated: ({ agent, connect }) => {
+      update((x) => markDone(x, 'agent', { agent: agent.config.name }));
+      // Setup resumes here afterwards: the channel's own setup comes first.
+      if (connect)
+        void navigate({ to: '/channels/add/$provider/$step', params: { provider: connect, step: '1' } });
+    },
+  });
 
   if (existing)
     return (
@@ -374,19 +341,16 @@ export const StepAgent = () => {
       </StepFrame>
     );
 
-  const reads = folder ? [folder] : [];
   return (
     <StepFrame
       step="agent"
       title={t('setup.setup.createYourFirstAgent')}
       lede="Pick what it's for; everything else is prefilled. You can change any of it later."
-      cli={`beamhop agent add ${name || '<name>'} --preset ${preset} --harness ${harness || '<harness>'}${folder ? ` --mount ${folder}:${mode}` : ''}`}
       primary={{
-        label: `Create ${name || 'agent'}`,
-        icon: <Plus size={16} weight="bold" aria-hidden="true" />,
-        disabled: !nameOk || !harness,
-        pending: create.isPending,
-        onPress: () => void submit(),
+        label: c.submitLabel,
+        icon: c.submitIcon,
+        pending: c.pending,
+        onPress: () => void c.submit(),
       }}
       skip={{
         label: 'Skip',
@@ -396,108 +360,16 @@ export const StepAgent = () => {
         },
       }}
     >
-      {!presets.data || !harnesses.data ? (
+      {c.loading ? (
         <Skeleton variant="detail" count={3} label={t('setup.setup.loadingPresets')} />
       ) : (
         <>
-          <RadioGroup label={t('setup.setup.whatSItFor')} variant="cards" value={preset} onChange={setPreset}>
-            {presets.data.presets.map((x) => (
-              <Radio key={x.id} value={x.id} description={x.description}>
-                {x.title}
-              </Radio>
-            ))}
-          </RadioGroup>
-          <TextField
-            label={t('setup.setup.name')}
-            mono
-            value={name}
-            onChange={(v) => {
-              setNameTouched(true);
-              setName(v.toLowerCase());
-            }}
-            description={t('setup.setup.alsoItsNostrProfile')}
-            isInvalid={!!name && !nameOk}
-            errorMessage={
-              taken.includes(name) ? `${name} already exists.` : t('setup.setup.useLowercaseLettersDigits')
-            }
-          />
-          {ready.length ? (
-            <RadioGroup
-              label={t('setup.setup.harness')}
-              value={harness}
-              onChange={setHarness}
-              description={t('setup.setup.onlyHarnessesThatAre')}
-            >
-              {ready.map((h) => (
-                <Radio
-                  key={h.id}
-                  value={h.id}
-                  description={<span className="font-mono text-[12px]">{h.version}</span>}
-                >
-                  {h.displayName}
-                </Radio>
-              ))}
-            </RadioGroup>
-          ) : (
-            <ErrorState title={t('setup.setup.noHarnessIsReady')}>
-              {t('setup.setup.goBackOneStep')}
-            </ErrorState>
-          )}
-          <div className="flex flex-col gap-2">
-            <PathPicker label={t('setup.setup.folderItCanSee')} value={folder} onChange={setFolder} />
-            <SegmentedControl
-              label={t('setup.setup.folderAccess')}
-              value={mode}
-              onChange={setMode}
-              options={[
-                { id: 'ro', label: 'Read-only' },
-                { id: 'rw', label: 'Read-write' },
-              ]}
-            />
-            {mode === 'rw' && (
-              <p className="type-body-sm text-ink-2">
-                {t('setup.setup.gitBranch')}{' '}
-                <span className="font-mono text-ink">beamhop/&lt;thread&gt;</span>.
-              </p>
-            )}
-          </div>
-          <section
-            aria-labelledby="exposure"
-            className="rounded-lg border border-line bg-sunken p-4"
-            aria-live="polite"
-          >
-            <h2 id="exposure" className="type-micro text-ink-2">
-              {t('setup.setup.whatCanReach', { name: name || t('setup.setup.it') })}
-            </h2>
-            <ul className="mt-2 flex flex-col gap-1.5 type-body-sm text-ink">
-              <li>
-                {reads.length ? (
-                  <>
-                    {mode === 'rw' ? t('setup.setup.canReadWrite') : t('setup.setup.canRead')}{' '}
-                    <span className="font-mono">{folder}</span>
-                  </>
-                ) : (
-                  t('setup.setup.seesNoFolders')
-                )}
-              </li>
-              <li>
-                {t('setup.setup.canReachApi', {
-                  harness: ready.find((h) => h.id === harness)?.displayName ?? t('setup.setup.theHarness'),
-                })}
-              </li>
-              <li>
-                {t('setup.setup.sandboxProfile')} <span className="font-mono">{profile}</span>
-              </li>
-              <li className="text-ink-2">
-                {t('setup.setup.never')} <span className="font-mono">~/.ssh</span>,{' '}
-                <span className="font-mono">~/.aws</span>, {t('setup.setup.keychains')}
-              </li>
-            </ul>
-          </section>
-          {create.isError && (
-            <ErrorState title={t('setup.setup.couldntCreate', { name })} details={create.error}>
-              {create.error.message}
-            </ErrorState>
+          {c.form}
+          {c.preview}
+          {c.blocker && (
+            <p className="type-meta text-stop-text" role="alert">
+              {c.blocker}
+            </p>
           )}
         </>
       )}

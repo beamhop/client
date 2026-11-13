@@ -26,7 +26,8 @@ test('the whole journey, with a skipped phone, ends in a verified round trip', a
   await expect(page).toHaveURL(/\/setup\/agent/);
   await page.getByRole('radio', { name: /Personal assistant/ }).check({ force: true });
   await expect(page.getByLabel('Name')).toHaveValue('assistant');
-  await expect(page.getByText(/Can read/)).toBeVisible();
+  // Same one-page form as Agents → New: the assistant listens in Nostr DMs, where step 06 says hello.
+  await expect(page.getByRole('checkbox', { name: /Direct messages on Nostr/ })).toBeChecked();
   await page.getByRole('button', { name: 'Create assistant', exact: true }).click();
   await expect(page.locator('[data-agent="created"]')).toBeVisible();
   await page.getByRole('button', { name: 'Continue · Hello' }).click();

@@ -6,6 +6,16 @@ All notable changes to beamhop are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **One page to create an agent, and it ends reachable.** First-run setup and Agents → New now share one
+  page: what it's for, name, which AI account it uses (Claude, ChatGPT, Gemini… with the program and model
+  under Advanced), folders, and **where it listens**. Tick the channels you already have, or pick a new one
+  (Telegram, Slack, Discord, Nostr); its setup opens next with the agent already chosen to join, and
+  finishing it brings you back to the agent.
+- **Chat with any agent from its page.** A Chat button sits next to Stop. An agent no channel can reach says
+  so at the top of its page ("Only you can reach it, here in the app") with Connect a channel and Chat.
+
 ## [0.3.0] - 2026-11-13
 
 ### Added

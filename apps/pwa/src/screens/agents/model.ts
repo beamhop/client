@@ -629,7 +629,7 @@ export interface PresetMeta {
 export const PRESET_META: Record<string, PresetMeta> = {
   'personal-assistant': {
     name: 'assistant',
-    who: 'Only you, over Nostr DMs',
+    who: 'Only you, in direct messages',
     writes: 'Folders you mount read-write',
     tradeoff: 'Most reach, smallest audience.',
   },

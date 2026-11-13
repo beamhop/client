@@ -207,15 +207,12 @@ test('unknown agent shows a calm not-found state', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'No agent named ghost.' })).toBeVisible();
 });
 
-test('new agent: preset → harness → folders → review → create', async ({ page }) => {
+test('new agent: one page — purpose, name, AI account, folders, where it listens', async ({ page }) => {
   await open(page, '/agents/new');
   await page.getByText('Public Q&A bot', { exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('qa');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
-  await expect(page.getByRole('heading', { name: 'Which harness runs it?' })).toBeVisible();
-  await expect(page.getByRole('radio', { name: /Codex/ })).toBeDisabled();
-  await page.getByText('Gemini CLI', { exact: true }).click();
-  await page.getByRole('button', { name: 'Continue · Folders' }).click();
+  await expect(page.getByRole('radio', { name: /ChatGPT/ })).toBeDisabled();
+  await page.getByText('Gemini', { exact: true }).click();
   await page.getByRole('button', { name: 'Add folder' }).click();
   await page.getByRole('combobox', { name: 'Folder' }).fill('~/.ssh');
   await page.getByRole('button', { name: 'Add folder' }).click();
@@ -224,42 +221,48 @@ test('new agent: preset → harness → folders → review → create', async ({
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Add folder' }).click();
   await expect(page.getByText('Read-only (preset).')).toBeVisible();
-  await page.getByRole('button', { name: 'Continue · Review' }).click();
-  await expect(page.getByRole('heading', { name: 'Check and create' })).toBeVisible();
-  await expect(
-    page
-      .getByText('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro')
-      .first(),
-  ).toBeAttached();
+  await page.getByText('Direct messages on Telegram', { exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: /Direct messages on Telegram/ })).toBeChecked();
+  await expect(page.getByText('Direct messages on Telegram').nth(1)).toBeAttached();
   await page.getByRole('button', { name: 'Create qa', exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/qa/);
   await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Created qa/)).toBeVisible();
+  // It listens on Telegram, so it is not "app only".
+  await expect(page.locator('[data-reach="app-only"]')).toHaveCount(0);
 });
 
-test('new agent: from scratch, without a preset', async ({ page }) => {
+test('new agent: connecting a new place opens its setup, primed to join this agent', async ({ page }) => {
+  await open(page, '/agents/new');
+  await page.getByText('Code reviewer', { exact: true }).click();
+  await page.getByRole('radio', { name: 'Slack' }).click();
+  await page.getByRole('button', { name: 'Create reviewer-2 and connect Slack' }).click();
+  await expect(page).toHaveURL(/\/channels\/add\/slack\/1/);
+  const draft = await page.evaluate(() => localStorage.getItem('bh.channelDraft.slack'));
+  expect(JSON.parse(draft ?? '{}').values).toMatchObject({ agents: ['reviewer-2'], forAgent: 'reviewer-2' });
+});
+
+test('new agent: from scratch is app only until it gets a channel', async ({ page }) => {
   await open(page, '/agents/new');
   await page.getByText('Start from scratch', { exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue('agent');
   await page.getByRole('radio', { name: 'Strict', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
-  await page.getByText('Gemini CLI', { exact: true }).click();
-  await page.getByRole('button', { name: 'Continue · Folders' }).click();
-  await expect(page.getByText('The strict sandbox never writes, so folders are read-only.')).toBeVisible();
-  await page.getByRole('button', { name: 'Skip · Review' }).click();
-  await expect(
-    page.getByText('beamhop agent add agent --profile strict --harness gemini').first(),
-  ).toBeAttached();
+  await expect(page.getByText(/Read-only folders and a locked-down sandbox/)).toBeVisible();
+  await page.getByText('Gemini', { exact: true }).click();
   await page.getByRole('button', { name: 'Create agent', exact: true }).click();
   await expect(page).toHaveURL(/\/agents\/agent/);
-  await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Created agent/)).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Only you can reach agent, here in the app.' }),
+  ).toBeVisible();
+  await page.locator('[data-reach="app-only"]').getByRole('button', { name: 'Chat' }).click();
+  await expect(page.getByRole('dialog', { name: 'New session' })).toBeVisible();
 });
 
 test('new agent: a taken name is caught with a suggestion', async ({ page }) => {
   await open(page, '/agents/new');
   await page.getByRole('textbox', { name: 'Name' }).fill('reviewer');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
+  await page.getByRole('button', { name: 'Create reviewer', exact: true }).click();
   await expect(page.getByText('reviewer already exists. Try reviewer-2.').first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'What kind of agent?' })).toBeVisible();
+  await expect(page).toHaveURL(/\/agents\/new/);
 });
 
 for (const path of [
@@ -280,14 +283,9 @@ for (const path of [
   });
 }
 
-test('a11y new-agent steps and sheets', async ({ page }) => {
+test('a11y new-agent with a folder sheet open', async ({ page }) => {
   await open(page, '/agents/new');
-  await page.getByRole('button', { name: 'Continue · Harness' }).click();
-  await axe(page);
-  await page.getByRole('button', { name: 'Continue · Folders' }).click();
   await page.getByRole('button', { name: 'Add folder' }).click();
-  await axe(page);
-  await page.getByRole('button', { name: /Skip · Review|Continue · Review/ }).click();
   await axe(page);
 });
 

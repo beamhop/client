@@ -12,7 +12,15 @@
  * resource pattern (https://cloudscape.design/patterns/resource-management/edit/).
  */
 import type { AgentView } from '@beamhop/core';
-import { CloudArrowUp, Copy as CopyIcon, Play, Stop, Trash, XCircle } from '@phosphor-icons/react';
+import {
+  ChatCircle,
+  CloudArrowUp,
+  Copy as CopyIcon,
+  Play,
+  Stop,
+  Trash,
+  XCircle,
+} from '@phosphor-icons/react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { type ReactNode, useRef, useState } from 'react';
 import { Link } from 'react-aria-components';
@@ -33,6 +41,7 @@ import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { SegmentedMeter, StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
+import { NewSessionSheet } from '../sessions/Inspector.tsx';
 import { AGENT_SECTIONS, type AgentSection, isSection, suggestName, validateName } from './model.ts';
 import { OverflowMenu } from './parts.tsx';
 import { BudgetsSection } from './sections/Budgets.tsx';
@@ -180,6 +189,7 @@ const Lifecycle = ({ a, panic }: { a: AgentView; panic: boolean }) => {
   const all = useApi('agent.list');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const name = a.config.name;
   const taken = (all.data?.agents ?? []).map((x) => x.config.name);
   const [newName, setNewName] = useState('');
@@ -242,6 +252,24 @@ const Lifecycle = ({ a, panic }: { a: AgentView; panic: boolean }) => {
 
   return (
     <>
+      {!panic &&
+        (expanded ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<ChatCircle size={16} aria-hidden="true" />}
+            onPress={() => setChatOpen(true)}
+          >
+            {t('agents.reach.chat')}
+          </Button>
+        ) : (
+          <IconButton
+            label={t('agents.chatWith', { name })}
+            icon={<ChatCircle size={20} />}
+            onPress={() => setChatOpen(true)}
+          />
+        ))}
+      <NewSessionSheet isOpen={chatOpen} onOpenChange={setChatOpen} agents={[a]} defaultAgent={name} />
       {primary}
       <OverflowMenu
         label={t('agents.more', { name })}

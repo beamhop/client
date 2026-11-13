@@ -4,18 +4,58 @@
  * setup slug, CLI.
  */
 import type { AgentView, SessionView } from '@beamhop/core';
-import { CaretRight, FileText } from '@phosphor-icons/react';
+import { CaretRight, ChatCircle, FileText, Plugs } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Link, Button as RACButton } from 'react-aria-components';
 import { harnessSlug, sessionLamp, targetLabel, useApi } from '../../../api/index.ts';
 import { t } from '../../../i18n/index.ts';
 import { since, usd } from '../../../lib/format.ts';
-import { LinkButton } from '../../../ui/Button.tsx';
+import { Button, LinkButton } from '../../../ui/Button.tsx';
 import { MetaLine } from '../../../ui/Meta.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../../ui/States.tsx';
 import { RouteLine, StatusDot } from '../../../ui/Status.tsx';
+import { NewSessionSheet } from '../../sessions/Inspector.tsx';
 import { Block, Rows } from '../parts.tsx';
 import { InstructionSheet } from './InstructionSheet.tsx';
+
+/** An agent no channel can reach yet: say so up front, with the two ways forward. */
+const AppOnly = ({ agent }: { agent: AgentView }) => {
+  const [chat, setChat] = useState(false);
+  const name = agent.config.name;
+  return (
+    <section
+      aria-labelledby="ov-app-only"
+      data-reach="app-only"
+      className="flex flex-col gap-3 rounded-lg border border-caution-text/40 bg-caution-wash p-4"
+    >
+      <div>
+        <h2 id="ov-app-only" className="type-title-3 text-ink">
+          {t('agents.reach.appOnly', { name })}
+        </h2>
+        <p className="mt-0.5 type-body-sm text-ink-2">{t('agents.reach.appOnlyHint')}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton
+          href={`/agents/${name}/channels`}
+          variant="primary"
+          size="sm"
+          icon={<Plugs size={16} aria-hidden="true" />}
+        >
+          {t('agents.reach.connect')}
+        </LinkButton>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<ChatCircle size={16} aria-hidden="true" />}
+          onPress={() => setChat(true)}
+        >
+          {t('agents.reach.chat')}
+        </Button>
+      </div>
+      <NewSessionSheet isOpen={chat} onOpenChange={setChat} agents={[agent]} defaultAgent={name} />
+    </section>
+  );
+};
 
 const SessionRow = ({ s }: { s: SessionView }) => (
   <li>
@@ -57,6 +97,7 @@ export const OverviewSection = ({ agent }: { agent: AgentView }) => {
   return (
     <div className="flex flex-col gap-8">
       {cfg.description && <p className="type-body text-ink">{cfg.description}</p>}
+      {cfg.memberships.length === 0 && <AppOnly agent={agent} />}
 
       <Block id="ov-now" title={t('agents.ov.now', { count: live.length })}>
         {sessions.isPending ? (

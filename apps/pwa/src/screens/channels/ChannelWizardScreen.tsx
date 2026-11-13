@@ -150,7 +150,11 @@ const nextLabel = (ctx: Ctx, from = ctx.index) => {
 const CreateStep = ({ ctx }: { ctx: Ctx }) => {
   const { meta, draft, patch } = ctx;
   const agents = useApi('agent.list');
-  const agent = agents.data?.agents[0]?.config.name ?? 'beamhop';
+  // Set up for one agent (from creating it): name the bot after that agent.
+  const agent =
+    (typeof draft.values.forAgent === 'string' ? draft.values.forAgent : undefined) ??
+    agents.data?.agents[0]?.config.name ??
+    'beamhop';
   const opened = !!draft.values.openedCreate;
   const open = () => {
     patch({ values: { openedCreate: true } });
@@ -1271,13 +1275,17 @@ export const ChannelWizardScreen = () => {
   const finishing = useRef(false);
   const finish = useCallback(() => {
     const target = draft.channel;
+    // Opened from creating an agent: go back to that agent, which now listens here.
+    const forAgent = typeof draft.values.forAgent === 'string' ? draft.values.forAgent : undefined;
     finishing.current = true;
     toast.show({ message: t('channels.wizard.doneToast', { provider: meta.name }), tone: 'success' });
     // Clear the draft only once we've left, so this screen never re-renders without its channel.
-    void navigate({ to: target ? '/channels/$id' : '/channels', params: target ? { id: target } : {} }).then(
-      reset,
-    );
-  }, [draft.channel, reset, toast, meta.name, navigate]);
+    void (
+      forAgent
+        ? navigate({ to: '/agents/$name', params: { name: forAgent } })
+        : navigate({ to: target ? '/channels/$id' : '/channels', params: target ? { id: target } : {} })
+    ).then(reset);
+  }, [draft.channel, draft.values.forAgent, reset, toast, meta.name, navigate]);
   const next = useCallback(() => {
     let n = index + 1;
     while (n < steps.length && AUTO_STEPS.has(steps[n]!)) n++;
