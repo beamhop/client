@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import type { HarnessEvent, HarnessSession, SessionSpec } from '@beamhop/core';
 import { unsafePassthroughSandbox, writeFakeBin } from '@beamhop/harness-kit';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { mapPiEvent, PI_GATE_EXTENSION, piArgs, piHarness } from '../src/index.ts';
+import { mapPiEvent, PI_GATE_EXTENSION, piArgs, piHarness, piModelOptions } from '../src/index.ts';
 
 let root: string;
 let work: string;
@@ -58,6 +58,21 @@ const run = async (
   return evs;
 };
 const text = (evs: HarnessEvent[]) => evs.flatMap((e) => (e.type === 'text' ? [e.delta] : [])).join('');
+
+describe('pi models', () => {
+  it('uses provider/id (what --model takes) and the display name', () => {
+    expect(
+      piModelOptions({
+        models: [
+          { id: 'anthropic/claude-x', provider: 'openrouter', name: 'Claude X' },
+          { id: 'gpt-y', provider: 'openai' },
+          { name: 'no id' },
+        ],
+      }),
+    ).toEqual([{ id: 'openrouter/anthropic/claude-x', label: 'Claude X' }, { id: 'openai/gpt-y' }]);
+    expect(piModelOptions(undefined)).toEqual([]);
+  });
+});
 
 describe('piArgs', () => {
   it('leaves the model to pi for the "default" model', () => {

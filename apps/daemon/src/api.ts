@@ -57,7 +57,7 @@ import {
   elevatedFailure,
   type FixRunner,
 } from './doctor-fix.ts';
-import { checkLogin, harnessLogin, loginMethods, resolveMethod } from './harness-auth.ts';
+import { checkLogin, harnessLogin, harnessModels, loginMethods, resolveMethod } from './harness-auth.ts';
 import {
   defaultInstallerDeps,
   homeSignInBody,
@@ -848,6 +848,7 @@ export class ApiHandlers {
 
       // ── harnesses ──
       'harness.scan': async () => ({ harnesses: await this.withLogins(await this.scan()) }),
+      'harness.models': async ({ id, refresh }) => harnessModels(d, id, refresh),
       'harness.list': async () => {
         if (!this.scanFresh()) await this.scan();
         return { harnesses: await this.withLogins(this.harnessViews()) };

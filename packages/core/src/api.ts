@@ -493,6 +493,25 @@ export const methods = {
 
   'harness.scan': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
   'harness.list': { params: empty, result: z.object({ harnesses: z.array(HarnessView) }) },
+  /**
+   * Models a harness offers with its current sign-in, asked of the harness itself (it is started briefly
+   * in a sandbox, no prompt sent; cached for a few minutes, `refresh` to ask again). `error` when it
+   * could not list them (not installed, not signed in, no listing support): type a model id instead.
+   */
+  'harness.models': {
+    params: z.object({ id: z.string(), refresh: z.boolean().default(false) }),
+    result: z.object({
+      models: z.array(
+        z.object({
+          id: z.string(),
+          label: z.string().optional(),
+          description: z.string().optional(),
+          isDefault: z.boolean().optional(),
+        }),
+      ),
+      error: z.string().optional(),
+    }),
+  },
   /** Store a credential for a harness login method (default: its first method), then check it. */
   'harness.login': {
     params: z.object({ id: z.string(), method: z.string().optional(), value: z.string().min(1) }),

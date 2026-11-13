@@ -215,6 +215,23 @@ const MOCK_PAIRERS: Record<string, { principal: string; displayName: string; han
   discord: { principal: 'discord:220719', displayName: 'alice', handle: '@alice' },
 };
 
+/** Demo model lists for the mock daemon's model picker. */
+const MOCK_MODELS: Record<
+  string,
+  { id: string; label?: string; description?: string; isDefault?: boolean }[]
+> = {
+  claude: [
+    { id: 'default', label: 'Default (recommended)', isDefault: true },
+    { id: 'opus', label: 'Opus', description: 'Most capable for complex work' },
+    { id: 'sonnet', label: 'Sonnet', description: 'Best for everyday tasks' },
+    { id: 'haiku', label: 'Haiku', description: 'Fastest for quick answers' },
+  ],
+  codex: [
+    { id: 'gpt-6-luna', label: 'GPT-6-Luna', description: 'Fast and affordable', isDefault: true },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6-Terra', description: 'Older balanced model' },
+  ],
+};
+
 export class MockDaemon {
   state: MockState;
   private listeners = new Set<(e: ServerEvent) => void>();
@@ -916,6 +933,7 @@ export class MockDaemon {
       return { harnesses: this.state.harnesses };
     },
     'harness.list': () => ({ harnesses: this.state.harnesses }),
+    'harness.models': (p) => ({ models: MOCK_MODELS[p.id] ?? [] }),
     // Install / update / login run as jobs (mock/jobs.ts); the browser is the local client, so allowed.
     'harness.install': (p) => this.jobs.install(p.id, p.method),
     'harness.update': (p) => this.jobs.update(p.id),

@@ -8,6 +8,7 @@ import {
   type HarnessPlugin,
   type HarnessSession,
   type Logger,
+  type ModelOption,
   type SandboxHandle,
   type SessionSpec,
   silentLogger,
@@ -313,6 +314,12 @@ export const startPiSession = async (
     get id() {
       return state.sessionId ?? spec.sessionId;
     },
+    async models(): Promise<ModelOption[]> {
+      if (exited || closing) throw new BeamhopError('unavailable', 'pi is not running');
+      const r = await call({ type: 'get_available_models' }, opts.startTimeoutMs ?? 60000);
+      if (!r.success) throw new BeamhopError('unavailable', `pi get_available_models failed: ${r.error}`);
+      return piModelOptions(r.data);
+    },
     prompt(text, attachments = []) {
       if (exited || closing) throw new BeamhopError('unavailable', 'pi is not running');
       if (turn) throw new BeamhopError('conflict', 'a prompt is already running in this session');
@@ -384,4 +391,19 @@ export const piHarness = (opts: PiHarnessOptions = {}): HarnessPlugin => {
     start: (spec, sandbox) =>
       startPiSession({ ...opts, command: opts.command ?? (() => lastPath ?? 'pi') }, spec, sandbox),
   };
+};
+
+/**
+ * pi's `get_available_models` rows as model options. pi's `--model` takes `<provider>/<id>`, so that is
+ * the option id. Exported for tests.
+ */
+export const piModelOptions = (data: unknown): ModelOption[] => {
+  const rows = (data as { models?: { id?: unknown; provider?: unknown; name?: unknown }[] } | undefined)
+    ?.models;
+  const out: ModelOption[] = [];
+  for (const m of Array.isArray(rows) ? rows : []) {
+    if (typeof m?.id !== 'string' || typeof m.provider !== 'string') continue;
+    out.push({ id: `${m.provider}/${m.id}`, ...(typeof m.name === 'string' ? { label: m.name } : {}) });
+  }
+  return out;
 };

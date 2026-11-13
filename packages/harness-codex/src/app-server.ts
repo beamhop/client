@@ -4,6 +4,7 @@ import {
   type HarnessEvent,
   type HarnessSession,
   type Logger,
+  type ModelOption,
   type SandboxHandle,
   type SessionSpec,
   silentLogger,
@@ -348,6 +349,10 @@ export const startCodexAppServer = async (
     get id() {
       return threadId!;
     },
+    async models() {
+      if (exited || closing) throw new BeamhopError('unavailable', 'codex is not running');
+      return listCodexModels(<T>(method: string, params: unknown) => rpc.request<T>(method, params, timeout));
+    },
     prompt(text, attachments = []) {
       if (exited || closing) throw new BeamhopError('unavailable', 'codex is not running');
       if (turn) throw new BeamhopError('conflict', 'a prompt is already running in this session');
@@ -404,4 +409,42 @@ export const startCodexAppServer = async (
       await exitP;
     },
   };
+};
+
+interface CodexModel {
+  id: string;
+  model?: string;
+  displayName?: string;
+  description?: string;
+  hidden?: boolean;
+  isDefault?: boolean;
+}
+
+/**
+ * The models codex offers with its sign-in (`model/list`, paged). Hidden ones are left out; `model` is
+ * the id `--model`/`thread/start` take.
+ */
+export const listCodexModels = async (
+  request: <T>(method: string, params: unknown) => Promise<T>,
+): Promise<ModelOption[]> => {
+  const out: ModelOption[] = [];
+  let cursor: string | null | undefined;
+  for (let page = 0; page < 10; page++) {
+    const r = await request<{ data: CodexModel[]; nextCursor?: string | null }>(
+      'model/list',
+      cursor ? { cursor } : {},
+    );
+    for (const m of r.data ?? []) {
+      if (m.hidden) continue;
+      out.push({
+        id: m.model ?? m.id,
+        ...(m.displayName ? { label: m.displayName } : {}),
+        ...(m.description ? { description: m.description } : {}),
+        ...(m.isDefault ? { isDefault: true } : {}),
+      });
+    }
+    cursor = r.nextCursor;
+    if (!cursor) break;
+  }
+  return out;
 };

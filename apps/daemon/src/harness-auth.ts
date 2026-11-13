@@ -17,7 +17,16 @@ import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { type AgentConfig, BeamhopError, type HarnessView, paths, type SecretStore } from '@beamhop/core';
+import {
+  type AgentConfig,
+  BeamhopError,
+  DEFAULT_MODEL,
+  type HarnessSession,
+  type HarnessView,
+  type ModelOption,
+  paths,
+  type SecretStore,
+} from '@beamhop/core';
 import { type CatalogEntry, findHarness, type LoginMethod, loadCatalog } from '@beamhop/harness-catalog';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { Daemon } from './daemon.ts';
@@ -210,68 +219,78 @@ export const checkProviderKey = (
   }
 };
 
-/** Start the harness in a throwaway sandboxed session with its login, then close it (no prompt sent). */
-const checkByStarting = async (d: Daemon, harnessId: string): Promise<CheckResult> => {
+/** The stored sign-in could not be set up for a throwaway session (damaged or unreadable). */
+class LoginSetupError extends Error {}
+
+/**
+ * Start the harness in a throwaway sandboxed session with its login (the same sandbox, hosts, trustd and
+ * sign-in files a real session gets), run `use` on it, then close it. No prompt is sent.
+ */
+export const withThrowawaySession = async <T>(
+  d: Daemon,
+  harnessId: string,
+  purpose: string,
+  use: (session: HarnessSession) => Promise<T>,
+): Promise<T> => {
   const plugin = d.registry.harness(harnessId);
-  if (!plugin) return { status: 'error', message: `${harnessId} is not installed` };
+  if (!plugin) throw new BeamhopError('not_found', `${harnessId} is not installed`);
   const home = paths(d.home);
-  const dir = join(home.sessions, `logincheck-${harnessId}-${randomBytes(4).toString('hex')}`);
+  const dir = join(home.sessions, `${purpose}-${harnessId}-${randomBytes(4).toString('hex')}`);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const policy = compilePolicy(
-    'workspace',
-    [],
-    { fs: { read: [dir], write: [dir], deny: [d.home] } },
-    { own: { dirs: [dir], beamhopHome: d.home } },
-  );
-  if (d.llmProxy) {
-    const llm = new Set<string>(LLM_PROVIDER_HOSTS);
-    policy.net.allow = policy.net.allow.filter((h) => !llm.has(h));
-  }
-  for (const h of plugin.network ?? []) if (!policy.net.allow.includes(h)) policy.net.allow.push(h);
-  const env: Record<string, string> = {
-    ...(await sessionCredentials(
-      d.secrets,
-      { name: '(login check)', secretEnv: [] },
-      harnessId,
-      plugin.displayName,
-    )),
-  };
-  if (plugin.homeEnv) {
-    mkdirSync(join(dir, 'harness-home'), { recursive: true, mode: 0o700 });
-    env[plugin.homeEnv] = join(dir, 'harness-home');
-  }
-  // A subscription login: its files in the throwaway home (a refresh during the check is saved back).
   let homeSync: HomeLoginSync | undefined;
-  const active = await activeMethod(d.secrets, harnessId);
-  if (active?.kind === 'home') {
-    const home = homeOf(active);
-    const blob = decodeBlob(await d.secrets.get(active.secret));
-    if (!blob) return { status: 'invalid', message: 'the stored sign-in is damaged; sign in again' };
-    const hdir = join(dir, home.env && home.env === plugin.homeEnv ? 'harness-home' : 'login-home');
-    try {
-      homeSync = await HomeLoginSync.open(d.secrets, active, hdir, blob, {
-        ...(home.transfer ? { bin: (await plugin.detect().catch(() => null))?.path } : {}),
-      });
-    } catch (e) {
-      rmSync(dir, { recursive: true, force: true });
-      return { status: 'invalid', message: (e as Error).message };
-    }
-    Object.assign(env, homeEnv(hdir, home, blob));
-    for (const h of home.network) if (!policy.net.allow.includes(h)) policy.net.allow.push(h);
-  }
   let sandbox: Awaited<ReturnType<Daemon['sandboxFactory']>> | undefined;
   try {
+    const policy = compilePolicy(
+      'workspace',
+      [],
+      { fs: { read: [dir], write: [dir], deny: [d.home] } },
+      { own: { dirs: [dir], beamhopHome: d.home } },
+    );
+    if (d.llmProxy) {
+      const llm = new Set<string>(LLM_PROVIDER_HOSTS);
+      policy.net.allow = policy.net.allow.filter((h) => !llm.has(h));
+    }
+    for (const h of plugin.network ?? []) if (!policy.net.allow.includes(h)) policy.net.allow.push(h);
+    const env: Record<string, string> = {
+      ...(await sessionCredentials(
+        d.secrets,
+        { name: `(${purpose})`, secretEnv: [] },
+        harnessId,
+        plugin.displayName,
+      )),
+    };
+    if (plugin.homeEnv) {
+      mkdirSync(join(dir, 'harness-home'), { recursive: true, mode: 0o700 });
+      env[plugin.homeEnv] = join(dir, 'harness-home');
+    }
+    // A subscription login: its files in the throwaway home (a refresh meanwhile is saved back).
+    const active = await activeMethod(d.secrets, harnessId);
+    if (active?.kind === 'home') {
+      const hl = homeOf(active);
+      const blob = decodeBlob(await d.secrets.get(active.secret));
+      if (!blob) throw new LoginSetupError('the stored sign-in is damaged; sign in again');
+      const hdir = join(dir, hl.env && hl.env === plugin.homeEnv ? 'harness-home' : 'login-home');
+      try {
+        homeSync = await HomeLoginSync.open(d.secrets, active, hdir, blob, {
+          ...(hl.transfer ? { bin: (await plugin.detect().catch(() => null))?.path } : {}),
+        });
+      } catch (e) {
+        throw new LoginSetupError((e as Error).message);
+      }
+      Object.assign(env, homeEnv(hdir, hl, blob));
+      for (const h of hl.network) if (!policy.net.allow.includes(h)) policy.net.allow.push(h);
+    }
     sandbox = await d.sandboxFactory(policy, {
       env,
       localAllow: [],
-      log: d.log.child({ check: harnessId }),
+      log: d.log.child({ [purpose]: harnessId }),
       ...(plugin.macosTrustd ? { macosTrustd: true } : {}),
     });
     const session = await plugin.start(
       {
-        sessionId: `logincheck-${harnessId}`,
-        agent: '(login check)',
-        model: 'default',
+        sessionId: `${purpose}-${harnessId}`,
+        agent: `(${purpose})`,
+        model: DEFAULT_MODEL,
         cwd: dir,
         mounts: [],
         permissionMode: 'read-only',
@@ -280,17 +299,58 @@ const checkByStarting = async (d: Daemon, harnessId: string): Promise<CheckResul
       },
       sandbox,
     );
-    await session.close();
-    return { status: 'logged-in', message: `${plugin.displayName} started and authenticated` };
-  } catch (e) {
-    const msg = (e as Error).message;
-    return /auth|login|unauthori[sz]ed|forbidden|token/i.test(msg)
-      ? { status: 'invalid', message: msg }
-      : { status: 'error', message: msg };
+    try {
+      return await use(session);
+    } finally {
+      await session.close().catch(() => {});
+    }
   } finally {
     await sandbox?.close().catch(() => {});
     await homeSync?.stop().catch(() => {});
     rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+/** Start the harness in a throwaway sandboxed session with its login, then close it (no prompt sent). */
+const checkByStarting = async (d: Daemon, harnessId: string): Promise<CheckResult> => {
+  const plugin = d.registry.harness(harnessId);
+  if (!plugin) return { status: 'error', message: `${harnessId} is not installed` };
+  try {
+    await withThrowawaySession(d, harnessId, 'logincheck', async () => undefined);
+    return { status: 'logged-in', message: `${plugin.displayName} started and authenticated` };
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (e instanceof LoginSetupError) return { status: 'invalid', message: msg };
+    return /auth|login|unauthori[sz]ed|forbidden|token/i.test(msg)
+      ? { status: 'invalid', message: msg }
+      : { status: 'error', message: msg };
+  }
+};
+
+const MODELS_TTL_MS = 10 * 60_000;
+const modelCache = new Map<string, { at: number; models: ModelOption[] }>();
+
+/**
+ * The models a harness offers with its current sign-in, asked of the harness itself in a throwaway
+ * session (a few seconds), cached for 10 minutes per harness and sign-in.
+ */
+export const harnessModels = async (
+  d: Daemon,
+  harnessId: string,
+  refresh = false,
+): Promise<{ models: ModelOption[]; error?: string }> => {
+  const key = `${harnessId}|${(await activeMethod(d.secrets, harnessId))?.id ?? '-'}`;
+  const hit = modelCache.get(key);
+  if (!refresh && hit && Date.now() - hit.at < MODELS_TTL_MS) return { models: hit.models };
+  try {
+    const models = await withThrowawaySession(d, harnessId, 'models', async (s) =>
+      s.models ? await s.models() : undefined,
+    );
+    if (!models) return { models: [], error: 'this harness cannot list its models; type a model id' };
+    modelCache.set(key, { at: Date.now(), models });
+    return { models };
+  } catch (e) {
+    return { models: [], error: (e as Error).message };
   }
 };
 

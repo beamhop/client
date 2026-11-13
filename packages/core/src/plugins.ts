@@ -140,12 +140,26 @@ export interface PermissionDecision {
   reason?: string;
 }
 
+/** A model a harness offers, as reported by the harness itself (for a picker; `id` goes in `--model`). */
+export interface ModelOption {
+  id: string;
+  label?: string;
+  description?: string;
+  /** The harness's own default (what `DEFAULT_MODEL` resolves to). */
+  isDefault?: boolean;
+}
+
 export interface HarnessSession {
   readonly id: string;
   prompt(text: string, attachments?: { path: string; mime: string }[]): AsyncIterable<HarnessEvent>;
   respondPermission(requestId: string, decision: PermissionDecision): Promise<void>;
   cancel(): Promise<void>;
   close(): Promise<void>;
+  /**
+   * The models this harness offers with its current sign-in, asked of the running harness (no prompt
+   * sent). Absent when the harness has no way to list them.
+   */
+  models?(): Promise<ModelOption[]>;
 }
 
 export interface SandboxHandle {

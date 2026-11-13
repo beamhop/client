@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   acpHarnessesFromCatalog,
   acpHarnessFromCatalog,
+  acpModelOptions,
   autoDecision,
   chooseOption,
   createAcpHarness,
@@ -282,6 +283,31 @@ describe('catalog plugins', () => {
     const s = await p.start(spec(), unsafePassthroughSandbox());
     sessions.push(s);
     expect(textOf(await run(s, 'hi'))).toBe('pong');
+  });
+});
+
+describe('acp models', () => {
+  it('flattens the model select option, current value as the default', () => {
+    expect(
+      acpModelOptions([
+        { id: 'mode', category: 'mode', type: 'select', currentValue: 'x', options: [] },
+        {
+          id: 'model',
+          name: 'Model',
+          category: 'model',
+          type: 'select',
+          currentValue: 'b',
+          options: [
+            { value: 'a', name: 'Model A', description: 'small' },
+            { group: 'more', name: 'More', options: [{ value: 'b', name: 'Model B' }] },
+          ],
+        },
+      ] as never),
+    ).toEqual([
+      { id: 'a', label: 'Model A', description: 'small' },
+      { id: 'b', label: 'Model B', isDefault: true },
+    ]);
+    expect(acpModelOptions(undefined)).toEqual([]);
   });
 });
 

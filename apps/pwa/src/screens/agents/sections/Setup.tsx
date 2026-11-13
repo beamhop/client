@@ -21,10 +21,11 @@ import { useShowCli } from '../../../lib/desktop.ts';
 import { Button } from '../../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl, Select } from '../../../ui/Choice.tsx';
 import { CopyButton } from '../../../ui/CliStrip.tsx';
-import { NumberField, TextField } from '../../../ui/Field.tsx';
+import { NumberField } from '../../../ui/Field.tsx';
 import { PathPicker, useIsGitRepo } from '../../../ui/PathPicker.tsx';
 import { StatusDot } from '../../../ui/Status.tsx';
 import { HarnessJobControls } from '../../harnesses/HarnessJob.tsx';
+import { ModelField } from '../ModelField.tsx';
 import { validateMountPath } from '../model.ts';
 import { Block, OverflowMenu, Rows, SaveBar, useAgentDraft } from '../parts.tsx';
 
@@ -266,13 +267,7 @@ export const SetupSection = ({ agent }: { agent: AgentView }) => {
             )}
           </div>
         )}
-        <TextField
-          label={t('agents.setup.model')}
-          value={c.model}
-          onChange={(v) => d.set((x) => ({ ...x, model: v.trim() || 'default' }))}
-          mono
-          description={t('agents.setup.modelHint')}
-        />
+        <ModelField harness={current} value={c.model} onChange={(model) => d.set((x) => ({ ...x, model }))} />
         <RadioGroup
           label={t('agents.setup.auth')}
           value={c.harnessAuth}

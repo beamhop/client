@@ -16,6 +16,7 @@ import {
   type HarnessPlugin,
   type HarnessSession,
   type Logger,
+  type ModelOption,
   type SandboxHandle,
   type SessionSpec,
   silentLogger,
@@ -282,6 +283,16 @@ export const startClaudeSession = async (
   return {
     get id() {
       return sessionId || spec.sessionId;
+    },
+    async models(): Promise<ModelOption[]> {
+      if (closed || failed) throw new BeamhopError('unavailable', 'Claude Code is not running');
+      // The first row is Claude Code's own default (its "Default (recommended)" entry).
+      return (await q.supportedModels()).map((m, i) => ({
+        id: m.value,
+        ...(m.displayName ? { label: m.displayName } : {}),
+        ...(m.description ? { description: m.description } : {}),
+        ...(i === 0 && m.value === 'default' ? { isDefault: true } : {}),
+      }));
     },
     prompt(text, attachments = []) {
       if (closed || failed)

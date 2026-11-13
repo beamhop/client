@@ -43,6 +43,7 @@ const SAMPLE: Partial<Record<MethodName, unknown>> = {
   'owner.remove': { principal: 'nostr:npub1bob' },
   'policy.get': { name: 'reviewer' },
   'sandbox.test': { name: 'reviewer' },
+  'harness.models': { id: 'claude' },
   'policy.set': { name: 'helpdesk', profile: 'strict' },
   'policy.applySuggestion': { id: 'sug_pypi', accept: true },
   'secret.set': { name: 'X', value: 'v' },

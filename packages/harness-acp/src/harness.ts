@@ -9,6 +9,7 @@ import {
   type HarnessPlugin,
   type HarnessSession,
   type Logger,
+  type ModelOption,
   type PermissionDecision,
   type SandboxHandle,
   type SessionSpec,
@@ -188,6 +189,8 @@ export const startAcpSession = async (
   const startTimeout = opts.startTimeoutMs ?? 60000;
   let init: acp.InitializeResponse;
   let promptCaps: acp.PromptCapabilities = {};
+  /** The agent's model choices from its session config (empty when it offers none). */
+  let modelOptions: ModelOption[] = [];
   try {
     init = await withTimeout(
       Promise.race([
@@ -252,6 +255,7 @@ export const startAcpSession = async (
       configOptions = r.configOptions;
       modes = r.modes;
     }
+    modelOptions = acpModelOptions(configOptions);
     await applySessionSettings(conn, acpSessionId!, spec, configOptions, modes, log);
   } catch (e) {
     closing = true;
@@ -287,6 +291,9 @@ export const startAcpSession = async (
   const session: HarnessSession = {
     get id() {
       return acpSessionId!;
+    },
+    async models() {
+      return modelOptions;
     },
     prompt(text, attachments) {
       if (exited || closing || conn.signal.aborted) {
@@ -356,6 +363,22 @@ export const startAcpSession = async (
     },
   };
   return session;
+};
+
+/** The choices of the agent's `model` select config option (grouped ones flattened), current one as default. */
+export const acpModelOptions = (
+  configOptions: acp.SessionConfigOption[] | null | undefined,
+): ModelOption[] => {
+  const opt = configOptions?.find((o) => o.category === 'model' && o.type === 'select');
+  if (opt?.type !== 'select') return [];
+  return opt.options
+    .flatMap((o) => ('options' in o ? o.options : [o]))
+    .map((o) => ({
+      id: o.value,
+      ...(o.name ? { label: o.name } : {}),
+      ...(o.description ? { description: o.description } : {}),
+      ...(o.value === opt.currentValue ? { isDefault: true } : {}),
+    }));
 };
 
 /** Apply model (via a `model` config option) and plan mode (via session modes) when the agent offers them. */

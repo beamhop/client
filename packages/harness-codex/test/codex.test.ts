@@ -5,7 +5,14 @@ import { pathToFileURL } from 'node:url';
 import type { HarnessEvent, HarnessSession, SessionSpec } from '@beamhop/core';
 import { unsafePassthroughSandbox, writeFakeBin } from '@beamhop/harness-kit';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { codexHarness, codexPolicy, execArgs, mapExecEvent, mcpConfigArgs } from '../src/index.ts';
+import {
+  codexHarness,
+  codexPolicy,
+  execArgs,
+  listCodexModels,
+  mapExecEvent,
+  mcpConfigArgs,
+} from '../src/index.ts';
 
 let root: string;
 let work: string;
@@ -208,6 +215,35 @@ describe('codex exec fallback', () => {
     setTimeout(() => void s.cancel(), 300);
     for await (const ev of it) h.push(ev);
     expect(h.at(-1)).toMatchObject({ stopReason: 'cancelled' });
+  });
+});
+
+describe('codex models', () => {
+  it('pages through model/list, skips hidden models and keeps the default flag', async () => {
+    const pages: Record<string, unknown> = {
+      first: {
+        data: [
+          { id: 'a', model: 'gpt-a', displayName: 'GPT-A', description: 'fast', isDefault: true },
+          { id: 'h', model: 'gpt-hidden', hidden: true },
+        ],
+        nextCursor: 'p2',
+      },
+      p2: { data: [{ id: 'b', model: 'gpt-b' }], nextCursor: null },
+    };
+    const calls: unknown[] = [];
+    const request = async <T>(method: string, params: unknown): Promise<T> => {
+      calls.push([method, params]);
+      const cursor = (params as { cursor?: string }).cursor;
+      return pages[cursor ?? 'first'] as T;
+    };
+    expect(await listCodexModels(request)).toEqual([
+      { id: 'gpt-a', label: 'GPT-A', description: 'fast', isDefault: true },
+      { id: 'gpt-b' },
+    ]);
+    expect(calls).toEqual([
+      ['model/list', {}],
+      ['model/list', { cursor: 'p2' }],
+    ]);
   });
 });
 

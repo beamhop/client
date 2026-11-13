@@ -168,6 +168,11 @@ const fakeQuery = (record: { options?: Options; prompts: string[] }): QueryFn =>
       }
     }
     const g = gen() as Query;
+    g.supportedModels = async () =>
+      [
+        { value: 'default', displayName: 'Default (recommended)', description: 'Opus for complex work' },
+        { value: 'sonnet', displayName: 'Sonnet', description: 'Everyday tasks' },
+      ] as never;
     g.interrupt = async () => {
       if (interrupted) interrupted();
       else interruptPending = true;
@@ -327,6 +332,21 @@ describe('claude harness (fake SDK stream)', () => {
       scan: { env: { PATH: bin, ANTHROPIC_API_KEY: 'set' }, home: root },
     }).detect();
     expect(d).toMatchObject({ id: 'claude', version: '2.1.323', status: 'ready', protocol: 'claude-sdk' });
+  });
+});
+
+describe('claude models', () => {
+  it('lists the SDK supported models, its first "default" row as the default', async () => {
+    const { s } = await start();
+    expect(await s.models?.()).toEqual([
+      {
+        id: 'default',
+        label: 'Default (recommended)',
+        description: 'Opus for complex work',
+        isDefault: true,
+      },
+      { id: 'sonnet', label: 'Sonnet', description: 'Everyday tasks' },
+    ]);
   });
 });
 
