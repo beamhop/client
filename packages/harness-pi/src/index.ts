@@ -11,7 +11,7 @@ import {
   type SessionSpec,
   silentLogger,
 } from '@beamhop/core';
-import { type CatalogEntry, findHarness, loadCatalog } from '@beamhop/harness-catalog';
+import { type CatalogEntry, findHarness, loadCatalog, sandboxTraits } from '@beamhop/harness-catalog';
 import { detectHarness, type ScanOptions } from '@beamhop/harness-discovery';
 import {
   AsyncQueue,
@@ -373,6 +373,7 @@ export const piHarness = (opts: PiHarnessOptions = {}): HarnessPlugin => {
   return {
     id: 'pi',
     displayName: entry.displayName,
+    ...sandboxTraits(entry),
     async detect(): Promise<HarnessDetection | null> {
       const d = await detectHarness(entry, opts.scan);
       if (d.path) lastPath = d.path;

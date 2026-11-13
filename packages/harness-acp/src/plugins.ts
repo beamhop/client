@@ -6,6 +6,7 @@ import {
   findHarness,
   launchFor,
   loadCatalog,
+  sandboxTraits,
 } from '@beamhop/harness-catalog';
 import {
   detectHarness,
@@ -42,12 +43,7 @@ export const acpHarnessFromCatalog = (entry: CatalogEntry, opts: CatalogAcpOptio
       return d.status === 'not-installed' ? null : { ...d, protocol: 'acp' };
     },
   });
-  return {
-    ...plugin,
-    ...(entry.network.length ? { network: [...entry.network] } : {}),
-    ...(entry.homeEnv ? { homeEnv: entry.homeEnv } : {}),
-    ...(entry.macosTrustd ? { macosTrustd: true } : {}),
-  };
+  return { ...plugin, ...sandboxTraits(entry) };
 };
 
 const fromBundled = (id: string, opts: CatalogAcpOptions, catalog?: Catalog): HarnessPlugin => {

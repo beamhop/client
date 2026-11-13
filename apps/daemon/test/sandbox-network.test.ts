@@ -2,8 +2,12 @@
  * Sandbox network: the hosts a harness needs must reach the compiled sandbox, the Codex sign-in must run
  * with macOS trustd (without it every TLS call fails silently), and "allow all" is an explicit per-agent mode.
  */
-import { SandboxPolicy } from '@beamhop/core';
+import { type HarnessPlugin, SandboxPolicy } from '@beamhop/core';
+import { acpHarnessFromCatalog } from '@beamhop/harness-acp';
 import { loadCatalog } from '@beamhop/harness-catalog';
+import { claudeHarness } from '@beamhop/harness-claude';
+import { codexHarness } from '@beamhop/harness-codex';
+import { piHarness } from '@beamhop/harness-pi';
 import { compilePolicy, toSrtConfig } from '@beamhop/sandbox';
 import { describe, expect, it } from 'vitest';
 
@@ -20,6 +24,26 @@ describe('catalog hosts reach the sandbox', () => {
       const policy = compilePolicy('workspace', [], { net: { allow: hosts } });
       const srt = toSrtConfig(policy);
       for (const host of hosts) expect(srt.network.allowedDomains).toContain(host.toLowerCase());
+    });
+  }
+});
+
+describe('harness plugins carry the catalog sandbox fields', () => {
+  // The session sandbox reads these from the plugin, not the catalog: a plugin that drops them silently
+  // loses its hosts or trustd (Codex's TLS calls then fail with "workspace routing discovery failed").
+  const built: Record<string, () => HarnessPlugin> = {
+    codex: () => codexHarness(),
+    claude: () => claudeHarness(),
+    pi: () => piHarness(),
+  };
+  for (const h of catalog.harnesses) {
+    const make = built[h.id] ?? (h.modes.acp ? () => acpHarnessFromCatalog(h) : undefined);
+    if (!make) continue;
+    it(`${h.id}`, () => {
+      const p = make();
+      expect(p.macosTrustd ?? false).toBe(h.macosTrustd);
+      expect(p.network ?? []).toEqual(h.network);
+      expect(p.homeEnv).toBe(h.homeEnv);
     });
   }
 });

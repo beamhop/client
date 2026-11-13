@@ -1,5 +1,5 @@
 import type { HarnessDetection, HarnessPlugin } from '@beamhop/core';
-import { type CatalogEntry, findHarness, loadCatalog } from '@beamhop/harness-catalog';
+import { type CatalogEntry, findHarness, loadCatalog, sandboxTraits } from '@beamhop/harness-catalog';
 import { detectHarness, type ScanOptions } from '@beamhop/harness-discovery';
 import { type CodexOptions, startCodexAppServer } from './app-server.ts';
 import { startCodexExec } from './exec.ts';
@@ -23,6 +23,7 @@ export const codexHarness = (opts: CodexHarnessOptions = {}): HarnessPlugin => {
   return {
     id: 'codex',
     displayName: entry.displayName,
+    ...sandboxTraits(entry),
     async detect(): Promise<HarnessDetection | null> {
       const d = await detectHarness(entry, opts.scan);
       if (d.path) lastPath = d.path;

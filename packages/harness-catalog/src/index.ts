@@ -71,6 +71,19 @@ export const loadCatalog = (opts: LoadCatalogOptions = {}): Catalog => {
 export const findHarness = (catalog: Catalog, id: string): CatalogEntry | undefined =>
   catalog.harnesses.find((h) => h.id === id);
 
+/**
+ * What an entry asks of the sandbox, in the HarnessPlugin shape: its own service's hosts, the env var that
+ * relocates its config dir, and whether it needs macOS trustd for TLS. Every harness plugin spreads this,
+ * so a catalog change reaches the session's sandbox whatever the harness's protocol.
+ */
+export const sandboxTraits = (
+  entry: CatalogEntry,
+): { network?: string[]; homeEnv?: string; macosTrustd?: true } => ({
+  ...(entry.network.length ? { network: [...entry.network] } : {}),
+  ...(entry.homeEnv ? { homeEnv: entry.homeEnv } : {}),
+  ...(entry.macosTrustd ? { macosTrustd: true as const } : {}),
+});
+
 /** Resolve the launch command for one mode of an entry (`command` defaults to the first binary). */
 export const launchFor = (
   entry: CatalogEntry,

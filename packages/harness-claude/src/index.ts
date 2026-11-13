@@ -20,7 +20,7 @@ import {
   type SessionSpec,
   silentLogger,
 } from '@beamhop/core';
-import { type CatalogEntry, findHarness, loadCatalog } from '@beamhop/harness-catalog';
+import { type CatalogEntry, findHarness, loadCatalog, sandboxTraits } from '@beamhop/harness-catalog';
 import { detectHarness, type ScanOptions } from '@beamhop/harness-discovery';
 import { AsyncQueue, PermissionBroker, resolveInMounts, truncate } from '@beamhop/harness-kit';
 import { sandboxedClaudeSpawner } from './spawn.ts';
@@ -356,6 +356,7 @@ export const claudeHarness = (opts: ClaudeHarnessOptions = {}): HarnessPlugin =>
   return {
     id: 'claude',
     displayName: entry.displayName,
+    ...sandboxTraits(entry),
     async detect(): Promise<HarnessDetection | null> {
       const d = await detectHarness(entry, opts.scan);
       return d.status === 'not-installed' ? null : d;
