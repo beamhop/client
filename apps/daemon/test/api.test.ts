@@ -469,9 +469,18 @@ describe('deploy, audit, usage, devices, identity, data', () => {
     expect(dev.pubkey).toBe(npub);
     expect((await env.client.call('device.list')).devices).toHaveLength(1);
     expect(env.d.controlAllowlist()).toContain(npub);
+    await expect(
+      env.client.call('device.pushSubscribe', {
+        id: dev.id,
+        subscription: { endpoint: 'https://push.example/x' },
+      }),
+    ).rejects.toThrow(/keys/);
     await env.client.call('device.pushSubscribe', {
       id: dev.id,
-      subscription: { endpoint: 'https://push.example/x' },
+      subscription: {
+        endpoint: 'https://push.example/x',
+        keys: { p256dh: 'p'.repeat(20), auth: 'a'.repeat(10) },
+      },
     });
     expect((await env.client.call('device.list')).devices[0]!.pushEnabled).toBe(true);
     await env.client.call('device.remove', { id: dev.id });

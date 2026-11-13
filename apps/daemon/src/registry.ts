@@ -72,7 +72,7 @@ export interface BuiltinContext {
    */
   fetchAttachment?: (url: string) => Promise<Response>;
   /** Supplies provisioning info for deployers (owner npub etc.). */
-  provisioning: () => Promise<{
+  provisioning: (spec?: { agent: string }) => Promise<{
     ownerNpub: string;
     provisioningPubkey: string;
     beamhopVersion: string;
@@ -121,7 +121,11 @@ export const BUILTIN_PLUGINS: { module: string; load: Loader }[] = [
     module: '@beamhop/deploy',
     load: (m, c) => {
       const create = m.createDeployers as (o: unknown) => Record<string, Deployer>;
-      const all = create({ secrets: c.secrets, log: c.log, provisioning: () => c.provisioning() });
+      const all = create({
+        secrets: c.secrets,
+        log: c.log,
+        provisioning: (spec: { agent: string }) => c.provisioning(spec),
+      });
       for (const d of Object.values(all)) c.registry.addDeployer(d);
     },
   },

@@ -221,9 +221,10 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       }));
     },
 
-    async mesh_list_agents(_ctx, input) {
+    async mesh_list_agents(ctx, input) {
+      const s = liveOf(ctx);
       if (!d.mesh) throw new BeamhopError('unavailable', 'mesh requires the nostr channel');
-      return { agents: await d.mesh.listAgents(input.query) };
+      return { agents: await d.mesh.listAgents(input.query, s.agent) };
     },
 
     async mesh_ask_agent(ctx, input, meta) {
@@ -237,6 +238,7 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       if (roleOf(s).name === 'agent')
         throw new BeamhopError('forbidden', 'peer agents cannot start mesh conversations');
       const answer = await d.mesh.ask({
+        agent: s.agent,
         npub,
         question: input.question,
         hops,
@@ -251,6 +253,7 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       if (!d.mesh) throw new BeamhopError('unavailable', 'mesh requires the nostr channel');
       const hops = meshHops(s);
       return d.mesh.postJob({
+        agent: s.agent,
         kind: input.kind,
         input: input.input,
         inputType: input.inputType,
@@ -259,10 +262,12 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       });
     },
 
-    async mesh_job_result(_ctx, input, meta) {
+    async mesh_job_result(ctx, input, meta) {
+      const s = liveOf(ctx);
       if (!d.mesh) throw new BeamhopError('unavailable', 'mesh requires the nostr channel');
       return {
         result: await d.mesh.jobResult({
+          agent: s.agent,
           jobId: input.jobId,
           waitSeconds: input.waitSeconds,
           signal: meta.signal,

@@ -4,7 +4,7 @@
  */
 import { mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { budgetKey, modeRank, normalizePrincipal, stricterMode } from '@beamhop/authz';
+import { baseChannelName, budgetKey, modeRank, normalizePrincipal, stricterMode } from '@beamhop/authz';
 import { envForHarness } from '@beamhop/broker';
 import {
   type AgentConfig,
@@ -31,6 +31,9 @@ import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
 import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
 import { addWorktree, gitTopLevel, type Worktree } from './worktree.ts';
+
+const CONV_KIND_NS = 'conv-kind';
+const CONV_KINDS = ['dm', 'group', 'channel', 'public'] as const;
 
 export interface Turn {
   text: string;
@@ -269,6 +272,7 @@ export class SessionManager {
       this.emitSession(rec.id);
     }
     if (input.membership) live.membership = input.membership;
+    this.rememberKind(key, input.conversation.kind);
     return live;
   }
 
@@ -750,6 +754,16 @@ export class SessionManager {
       live.current = undefined;
       release();
       if (text.trim()) this.event(live.id, { kind: 'assistant', text });
+      // A turn that failed on its own (not stopped, not the session watchdog) is an agent crash (§9B).
+      if (error && !stopped)
+        d.audit({
+          type: 'agent.crash',
+          severity: 'warn',
+          summary: `${agent.name} failed: ${error.slice(0, 200)}`,
+          actor: `agent:${agent.name}`,
+          agent: agent.name,
+          data: { session: live.id },
+        });
       this.usage(live, agent, turn, { minutes: elapsedMin }, 'clock');
       if (streamer) {
         const fallback = error ? `⚠️ ${error}` : stopped ? '⏹ Stopped.' : undefined;
@@ -948,19 +962,37 @@ export class SessionManager {
     const rec = this.d.store.sessions.findLatest(key.agent, key.channel, key.conversationId, key.threadId);
     if (!rec) return undefined;
     this.d.store.sessions.update(rec.id, { status: 'idle' });
-    const kind = (rec.channel === 'local' ? 'dm' : this.kindOf(key)) as LiveSession['conversationKind'];
+    const kind = rec.channel === 'local' ? 'dm' : this.kindOf(key);
     const live = new LiveSession(this.d, rec.id, key, kind, undefined);
     this.attach(live);
     this.emitSession(rec.id);
     return rec.id;
   }
 
-  private kindOf(key: ThreadKey): string {
+  /** Remember the real conversation kind (resumed sessions must not guess it from names). */
+  private rememberKind(key: ThreadKey, kind: LiveSession['conversationKind']): void {
+    const k = `${key.channel}|${key.conversationId}`;
+    if (this.d.store.kv.get<string>(CONV_KIND_NS, k) !== kind) this.d.store.kv.set(CONV_KIND_NS, k, kind);
+  }
+
+  /**
+   * Conversation kind for a thread without a live inbound message (/resume, overrides): the kind
+   * recorded when the session was created, else a membership on the base channel (`nostr@rev` →
+   * `nostr`), else `dm`.
+   */
+  kindOf(key: ThreadKey): LiveSession['conversationKind'] {
+    const stored = this.d.store.kv.get<string>(CONV_KIND_NS, `${key.channel}|${key.conversationId}`);
+    if (stored && (CONV_KINDS as readonly string[]).includes(stored))
+      return stored as LiveSession['conversationKind'];
+    const base = baseChannelName(key.channel);
     const a = this.d.config.agents.get(key.agent);
     const m = a?.memberships.find(
-      (x) => x.target.startsWith(`${key.channel}:`) && x.target.endsWith(`/${key.conversationId}`),
+      (x) => x.target.startsWith(`${base}:`) && x.target.endsWith(`/${key.conversationId}`),
     );
-    return m ? m.target.slice(m.target.indexOf(':') + 1).split('/')[0]! : 'dm';
+    const kind = m ? m.target.slice(m.target.indexOf(':') + 1).split('/')[0]! : 'dm';
+    return (
+      (CONV_KINDS as readonly string[]).includes(kind) ? kind : 'dm'
+    ) as LiveSession['conversationKind'];
   }
 
   setOverride(key: ThreadKey, patch: Overrides, agent: AgentConfig): void {
@@ -974,13 +1006,7 @@ export class SessionManager {
         status: 'idle',
         harness: agent.harness,
       });
-      live = new LiveSession(
-        this.d,
-        rec.id,
-        key,
-        this.kindOf(key) as LiveSession['conversationKind'],
-        undefined,
-      );
+      live = new LiveSession(this.d, rec.id, key, this.kindOf(key), undefined);
       this.attach(live);
     }
     live.overrides = { ...live.overrides, ...patch };

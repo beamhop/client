@@ -1,14 +1,17 @@
 /**
  * Mesh (§6A.6) over Nostr: mesh_ask_agent = NIP-17 DM with a `hops` tag and a bounded wait for the
  * peer's reply; mesh_list_agents = NIP-89 capability cards; mesh_post_job / mesh_job_result = NIP-90.
- * The provider uses whichever nostr channel is connected.
+ * Every call names the asking agent and goes out on that agent's own Nostr connection
+ * (`nostr@<agent>`), so peers see the agent's key; a shared-key nostr channel is the fallback.
+ * Another agent's connection is never used.
  */
 import { BeamhopError, type ChannelConn, type InboundMsg } from '@beamhop/core';
 import type { Daemon } from './daemon.ts';
 
 export interface MeshProvider {
-  listAgents(query?: string): Promise<unknown[]>;
+  listAgents(query?: string, agent?: string): Promise<unknown[]>;
   ask(input: {
+    agent: string;
     npub: string;
     question: string;
     hops: number;
@@ -16,13 +19,19 @@ export interface MeshProvider {
     signal: AbortSignal;
   }): Promise<string>;
   postJob(input: {
+    agent: string;
     kind: number;
     input: string;
     inputType: string;
     peer?: string;
     hops: number;
   }): Promise<{ jobId: string }>;
-  jobResult(input: { jobId: string; waitSeconds: number; signal: AbortSignal }): Promise<unknown>;
+  jobResult(input: {
+    agent?: string;
+    jobId: string;
+    waitSeconds: number;
+    signal: AbortSignal;
+  }): Promise<unknown>;
   /** Return true when the inbound message answers a pending ask (it is then not routed further). */
   onInbound?(conn: ChannelConn, msg: InboundMsg): boolean;
   subscribe?(filter: unknown, onEvent: (ev: unknown) => void): () => void;
@@ -74,14 +83,30 @@ export class NostrMesh implements MeshProvider {
     private readonly mod: NostrMod,
   ) {}
 
-  private conn(): NostrLike {
-    const c = this.d.channels.connected().find((x) => x.provider === 'nostr') as NostrLike | undefined;
-    if (!c) throw new BeamhopError('unavailable', 'mesh tools need a connected nostr channel');
-    return c;
+  /**
+   * The asking agent's own nostr connection (`nostr@<agent>`), else a connected shared-key nostr
+   * channel. Connections bound to other agents are never used. Without an agent (read-only
+   * lookups such as isKnownAgent) any connected nostr connection will do.
+   */
+  conn(agent?: string): NostrLike {
+    const nostr = this.d.channels.connected().filter((x) => x.provider === 'nostr');
+    const bound = (x: ChannelConn) => this.d.channels.binding(x.name)?.agent;
+    const c =
+      agent === undefined
+        ? nostr[0]
+        : (nostr.find((x) => bound(x) === agent) ?? nostr.find((x) => bound(x) === undefined));
+    if (!c)
+      throw new BeamhopError(
+        'unavailable',
+        agent
+          ? `mesh tools need a connected nostr channel for agent ${agent}`
+          : 'mesh tools need a connected nostr channel',
+      );
+    return c as NostrLike;
   }
 
-  async listAgents(query?: string): Promise<unknown[]> {
-    const c = this.conn();
+  async listAgents(query?: string, agent?: string): Promise<unknown[]> {
+    const c = this.conn(agent);
     const evs = await c.pool.query(
       [{ kinds: [this.mod.CAPABILITY_CARD_KIND], '#t': ['beamhop'], limit: 100 }],
       { timeoutMs: 8000 },
@@ -96,14 +121,16 @@ export class NostrMesh implements MeshProvider {
   }
 
   async ask(input: {
+    agent: string;
     npub: string;
     question: string;
     hops: number;
     timeoutSeconds: number;
     signal: AbortSignal;
   }): Promise<string> {
-    const c = this.conn();
-    const principal = `nostr:${input.npub}`.toLowerCase();
+    const c = this.conn(input.agent);
+    // Replies are matched per connection: only the asking agent's key receives its answer.
+    const principal = `${c.name}|nostr:${input.npub}`.toLowerCase();
     const reply = new Promise<string>((resolve, reject) => {
       const list = this.asks.get(principal) ?? [];
       const entry: { resolve: (t: string) => void } = { resolve: (t: string) => resolve(t) };
@@ -138,7 +165,7 @@ export class NostrMesh implements MeshProvider {
 
   onInbound(conn: ChannelConn, msg: InboundMsg): boolean {
     if (conn.provider !== 'nostr' || msg.conversation.kind !== 'dm') return false;
-    const list = this.asks.get(msg.from.principal.toLowerCase());
+    const list = this.asks.get(`${conn.name}|${msg.from.principal}`.toLowerCase());
     const w = list?.shift();
     if (!w) return false;
     w.resolve(msg.text);
@@ -146,13 +173,14 @@ export class NostrMesh implements MeshProvider {
   }
 
   async postJob(input: {
+    agent: string;
     kind: number;
     input: string;
     inputType: string;
     peer?: string;
     hops: number;
   }): Promise<{ jobId: string }> {
-    const c = this.conn();
+    const c = this.conn(input.agent);
     const tags: string[][] = [
       ['i', input.input, input.inputType],
       ['hops', String(input.hops)],
@@ -169,8 +197,13 @@ export class NostrMesh implements MeshProvider {
     return { jobId: r.id };
   }
 
-  async jobResult(input: { jobId: string; waitSeconds: number; signal: AbortSignal }): Promise<unknown> {
-    const c = this.conn();
+  async jobResult(input: {
+    agent?: string;
+    jobId: string;
+    waitSeconds: number;
+    signal: AbortSignal;
+  }): Promise<unknown> {
+    const c = this.conn(input.agent);
     const filter = {
       kinds: Array.from({ length: 1000 }, (_, i) => 6000 + i).concat([7000]),
       '#e': [input.jobId],

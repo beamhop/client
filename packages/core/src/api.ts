@@ -193,6 +193,36 @@ export const DeploymentView = z.object({
 });
 export type DeploymentView = z.infer<typeof DeploymentView>;
 
+/** Web Push notification categories (§9B); each paired device turns them on or off. */
+export const PushCategory = z.enum(['approvals', 'budget', 'crash', 'offline', 'security']);
+export type PushCategory = z.infer<typeof PushCategory>;
+export const PushPrefs = z.record(PushCategory, z.boolean());
+export type PushPrefs = z.infer<typeof PushPrefs>;
+
+/** A cloud daemon this daemon controls over the Nostr control plane (§7A panic, §9B heartbeats). */
+export const RemoteDaemonView = z.object({
+  deployment: z.string(),
+  agent: z.string(),
+  provider: z.string(),
+  /** Control-plane npub of the remote daemon, once it has announced itself. */
+  npub: z.string().optional(),
+  provisioning: z.enum(['pending', 'done', 'failed']),
+  online: z.boolean(),
+  lastHeartbeatAt: z.string().optional(),
+  /** Remote panic state as last reported by heartbeat. */
+  remotePanic: z.boolean().optional(),
+  /** Outcome of the last panic/resume fan-out to this remote. */
+  command: z
+    .object({
+      kind: z.enum(['panic', 'resume']),
+      state: z.enum(['pending', 'acked', 'failed']),
+      at: z.string(),
+      error: z.string().optional(),
+    })
+    .optional(),
+});
+export type RemoteDaemonView = z.infer<typeof RemoteDaemonView>;
+
 export const PolicySuggestion = z.object({
   id: z.string(),
   agent: z.string(),
@@ -227,6 +257,8 @@ export const methods = {
       pendingApprovals: z.number(),
       owner: z.object({ npub: z.string().optional() }),
       home: z.string(),
+      /** Cloud daemons controlled from here (panic fan-out status, heartbeats). */
+      remotes: z.array(RemoteDaemonView).optional(),
     }),
   },
   'system.doctor': { params: empty, result: z.object({ checks: z.array(DoctorCheck) }) },
@@ -496,7 +528,18 @@ export const methods = {
     result: PairingStatusView,
   },
   'device.remove': { params: z.object({ id: z.string() }), result: ok },
+  /**
+   * Store (or with `subscription: null` remove) a Web Push subscription (`PushSubscription.toJSON()`).
+   * `id` is the paired device id, or `"browser"` for the PWA served by the local daemon.
+   */
   'device.pushSubscribe': { params: z.object({ id: z.string(), subscription: z.unknown() }), result: ok },
+  /** The daemon's VAPID public key (base64url), the `applicationServerKey` for `pushManager.subscribe`. */
+  'device.pushKey': { params: empty, result: z.object({ publicKey: z.string() }) },
+  /** Read (no `prefs`) or merge per-device notification categories. Unset categories default to on. */
+  'device.pushPrefs': {
+    params: z.object({ id: z.string(), prefs: z.partialRecord(PushCategory, z.boolean()).optional() }),
+    result: z.object({ id: z.string(), prefs: PushPrefs }),
+  },
 
   'identity.get': {
     params: empty,
@@ -594,7 +637,19 @@ export type ServerEvent =
   | { type: 'approval.updated'; approval: ApprovalView }
   | { type: 'channel.updated'; channel: ChannelView }
   | { type: 'audit'; event: AuditEvent }
-  | { type: 'panic'; active: boolean };
+  | { type: 'panic'; active: boolean }
+  /** Periodic, encrypted liveness beat from a cloud daemon to its owners and controllers (§9B). */
+  | {
+      type: 'daemon.heartbeat';
+      heartbeat: {
+        npub: string;
+        agent?: string;
+        at: string;
+        panic: boolean;
+        activeSessions: number;
+        version: string;
+      };
+    };
 
 // ───────────────────────────── JSON-RPC envelope ─────────────────────────────
 

@@ -66,6 +66,15 @@ export interface ControlServer {
 
 const ERR = { parse: -32700, invalidRequest: -32600, internal: -32603, app: -32000 } as const;
 
+/** A JSON-RPC 2.0 response (`result`/`error`, no `method`) or a notification (`method`, no `id`). */
+export const isResponseOrNotification = (m: unknown): boolean => {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) return false;
+  const o = m as Record<string, unknown>;
+  if (o.jsonrpc !== '2.0') return false;
+  if (!('method' in o)) return 'result' in o || 'error' in o;
+  return !('id' in o) || o.id === null;
+};
+
 export const createControlServer = (opts: ControlServerOptions): ControlServer => {
   const sk = decodeSecretKey(opts.key);
   const pubkey = getPublicKey(sk);
@@ -144,6 +153,9 @@ export const createControlServer = (opts: ControlServerOptions): ControlServer =
       );
       return;
     }
+    // JSON-RPC responses and notifications are never answered (a reply to a reply would let two
+    // daemons that share relays ping-pong error frames forever).
+    if (isResponseOrNotification(parsed)) return;
     const req = RpcRequest.safeParse(parsed);
     if (!req.success) {
       const id = (parsed as { id?: unknown })?.id;
