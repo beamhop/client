@@ -17,6 +17,14 @@ const escapeSlack = (s: string): string =>
 const escapeUrl = (u: string): string =>
   u.replace(/&/g, '&amp;').replace(/</g, '%3C').replace(/>/g, '%3E').replace(/\|/g, '%7C');
 
+/**
+ * Bounds for Markdown formatting. The inline passes are regex based and quadratic on a line full
+ * of unmatched openers (`**a **a …`), so a hostile or prompt-injected agent could stall the daemon
+ * with one large message. Longer lines, or longer messages, are sent unformatted (still escaped).
+ */
+export const MAX_FORMAT_LINE = 2_000;
+export const MAX_FORMAT_TOTAL = 200_000;
+
 const SAFE_SCHEME = /^(https?:|mailto:)/i;
 
 // Private-use sentinels for placeholders (never appear in normal text).
@@ -27,7 +35,8 @@ const convertInline = (text: string): string => {
   const slots: string[] = [];
   const hold = (s: string) => `${PH}${slots.push(s) - 1}${PH}`;
 
-  let s = text;
+  // Drop our sentinels from the input, so text cannot reference placeholder slots.
+  let s = text.replace(/[\uE000\uE001]/g, '');
   // Inline code spans: keep verbatim (escaped).
   s = s.replace(/(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/g, (_m, _t, code: string) =>
     hold(`\`${escapeSlack(code)}\``),
@@ -54,14 +63,23 @@ const convertInline = (text: string): string => {
   // Strikethrough ~~x~~ → ~x~
   s = s.replace(/~~(?=\S)([\s\S]*?\S)~~/g, '~$1~');
   s = s.replaceAll(BOLD, '*');
-  // Restore placeholders (may be nested inside link labels only once).
-  return s.replace(new RegExp(`${PH}(\\d+)${PH}`, 'g'), (_m, i: string) => slots[Number(i)] ?? '');
+  // Restore placeholders. A link label can hold a code-span placeholder, so repeat until none are
+  // left (slots only refer to earlier slots, so this ends after at most slots.length rounds).
+  const re = new RegExp(`${PH}(\\d+)${PH}`, 'g');
+  for (let round = 0; round <= slots.length && s.includes(PH); round++)
+    s = s.replace(re, (_m, i: string) => slots[Number(i)] ?? '');
+  return s.replaceAll(PH, '');
 };
 
 const isTableSep = (line: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);
 
 export const markdownToMrkdwn = (md: string): string => {
-  const lines = md.replace(/\r\n?/g, '\n').split('\n');
+  if (md.length > MAX_FORMAT_TOTAL) return escapeSlack(md);
+  // Our placeholder sentinels never appear in output, not even inside code blocks.
+  const lines = md
+    .replace(/[\uE000\uE001]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
   const out: string[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -109,6 +127,7 @@ const LINE_RULES: [RegExp, (m: RegExpExecArray) => string][] = [
 ];
 
 const convertLine = (line: string): string => {
+  if (line.length > MAX_FORMAT_LINE) return escapeSlack(line);
   for (const [re, fn] of LINE_RULES) {
     const m = re.exec(line);
     if (m) return fn(m);

@@ -1,4 +1,4 @@
-import type { Attachment, InboundMsg } from '@beamhop/core';
+import { type Attachment, type InboundMsg, safeFileName } from '@beamhop/core';
 import { decodeSlackEntities } from './mrkdwn.ts';
 
 /**
@@ -59,6 +59,12 @@ const CONTENT_SUBTYPES = new Set([undefined, 'file_share', 'thread_broadcast', '
 
 export const MESH_EVENT_TYPE = 'beamhop_mesh';
 
+/** Hard ceiling on a peer-supplied hop count (matches the Nostr channel). */
+const MAX_HOPS = 1000;
+
+/** Slack team / user / bot ids are short upper-case alphanumerics (T…, U…, W…, B…). */
+const SLACK_ID = /^[A-Za-z0-9]{1,32}$/;
+
 export interface NormalizeOptions {
   channelName: string;
   self: SlackSelf;
@@ -96,6 +102,7 @@ export const normalizeSlackMessage = (
   const isBot = ev.bot_id !== undefined || ev.subtype === 'bot_message';
   const senderId = ev.user ?? ev.bot_profile?.user_id ?? ev.bot_id;
   if (!senderId) return { ok: false, reason: 'no-sender' };
+  if (!SLACK_ID.test(senderId)) return { ok: false, reason: 'bad-sender' };
   if (isBot) {
     const peers = opts.meshPeers ?? new Set<string>();
     const peer = [ev.user, ev.bot_id, ev.bot_profile?.user_id].some(
@@ -105,8 +112,9 @@ export const normalizeSlackMessage = (
   }
 
   const team = ev.user_team ?? ev.team ?? envelope?.team_id ?? self.teamId;
+  if (!SLACK_ID.test(team)) return { ok: false, reason: 'bad-team' };
   const kind = slackConversationKind(ev);
-  const raw = ev.text ?? '';
+  const raw = typeof ev.text === 'string' ? ev.text : '';
   const selfMention = `<@${self.userId}>`;
   const mentionsAgent =
     ev.type === 'app_mention' || raw.includes(selfMention) || raw.includes(`<@${self.userId}|`);
@@ -120,8 +128,8 @@ export const normalizeSlackMessage = (
   const replyToAgent =
     ev.thread_ts !== undefined && ev.thread_ts !== ev.ts && ev.parent_user_id === self.userId;
 
-  const attachments: Attachment[] = (ev.files ?? []).map((f) => ({
-    name: f.name ?? f.title ?? f.id,
+  const attachments: Attachment[] = (Array.isArray(ev.files) ? ev.files : []).map((f) => ({
+    name: safeFileName(String(f.name ?? f.title ?? f.id)),
     mime: f.mimetype ?? 'application/octet-stream',
     ...(f.size !== undefined ? { size: f.size } : {}),
     // Requires the bot token to download; fetched through the broker (PLAN §3.3).
@@ -129,7 +137,10 @@ export const normalizeSlackMessage = (
   }));
 
   const hopsRaw = ev.metadata?.event_type === MESH_EVENT_TYPE ? ev.metadata.event_payload?.hops : undefined;
-  const hops = typeof hopsRaw === 'number' && Number.isInteger(hopsRaw) && hopsRaw >= 0 ? hopsRaw : 0;
+  const hops =
+    typeof hopsRaw === 'number' && Number.isInteger(hopsRaw) && hopsRaw >= 0
+      ? Math.min(hopsRaw, MAX_HOPS)
+      : 0;
 
   const displayName = opts.displayName ?? ev.bot_profile?.name ?? ev.username;
   const msg: InboundMsg = {

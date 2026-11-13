@@ -1,10 +1,19 @@
 // Browser-compatible.
 
 /**
+ * Bounds for Markdown formatting. The inline passes are regex based and quadratic on a line full
+ * of unmatched openers (`**a **a …`), so a hostile or prompt-injected agent could stall the daemon
+ * with one large message. Longer lines, or longer messages, are sent unformatted (still escaped).
+ */
+export const MAX_FORMAT_LINE = 2_000;
+export const MAX_FORMAT_TOTAL = 200_000;
+
+/**
  * Render Markdown for Nostr clients (§3.3): plain text, code fences kept verbatim,
  * unsupported inline formatting stripped. Inline `code` is kept since most clients show it fine.
  */
 export const renderNostrText = (md: string): string => {
+  if (md.length > MAX_FORMAT_TOTAL) return md.replace(/\r\n?/g, '\n').trim();
   const lines = md.replace(/\r\n?/g, '\n').split('\n');
   const out: string[] = [];
   let fence: string | undefined;
@@ -30,6 +39,7 @@ export const renderNostrText = (md: string): string => {
 };
 
 const renderLine = (line: string): string => {
+  if (line.length > MAX_FORMAT_LINE) return line;
   let l = line;
   // Horizontal rule
   if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) return '———';

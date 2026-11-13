@@ -8,6 +8,14 @@ export const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const escapeAttr = (s: string): string => escapeHtml(s).replace(/"/g, '&quot;');
 
+/**
+ * Bounds for Markdown formatting. The inline passes are regex based and quadratic on a line full
+ * of unmatched openers (`**a **a …`), so a hostile or prompt-injected agent could stall the daemon
+ * with one large message. Longer lines, or longer messages, are sent unformatted (still escaped).
+ */
+export const MAX_FORMAT_LINE = 2_000;
+export const MAX_FORMAT_TOTAL = 200_000;
+
 const SAFE_HREF = /^(https?:\/\/|tg:\/\/|mailto:)/i;
 const PH = '\uE000';
 
@@ -58,7 +66,12 @@ export const isBalanced = (html: string): boolean => {
 
 /** Convert agent Markdown to Telegram HTML. Output is always tag-balanced. */
 export const markdownToTelegramHtml = (md: string): string => {
-  const lines = md.replace(/\r\n?/g, '\n').split('\n');
+  if (md.length > MAX_FORMAT_TOTAL) return escapeHtml(md);
+  // The placeholder sentinel never reaches the output, not even inside code blocks.
+  const lines = md
+    .replace(/\uE000/g, '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
   const out: string[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -96,6 +109,7 @@ export const markdownToTelegramHtml = (md: string): string => {
 };
 
 const renderBlockLine = (line: string): string => {
+  if (line.length > MAX_FORMAT_LINE) return escapeHtml(line);
   const heading = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
   if (heading) return `<b>${renderInline(heading[1] ?? '')}</b>`;
   if (/^\s{0,3}([-*_])(\s*\1){2,}\s*$/.test(line)) return '──────────';

@@ -577,7 +577,14 @@ export interface PairingCodeRecord {
 
 export type PairingConsume =
   | { ok: true; record: PairingCodeRecord }
-  | { ok: false; reason: 'unknown' | 'expired' | 'used' };
+  | { ok: false; reason: 'unknown' | 'expired' | 'used' | 'too_many_attempts' };
+
+/**
+ * Wrong guesses tolerated per live code before it is burned. Every failed `consume` counts against
+ * all live codes of the purpose, because a guess cannot be attributed to one code: without this an
+ * unknown sender (or a stream of fresh Nostr keys) could guess `/pair` codes without limit.
+ */
+export const PAIRING_MAX_FAILURES = 10;
 
 /** Only a SHA-256 of each code is stored; lookups by hash don't leak timing about the code. */
 export const hashPairingCode = (code: string): string =>
@@ -595,11 +602,12 @@ export class PairingCodeRepo {
   constructor(
     private readonly db: Db,
     private readonly now: Now,
+    private readonly maxFailures = PAIRING_MAX_FAILURES,
   ) {}
 
   put(input: { code: string; purpose: string; expiresAt: string; data?: Record<string, unknown> }): void {
     this.db.run(
-      'INSERT OR REPLACE INTO pairing_codes (code_hash, purpose, created_at, expires_at, data) VALUES (?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO pairing_codes (code_hash, purpose, created_at, expires_at, data, attempts) VALUES (?, ?, ?, ?, ?, 0)',
       hashPairingCode(input.code),
       input.purpose,
       this.now().toISOString(),
@@ -608,15 +616,38 @@ export class PairingCodeRepo {
     );
   }
 
+  /** Count a wrong guess against every live code (of `purpose`, when given). */
+  private recordFailure(purpose: string | undefined, now: Date): void {
+    const at = now.toISOString();
+    if (purpose)
+      this.db.run(
+        'UPDATE pairing_codes SET attempts = attempts + 1 WHERE used_at IS NULL AND expires_at > ? AND purpose = ?',
+        at,
+        purpose,
+      );
+    else
+      this.db.run(
+        'UPDATE pairing_codes SET attempts = attempts + 1 WHERE used_at IS NULL AND expires_at > ?',
+        at,
+      );
+  }
+
   /** One-shot: marks the code used on success. Optionally require a purpose. */
   consume(code: string, purpose?: string): PairingConsume {
     return this.db.tx(() => {
       const h = hashPairingCode(code);
-      const r = this.db.get('SELECT * FROM pairing_codes WHERE code_hash = ?', h);
-      if (!r || (purpose && r.purpose !== purpose)) return { ok: false, reason: 'unknown' };
-      if (r.used_at) return { ok: false, reason: 'used' };
       const now = this.now();
+      const r = this.db.get('SELECT * FROM pairing_codes WHERE code_hash = ?', h);
+      if (!r || (purpose && r.purpose !== purpose)) {
+        this.recordFailure(purpose, now);
+        return { ok: false, reason: 'unknown' };
+      }
+      if (r.used_at) return { ok: false, reason: 'used' };
       if (now.getTime() >= Date.parse(r.expires_at as string)) return { ok: false, reason: 'expired' };
+      if (Number(r.attempts ?? 0) >= this.maxFailures) {
+        this.db.run('UPDATE pairing_codes SET used_at = ? WHERE code_hash = ?', now.toISOString(), h);
+        return { ok: false, reason: 'too_many_attempts' };
+      }
       this.db.run('UPDATE pairing_codes SET used_at = ? WHERE code_hash = ?', now.toISOString(), h);
       return {
         ok: true,

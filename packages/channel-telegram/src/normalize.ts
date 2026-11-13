@@ -1,6 +1,6 @@
 // Telegram update → normalized InboundMsg (§5 "Common mapping").
 
-import type { Attachment, InboundMsg } from '@beamhop/core';
+import { type Attachment, type InboundMsg, safeFileName } from '@beamhop/core';
 import { fileRef } from './api.ts';
 import type { TgChat, TgEntity, TgMessage, TgUser } from './types.ts';
 
@@ -93,7 +93,7 @@ export const extractAttachments = (m: TgMessage): Attachment[] => {
       (b.file_size ?? b.width * b.height) > (a.file_size ?? a.width * a.height) ? b : a,
     );
     const a: Attachment = {
-      name: `photo_${best.file_unique_id}.jpg`,
+      name: safeFileName(`photo_${best.file_unique_id}.jpg`),
       mime: 'image/jpeg',
       url: fileRef(best.file_id),
     };
@@ -103,7 +103,7 @@ export const extractAttachments = (m: TgMessage): Attachment[] => {
   if (m.document) {
     const d = m.document;
     const a: Attachment = {
-      name: d.file_name ?? `file_${d.file_unique_id}`,
+      name: safeFileName(d.file_name ?? `file_${d.file_unique_id}`),
       mime: d.mime_type ?? 'application/octet-stream',
       url: fileRef(d.file_id),
     };
@@ -120,12 +120,34 @@ export interface NormalizeOptions {
   includeRaw?: boolean;
 }
 
+const toIso = (unix: unknown): string => {
+  const d = new Date(typeof unix === 'number' ? unix * 1000 : Number.NaN);
+  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+};
+
 /** Returns undefined for messages with nothing to act on (service messages, etc.). */
 export const normalizeMessage = (m: TgMessage, o: NormalizeOptions): InboundMsg | undefined => {
   const text = m.text ?? m.caption ?? '';
   const entities = m.text !== undefined ? m.entities : m.caption_entities;
   const attachments = extractAttachments(m);
   if (!text && attachments.length === 0) return undefined;
+
+  // A message sent on behalf of a chat (a channel, or the group itself for anonymous admins) has
+  // `from` set to a shared service account (Channel_Bot 136817688, GroupAnonymousBot 1087968824,
+  // Telegram 777000). Those ids are shared by everyone posting that way, so the authenticated
+  // sender is `sender_chat`, never `from`.
+  const sender = m.sender_chat ? undefined : m.from;
+  const senderId = sender ? sender.id : m.sender_chat?.id;
+  // No attributable sender (or a malformed id): drop it rather than invent "telegram:unknown".
+  if (typeof senderId !== 'number' || !Number.isSafeInteger(senderId)) return undefined;
+  const from: InboundMsg['from'] = sender
+    ? { principal: principalOf(senderId), displayName: userName(sender), isBot: sender.is_bot === true }
+    : {
+        principal: principalOf(senderId),
+        displayName: chatTitle(m.sender_chat!) ?? '',
+        isBot: false,
+      };
+  if (from.displayName === '') delete from.displayName;
 
   const chatId = String(m.chat.id);
   const kind = conversationKind(m.chat);
@@ -142,18 +164,6 @@ export const normalizeMessage = (m: TgMessage, o: NormalizeOptions): InboundMsg 
     threadId = String(m.message_id);
   }
   o.threads.remember(chatId, m.message_id, threadId);
-
-  const sender = m.from;
-  const from: InboundMsg['from'] = sender
-    ? { principal: principalOf(sender.id), displayName: userName(sender), isBot: sender.is_bot }
-    : m.sender_chat
-      ? {
-          principal: principalOf(m.sender_chat.id),
-          displayName: chatTitle(m.sender_chat) ?? '',
-          isBot: false,
-        }
-      : { principal: principalOf('unknown'), isBot: false };
-  if (from.displayName === '') delete from.displayName;
 
   const conversation: InboundMsg['conversation'] = { kind, id: chatId };
   const title = chatTitle(m.chat);
@@ -172,7 +182,7 @@ export const normalizeMessage = (m: TgMessage, o: NormalizeOptions): InboundMsg 
     mentionsAgent: detectMention(text, entities, o.bot),
     replyToAgent: reply?.from?.id === o.bot.id,
     hops: 0,
-    receivedAt: new Date(m.date * 1000).toISOString(),
+    receivedAt: toIso(m.date),
   };
   // A reply to a topic's root service message isn't a real reply.
   if (reply && !(m.is_topic_message && reply.message_id === m.message_thread_id)) {

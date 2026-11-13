@@ -14,7 +14,6 @@ import {
 } from '@beamhop/core';
 import type { Event, EventTemplate, VerifiedEvent } from 'nostr-tools/core';
 import { minePow } from 'nostr-tools/nip13';
-import * as nip17 from 'nostr-tools/nip17';
 import * as nip19 from 'nostr-tools/nip19';
 import { createRumor, createSeal, createWrap } from 'nostr-tools/nip59';
 import { finalizeEvent, getPublicKey } from 'nostr-tools/pure';
@@ -34,7 +33,9 @@ import {
   tagValue,
   tagValues,
   threadRefs,
+  urlFileName,
 } from './tags.ts';
+import { type Rumor, unwrapGiftWrap } from './unwrap.ts';
 
 export const DEFAULT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.primal.net'];
 /** Live-subscription replay window (§ task: connect time minus 2 minutes). */
@@ -42,6 +43,13 @@ export const LIVE_GRACE_S = 120;
 const TWO_DAYS = 2 * 24 * 60 * 60;
 const MAX_TEXT_CHUNK = 12_000;
 export const PUBLIC_NOTES_PER_MINUTE = 6;
+/**
+ * Inbound events older than this are dropped even while the channel stays connected. Together with
+ * the connect-time bound this caps how far back a replayed event can reach once its id has fallen
+ * out of the in-memory dedupe set (§4 "replay protection"). The daemon's persistent dedupe
+ * (@beamhop/store `dedupe`) is the long-term guard.
+ */
+export const DEFAULT_MAX_EVENT_AGE_S = 24 * 60 * 60;
 
 export interface NostrGroupRef {
   relay: string;
@@ -60,6 +68,8 @@ export interface NostrChannelSettings {
   publicNotesPerMinute?: number;
   /** Publish a kind 10050 DM relay list on connect (default true). */
   publishDmRelays?: boolean;
+  /** Drop inbound events older than this many seconds (default 24 h). */
+  maxEventAgeS?: number;
 }
 
 export interface NostrChannelDeps {
@@ -128,6 +138,7 @@ export const parseSettings = (
     powDifficulty: Math.min(32, n(raw.powDifficulty, 0)),
     publicNotesPerMinute: n(raw.publicNotesPerMinute, PUBLIC_NOTES_PER_MINUTE),
     publishDmRelays: raw.publishDmRelays !== false,
+    maxEventAgeS: Math.max(60, n(raw.maxEventAgeS, DEFAULT_MAX_EVENT_AGE_S)),
   };
 };
 
@@ -176,7 +187,13 @@ class NostrConnection implements NostrConn {
   private readonly sk: Uint8Array;
   private readonly log: Logger;
   private readonly queue = new AsyncQueue<InboundMsg>();
-  private readonly seen = new SeenSet(10_000);
+  /** Ids of authenticated events (rumors, signed events) already delivered: the replay guard. */
+  private readonly seen = new SeenSet(50_000);
+  /**
+   * Gift-wrap ids, kept apart from `seen`: wraps are free to mint and are recorded before they can
+   * be authenticated, so a flood of junk wraps must not evict real message ids from `seen`.
+   */
+  private readonly wrapSeen = new SeenSet(20_000);
   private readonly sentIds = new SeenSet(5_000);
   private readonly threadOf = new LruMap<string, string>(10_000);
   private readonly authorOf = new LruMap<string, string>(10_000);
@@ -318,7 +335,13 @@ class NostrConnection implements NostrConn {
   }
 
   private tooOld(createdAt: number): boolean {
-    return createdAt < this.startedAt - LIVE_GRACE_S || createdAt > this.now() + 600;
+    const now = this.now();
+    return (
+      !Number.isFinite(createdAt) ||
+      createdAt < this.startedAt - LIVE_GRACE_S ||
+      createdAt < now - this.settings.maxEventAgeS ||
+      createdAt > now + 600
+    );
   }
 
   private expired(tags: string[][]): boolean {
@@ -348,10 +371,11 @@ class NostrConnection implements NostrConn {
   }
 
   private handleGiftWrap(wrap: Event): void {
-    if (!this.markSeen(wrap.id)) return;
-    let rumor: ReturnType<typeof nip17.unwrapEvent>;
+    if (!this.wrapSeen.add(wrap.id)) return;
+    let rumor: Rumor;
     try {
-      rumor = nip17.unwrapEvent(wrap, this.sk);
+      // Checks the seal signature, rumor author == seal signer, and the rumor id hash.
+      rumor = unwrapGiftWrap(wrap, this.sk);
     } catch (err) {
       this.log.debug('could not unwrap gift wrap', { error: String(err) });
       return;
@@ -375,7 +399,7 @@ class NostrConnection implements NostrConn {
       const mime = tagValue(rumor.tags, 'file-type') ?? 'application/octet-stream';
       text = '';
       if (/^https?:\/\//.test(rumor.content))
-        attachments.push({ name: rumor.content.split('/').pop() || 'file', mime, url: rumor.content });
+        attachments.push({ name: urlFileName(rumor.content), mime, url: rumor.content });
     }
     const subject = tagValue(rumor.tags, 'subject');
     this.emit({
@@ -648,7 +672,7 @@ class NostrConnection implements NostrConn {
     for (const r of results) this.ensureDelivered(r, 'DM');
     // Copy to self so other devices of this agent can see the history.
     const selfWrap = createWrap(createSeal(rumor, this.sk, this.pubkey), this.pubkey);
-    this.seen.add(selfWrap.id);
+    this.wrapSeen.add(selfWrap.id);
     this.pool.publish(selfWrap, { relays: this.mainRelays }).catch(() => {});
     this.recordSent(rumor.id, msg.threadId ?? msg.conversation.id);
     return { id: rumor.id };

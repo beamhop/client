@@ -91,6 +91,34 @@ const MIME_BY_EXT: Record<string, string> = {
   zip: 'application/zip',
 };
 
+/**
+ * Same rules as `safeFileName` in @beamhop/core (kept local: this module must stay browser-safe and
+ * may only type-import core): one path segment, no controls, no leading dot, at most 120 chars.
+ */
+const safeName = (name: string): string => {
+  const last = name.split(/[/\\]/).pop() ?? '';
+  let s = last
+    .normalize('NFC')
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}:*?"<>|]/gu, '_')
+    .trim()
+    .replace(/[. ]+$/, '');
+  if (!s || /^\.+$/.test(s)) return 'file';
+  if (s.startsWith('.') || /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i.test(s)) s = `_${s}`;
+  return Array.from(s).slice(0, 120).join('');
+};
+
+/** File name from a URL path; never throws on malformed percent-encoding, never contains a path. */
+export const urlFileName = (url: string): string => {
+  const last = url.split(/[?#]/)[0]?.split('/').pop() || 'file';
+  let name = last;
+  try {
+    name = decodeURIComponent(last);
+  } catch {
+    // keep the raw segment
+  }
+  return safeName(name);
+};
+
 const FILE_URL = /https?:\/\/[^\s<>"']+\.([a-z0-9]{2,5})(?=$|[\s?#)\]"'<>])/gi;
 
 /** Attachments from NIP-92 `imeta` tags plus bare file URLs in content. */
@@ -106,7 +134,7 @@ export const extractAttachments = (ev: { tags: Tags; content: string }): Attachm
     const url = fields.url;
     if (!url || !/^https?:\/\//.test(url)) continue;
     const a: Attachment = {
-      name: decodeURIComponent(url.split('/').pop()?.split('?')[0] || 'file'),
+      name: urlFileName(url),
       mime: fields.m ?? 'application/octet-stream',
       url,
     };
@@ -119,7 +147,7 @@ export const extractAttachments = (ev: { tags: Tags; content: string }): Attachm
     const ext = m[1]!.toLowerCase();
     const mime = MIME_BY_EXT[ext];
     if (!mime || byUrl.has(url)) continue;
-    byUrl.set(url, { name: decodeURIComponent(url.split('/').pop() || 'file'), mime, url });
+    byUrl.set(url, { name: urlFileName(url), mime, url });
   }
   return [...byUrl.values()];
 };
