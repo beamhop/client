@@ -112,12 +112,12 @@ export const IdentityCard = ({
   handle?: string;
   provider: string;
   note?: ReactNode;
-  tone?: 'go' | 'caution';
+  tone?: 'go' | 'caution' | 'neutral';
 }) => (
   <div
     className={cx(
       'flex items-start gap-3 rounded-lg border border-line px-4 py-3',
-      tone === 'go' ? 'bg-go-wash' : 'bg-caution-wash',
+      tone === 'go' ? 'bg-go-wash' : tone === 'neutral' ? 'bg-surface' : 'bg-caution-wash',
     )}
   >
     <LetterTile code={initials(name)} size={40} tone="ink" />
@@ -128,7 +128,7 @@ export const IdentityCard = ({
       <MetaLine items={[handle, provider].filter(Boolean) as string[]} />
       {note && <p className="mt-1 type-body-sm text-ink">{note}</p>}
     </div>
-    {tone === 'go' ? (
+    {tone === 'neutral' ? null : tone === 'go' ? (
       <CheckCircle size={22} weight="fill" className="shrink-0 text-go-text" aria-label="Valid" />
     ) : (
       <WarningCircle

@@ -48,7 +48,7 @@ import { Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { Banner, ErrorState } from '../../ui/States.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
 import { useToast } from '../../ui/Toast.tsx';
-import { type ChannelDraft, useDraft } from './draft.ts';
+import { type ChannelDraft, readDraft, useDraft } from './draft.ts';
 import { PairPanel } from './PairPanel.tsx';
 import { ExternalButton, IdentityCard, ScriptStep, StepHeading, WaitingLine } from './parts.tsx';
 import {
@@ -1232,6 +1232,11 @@ export const ChannelWizardScreen = () => {
   const name = wv?.displayName && provider !== 'nostr' ? wv.displayName : meta.name;
   const index = Math.min(steps.length - 1, Math.max(0, Number(step) - 1 || 0));
   const { draft, patch, reset } = useDraft(provider);
+  // Only when this page was opened onto a half-finished setup (not while clicking through it).
+  const [resumed] = useState(() => {
+    const d = readDraft(provider);
+    return !!d?.channel && d.step === Number(step);
+  });
   const channels = channelsQ.data?.channels ?? [];
   const channel = draft.channel ? channels.find((c) => c.config.name === draft.channel) : undefined;
   const [footer, setFooter] = useState<HTMLElement | null>(null);
@@ -1365,7 +1370,6 @@ export const ChannelWizardScreen = () => {
 
   const stepLabels = steps.map(label);
   const current = auto ?? index;
-  const resumed = draft.step > 1 && index + 1 === draft.step && !!draft.channel;
 
   return (
     <Screen

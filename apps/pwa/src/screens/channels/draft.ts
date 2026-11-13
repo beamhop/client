@@ -64,10 +64,17 @@ export const clearDraft = (provider: string) => {
 /** Drafts older than a day are stale (pair codes expire after 10 min; tokens may have been reset). */
 const FRESH_MS = 24 * 60 * 60 * 1000;
 
+/** Worth offering to resume: something happened beyond opening a step. */
+export const hasProgress = (d: ChannelDraft): boolean =>
+  !!d.channel || !!d.values.openedCreate || (d.checklist?.length ?? 0) > 0 || !!d.values.relay;
+
 export const listDrafts = (providers: string[]): ChannelDraft[] =>
   providers
     .map(readDraft)
-    .filter((d): d is ChannelDraft => !!d && Date.now() - new Date(d.updatedAt).getTime() < FRESH_MS)
+    .filter(
+      (d): d is ChannelDraft =>
+        !!d && Date.now() - new Date(d.updatedAt).getTime() < FRESH_MS && hasProgress(d),
+    )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
 export const useDrafts = (providers: string[]): ChannelDraft[] => {

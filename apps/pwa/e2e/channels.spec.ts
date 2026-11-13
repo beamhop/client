@@ -22,7 +22,7 @@ const open = async (page: Page, path: string) => {
 const axe = async (page: Page) => {
   // React Aria's LiveAnnouncer briefly injects labelled role=img nodes into its own off-screen log region.
   const r = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .exclude('[role="log"][aria-live] > [role="img"]')
     .analyze();
   const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
@@ -68,10 +68,10 @@ test('channel detail: identity, owners, memberships with undo, remove', async ({
   await expect(page.getByText('telegram:7712345')).toBeVisible();
   await axe(page);
   await shot(page, 'channels_tg', info.project.name);
-  await page.getByRole('button', { name: /Remove reviewer from tg:group\/-100123/ }).click();
+  await page.getByRole('button', { name: /Leave: reviewer on tg:group\/-100123/ }).click();
   await expect(page.getByText(/reviewer left/).first()).toBeVisible();
   await page.getByRole('button', { name: 'Undo' }).click();
-  await expect(page.getByRole('button', { name: /Remove reviewer from tg:group\/-100123/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Leave: reviewer on tg:group\/-100123/ })).toBeVisible();
   await page.getByRole('button', { name: 'Remove channel' }).click();
   const dlg = page.getByRole('alertdialog', { name: 'Remove @reviewer_alice_bot?' });
   await expect(dlg).toContainText('stop listening here');
@@ -188,4 +188,24 @@ test('discord create step: checklist + portal link; nostr relay step checks NIP-
   await page.getByRole('button', { name: 'groups.fiatjaf.com' }).click();
   await expect(page.getByText(/supports NIP-29 groups/)).toBeVisible();
   await axe(page);
+});
+
+test('dark screenshots of channels + harnesses for review', async ({ page }, info) => {
+  test.skip(!process.env.BH_SHOTS, 'screenshots only with BH_SHOTS=1');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  for (const [path, name] of [
+    ['/channels', 'channels-dark'],
+    ['/channels/tg', 'channels_tg-dark'],
+    ['/channels/nostr', 'channels_nostr-dark'],
+    ['/channels/add', 'channels_add-dark'],
+    ['/channels/add/slack/1', 'channels_add_slack_1-dark'],
+    ['/harnesses', 'harnesses-dark'],
+  ] as const) {
+    await open(page, path);
+    await shot(page, name, info.project.name);
+  }
+  await open(page, '/channels/add/telegram/2');
+  await page.getByLabel('Bot token', { exact: true }).fill(tgToken());
+  await expect(page.getByText('reviewer (beamhop)')).toBeVisible();
+  await shot(page, 'channels_add_telegram_2-dark', info.project.name);
 });

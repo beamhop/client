@@ -29,7 +29,7 @@ import { SecretField } from '../../ui/Field.tsx';
 import { Badge, Eyebrow, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
-import { SignalBars, StatusDot } from '../../ui/Status.tsx';
+import { RouteLine, SignalBars, StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { agentsOn, channelLampWithPanic, channelTitle } from './ChannelsScreen.tsx';
 import { PairPanel } from './PairPanel.tsx';
@@ -315,6 +315,29 @@ export const ChannelDetailScreen = () => {
           </ErrorState>
         ) : (
           <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+            <RouteLine
+              nodes={[
+                {
+                  label: isNostr ? t('channels.detail.routeRelays', { count: up.size }) : meta.name,
+                  kind: 'channel',
+                },
+                {
+                  label: (() => {
+                    const names = [...new Set(members.map((x) => x.agent.config.name))];
+                    return names.length === 0
+                      ? t('channels.detail.routeNobody')
+                      : names.length === 1
+                        ? names[0]!
+                        : t('channels.detail.routeMany', { first: names[0]!, count: names.length - 1 });
+                  })(),
+                  kind: 'agent',
+                },
+              ]}
+              reverse
+              live={c.status === 'connected' && members.some((x) => x.agent.status === 'busy')}
+              state={c.status === 'connected' || c.status === 'connecting' ? 'ok' : 'broken'}
+              reason={c.status === 'disconnected' ? t('channels.detail.routeDown') : undefined}
+            />
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               <StatusDot
                 state={lamp}
@@ -346,7 +369,7 @@ export const ChannelDetailScreen = () => {
               name={c.self.displayName}
               handle={c.self.handle}
               provider={meta.name}
-              tone={c.status === 'error' ? 'caution' : 'go'}
+              tone={c.status === 'error' ? 'caution' : 'neutral'}
             />
             <div className="mt-2 flex min-w-0 items-center gap-1 rounded-md bg-sunken pl-3">
               <MetaLine items={[{ value: c.self.principal, truncate: 36 }]} className="flex-1 py-2" />
