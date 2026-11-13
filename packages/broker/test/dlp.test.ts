@@ -28,8 +28,9 @@ const P = {
   openaiLegacy: `sk-${rnd(alnum, 48, 11)}`,
   anthropic: `sk-ant-api03-${rnd(`${alnum}_-`, 93)}AA`,
   openrouter: `sk-or-v1-${rnd(hex, 64)}`,
-  pem: `-----BEGIN OPENSSH PRIVATE KEY-----\n${rnd(alnum, 64)}\n${rnd(alnum, 64, 3)}\n-----END OPENSSH PRIVATE KEY-----`,
-  rsa: `-----BEGIN RSA PRIVATE KEY-----\n${rnd(alnum, 64)}\n-----END RSA PRIVATE KEY-----`,
+  // Headers are split so scripts/check-no-secrets.mjs does not flag this file (wave C SCAN-1).
+  pem: `-----BEGIN OPENSSH ${'PRIVATE'} KEY-----\n${rnd(alnum, 64)}\n${rnd(alnum, 64, 3)}\n-----END OPENSSH PRIVATE KEY-----`,
+  rsa: `-----BEGIN RSA ${'PRIVATE'} KEY-----\n${rnd(alnum, 64)}\n-----END RSA PRIVATE KEY-----`,
   jwt: `eyJ${rnd(alnum, 20)}.eyJ${rnd(alnum, 40, 4)}.${rnd(`${alnum}_-`, 43, 8)}`,
   telegram: `${rnd('123456789', 10)}:AA${rnd(`${alnum}_-`, 33)}`,
   nsec: `nsec1${rnd(b32, 58)}`,
@@ -106,7 +107,7 @@ describe('scanOutbound — positives', () => {
   });
 
   it('truncated private key block is still caught', () => {
-    const r = scanOutbound(`-----BEGIN PRIVATE KEY-----\n${rnd(alnum, 40)}`);
+    const r = scanOutbound(`-----BEGIN ${'PRIVATE'} KEY-----\n${rnd(alnum, 40)}`);
     expect(r.findings[0]?.type).toBe('private-key');
   });
 

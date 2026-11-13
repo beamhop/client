@@ -28,6 +28,16 @@ export const RULES = [
   { id: 'nostr-nsec', re: /\bnsec1[02-9ac-hj-np-z]{58}\b/ },
   { id: 'telegram-bot-token', re: /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/ },
   { id: 'hetzner-token', re: /\bhcloud_[A-Za-z0-9]{64}\b/ },
+  // Review wave C SCAN-1: kinds the first version missed.
+  {
+    id: 'private-key-pem',
+    re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----/,
+  },
+  { id: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
+  { id: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { id: 'gitlab-pat', re: /\bglpat-[A-Za-z0-9_-]{20}\b/ },
+  { id: 'stripe-secret-key', re: /\b[sr]k_live_[A-Za-z0-9]{24,}\b/ },
+  { id: 'fly-token', re: /\bFlyV1 fm[12]_[A-Za-z0-9+/=_-]{40,}/ },
 ];
 
 const ALLOW = 'check-no-secrets: allow';
@@ -55,7 +65,10 @@ const BINARY = new Set([
   '.blob',
   '.exe',
 ]);
-const MAX_BYTES = 2 * 1024 * 1024;
+// Bigger files and long lines (minified bundles, lockfiles, snapshots) used to be skipped
+// entirely, which hid any secret in them (review wave C SCAN-1). Every rule starts with a literal
+// prefix, so scanning long lines stays linear.
+const MAX_BYTES = 32 * 1024 * 1024;
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
@@ -68,7 +81,7 @@ export const scanText = (text) => {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    if (l.length > 20000 || l.includes(ALLOW)) continue;
+    if (l.includes(ALLOW)) continue;
     for (const { id, re } of RULES) {
       const m = re.exec(l);
       if (m) out.push({ line: i + 1, rule: id, sample: mask(m[0]) });
@@ -77,11 +90,22 @@ export const scanText = (text) => {
   return out;
 };
 
-const isText = (buf) => !buf.subarray(0, 8000).includes(0);
+/** UTF-16 text (BOM) is decoded instead of being mistaken for binary because of its NUL bytes. */
+const decode = (buf) => {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder('utf-16le').decode(buf);
+  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder('utf-16be').decode(buf);
+  return buf.subarray(0, 8000).includes(0) ? undefined : buf.toString('utf8');
+};
 
 const scanBuffer = (name, buf, findings) => {
-  if (BINARY.has(extname(name).toLowerCase()) || buf.length > MAX_BYTES || !isText(buf)) return;
-  for (const f of scanText(buf.toString('utf8'))) findings.push({ file: name, ...f });
+  if (BINARY.has(extname(name).toLowerCase())) return;
+  if (buf.length > MAX_BYTES) {
+    findings.push({ file: name, line: 0, rule: 'too-large-to-scan', sample: `${buf.length} bytes` });
+    return;
+  }
+  const text = decode(buf);
+  if (text === undefined) return;
+  for (const f of scanText(text)) findings.push({ file: name, ...f });
 };
 
 const main = () => {
