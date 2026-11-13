@@ -158,6 +158,25 @@ describe('control plane over nostr', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('never answers JSON-RPC responses or notifications (no reply ping-pong)', async () => {
+    await startServer();
+    await client();
+    for (const payload of [
+      { jsonrpc: '2.0', id: 'x', result: { ok: true } },
+      { jsonrpc: '2.0', id: 'y', error: { code: -32600, message: 'invalid request' } },
+      { jsonrpc: '2.0', method: 'event', params: { type: 'panic', active: true } },
+    ])
+      R.inject(buildControlEvents(phone.secretKey, daemon.pubkey, payload)[0]!, false);
+    // A real request afterwards still gets its (only) reply.
+    R.inject(
+      buildControlEvents(phone.secretKey, daemon.pubkey, { jsonrpc: '2.0', id: 1, method: 'ping' })[0]!,
+      false,
+    );
+    await waitFor(() => calls.length === 1);
+    await sleep(100);
+    expect(R.received.filter((e) => e.pubkey === daemon.pubkey)).toHaveLength(1);
+  });
+
   it('pushes server events to allowlisted clients', async () => {
     const server = await startServer();
     const c = await client();
