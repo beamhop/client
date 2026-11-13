@@ -31,3 +31,4 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 - 01:30 — sandbox/broker, store/authz, Slack/Discord merged: 500 tests green. Daemon builder + security reviewer launched.
 - 02:00 — Nostr, harnesses, deploy, security wave A merged: 742 tests green. Review wave B (channels/authz fuzzing) running. Daemon integrating everything.
 - 02:10 — Daemon merged: 802 tests green. Real CLI↔daemon smoke OK (status/doctor/harness/agent/join/policy/panic/audit). Found gaps → onboarding+identity builder, connectivity+live E2E builder launched.
+- 02:30 — Core loop proven live end-to-end on public Nostr relays inside srt. Review wave B merged. 875 tests green.
