@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * E2E against the production build served by `vite preview` (mock daemon via `?mock=1`).
  * `pnpm test:e2e` builds first. Projects: mobile (390×844 touch) and desktop (1280×800), chromium only.
  */
-const PORT = 4173;
+const PORT = Number(process.env.PW_PORT ?? 4173);
 
 export default defineConfig({
   testDir: 'e2e',

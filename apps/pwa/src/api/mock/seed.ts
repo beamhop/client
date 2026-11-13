@@ -8,6 +8,7 @@ import {
   AgentConfig,
   type AgentConfigInput,
   type AgentView,
+  type AlertRulesPatch,
   type ApprovalView,
   type AuditEvent,
   ChannelConfig,
@@ -97,6 +98,13 @@ export interface MockState {
   roles: RoleDef[];
   grants: Record<string, string>;
   owners: string[];
+  /** Linked identities (person → principals), like config `people`. */
+  people: Record<string, string[]>;
+  updates: { catalogAuto: boolean; appPrompt: boolean };
+  /** Config `approvals.quorum`. */
+  quorum: number;
+  /** Config `alerts` (a patch over the defaults). */
+  alerts: AlertRulesPatch;
   policies: Map<string, { profile: string; effective: SandboxPolicy }>;
   doctor: DoctorCheck[];
 }
@@ -1360,6 +1368,11 @@ export const seed = (now = Date.now()): MockState => {
     roles: DEFAULT_ROLES,
     grants: { [BOB.principal]: 'admin', 'telegram:5551': 'user', 'slack:T01ACME/U02BOB': 'user' },
     owners: [OWNER.principal],
+    // The local client (this browser) is alice: whoami → person "alice", votes show "alice".
+    people: { alice: ['local:owner', OWNER.principal, 'telegram:5551'] },
+    updates: { catalogAuto: true, appPrompt: true },
+    quorum: 1,
+    alerts: {},
     policies,
     doctor,
   };

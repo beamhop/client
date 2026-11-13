@@ -17,6 +17,7 @@ import {
 } from '@beamhop/authz';
 import {
   type AgentConfig,
+  type ApprovalRule,
   type ApprovalView,
   BeamhopError,
   type ChannelConn,
@@ -26,6 +27,7 @@ import {
   type PermissionDecision,
 } from '@beamhop/core';
 import { type Daemon, LOCAL_OWNER } from './daemon.ts';
+import { buildRule, cleanReason, ruleMatches, withRule } from './rules.ts';
 import type { LiveSession, Turn } from './sessions.ts';
 import { errMsg } from './util.ts';
 
@@ -39,20 +41,47 @@ interface Waiter {
 }
 
 const ACCESS_DENIED_COOLDOWN_MS = 24 * 3600_000;
-/** Default commit/undo window for approval decisions. */
+
+/** Options of an `approval.decide` vote. */
+export interface DecideOptions {
+  /** Persist an "always allow" rule for this agent (`rule`, or the exact request). */
+  always?: boolean;
+  /** Allow this tool for the rest of the session. */
+  session?: boolean;
+  /** With `always`: the policy value (`bash:<prefix>`, host / `*.domain`, file or `dir/`). */
+  rule?: string;
+  /** With a deny: short reason, stored, audited and passed to the agent. */
+  reason?: string;
+  grantRole?: string;
+}
+
+/** A daemon action held until an approval settles (e.g. `session.openPr` pushing a branch). */
+export interface ActionRequest {
+  agent: string;
+  sessionId: string;
+  requestedBy: ApprovalView['requestedBy'];
+  tool: string;
+  title: string;
+  input: unknown;
+  risk: ApprovalView['risk'];
+  run: () => Promise<void>;
+}
+
+/** Default commit/undo window before a decision reaches the agent (JOURNEYS §2.6: the PWA's 5 s toast). */
 export const APPROVAL_UNDO_MS = 5_000;
 
 export class ApprovalManager {
   private readonly waiters = new Map<string, Waiter>();
   private readonly settleTimers = new Map<string, NodeJS.Timeout>();
   private readonly grants = new Map<string, string>();
-  /** Deny reasons given with the decision (passed to the agent when the decision settles). */
-  private readonly reasons = new Map<string, string>();
   private readonly settled = new Set<string>();
+  /** "Always" rules waiting for their approval to settle. */
+  private readonly rules = new Map<string, ApprovalRule>();
+  /** Daemon actions waiting for their approval to settle. */
+  private readonly actions = new Map<string, ActionRequest['run']>();
 
   constructor(private readonly d: Daemon) {}
 
-  /** The commit window before a decision reaches the agent (JOURNEYS §2.6: 5 s, the PWA's undo toast). */
   get undoMs(): number {
     return this.d.opts.approvalUndoMs ?? APPROVAL_UNDO_MS;
   }
@@ -92,8 +121,27 @@ export class ApprovalManager {
     }
   }
 
-  private view(s: ApprovalState): ApprovalView {
-    return ApprovalPolicy.toView(s);
+  /** Name shown for a voter: the linked person, or the principal. */
+  private voterName(principal: string): string {
+    const n = normalizePrincipal(principal);
+    for (const [person, ps] of Object.entries(this.d.global().people))
+      if (ps.some((p) => normalizePrincipal(p) === n)) return person;
+    return principal;
+  }
+
+  /** API view: quorum (when more than one approval is needed) and the votes cast so far. */
+  view(s: ApprovalState): ApprovalView {
+    const v = ApprovalPolicy.toView(s);
+    const q = this.policy(this.agentOf(s.agent)).quorumFor(s);
+    if (q.needed > 1) v.quorum = q;
+    if (s.votes?.length)
+      v.votes = s.votes.map((x) => ({ by: this.voterName(x.by), allow: x.allow, at: x.at }));
+    return v;
+  }
+
+  /** Stored deny reason of an approval, if any. */
+  reasonOf(id: string): string | undefined {
+    return this.d.store.kv.get<string>('approval-reason', id);
   }
 
   // ───────────────────────────── tool permissions ─────────────────────────────
@@ -129,6 +177,21 @@ export class ApprovalManager {
     const always = toolNameVariants(ev.tool).some((v) => live.alwaysAllow.has(v));
     if (check.decision === 'allow' || always) {
       record(always ? 'allowed (always for this session)' : 'allowed');
+      return { allow: true };
+    }
+    const rule = (agent.approvalRules ?? []).find((r) =>
+      ruleMatches(r, { tool: ev.tool, input: ev.input, role: role.name }),
+    );
+    if (rule) {
+      record(`allowed (always rule ${rule.kind} ${rule.value})`);
+      d.audit({
+        type: 'tool.allowed.rule',
+        severity: 'info',
+        summary: `Allowed ${ev.tool} for ${turn.from.principal} (${role.name}) by rule ${rule.kind} ${rule.value}`,
+        actor: `agent:${agent.name}`,
+        agent: agent.name,
+        data: { tool: ev.tool, role: role.name, rule: rule.value, kind: rule.kind, session: live.id },
+      });
       return { allow: true };
     }
     const id = newId('apr');
@@ -260,16 +323,58 @@ export class ApprovalManager {
 
   // ───────────────────────────── decisions ─────────────────────────────
 
-  async decide(
-    id: string,
-    by: string,
-    allow: boolean,
-    opts: { always?: boolean; session?: boolean; rule?: string; reason?: string; grantRole?: string },
-  ): Promise<ApprovalView> {
+  /**
+   * Hold a daemon action behind an approval; `run` executes once the approval settles as approved
+   * (after the undo window). Denied, expired or cancelled actions never run.
+   */
+  async requestAction(req: ActionRequest): Promise<ApprovalView> {
+    const d = this.d;
+    const agent = this.agentOf(req.agent);
+    const state = this.policy(agent).create({
+      id: newId('apr'),
+      agent: req.agent,
+      sessionId: req.sessionId,
+      requestedBy: req.requestedBy,
+      tool: req.tool,
+      title: req.title,
+      input: req.input,
+      risk: req.risk,
+    });
+    d.store.approvals.put(state);
+    this.actions.set(state.id, req.run);
+    d.emit({ type: 'approval.created', approval: this.view(state) });
+    d.audit({
+      type: 'approval.requested',
+      severity: 'info',
+      summary: `${req.requestedBy.principal} asks to run ${req.tool} for ${req.agent}`,
+      actor: req.requestedBy.principal,
+      agent: req.agent,
+      data: { approval: state.id, tool: req.tool, risk: req.risk, session: req.sessionId },
+    });
+    await this.notify(state);
+    return this.view(state);
+  }
+
+  async decide(id: string, by: string, allow: boolean, opts: DecideOptions): Promise<ApprovalView> {
     const d = this.d;
     const state = d.store.approvals.get(id);
     if (!state) throw new BeamhopError('not_found', `approval ${id} not found`);
     const agent = this.agentOf(state.agent);
+    const reason = allow ? undefined : cleanReason(opts.reason);
+    if (opts.rule !== undefined && !opts.always)
+      throw new BeamhopError('invalid_input', '`rule` needs `always: true`');
+    let rule: ApprovalRule | undefined;
+    if (allow && opts.always) {
+      if (state.kind !== 'tool' || this.actions.has(id))
+        throw new BeamhopError('invalid_input', 'only tool requests can be allowed always');
+      // Validated before the vote counts: an invalid rule leaves the approval pending.
+      rule = buildRule({ tool: state.tool, input: state.input, role: state.requestedBy.role }, opts.rule, {
+        at: new Date(d.now()).toISOString(),
+        by,
+      });
+    }
+    if (allow && opts.session && (state.kind !== 'tool' || this.actions.has(id)))
+      throw new BeamhopError('invalid_input', 'only tool requests can be allowed for the session');
     const policy = this.policy(agent);
     const res = policy.decide(state, by, allow);
     if (!res.ok) {
@@ -299,18 +404,20 @@ export class ApprovalManager {
     }
     d.store.approvals.put(res.state);
     const w = this.waiters.get(id);
-    // `session` (PWA "Allow for this session") and `always` both allow the tool for the rest of
-    // the session; there is no persistent per-command rule in the config yet.
     if (w && allow && (opts.always || opts.session)) w.always = true;
+    if (rule) this.rules.set(id, rule);
+    if (reason) d.store.kv.set('approval-reason', id, reason);
     if (opts.grantRole) this.grants.set(id, opts.grantRole);
-    const reason = opts.reason?.trim();
-    if (!allow && reason) this.reasons.set(id, reason.slice(0, 500));
-    else this.reasons.delete(id);
     d.emit({ type: 'approval.updated', approval: this.view(res.state) });
+    const scope = rule
+      ? ` always (${rule.kind} ${rule.value})`
+      : allow && opts.session
+        ? ' for the session'
+        : '';
     d.audit({
       type: 'approval.vote',
       severity: 'security',
-      summary: `${by} ${allow ? 'approved' : 'denied'} ${res.state.tool} for ${state.agent}${res.final ? '' : ' (waiting for quorum)'}`,
+      summary: `${by} ${allow ? 'approved' : 'denied'} ${res.state.tool} for ${state.agent}${scope}${reason ? `: ${reason}` : ''}${res.final ? '' : ' (waiting for quorum)'}`,
       actor: by,
       agent: state.agent,
       data: {
@@ -318,10 +425,9 @@ export class ApprovalManager {
         allow,
         final: res.final,
         status: res.state.status,
-        ...(opts.always ? { always: true } : {}),
         ...(opts.session ? { session: true } : {}),
-        ...(opts.rule ? { rule: opts.rule } : {}),
-        ...(!allow && reason ? { reason: reason.slice(0, 500) } : {}),
+        ...(rule ? { always: true, rule: rule.value, ruleKind: rule.kind } : {}),
+        ...(reason ? { reason } : {}),
       },
     });
     if (res.final) this.scheduleSettle(res.state);
@@ -410,21 +516,59 @@ export class ApprovalManager {
       this.grants.delete(state.id);
       return;
     }
+    const action = this.actions.get(state.id);
+    if (action) {
+      this.actions.delete(state.id);
+      if (allow)
+        await action().catch((e) => {
+          this.d.audit({
+            type: 'action.failed',
+            severity: 'warn',
+            summary: `${state.title} failed: ${errMsg(e)}`,
+            actor: 'beamhopd',
+            agent: state.agent,
+            data: { approval: state.id, tool: state.tool },
+          });
+          try {
+            this.d.sessions.event(state.sessionId, {
+              kind: 'error',
+              text: `${state.title} failed: ${errMsg(e)}`,
+            });
+          } catch {
+            /* session purged */
+          }
+        });
+      return;
+    }
     const w = this.waiters.get(state.id);
-    const reason = this.reasons.get(state.id);
-    this.reasons.delete(state.id);
+    const rule = this.rules.get(state.id);
+    this.rules.delete(state.id);
+    if (allow && rule) {
+      try {
+        this.d.config.agents.update(state.agent, (a) => withRule(a, rule));
+        this.d.audit({
+          type: 'approval.rule',
+          severity: 'security',
+          summary: `Always allow ${rule.kind} ${rule.value} (${rule.tool}${rule.role ? `, role ${rule.role}` : ''}) on ${state.agent}`,
+          actor: state.decidedBy ?? 'unknown',
+          agent: state.agent,
+          data: { approval: state.id, ...rule },
+        });
+        this.d.emitAgent(state.agent);
+      } catch (e) {
+        this.d.log.warn('could not persist approval rule', { error: errMsg(e) });
+      }
+    }
     if (allow && w?.always) {
       const live = this.d.sessions.live(state.sessionId);
       for (const v of toolNameVariants(state.tool)) live?.alwaysAllow.add(v);
     }
+    const reason = this.reasonOf(state.id);
     this.finish(
       state,
       allow
         ? { allow: true, ...(w?.always ? { always: true } : {}) }
-        : {
-            allow: false,
-            reason: `denied by ${state.decidedBy ?? 'owner'}${reason ? `: ${reason}` : ''}`,
-          },
+        : { allow: false, reason: `denied by ${state.decidedBy ?? 'owner'}${reason ? `: ${reason}` : ''}` },
     );
   }
 
@@ -462,7 +606,9 @@ export class ApprovalManager {
     const t = this.settleTimers.get(id);
     if (t) clearTimeout(t);
     this.settleTimers.delete(id);
-    this.reasons.delete(id);
+    this.rules.delete(id);
+    d.store.kv.delete('approval-reason', id);
+    // An undone "allow for session" must not stick to the re-decided vote.
     const w = this.waiters.get(id);
     if (w) w.always = false;
     d.store.approvals.put(res.state);
@@ -491,6 +637,8 @@ export class ApprovalManager {
         agent: a.agent,
         data: { approval: a.id },
       });
+      this.actions.delete(a.id);
+      this.rules.delete(a.id);
       this.finish(a, { allow: false, reason: 'denied: timed out' });
     }
   }
@@ -517,6 +665,21 @@ export class ApprovalManager {
 
   denyAll(reason: string): void {
     for (const w of [...this.waiters.values()]) this.cancelSession(w.sessionId, reason);
+    // Held actions (e.g. a branch push) are cancelled too.
+    for (const id of [...this.actions.keys()]) {
+      this.actions.delete(id);
+      const st = this.d.store.approvals.get(id);
+      if (st?.status === 'pending' || st?.status === 'approved') {
+        const next = {
+          ...st,
+          status: 'denied' as const,
+          decidedAt: new Date(this.d.now()).toISOString(),
+          decidedBy: 'system:stop',
+        };
+        this.d.store.approvals.put(next);
+        this.d.emit({ type: 'approval.updated', approval: this.view(next) });
+      }
+    }
   }
 
   dispose(): void {

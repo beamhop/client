@@ -32,6 +32,24 @@ export const agentConnName = (channel: string, agent: string): string => `${chan
 export const isAgentKeyed = (cfg: ChannelConfig): boolean =>
   cfg.provider === 'nostr' && cfg.settings.agentKeys === true;
 
+/** An owner paired through `/pair` on a channel (`settings.pairings`, non-secret). */
+export interface ChannelPairing {
+  principal: string;
+  displayName: string;
+  handle?: string;
+  role: string;
+  pairedAt: string;
+}
+
+/** A group chat / channel the bot is known to be in (`settings.chats`). */
+export interface ChannelChat {
+  /** `<kind>/<conversation id>`, the membership target suffix. */
+  target: string;
+  title: string;
+}
+
+const MAX_CHATS = 200;
+
 export class ChannelManager {
   private readonly entries = new Map<string, Entry>();
 
@@ -102,6 +120,64 @@ export class ChannelManager {
   private emit(name: string): void {
     const cfg = this.entries.get(name)?.cfg ?? this.d.config.channels.get(name);
     if (cfg) this.d.emit({ type: 'channel.updated', channel: this.view(cfg) });
+  }
+
+  /** Update a channel's stored config (settings bookkeeping) and broadcast `channel.updated`. */
+  private patchSettings(
+    channel: string,
+    fn: (s: Record<string, unknown>) => Record<string, unknown> | undefined,
+  ) {
+    const cur = this.d.config.channels.get(channel);
+    if (!cur) return;
+    const next = fn(cur.settings);
+    if (!next) return;
+    const saved = this.d.config.channels.update(channel, (c) => ({ ...c, settings: next }));
+    for (const e of this.entries.values()) if (e.cfg.name === channel) e.cfg = saved;
+    this.d.emit({ type: 'channel.updated', channel: this.view(saved) });
+  }
+
+  /** Record (or refresh) an owner pairing on the channel. */
+  recordPairing(channel: string, p: ChannelPairing): void {
+    this.patchSettings(channel, (s) => {
+      const prev = Array.isArray(s.pairings) ? (s.pairings as ChannelPairing[]) : [];
+      return { ...s, pairings: [...prev.filter((x) => x?.principal !== p.principal), p] };
+    });
+  }
+
+  /** Drop pairings of a principal on every channel (owner removed). */
+  forgetPairings(isRemoved: (principal: string) => boolean): void {
+    for (const c of this.d.config.channels.list())
+      this.patchSettings(c.name, (s) => {
+        const prev = Array.isArray(s.pairings) ? (s.pairings as ChannelPairing[]) : [];
+        const next = prev.filter((x) => !isRemoved(x?.principal ?? ''));
+        return next.length === prev.length ? undefined : { ...s, pairings: next };
+      });
+  }
+
+  /** Remember a group/channel conversation the bot received a message in (only writes on change). */
+  noteChat(channel: string, kind: string, id: string, title?: string): void {
+    if ((kind !== 'group' && kind !== 'channel') || !id) return;
+    const target = `${kind}/${id}`;
+    const name = (title ?? '').trim().slice(0, 120) || id;
+    this.patchSettings(channel, (s) => {
+      const prev = Array.isArray(s.chats) ? (s.chats as ChannelChat[]) : [];
+      const old = prev.find((c) => c?.target === target);
+      if (old && (old.title === name || !title)) return undefined;
+      const rest = prev.filter((c) => c?.target !== target);
+      return {
+        ...s,
+        chats: [...rest, { target, title: old && !title ? old.title : name }].slice(-MAX_CHATS),
+      };
+    });
+  }
+
+  /** The bot left (or was removed from) a conversation. */
+  forgetChat(channel: string, id: string): void {
+    this.patchSettings(channel, (s) => {
+      const prev = Array.isArray(s.chats) ? (s.chats as ChannelChat[]) : [];
+      const next = prev.filter((c) => c?.target?.slice(c.target.indexOf('/') + 1) !== id);
+      return next.length === prev.length ? undefined : { ...s, chats: next };
+    });
   }
 
   /** Secrets for a channel, keyed by wizard field id (`channel.<name>.<field>` in the vault). */
@@ -240,32 +316,6 @@ export class ChannelManager {
         this.emit(entry.cfg.name);
       }
     }
-  }
-
-  /**
-   * Record an owner pairing on the channel (`settings.pairings`, non-secret) and push
-   * `channel.updated`, so a PWA waiting on the pairing step sees it live.
-   */
-  recordPairing(channel: string, p: { principal: string; displayName?: string; handle?: string }): void {
-    const cfg = this.d.config.channels.get(channel);
-    if (!cfg) return;
-    const prev = Array.isArray(cfg.settings.pairings)
-      ? (cfg.settings.pairings as { principal?: unknown }[]).filter((x) => x?.principal !== p.principal)
-      : [];
-    const pairing = {
-      principal: p.principal,
-      displayName: p.displayName ?? p.principal,
-      ...(p.handle ? { handle: p.handle } : {}),
-      role: 'owner',
-      pairedAt: new Date(this.d.now()).toISOString(),
-    };
-    const next = this.d.config.channels.save({
-      ...cfg,
-      settings: { ...cfg.settings, pairings: [...prev, pairing].slice(-20) },
-    });
-    const e = this.entries.get(channel);
-    if (e) e.cfg = next;
-    this.d.emit({ type: 'channel.updated', channel: this.view(next) });
   }
 
   /** A channel secret (`channel.<name>.<field>`) was replaced: track the ref and reconnect. */

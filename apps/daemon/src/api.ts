@@ -25,10 +25,12 @@ import {
   type ScheduleConfig,
 } from '@beamhop/core';
 import { compilePolicy, probeSandbox } from '@beamhop/sandbox';
+import { INSTRUCTION_FILES, type MoreMethod, moreHandlers } from './api-more.ts';
 import { channelSecretName } from './channels.ts';
 import { type Daemon, LOCAL_OWNER, VERSION } from './daemon.ts';
 import { isInternalSecret } from './home.ts';
 import { type CallContext, createDispatcher, type Handler, type Handlers } from './rpc-server.ts';
+import { suggestionValue, withPolicyValue } from './rules.ts';
 import { webhookSecretName } from './schedules.ts';
 import { stripRecord } from './sessions.ts';
 import { errMsg } from './util.ts';
@@ -42,16 +44,6 @@ const deepMerge = (a: unknown, b: unknown): unknown => {
   for (const [k, v] of Object.entries(b as Record<string, unknown>)) out[k] = deepMerge(out[k], v);
   return out;
 };
-
-const INSTRUCTION_FILES: { file: string; harness: string }[] = [
-  { file: 'CLAUDE.md', harness: 'claude' },
-  { file: '.claude/CLAUDE.md', harness: 'claude' },
-  { file: 'AGENTS.md', harness: 'codex' },
-  { file: 'GEMINI.md', harness: 'gemini' },
-  { file: '.codex/config.toml', harness: 'codex' },
-  { file: '.pi/SYSTEM.md', harness: 'pi' },
-  { file: 'opencode.json', harness: 'opencode' },
-];
 
 export class ApiHandlers {
   private dispatcher: ReturnType<typeof createDispatcher> | undefined;
@@ -217,7 +209,7 @@ export class ApiHandlers {
 
   handlers(): Handlers {
     const d = this.d;
-    const h: { [M in MethodName]: Handler<M> } = {
+    const h: { [M in Exclude<MethodName, MoreMethod>]: Handler<M> } = {
       // ── system ──
       'system.status': async () => {
         const g = d.global();
@@ -681,13 +673,15 @@ export class ApiHandlers {
       },
 
       // ── approvals ──
-      'approval.list': async ({ status }) => ({ approvals: d.store.approvals.list({ status }) }),
-      'approval.decide': async ({ id, allow, always, session, rule, reason, grantRole }, ctx) =>
+      'approval.list': async ({ status }) => ({
+        approvals: d.store.approvals.listStates({ status }).map((s) => d.approvals.view(s)),
+      }),
+      'approval.decide': async ({ id, allow, always, grantRole, session, rule, reason }, ctx) =>
         d.approvals.decide(id, this.principal(ctx), allow, {
           always,
           ...(session ? { session } : {}),
-          ...(rule ? { rule } : {}),
-          ...(reason ? { reason } : {}),
+          ...(rule !== undefined ? { rule } : {}),
+          ...(reason !== undefined ? { reason } : {}),
           ...(grantRole ? { grantRole } : {}),
         }),
       'approval.undo': async ({ id }, ctx) => d.approvals.undo(id, this.principal(ctx)),
@@ -784,6 +778,7 @@ export class ApiHandlers {
               : c.nostr,
         }));
         d.refreshControlAllowlist();
+        d.channels.forgetPairings((p) => normalizePrincipal(p) === n);
         d.audit({
           type: 'owner.remove',
           severity: 'security',
@@ -820,34 +815,32 @@ export class ApiHandlers {
       'policy.suggestions': async ({ name }) => ({
         suggestions: d.store.policySuggestions.list(name ? { agent: name } : {}),
       }),
-      'policy.applySuggestion': async ({ id, accept }, ctx) => {
+      'policy.applySuggestion': async ({ id, accept, value }, ctx) => {
         const s = d.store.policySuggestions.get(id);
         if (!s) throw new BeamhopError('not_found', `suggestion ${id} not found`);
+        if (value !== undefined && !accept)
+          throw new BeamhopError('invalid_input', '`value` only applies when accepting');
+        // Validated before anything changes: widened hosts/dirs must cover the suggestion, never
+        // an always-denied path. Paths are validated even without `value`.
+        const v = accept
+          ? value !== undefined
+            ? suggestionValue(s.kind, s.value, value)
+            : s.kind === 'net.allow'
+              ? s.value
+              : suggestionValue(s.kind, s.value, s.value)
+          : s.value;
         d.store.policySuggestions.resolve(id, accept);
         if (accept) {
-          d.config.agents.update(s.agent, (a) => {
-            const pol = (a.sandbox.policy ?? {}) as Record<string, Record<string, string[]>>;
-            const [sect, key] =
-              s.kind === 'net.allow'
-                ? ['net', 'allow']
-                : s.kind === 'fs.read'
-                  ? ['fs', 'read']
-                  : ['fs', 'write'];
-            const cur = pol[sect!] ?? {};
-            const list = [...new Set([...(cur[key!] ?? []), s.value])];
-            return {
-              ...a,
-              sandbox: { ...a.sandbox, policy: { ...pol, [sect!]: { ...cur, [key!]: list } } as never },
-            };
-          });
+          d.config.agents.update(s.agent, (a) => withPolicyValue(a, s.kind, v));
           d.emitAgent(s.agent);
         }
         d.audit({
           type: 'policy.suggestion',
           severity: 'security',
-          summary: `${accept ? 'Accepted' : 'Rejected'} sandbox suggestion ${s.kind} ${s.value} for ${s.agent}`,
+          summary: `${accept ? 'Accepted' : 'Rejected'} sandbox suggestion ${s.kind} ${v}${v !== s.value ? ` (suggested ${s.value})` : ''} for ${s.agent}`,
           actor: this.principal(ctx),
           agent: s.agent,
+          data: { kind: s.kind, value: v, suggested: s.value },
         });
         return OK;
       },
@@ -965,7 +958,7 @@ export class ApiHandlers {
       'deploy.plan': async (p) => {
         const dep = this.requireDeployer(p.provider);
         const a = d.agent(p.agent);
-        return dep.plan({ ...p, harnesses: [a.harness] });
+        return dep.plan(this.deploySpec(p, a));
       },
       'deploy.apply': async (p, ctx) => {
         d.assertNotPanic();
@@ -974,8 +967,9 @@ export class ApiHandlers {
         // The one-time provisioning key must exist before the host is created (its pubkey goes into
         // the host's environment); without the nostr package the deployer reports the gap itself.
         await d.remotes.provisioningKey(a.name).catch(() => undefined);
-        const res = await dep.apply({ ...p, harnesses: [a.harness] });
-        const plan = await dep.plan({ ...p, harnesses: [a.harness] }).catch(() => undefined);
+        const spec = this.deploySpec(p, a);
+        const res = await dep.apply(spec);
+        const plan = await dep.plan(spec).catch(() => undefined);
         const rec = d.store.deployments.upsert({
           id: res.id,
           provider: res.provider,
@@ -1195,7 +1189,34 @@ export class ApiHandlers {
         return { deleted: r.deleted };
       },
     };
-    return h as Handlers;
+    const more = moreHandlers(d, { principal: (ctx) => this.principal(ctx) });
+    return { ...h, ...more.handlers } as Handlers;
+  }
+
+  /** DeploySpec from deploy.plan/apply params: mount choices must name the agent's own mounts. */
+  private deploySpec(
+    p: import('@beamhop/core').ParsedParams<'deploy.plan'>,
+    a: import('@beamhop/core').AgentConfig,
+  ): import('@beamhop/core').DeploySpec {
+    const { mounts, harnessAuth, ...rest } = p;
+    if (mounts) {
+      const known = new Set(a.mounts.flatMap((m) => [m.path, expandHome(m.path)]));
+      for (const m of mounts)
+        if (!known.has(m.path) && !known.has(expandHome(m.path)))
+          throw new BeamhopError('invalid_input', `${m.path} is not a mount of ${a.name}`);
+      const seen = new Set<string>();
+      for (const m of mounts) {
+        const k = expandHome(m.path);
+        if (seen.has(k)) throw new BeamhopError('invalid_input', `${m.path} is listed twice`);
+        seen.add(k);
+      }
+    }
+    return {
+      ...rest,
+      harnesses: [a.harness],
+      ...(mounts ? { mounts } : {}),
+      harnessAuth: harnessAuth ?? a.harnessAuth,
+    };
   }
 }
 

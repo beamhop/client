@@ -128,6 +128,7 @@ const deployIndex = createRoute({ getParentRoute: () => deploy, path: '/' });
 const deployNew = createRoute({
   getParentRoute: () => deploy,
   path: 'new',
+  staticData: { hideTabBar: true },
   component: lazy(() => import('./screens/deploy/NewDeployScreen.tsx'), 'NewDeployScreen'),
 });
 const deployment = createRoute({
