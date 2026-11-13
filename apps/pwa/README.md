@@ -38,7 +38,8 @@ public/boot.js        sets data-theme/contrast/motion before paint (external: da
 - **Transport choice** (`connection.ts`): `#token=…` in the URL → saved to localStorage, stripped from the URL →
   WebSocket to the local daemon (`location.origin`, or `?daemon=<url>`). `?mock=1` (sticky per tab) or no token →
   in-browser **mock daemon**. `?still=1` freezes the mock's timers. `?mockFail=channel.list,agent.get` makes those
-  methods fail (error states). `?mock=0` forgets the sticky mock. Hosted/Nostr: interface only (`nostr.ts`).
+  methods fail (error states). `?mock=0` forgets the sticky mock. A saved daemon → hosted mode (below). Nothing at
+  all → mock in dev builds, `kind: 'none'` (pair prompt, `useConnection().needsPairing`) in production builds.
 - **Hooks** (`hooks.ts`) — the only way screens talk to the daemon:
 
   ```ts
@@ -59,6 +60,35 @@ public/boot.js        sets data-theme/contrast/motion before paint (external: da
   `daemon.ts` implements **every** method in `@beamhop/core` `methods` (params validated with the real zod schemas,
   real error codes, 5 s undo window), `sim.ts` streams sessions, adds approvals, expires them, flickers relays.
   Console: `__beamhop.mock.daemon.state`, `__beamhop.runtime.client.call('system.panic')`.
+
+## Hosted mode (`src/api/hosted.ts`)
+
+The hosted copy (app.beamhop.dev) reaches daemons over the encrypted Nostr control plane (PLAN §4, §9 Hosting).
+Boot order (`connection.ts`): `?mock=1` > `#token=` > **active saved daemon → Nostr** > stored token > dev mock / `none`.
+
+- **Transport** (`nostr.ts`): `@beamhop/client` Transport over `createControlClient` (device key) or a signer
+  client (`signer-client.ts`, NIP-07). Reconnect with backoff (RelayPool) + immediate retry on the `online` event;
+  requests wait in a bounded queue while offline / no relay is up / the response subscription is not live yet
+  (control events are ephemeral) and are never re-sent once published. Transport failures reject with
+  `RpcError(-32000, { code: 'timeout' | 'unavailable' | 'offline' | 'closed' | 'signer_unavailable' })`.
+  `useConnection().hosted` = `{ relays[{url,connected}], up, total, daemon: 'unknown'|'reachable'|'unreachable'|'unpaired', queued, identity, daemonNpub }`
+  for the connection pill/sheet. Loaded lazily (`hosted-lazy.ts`) so nostr-tools stays out of the main chunk —
+  import hosted APIs from `api/hosted.ts`, not `api/index.ts`.
+- **Pairing** (`pairing.ts`): `usePairing()` reads `/pair#<payload>` (then strips it from the URL; kept in
+  sessionStorage for reloads), creates the device key, exposes the 4-word safety phrase, runs `completePairing`,
+  polls `device.list` until paired / rejected / expired, and saves `{ daemonNpub, relays }` as the active daemon.
+  `?mock=1` or `DEMO_PAIRING_PAYLOAD` runs a simulated flow (`?mockPair=rejected|expired`). The phone cannot see a
+  "No" pressed on the computer after it answered — that ends as `expired` when the 5-minute confirm window closes.
+- **Saved daemons** (`daemons.ts`, localStorage `bh.daemons`, public data only): `useDaemons()` →
+  `{ daemons, active, switchTo(id), remove(id), rename(id, name) }`; switching reloads the app into that daemon.
+  `remove` only forgets locally — call `device.remove` on the daemon first.
+- **Device key** (`device-key.ts`): generated on first use, stored in IndexedDB (`beamhop` / `keys` / `device`).
+  ⚠ WebCrypto has no secp256k1, so the key cannot be a non-extractable CryptoKey. We encrypt it with a
+  non-extractable AES-GCM key kept in the same record (protects profile backups / disk dumps), but any script on
+  this origin can still use it: keep the strict CSP and no third-party scripts, and remove lost devices in
+  Settings → Devices (§7A). The key is never logged or sent anywhere.
+- **Signers** (`signer.ts`): device key (default), NIP-07 (`hasNip07()`, needs `window.nostr.nip44`), NIP-46 bunker
+  (`parseBunkerUrl` works; `nip46Signer` is a TODO stub).
 
 ## Adding / building a screen
 
