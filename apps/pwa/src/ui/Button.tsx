@@ -1,7 +1,7 @@
 /**
  * Buttons (DESIGN §9.1). One primary per view. Allow and Deny differ in shape (fill vs outline), not only hue.
  */
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, type ReactNode, useEffect, useRef } from 'react';
 import {
   OverlayArrow,
   Button as RACButton,
@@ -11,7 +11,9 @@ import {
   Tooltip,
   TooltipTrigger,
 } from 'react-aria-components';
+import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
+import { announce } from '../lib/live.ts';
 import { HopMeter } from './glyphs/index.tsx';
 
 export type ButtonVariant =
@@ -70,8 +72,11 @@ export interface ButtonProps extends Omit<RACButtonProps, 'className' | 'childre
 }
 
 /**
- * Pending state: the label is replaced by three animated hop bars, width is locked, `aria-busy` is set
- * (RAC `isPending` keeps the button focusable and announces progress).
+ * Pending state: the label is replaced by three animated hop bars, width is locked, `aria-busy` and
+ * `aria-disabled` are set and presses are ignored, but the button stays focusable.
+ * We do not use RAC's `isPending`: it announces through a `role="img"` node labelled by the button's
+ * id, which dangles (axe: role-img-alt) once the button unmounts — e.g. a sheet that closes on success.
+ * Progress is announced as plain text in our own polite live region instead.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -84,29 +89,58 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       className,
       children,
       isPending,
+      onPress,
+      onPressStart,
+      onPressEnd,
+      onPressChange,
+      onPressUp,
       ...rest
     },
     ref,
-  ) => (
-    <RACButton
-      ref={ref}
-      {...rest}
-      isPending={isPending}
-      aria-busy={isPending || undefined}
-      className={buttonClass(variant, size, cx(fullWidth && 'w-full', className))}
-    >
-      <span className={cx('inline-flex items-center gap-[inherit]', isPending && 'opacity-0')}>
-        {icon}
-        {children}
-        {trailing}
-      </span>
-      {isPending && (
-        <span className="absolute inset-0 grid place-items-center" aria-hidden="true">
-          <HopMeter up={3} total={3} busy tone="ink" className="text-current [&>span]:bg-current!" />
+  ) => {
+    const own = useRef<HTMLButtonElement | null>(null);
+    const was = useRef(!!isPending);
+    useEffect(() => {
+      const el = own.current;
+      if (was.current !== !!isPending && el && document.activeElement === el) {
+        const name = el.getAttribute('aria-label') || el.textContent?.trim() || '';
+        announce(isPending ? t('a11y.busy', { name }) : t('a11y.done', { name }));
+      }
+      was.current = !!isPending;
+    }, [isPending]);
+    const press = isPending ? {} : { onPress, onPressStart, onPressEnd, onPressChange, onPressUp };
+    return (
+      <RACButton
+        ref={(el) => {
+          own.current = el;
+          if (typeof ref === 'function') ref(el);
+          else if (ref) ref.current = el;
+        }}
+        {...rest}
+        {...press}
+        aria-busy={isPending || undefined}
+        aria-disabled={isPending || rest['aria-disabled'] || undefined}
+        data-pending={isPending || undefined}
+        type={rest.type === 'submit' && isPending ? 'button' : rest.type}
+        className={buttonClass(
+          variant,
+          size,
+          cx(fullWidth && 'w-full', 'data-[pending]:cursor-wait', className),
+        )}
+      >
+        <span className={cx('inline-flex items-center gap-[inherit]', isPending && 'opacity-0')}>
+          {icon}
+          {children}
+          {trailing}
         </span>
-      )}
-    </RACButton>
-  ),
+        {isPending && (
+          <span className="absolute inset-0 grid place-items-center" aria-hidden="true">
+            <HopMeter up={3} total={3} busy tone="ink" className="text-current [&>span]:bg-current!" />
+          </span>
+        )}
+      </RACButton>
+    );
+  },
 );
 Button.displayName = 'Button';
 
