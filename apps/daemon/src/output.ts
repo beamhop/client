@@ -79,6 +79,9 @@ export class ReplyStreamer {
   private render(final: boolean): string {
     let body = this.text.trim();
     if (!final) {
+      // Never show a half-streamed token: a secret split across deltas must be complete before DLP sees it.
+      const cut = Math.max(body.lastIndexOf(' '), body.lastIndexOf('\n'));
+      body = cut >= 0 ? body.slice(0, cut).trimEnd() : '';
       if (body.length > MAX_LIVE_CHARS) body = `…${body.slice(-MAX_LIVE_CHARS)}`;
       const tail = this.progress ? `\n\n_${this.progress}_` : '';
       return `${body || '…'}${tail}${body ? ' ▍' : ''}`;
