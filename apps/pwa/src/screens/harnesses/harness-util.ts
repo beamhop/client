@@ -1,5 +1,5 @@
 /** Pure helpers for the Harnesses screen (unit-tested). */
-import type { HarnessView } from '@beamhop/core';
+import { type HarnessView, type InstallManager, installCommand } from '@beamhop/core';
 
 export type Os = 'mac' | 'linux' | 'windows';
 
@@ -15,7 +15,7 @@ export const detectOs = (
 };
 
 export interface InstallOption {
-  manager: 'npm' | 'brew' | 'winget';
+  manager: InstallManager;
   label: string;
   command: string;
 }
@@ -30,7 +30,7 @@ const LABEL: Record<InstallOption['manager'], string> = { npm: 'npm', brew: 'Hom
 /** Install commands that make sense on `os`, best first. */
 export const installOptions = (h: Pick<HarnessView, 'install'>, os: Os): InstallOption[] =>
   ORDER[os]
-    .map((m) => ({ manager: m, label: LABEL[m], command: h.install?.[m] ?? '' }))
+    .map((m) => ({ manager: m, label: LABEL[m], command: installCommand(m, h.install?.[m] ?? '') }))
     .filter((o) => o.command.length > 0);
 
 /** OSes for which this harness has at least one command. */

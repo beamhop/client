@@ -12,7 +12,7 @@
  * PatternFly wizard review step, https://www.patternfly.org/components/wizard/design-guidelines). Redundant entry
  * avoided (WCAG 3.3.7): the name is prefilled from the preset and never asked twice.
  */
-import type { HarnessView, Mount } from '@beamhop/core';
+import { type HarnessView, installCommand, type Mount } from '@beamhop/core';
 import { ArrowClockwise, ArrowLeft, Check, PencilSimple } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
@@ -182,7 +182,11 @@ const HarnessStep = ({
             h.status === 'needs-login'
               ? loginCommand(h)
               : h.status === 'not-installed' || h.status === 'unsupported-version'
-                ? (h.install?.npm ?? h.install?.brew)
+                ? h.install?.npm
+                  ? installCommand('npm', h.install.npm)
+                  : h.install?.brew
+                    ? installCommand('brew', h.install.brew)
+                    : undefined
                 : undefined;
           return (
             <Radio

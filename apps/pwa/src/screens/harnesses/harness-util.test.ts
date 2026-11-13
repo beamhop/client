@@ -8,7 +8,7 @@ import {
   supportedOses,
 } from './harness-util.ts';
 
-const copilot = { install: { npm: 'npm i -g @github/copilot', brew: 'brew install copilot-cli' } };
+const copilot = { install: { npm: '@github/copilot', brew: 'copilot-cli' } };
 
 describe('harness helpers', () => {
   it('detects the OS from UA hints', () => {
@@ -21,6 +21,13 @@ describe('harness helpers', () => {
     expect(installOptions(copilot, 'mac').map((o) => o.manager)).toEqual(['brew', 'npm']);
     expect(installOptions(copilot, 'linux').map((o) => o.manager)).toEqual(['npm', 'brew']);
     expect(installOptions(copilot, 'windows').map((o) => o.manager)).toEqual(['npm']);
+    expect(installOptions(copilot, 'mac').map((o) => o.command)).toEqual([
+      'brew install copilot-cli',
+      'npm i -g @github/copilot',
+    ]);
+    expect(installOptions({ install: { winget: 'GitHub.Copilot' } }, 'windows')[0]?.command).toBe(
+      'winget install --id GitHub.Copilot -e',
+    );
     expect(supportedOses({ install: { winget: 'winget install x' } })).toEqual(['windows']);
     expect(supportedOses({})).toEqual([]);
   });

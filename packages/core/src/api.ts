@@ -77,6 +77,23 @@ export const HarnessView = z.object({
 });
 export type HarnessView = z.infer<typeof HarnessView>;
 
+/** Package managers the harness catalog lists packages for. */
+export type InstallManager = 'npm' | 'brew' | 'winget';
+
+/**
+ * The shell command that installs `pkg` with `manager`. The catalog stores package names/ids only
+ * (`@google/gemini-cli`, `gemini-cli`, `GitHub.Copilot`); an entry that is already a full command
+ * is returned as-is.
+ */
+export const installCommand = (manager: InstallManager, pkg: string): string => {
+  const p = pkg.trim();
+  if (!p) return '';
+  const prefix = { npm: 'npm i -g ', brew: 'brew install ', winget: 'winget install --id ' }[manager];
+  const head = { npm: /^npm\s/, brew: /^brew\s/, winget: /^winget\s/ }[manager];
+  if (head.test(p)) return p;
+  return manager === 'winget' ? `${prefix}${p} -e` : `${prefix}${p}`;
+};
+
 export const ChannelView = z.object({
   config: ChannelConfig,
   status: z.enum(['connected', 'connecting', 'disconnected', 'error', 'disabled']),

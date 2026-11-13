@@ -5,7 +5,7 @@
  */
 import { resolve } from 'node:path';
 import type { BeamhopClient } from '@beamhop/client';
-import type { HarnessView } from '@beamhop/core';
+import { type HarnessView, installCommand } from '@beamhop/core';
 import pc from 'picocolors';
 import QRCode from 'qrcode';
 
@@ -141,9 +141,9 @@ const harnessHint = (h: HarnessView): string => {
   if (h.status === 'not-installed') {
     const i = h.install;
     const opts = [
-      i?.npm && `npm i -g ${i.npm}`,
-      i?.brew && `brew install ${i.brew}`,
-      i?.winget,
+      i?.npm && installCommand('npm', i.npm),
+      i?.brew && installCommand('brew', i.brew),
+      i?.winget && installCommand('winget', i.winget),
       i?.url,
     ].filter(Boolean);
     return opts.length ? `install: ${opts.join('  |  ')}` : 'not installed';
