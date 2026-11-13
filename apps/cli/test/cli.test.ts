@@ -224,7 +224,9 @@ describe('cli', () => {
     await t.run('agent', 'add', 'bot', '--harness', 'claude', '--mount', '/does/not/exist-beamhop');
     const out = t.out.join('\n');
     expect(out).toContain('mount /does/not/exist-beamhop does not exist');
-    expect(out).toContain('Claude Code is not logged in (run `claude /login`)');
+    expect(out).toContain(
+      'Claude Code is not logged in (run `claude /login`); that is fine once beamhop holds',
+    );
     expect(out).toContain('beamhop session start bot');
   });
 

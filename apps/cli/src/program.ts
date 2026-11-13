@@ -394,9 +394,13 @@ export const buildProgram = (deps: CliDeps): Command => {
             .catch(() => null);
           if (h === undefined)
             warnings.push(`harness "${o.harness}" is not known; \`beamhop harness ls\` lists the ids`);
+          else if (h?.status === 'needs-login')
+            warnings.push(
+              `${h.displayName} is not logged in${h.message ? ` (${h.message})` : ''}; that is fine once beamhop holds the provider key (\`beamhop doctor\` checks LLM API keys)`,
+            );
           else if (h && h.status !== 'ready')
             warnings.push(
-              `${h.displayName} is ${{ 'needs-login': 'not logged in', 'not-installed': 'not installed' }[h.status as string] ?? h.status}${h.message ? ` (${h.message})` : ''}; sessions will fail until it is ready`,
+              `${h.displayName} is ${{ 'not-installed': 'not installed' }[h.status as string] ?? h.status}${h.message ? ` (${h.message})` : ''}; sessions will fail until it is ready`,
             );
           return {
             data: a,
@@ -967,7 +971,12 @@ export const buildProgram = (deps: CliDeps): Command => {
     .action(
       act(async (c, name: string, o: { fromEnv?: string }) => {
         const value = o.fromEnv ? io.env[o.fromEnv] : (await io.readStdin()).replace(/\r?\n$/, '');
-        if (!value) throw new Error('empty secret value');
+        if (!value)
+          throw new Error(
+            o.fromEnv
+              ? `environment variable ${o.fromEnv} is empty or not set`
+              : 'empty secret value (pipe it in, e.g. `printenv MY_KEY | beamhop secret set NAME`, or use --from-env)',
+          );
         return { data: await c.call('secret.set', { name, value }), human: () => `stored ${name}` };
       }),
     );

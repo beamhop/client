@@ -32,6 +32,16 @@ describe('API coverage', () => {
     const doc = await env.client.call('system.doctor');
     expect(doc.checks.some((c) => c.id.startsWith('sandbox'))).toBe(true);
     expect(doc.checks.some((c) => c.id === 'harness.any')).toBe(true);
+    const keys = () =>
+      env!.client.call('system.doctor').then((r) => r.checks.find((c) => c.id === 'llm.keys'));
+    expect((await keys())?.status).toBe('skip');
+    await env.client.call('agent.create', { config: { name: 'k', harness: 'fake' } });
+    expect(await keys()).toMatchObject({
+      status: 'warn',
+      fix: expect.stringContaining('beamhop secret set'),
+    });
+    await env.client.call('secret.set', { name: 'ANTHROPIC_API_KEY', value: 'x'.repeat(8) });
+    expect(await keys()).toMatchObject({ status: 'ok', message: 'set: ANTHROPIC_API_KEY' });
     await env.client.call('system.panic', { reason: 'x' });
     expect((await env.client.call('system.status')).panic).toBe(true);
     expect(env.d.store.audit.query({ type: 'panic' })).toHaveLength(1);
@@ -183,6 +193,7 @@ describe('harnesses, channels, memberships', () => {
     expect(login.fix).toContain('Log in to claude (run `claude /login`)');
     expect(harnessCheck([h('codex', 'not-installed')]).fix).toContain('Install a harness');
     expect(harnessCheck([h('pi', 'ready')])).toMatchObject({ status: 'ok', message: 'ready: pi' });
+    expect(harnessCheck([h('claude', 'needs-login')], true).status).toBe('ok');
   });
 });
 

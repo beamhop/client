@@ -56,7 +56,9 @@ beamhop daemon
 
 The daemon keeps everything in `~/.beamhop` (override with `BEAMHOP_HOME`) and listens only on
 `127.0.0.1:7878` (`BEAMHOP_PORT`). The CLI reads its token from `~/.beamhop/api-token`. Leave it running;
-use your OS's service manager (systemd user unit, launchd agent) if you want it at login.
+use your OS's service manager (systemd user unit, launchd agent) if you want it at login. Ctrl-C stops it.
+If the port is taken, start it with `BEAMHOP_PORT=<port> beamhop daemon` and use the same `BEAMHOP_PORT` (and
+`BEAMHOP_HOME`, if you changed it) for every other `beamhop` command.
 
 Secret storage: the OS keychain (macOS Keychain, Windows Credential Manager, libsecret on Linux). On a
 headless Linux box without a keychain, set `BEAMHOP_VAULT_PASSPHRASE` to use the encrypted file vault;
@@ -78,8 +80,21 @@ beamhop init
 | 06 Hello    | the agent sends you a Nostr DM; reply from your phone (the PWA or any NIP-17 Nostr client signed in as your owner key) |
 | 07 Next     | pointers to channels, NIP-05 and cloud                                                         |
 
-Headless: `beamhop init --yes --agent-name helper --harness claude --mount ~/code/app --no-pair --no-hello`.
-`beamhop init --help` lists every flag.
+Headless: `beamhop init --yes --agent-name helper --harness claude --mount ~/code/app:ro`. With `--yes`,
+pairing and the hello round trip only run if you add `--pair` / `--hello`. `beamhop init --help` lists every
+flag.
+
+### Give it a model key
+
+Agents reach their model only through beamhop's local broker, which adds the real key. Store it once:
+
+```bash
+beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY   # Claude Code
+beamhop secret set OPENAI_API_KEY --from-env OPENAI_API_KEY         # Codex
+beamhop secret set OPENROUTER_API_KEY                               # or paste it on stdin
+```
+
+`beamhop doctor` shows which keys are set (never their values).
 
 ## 4. Talk to it
 
@@ -90,6 +105,9 @@ beamhop session start helper "what's in this repo?"
 beamhop session ls
 beamhop session show <id>
 ```
+
+Or open the web UI: `beamhop ui` prints a `http://127.0.0.1:…/#token=…` link to open in your browser. The
+link carries your access token, so don't paste it anywhere.
 
 From your phone: DM the agent's npub (shown by `beamhop agent show helper`) from a Nostr client, or add a
 Telegram/Slack/Discord bot — see [channels.md](channels.md). In a group, the agent answers only when it is

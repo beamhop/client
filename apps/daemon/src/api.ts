@@ -41,7 +41,7 @@ const OK = { ok: true as const };
  * The doctor's harness line: a short summary (ready / needs login / not installed) and a fix that
  * matches the situation — log in to an installed harness before suggesting a new install.
  */
-export const harnessCheck = (hs: HarnessView[]): DoctorCheck => {
+export const harnessCheck = (hs: HarnessView[], brokerHasKey = false): DoctorCheck => {
   const by = (s: HarnessView['status']) => hs.filter((h) => h.status === s);
   const ready = by('ready');
   const login = by('needs-login');
@@ -58,9 +58,17 @@ export const harnessCheck = (hs: HarnessView[]): DoctorCheck => {
         .join(' · ')
     : 'no harness adapters installed';
   if (ready.length) return { id: 'harness.any', title: 'Harnesses', status: 'ok', message };
+  // Installed but not logged in is fine when beamhop's broker holds the provider key.
+  if (login.length && brokerHasKey)
+    return {
+      id: 'harness.any',
+      title: 'Harnesses',
+      status: 'ok',
+      message: `${message} (they use the API key stored in beamhop)`,
+    };
   const first = login[0];
   const fix = first
-    ? `Log in to ${first.displayName} (${first.message?.startsWith('run ') ? first.message : `run \`${first.command} login\``}), then run \`beamhop harness scan\`.`
+    ? `Log in to ${first.displayName} (${first.message?.startsWith('run ') ? first.message : `run \`${first.command} login\``}) and run \`beamhop harness scan\` — or give beamhop the provider key instead (see the LLM API keys check).`
     : 'Install a harness (e.g. `npm i -g @anthropic-ai/claude-code`) and run `beamhop harness scan`. `beamhop harness ls` lists every supported one.';
   return { id: 'harness.any', title: 'Harnesses', status: 'warn', message, fix };
 };
@@ -261,7 +269,14 @@ export class ApiHandlers {
           checks.push({ id: 'sandbox', title: 'Sandbox', status: 'fail', message: errMsg(e) });
         }
         const hs = await this.scan();
-        checks.push(harnessCheck(hs));
+        // Agents with `harnessAuth: api-key` (the default) reach their LLM only through the broker,
+        // which needs the provider key in beamhop's secret store.
+        const llmKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
+        const haveKeys = (await d.secrets.list().catch(() => []))
+          .map((s) => s.name)
+          .filter((n) => llmKeys.includes(n));
+        const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
+        checks.push(harnessCheck(hs, haveKeys.length > 0));
         for (const c of d.config.channels.list()) {
           const v = d.channels.view(c);
           checks.push({
@@ -287,6 +302,21 @@ export class ApiHandlers {
           ...(secretsBackend === 'memory'
             ? { fix: 'Install a keychain (libsecret) or set BEAMHOP_VAULT_PASSPHRASE.' }
             : {}),
+        });
+        checks.push({
+          id: 'llm.keys',
+          title: 'LLM API keys',
+          status: haveKeys.length ? 'ok' : keyAgents.length ? 'warn' : 'skip',
+          message: haveKeys.length
+            ? `set: ${haveKeys.join(', ')}`
+            : keyAgents.length
+              ? `none set; ${keyAgents.map((a) => a.name).join(', ')} cannot reach a model`
+              : 'none set (no agent needs one yet)',
+          ...(haveKeys.length
+            ? {}
+            : {
+                fix: 'beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY (or OPENAI_API_KEY / OPENROUTER_API_KEY for other harnesses)',
+              }),
         });
         if (d.isPanic())
           checks.push({

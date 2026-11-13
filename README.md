@@ -27,9 +27,11 @@ npx beamhop init            # terminal 2: first-run wizard, about 3 minutes
 `init` walks seven skippable steps: **doctor** → **harness discovery** → **owner identity** (a Nostr key,
 or bring your own npub) → **pair your phone** (QR) → **first agent** (pick a harness, mount a folder
 read-only) → **hello** (the agent DMs you over Nostr; reply from your phone to prove the whole chain) →
-**next steps**. Then:
+**next steps**. Give beamhop the model key your harness uses (it stays in the keychain; the agent only
+sees a placeholder), then go on. With `npx`, put `npx` in front of each `beamhop` below.
 
 ```bash
+beamhop secret set ANTHROPIC_API_KEY --from-env ANTHROPIC_API_KEY   # or OPENAI_API_KEY / OPENROUTER_API_KEY
 beamhop status                                   # daemon, agents, approvals at a glance
 beamhop ui                                       # print the local web UI URL (it carries your token)
 BEAMHOP_TELEGRAM_TOKEN=... beamhop channel add telegram --name mybot --token-env BEAMHOP_TELEGRAM_TOKEN
