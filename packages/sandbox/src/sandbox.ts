@@ -29,7 +29,10 @@ export interface CreateSandboxOptions extends SrtConfigOptions {
   backend?: 'auto' | SandboxBackend;
   /** Explicit env vars for the sandboxed process (e.g. broker placeholders). */
   env?: Record<string, string>;
-  /** Port of the local LLM broker on 127.0.0.1; it is allow-listed through srt's proxy. */
+  /**
+   * Port of the local LLM broker on 127.0.0.1; it is allow-listed through srt's proxy (same as a
+   * `127.0.0.1:<port>` entry in `localAllow`).
+   */
   brokerPort?: number;
   log?: Logger;
   /** Where per-sandbox config files and sockets live (default: os.tmpdir()). */
@@ -54,6 +57,20 @@ export interface BeamhopSandbox extends SandboxHandle {
 }
 
 const BROKER_NO_PROXY = 'localhost,::1,169.254.0.0/16,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16';
+
+/**
+ * Ports of `127.0.0.1:<port>` entries in `localAllow`: the host-loopback services (broker, MCP
+ * bridge) the sandbox may reach. Only these get an in-sandbox forwarder on Linux.
+ */
+export const loopbackForwardPorts = (localAllow: readonly string[]): number[] => {
+  const out = new Set<number>();
+  for (const e of localAllow) {
+    const m = /^127\.0\.0\.1:(\d{1,5})$/.exec(e.trim());
+    const port = m?.[1] ? Number(m[1]) : 0;
+    if (port > 0 && port < 65536) out.add(port);
+  }
+  return [...out];
+};
 
 const commandExists = (cmd: string): boolean => {
   const probe = process.platform === 'win32' ? 'where' : 'which';
@@ -179,6 +196,7 @@ export const createSandbox = async (
 
   const localAllow = [...(opts.localAllow ?? [])];
   if (opts.brokerPort) localAllow.push(`127.0.0.1:${opts.brokerPort}`);
+  const forwardPorts = loopbackForwardPorts(localAllow);
   const srtConfig = toSrtConfig(policy, { ...opts, localAllow });
   const valid = SandboxRuntimeConfigSchema.safeParse(srtConfig);
   if (!valid.success) {
@@ -218,7 +236,10 @@ export const createSandbox = async (
       violationSocket: vserver.path,
       commandId,
       timeoutMs: policy.proc.maxSessionMinutes * 60_000,
-      ...(opts.brokerPort ? { noProxy: BROKER_NO_PROXY } : {}),
+      // Linux: in-sandbox forwarders for each host-loopback port (127.0.0.1 stays in NO_PROXY).
+      // macOS: no network namespace, so route 127.0.0.1 through srt's proxy instead.
+      ...(forwardPorts.length ? { forwardPorts } : {}),
+      ...(forwardPorts.length && process.platform === 'darwin' ? { noProxy: BROKER_NO_PROXY } : {}),
     };
     writeFileSync(file, JSON.stringify(cfg), { mode: 0o600 });
     return file;

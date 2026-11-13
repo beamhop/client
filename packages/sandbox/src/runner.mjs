@@ -7,8 +7,9 @@
 // spawns it with inherited stdio and forwards srt violation events as JSON lines to the
 // daemon's violation socket. The config file holds no secrets.
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { accessSync, constants, readFileSync } from 'node:fs';
 import { connect } from 'node:net';
+import { delimiter, isAbsolute, join } from 'node:path';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 
 const fail = (msg) => {
@@ -44,6 +45,70 @@ if (cfg.violationSocket) {
 const shQuote = (s) => (/^[A-Za-z0-9_./:=@%+,-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
 const winQuote = (s) => (/^[A-Za-z0-9_./:=@%+,\\-]+$/.test(s) ? s : `"${s.replace(/"/g, '""')}"`);
 
+/** Absolute path of an executable on PATH (or the path itself when absolute). */
+const findExecutable = (name) => {
+  const ok = (p) => {
+    try {
+      accessSync(p, constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (isAbsolute(name)) return ok(name) ? name : undefined;
+  for (const dir of (process.env.PATH ?? '/usr/bin:/bin').split(delimiter)) {
+    if (dir && ok(join(dir, name))) return join(dir, name);
+  }
+  return undefined;
+};
+
+/**
+ * Shell prefix (Linux) that starts one forwarder per host-loopback port *inside* the sandbox's
+ * network namespace: `socat` listens on 127.0.0.1:<port> there and tunnels each connection as
+ * `CONNECT 127.0.0.1:<port>` through srt's HTTP proxy, which allows exactly the allow-listed
+ * `127.0.0.1:<port>` entries and nothing else (SBX-3). Clients therefore need no proxy support
+ * (node `fetch` ignores HTTP_PROXY) and 127.0.0.1 stays in NO_PROXY, so a harness that talks to its
+ * own in-sandbox loopback server (opencode) is unaffected.
+ *
+ * The proxy credential is taken from srt's own $HTTP_PROXY at run time (it never appears in argv).
+ * The prefix waits (up to ~3 s) until every forwarder listens, then the caller `exec`s the command;
+ * the forwarders die with the sandbox's pid namespace. Forwarders run under srt's seccomp filter,
+ * which is fine: they only use AF_INET sockets.
+ */
+const loopbackForwardScript = (ports, socat) => {
+  const hex = ports.map((p) => `*:${p.toString(16).toUpperCase().padStart(4, '0')}`).join('|');
+  const lines = [
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: POSIX shell parameter expansion
+    'if [ -n "${HTTP_PROXY:-}" ]; then',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: POSIX shell parameter expansion
+    '_bh_p=${HTTP_PROXY#*://}; _bh_p=${_bh_p%%/*}; _bh_a=',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: POSIX shell parameter expansion (userinfo is `srt.<id>:<hex token>`; the token authenticates)
+    'case $_bh_p in *@*) _bh_a=${_bh_p%@*}; _bh_a=",proxyauth=srt:${_bh_a#*:}"; _bh_p=${_bh_p##*@};; esac',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: POSIX shell parameter expansion
+    '_bh_pp=${_bh_p##*:}',
+    ...ports.map(
+      (p) =>
+        `${shQuote(socat)} TCP4-LISTEN:${p},bind=127.0.0.1,fork,reuseaddr,backlog=1024 "PROXY:127.0.0.1:127.0.0.1:${p},proxyport=$_bh_pp$_bh_a" </dev/null >/dev/null 2>&1 &`,
+    ),
+    '_bh_i=0',
+    'while [ "$_bh_i" -lt 300 ]; do',
+    '  _bh_n=0',
+    '  for _bh_f in /proc/net/tcp /proc/net/tcp6; do',
+    '    [ -r "$_bh_f" ] || continue',
+    '    while read -r _bh_x _bh_l _bh_r _bh_s _bh_y; do',
+    `      [ "$_bh_s" = 0A ] && case "$_bh_l" in ${hex}) _bh_n=$((_bh_n + 1));; esac`,
+    '    done < "$_bh_f"',
+    '  done',
+    `  [ "$_bh_n" -ge ${ports.length} ] && break`,
+    '  _bh_i=$((_bh_i + 1))',
+    '  sleep 0.01 2>/dev/null || :',
+    'done',
+    'unset _bh_p _bh_a _bh_pp _bh_i _bh_n _bh_f _bh_x _bh_l _bh_r _bh_s _bh_y',
+    'fi',
+  ];
+  return `${lines.join('\n')}\n`;
+};
+
 const main = async () => {
   const learning = cfg.learning === true;
   const ask = learning
@@ -66,9 +131,19 @@ const main = async () => {
 
   const isWin = process.platform === 'win32';
   let command = (isWin ? [cmd, ...args].map(winQuote) : [cmd, ...args].map(shQuote)).join(' ');
-  if (!isWin && typeof cfg.noProxy === 'string') {
-    // srt routes 127.0.0.1 direct (NO_PROXY); the broker lives on the *host* loopback, which
-    // is only reachable through srt's proxy, so drop it from NO_PROXY for this command.
+  const forwards = (Array.isArray(cfg.forwardPorts) ? cfg.forwardPorts : []).filter(
+    (p) => Number.isInteger(p) && p > 0 && p < 65536,
+  );
+  if (process.platform === 'linux' && forwards.length) {
+    // Host-loopback services (broker, MCP bridge) are reached through in-sandbox forwarders on the
+    // *same* 127.0.0.1:<port>, so 127.0.0.1 stays in NO_PROXY and the harness's own loopback
+    // servers keep working (see loopbackForwardScript).
+    const socat = findExecutable(cfg.socatPath || 'socat');
+    if (!socat) fail('socat not found (required for host-loopback forwarding)');
+    command = `${loopbackForwardScript(forwards, socat)}exec ${command}`;
+  } else if (!isWin && typeof cfg.noProxy === 'string') {
+    // macOS (no network namespace): there is no place for an in-sandbox forwarder, so the broker on
+    // the host loopback is only reachable through srt's proxy: drop 127.0.0.1 from NO_PROXY.
     command = `NO_PROXY=${shQuote(cfg.noProxy)} no_proxy=${shQuote(cfg.noProxy)} ${command}`;
   }
   const options = { commandId: cfg.commandId };

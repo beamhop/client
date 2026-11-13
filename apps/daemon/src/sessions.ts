@@ -25,6 +25,7 @@ import {
   type SandboxProfileName,
   type SessionEventView,
 } from '@beamhop/core';
+import { mcpReadPaths } from '@beamhop/mcp';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
@@ -390,7 +391,8 @@ export class SessionManager {
         ...o,
         fs: {
           ...(o.fs ?? {}),
-          read: [...(o.fs?.read ?? []), live.dir],
+          // The injected beamhop-mcp stdio server (package, deps, node) must be readable inside.
+          read: [...(o.fs?.read ?? []), live.dir, ...MCP_READ_PATHS()],
           write: [...(o.fs?.write ?? []), ...extraWrite],
         },
       },
@@ -1028,6 +1030,9 @@ export class SessionManager {
     return { roots: [live.dir, ...(rt?.mounts.map((m) => m.path) ?? [])], deny: rt?.deny ?? [] };
   }
 }
+
+let mcpRead: string[] | undefined;
+const MCP_READ_PATHS = (): string[] => (mcpRead ??= mcpReadPaths());
 
 const minDefined = (...xs: (number | undefined)[]): number | undefined => {
   const v = xs.filter((x): x is number => x !== undefined);

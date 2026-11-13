@@ -14,7 +14,14 @@ import {
   normalizePrincipal,
   type RoleOverride,
 } from '@beamhop/authz';
-import { applyDlp, createLlmProxy, createSecretStore, type DlpMode, type LlmProxy } from '@beamhop/broker';
+import {
+  applyDlp,
+  createLlmProxy,
+  createSecretStore,
+  type DlpMode,
+  type LlmProxy,
+  type LlmRoute,
+} from '@beamhop/broker';
 import {
   type AgentConfig,
   type AgentView,
@@ -94,6 +101,8 @@ export interface DaemonOptions {
   sandbox?: SandboxFactory;
   /** Start the LLM key proxy (default true). */
   llmProxy?: boolean;
+  /** Upstream routes for the LLM key proxy (default: the broker's built-in provider routes). */
+  llmRoutes?: LlmRoute[];
   approvalUndoMs?: number;
   editThrottleMs?: number;
   /** Interval for timers (expiry, schedules, idle, retention). 0 disables; tests call `tick()`. */
@@ -244,6 +253,7 @@ export class Daemon {
       if (this.opts.llmProxy !== false) {
         this.llmProxy = await createLlmProxy({
           secrets: this.secrets,
+          ...(this.opts.llmRoutes ? { routes: this.opts.llmRoutes } : {}),
           log: this.log.child({ component: 'broker' }),
           onUsage: (u) => this.sessions.onBrokerUsage(u.session, u),
           checkBudget: (token) => this.sessions.brokerBudgetOk(token),

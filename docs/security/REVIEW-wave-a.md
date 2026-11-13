@@ -165,6 +165,28 @@ configuration.
 (`isLoopbackAllowEntry`). Host-loopback access goes only through `localAllow` with an explicit
 `ip:port`, as the broker does.
 
+### Follow-up: host-loopback access without touching NO_PROXY (core loop)
+
+The first broker integration removed `127.0.0.1` from the sandbox's `NO_PROXY` so the harness reached
+the host broker through srt's proxy. That broke harnesses with their own in-sandbox loopback server
+(opencode), and proxy-unaware clients (node `fetch` in `beamhop-mcp`) could not reach the MCP bridge
+from the isolated network namespace at all.
+
+**Now (Linux).** srt's `NO_PROXY` is left alone. For every `127.0.0.1:<port>` entry in `localAllow`
+(broker, MCP bridge) the runner starts a `socat` listener on `127.0.0.1:<port>` *inside* the
+sandbox's network namespace, which tunnels each connection as `CONNECT 127.0.0.1:<port>` through
+srt's HTTP proxy, authenticated with srt's per-run proxy token read from `$HTTP_PROXY` at run time
+(never in argv). srt still decides: only the allow-listed `ip:port` entries pass, so SBX-3 holds.
+The forwarders die with the sandbox's pid namespace. **macOS** (no network namespace) keeps the
+`NO_PROXY` approach; `beamhop-mcp` honours `HTTP(S)_PROXY`/`NO_PROXY` there via undici's
+`EnvHttpProxyAgent`.
+
+**Tests.** `packages/sandbox/test/sandbox.real.test.ts` (forwarding: proxy-unaware client reaches
+the allowed port, own loopback server works, another host port is refused directly and through the
+proxy) and `apps/daemon/test/core-loop.test.ts` (daemon + harness in srt: broker key injection, MCP
+`session_status`/`channel_send`, own loopback, other loopback closed). The latter fails on the old
+runner.
+
 ## Verified not vulnerable (attempted, blocked)
 
 - **Loopback / metadata through srt's proxy (Linux, real srt).** Refused targets: other

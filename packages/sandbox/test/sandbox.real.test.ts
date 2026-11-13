@@ -129,6 +129,60 @@ describe.skipIf(!hasBwrap)(
       }
     });
 
+    it('host-loopback forwarding: proxy-unaware clients reach allow-listed ports, own loopback servers work, other ports stay closed', async () => {
+      const other = createServer((_req, res) => res.end('other-host-service'));
+      await new Promise<void>((r) => other.listen(0, '127.0.0.1', () => r()));
+      const otherPort = (other.address() as AddressInfo).port;
+      const s = await createSandbox(policy, {
+        backend: 'srt',
+        sourceEnv,
+        env: { HOME: fx.home },
+        home: fx.home,
+        brokerPort: port,
+        localAllow: [`127.0.0.1:${port}`],
+      });
+      // Runs inside the sandbox under bare node: global fetch ignores HTTP(S)_PROXY entirely.
+      const probe = `
+        const http = require('node:http');
+        const get = async (u, o) => { try { const r = await fetch(u, o); return r.status + ':' + (await r.text()); } catch (e) { return 'err:' + (e.cause?.code ?? e.message); } };
+        (async () => {
+          const out = { noProxy: process.env.NO_PROXY };
+          out.allowed = await get('http://127.0.0.1:${port}/');
+          out.otherDirect = await get('http://127.0.0.1:${otherPort}/');
+          const own = http.createServer((q, r) => r.end('own-loopback-server'));
+          await new Promise((r) => own.listen(0, '127.0.0.1', r));
+          out.own = await get('http://127.0.0.1:' + own.address().port + '/');
+          own.close();
+          console.log(JSON.stringify(out));
+        })();`;
+      try {
+        const r = await runIn(s, process.execPath, ['-e', probe]);
+        const out = JSON.parse(r.stdout.trim().split('\n').at(-1) ?? '{}');
+        expect(out.noProxy).toContain('127.0.0.1');
+        expect(out.allowed).toBe('200:hello-from-host');
+        expect(out.own).toBe('200:own-loopback-server');
+        expect(out.otherDirect).toMatch(/^err:/);
+        // ...and explicitly through srt's proxy, the non-allow-listed host port is refused too.
+        const viaProxy = await runIn(s, 'sh', [
+          '-c',
+          `curl -sS -m 5 --proxy "$HTTP_PROXY" http://127.0.0.1:${otherPort}/; echo " rc=$?"`,
+        ]);
+        expect(viaProxy.stdout).not.toContain('other-host-service');
+        const viaProxyOk = await runIn(s, 'sh', [
+          '-c',
+          `curl -sS -m 5 --proxy "$HTTP_PROXY" http://127.0.0.1:${port}/`,
+        ]);
+        expect(viaProxyOk.stdout).toBe('hello-from-host');
+        // The forwarders never keep the sandbox alive after the command exits.
+        const t0 = Date.now();
+        expect((await runIn(s, 'true', [])).code).toBe(0);
+        expect(Date.now() - t0).toBeLessThan(5000);
+      } finally {
+        await s.close();
+        other.close();
+      }
+    });
+
     it('strict profile makes rw mounts read-only', async () => {
       const strict = compilePolicy('strict', [{ path: fx.ws, mode: 'rw' }], {}, { home: fx.home });
       const s = await createSandbox(strict, { backend: 'srt', sourceEnv, home: fx.home });
