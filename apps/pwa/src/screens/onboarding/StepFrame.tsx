@@ -164,7 +164,10 @@ export const StepFrame = ({
         {body}
       </main>
       {actions && (
-        <div className="sticky bottom-0 z-20 border-t border-line bg-bg pb-[var(--bh-safe-bottom)]">
+        <div
+          data-toast-avoid=""
+          className="sticky bottom-0 z-20 border-t border-line bg-bg pb-[var(--bh-safe-bottom)]"
+        >
           {actions}
         </div>
       )}

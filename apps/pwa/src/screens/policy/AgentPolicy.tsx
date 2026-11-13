@@ -499,7 +499,10 @@ const Editor = ({
         </>,
       )}
       {footer && (
-        <div className="fixed inset-x-0 bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom))] z-30 border-t border-line bg-bg">
+        <div
+          data-toast-avoid=""
+          className="fixed inset-x-0 bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom))] z-30 border-t border-line bg-bg"
+        >
           {footer}
         </div>
       )}

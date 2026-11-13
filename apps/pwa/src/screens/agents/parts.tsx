@@ -10,11 +10,12 @@ import { useConnection, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { haptic } from '../../lib/haptics.ts';
+import { useLeaveGuard } from '../../lib/leaveGuard.ts';
 import { Button } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { CodeBlock } from '../../ui/CodeBlock.tsx';
 import { Eyebrow } from '../../ui/Meta.tsx';
-import { Sheet } from '../../ui/Sheet.tsx';
+import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { type Change, describeChanges, patchOf, type Reach, toYaml } from './model.ts';
 
@@ -110,6 +111,9 @@ export const SaveBar = ({ agent, d }: { agent: AgentView; d: AgentDraft }) => {
   const update = useMutationApi('agent.update');
   const changes: Change[] = useMemo(() => describeChanges(d.base, d.draft), [d.base, d.draft]);
   const widens = changes.some((c) => c.widens);
+  // Every section with a draft renders a SaveBar, so the leave guard lives here: switching section,
+  // following a sidebar link or going back would otherwise unmount the draft without a word.
+  const leave = useLeaveGuard(d.dirty);
   if (!d.dirty) return null;
   const n = Math.max(1, changes.length);
   const save = () =>
@@ -139,6 +143,7 @@ export const SaveBar = ({ agent, d }: { agent: AgentView; d: AgentDraft }) => {
           'expanded:bottom-0 expanded:mx-0 expanded:rounded-lg expanded:border expanded:bg-surface expanded:px-4 expanded:shadow-pop',
         )}
         data-savebar=""
+        data-toast-avoid=""
       >
         <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 type-label text-ink" aria-live="polite">
@@ -203,6 +208,19 @@ export const SaveBar = ({ agent, d }: { agent: AgentView; d: AgentDraft }) => {
         )}
         <CodeBlock className="mt-4" label={t('agents.save.yaml')} code={toYaml(d.patch)} />
       </Sheet>
+      <ConfirmDialog
+        isOpen={leave.status === 'blocked'}
+        onOpenChange={(o) => !o && leave.reset?.()}
+        title={t('agents.save.leaveTitle')}
+        confirmLabel={t('agents.save.leaveDiscard')}
+        cancelLabel={t('agents.save.keepEditing')}
+        onConfirm={() => {
+          leave.proceed?.();
+          d.reset();
+        }}
+      >
+        {t('agents.save.leaveBody', { count: n, name: agent.config.name })}
+      </ConfirmDialog>
     </>
   );
 };
@@ -212,13 +230,13 @@ export const SaveBar = ({ agent, d }: { agent: AgentView; d: AgentDraft }) => {
 const PathChip = ({ children, locked }: { children: ReactNode; locked?: boolean }) => (
   <li
     className={cx(
-      'bh-chip relative inline-flex h-7 items-center gap-1 overflow-hidden rounded-sm px-2 type-meta',
+      'bh-chip relative inline-flex min-h-7 max-w-full items-center gap-1 overflow-hidden rounded-sm px-2 type-meta',
       locked ? 'border border-line bg-sunken text-ink-2' : 'border border-line-strong bg-surface text-ink',
     )}
   >
     {locked && <span aria-hidden="true" className="hatch absolute inset-0 text-ink-2" />}
     {locked && <LockSimple size={12} weight="bold" aria-hidden="true" className="relative" />}
-    <span className="relative">{children}</span>
+    <span className="relative min-w-0 py-0.5 [overflow-wrap:anywhere]">{children}</span>
   </li>
 );
 

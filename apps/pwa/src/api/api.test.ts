@@ -24,6 +24,7 @@ const SAMPLE: Partial<Record<MethodName, unknown>> = {
   'agent.clone': { name: 'reviewer', newName: 'reviewer-2' },
   'agent.instructions': { name: 'reviewer' },
   'harness.add': { id: 'myacp', command: 'my-agent', args: ['--acp'] },
+  'harness.remove': { id: 'myacp' },
   'channel.validate': { provider: 'slack', values: {}, secrets: { bot: 'placeholder' } },
   'channel.add': { name: 'ops2', provider: 'discord', values: {}, secrets: { token: 'placeholder' } },
   'channel.remove': { name: 'ops' },

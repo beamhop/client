@@ -78,8 +78,8 @@ export const StepIdentity = () => {
         const hex = await (
           window as unknown as { nostr: { getPublicKey(): Promise<string> } }
         ).nostr.getPublicKey();
-        await imp.mutateAsync({ npub: npubEncode(hex) });
-      } else if (bunkerNpub) await imp.mutateAsync({ npub: bunkerNpub });
+        await imp.mutateAsync({ npub: npubEncode(hex), replace: !!q.data?.npub });
+      } else if (bunkerNpub) await imp.mutateAsync({ npub: bunkerNpub, replace: !!q.data?.npub });
       haptic('confirm');
       setReplace(false);
     } catch {

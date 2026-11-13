@@ -555,6 +555,7 @@ export const NewAgentScreen = () => {
               </div>
               {stepBody}
               <div
+                data-toast-avoid=""
                 className={cx(
                   'sticky bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom))] z-20 -mx-4 border-t border-line bg-bg px-4 py-3 medium:-mx-6 medium:px-6',
                   'expanded:bottom-0 expanded:mx-0 expanded:px-0',

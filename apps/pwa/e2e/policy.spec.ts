@@ -94,7 +94,7 @@ test('a finding fix is staged as a change', async ({ page }) => {
 
 test('learning mode: triage suggestions with buttons, locked paths never allowable', async ({ page }) => {
   await open(page, '/policy/helpdesk');
-  const list = page.getByRole('list', { name: 'Blocked requests to review' });
+  const list = page.getByRole('list', { name: 'Logged requests to review' });
   await expect(list.getByRole('group')).toHaveCount(3);
   await list.getByRole('button', { name: 'Allow: pypi.org' }).click();
   await expect(page.getByText(/pypi\.org\s*will be allowed/)).toBeVisible();
@@ -109,7 +109,7 @@ test('learning mode: triage suggestions with buttons, locked paths never allowab
   await expect(review.getByText('helpdesk will also be able to reach pypi.org.')).toBeVisible();
   await review.getByRole('button', { name: 'Widen access' }).click();
   await expect(page.getByRole('region', { name: 'Notifications' }).getByText(/Widened/)).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Blocked requests to review' }).getByRole('group')).toHaveCount(
+  await expect(page.getByRole('list', { name: 'Logged requests to review' }).getByRole('group')).toHaveCount(
     1,
   );
 });

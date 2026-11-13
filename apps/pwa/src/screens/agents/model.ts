@@ -664,7 +664,9 @@ export const createCli = (o: {
   mounts: Mount[];
 }): string =>
   [
-    `beamhop agent add ${o.name || '<name>'}`,
+    // An invalid name would make a broken (or, with shell characters, a different) command, so the
+    // preview keeps the placeholder until the name passes validation.
+    `beamhop agent add ${o.name && o.name.length <= 48 && SLUG.test(o.name) ? o.name : '<name>'}`,
     o.preset && `--preset ${o.preset}`,
     `--harness ${o.harness || '<harness>'}`,
     o.model && o.model !== 'default' && `--model ${o.model}`,

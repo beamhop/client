@@ -178,6 +178,23 @@ export const Sheet = ({
   );
 };
 
+/**
+ * Footer button pair: stacked on compact (primary first), side by side on expanded with the primary
+ * on the right. Buttons are `shrink-0 whitespace-nowrap`, so a flex row of two `fullWidth` buttons
+ * overflows the dialog; equal grid tracks (each at least 0 wide) keep both inside at every width.
+ */
+export const SheetActions = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div
+    data-sheet-actions=""
+    className={cx(
+      'grid gap-2 expanded:grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] expanded:[&>*:first-child]:order-2 [&>*]:min-w-0',
+      className,
+    )}
+  >
+    {children}
+  </div>
+);
+
 export interface ConfirmDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -215,21 +232,14 @@ export const ConfirmDialog = ({
     role="alertdialog"
     focusTitle
     footer={
-      <div className="grid gap-2 expanded:grid-cols-2">
-        <Button
-          variant={variant}
-          size="lg"
-          fullWidth
-          isPending={isPending}
-          onPress={() => void onConfirm()}
-          className="expanded:order-2"
-        >
+      <SheetActions>
+        <Button variant={variant} size="lg" fullWidth isPending={isPending} onPress={() => void onConfirm()}>
           {confirmLabel}
         </Button>
         <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
           {cancelLabel}
         </Button>
-      </div>
+      </SheetActions>
     }
   >
     <div className="type-body text-ink-2">{children}</div>

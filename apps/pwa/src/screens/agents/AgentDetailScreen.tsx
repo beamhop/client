@@ -407,7 +407,8 @@ export const AgentDetailScreen = () => {
         <div className="@container/detail">
           <div className="flex flex-col gap-4 @min-[44rem]/detail:grid @min-[44rem]/detail:grid-cols-[152px_minmax(0,1fr)] @min-[44rem]/detail:gap-8">
             <SectionNav name={name} current={section} />
-            <div className="min-w-0 max-w-[640px] pt-2" key={section}>
+            {/* Keyed by agent too: a draft must never carry over to another agent on the same section. */}
+            <div className="min-w-0 max-w-[640px] pt-2" key={`${name}/${section}`}>
               <h2 className="sr-only">{sectionLabel(section)}</h2>
               <Body agent={a} />
             </div>

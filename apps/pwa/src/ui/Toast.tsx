@@ -11,6 +11,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -107,6 +108,35 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+/** Marks a bar pinned to the bottom of a screen (decision bar, save bar, wizard actions). */
+export const TOAST_AVOID = 'data-toast-avoid';
+
+interface Box {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+/**
+ * How far above the viewport bottom the toast must sit to clear every bottom bar it would cover.
+ * A toast over an action bar turns a late tap on Undo into a tap on the bar's button underneath
+ * (e.g. Deny on the next approval), so it always goes above. Bars outside the bottom `zone` px or
+ * beside the toast's column are ignored; 0 means the default position is fine.
+ */
+export const toastLift = (
+  bars: Box[],
+  toast: Pick<Box, 'left' | 'right'>,
+  vh: number,
+  zone: number,
+  gap = 8,
+) =>
+  bars.reduce((lift, b) => {
+    const beside = b.right <= toast.left || b.left >= toast.right;
+    const inZone = b.bottom > vh - zone && b.top < vh && b.bottom > b.top;
+    return beside || !inZone ? lift : Math.max(lift, Math.ceil(vh - b.top + gap));
+  }, 0);
+
 const ToastRegion = ({
   toast,
   onDismiss,
@@ -117,11 +147,53 @@ const ToastRegion = ({
   ref: React.Ref<HTMLElement>;
 }) => {
   const reduce = useReduced();
+  const own = useRef<HTMLElement>(null);
+  const [lift, setLift] = useState(0);
+  const visible = toast !== null;
+
+  // Re-measure while a toast is up: bars appear, resize or move as the screen under it changes.
+  useLayoutEffect(() => {
+    if (!visible) {
+      setLift(0);
+      return;
+    }
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const el = own.current?.querySelector<HTMLElement>('[data-toast]');
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const bars = [...document.querySelectorAll<HTMLElement>(`[${TOAST_AVOID}]`)].map((b) =>
+          b.getBoundingClientRect(),
+        );
+        // The zone covers the toast's default spot above the tab bar plus its own height.
+        setLift(toastLift(bars, r, window.innerHeight, el.offsetHeight + 160));
+      });
+    };
+    measure();
+    const mo = new MutationObserver(measure);
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      mo.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [visible]);
+
   return (
     <section
-      ref={ref}
+      ref={(node) => {
+        own.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) (ref as React.RefObject<HTMLElement | null>).current = node;
+      }}
       aria-label={tr('ui.toast.notifications')}
-      className="pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 bottom-[calc(var(--bh-tabbar-h)+var(--bh-safe-bottom)+8px)] expanded:bottom-6 expanded:pl-[calc(var(--bh-sidebar-w)+16px)]"
+      className="pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 bottom-[max(calc(var(--bh-tabbar-h)+var(--bh-safe-bottom)+8px),var(--bh-toast-lift))] expanded:bottom-[max(24px,var(--bh-toast-lift))] expanded:pl-[calc(var(--bh-sidebar-w)+16px)]"
+      style={{ ['--bh-toast-lift' as string]: `${lift}px` }}
       data-toast-region=""
     >
       <AnimatePresence>

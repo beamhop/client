@@ -233,7 +233,13 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
           </Button>
           <span className="type-body-sm text-ink-2">{t('agents.sandbox.testHint')}</span>
         </div>
-        {results && (
+        {results && results.length === 0 && (
+          // An empty result is still an answer: without it the button looks like it did nothing.
+          <p className="type-body-sm text-ink-2" role="status">
+            {t('agents.sandbox.testNone')}
+          </p>
+        )}
+        {results && results.length > 0 && (
           <ul className="flex flex-col gap-1">
             {results.map((r) => (
               <li

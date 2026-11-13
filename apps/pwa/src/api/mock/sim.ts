@@ -372,7 +372,8 @@ export class Simulator {
         actor: 'srt',
         type: 'sandbox.blocked_host',
         severity: 'security' as const,
-        summary: 'helpdesk was blocked from files.pythonhosted.org (learning mode logged it)',
+        summary:
+          'helpdesk reached files.pythonhosted.org outside its policy (learning mode allowed and logged it)',
         data: { host: 'files.pythonhosted.org' },
       },
       {

@@ -1034,7 +1034,7 @@ export const seed = (now = Date.now()): MockState => {
     actor: 'srt',
     type: 'sandbox.blocked_host',
     severity: 'security',
-    summary: 'helpdesk was blocked from pypi.org (learning mode logged it)',
+    summary: 'helpdesk reached pypi.org outside its policy (learning mode allowed and logged it)',
     data: { host: 'pypi.org', session: 'ses_h31' },
   });
   au(9, {

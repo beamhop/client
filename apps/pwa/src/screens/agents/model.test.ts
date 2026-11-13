@@ -179,6 +179,17 @@ describe('validators', () => {
       }),
     ).toBe('beamhop agent add qa --preset public-qa --harness gemini --mount ~/docs/public:ro');
   });
+  it('shows a placeholder instead of an invalid name', () => {
+    expect(createCli({ name: 'my bot!', harness: 'codex', mounts: [] })).toBe(
+      'beamhop agent add <name> --harness codex',
+    );
+    expect(createCli({ name: 'a;rm -rf ~', harness: 'codex', mounts: [] })).toBe(
+      'beamhop agent add <name> --harness codex',
+    );
+    expect(createCli({ name: '', harness: 'codex', mounts: [] })).toBe(
+      'beamhop agent add <name> --harness codex',
+    );
+  });
   it('adds --model only for a model other than the harness default', () => {
     expect(createCli({ name: 'a', harness: 'codex', model: 'gpt-6-luna', mounts: [] })).toBe(
       'beamhop agent add a --harness codex --model gpt-6-luna',

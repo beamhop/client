@@ -11,7 +11,7 @@ import { useShowCli } from '../../lib/desktop.ts';
 import { Button } from '../../ui/Button.tsx';
 import { Select, Switch } from '../../ui/Choice.tsx';
 import { NumberField, TextField } from '../../ui/Field.tsx';
-import { ConfirmDialog, Sheet } from '../../ui/Sheet.tsx';
+import { ConfirmDialog, Sheet, SheetActions } from '../../ui/Sheet.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { DLP_WORD, definePayload, MODE_WORD, roleDiff, roleUses } from './roles.ts';
 
@@ -118,14 +118,14 @@ export const RoleEditor = ({
         title={isNew ? t('policy.roleEdit.newTitle') : t('policy.roleEdit.title', { name: before.name })}
         subtitle={isNew ? t('policy.roleEdit.basedOn', { name: before.name }) : undefined}
         footer={
-          <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+          <SheetActions>
             <Button variant="primary" fullWidth isDisabled={!canSave} onPress={() => setConfirm('save')}>
               {isNew ? t('policy.roleEdit.create') : t('policy.roleEdit.review')}
             </Button>
             <Button variant="secondary" fullWidth onPress={onClose}>
               {t('common.cancel')}
             </Button>
-          </div>
+          </SheetActions>
         }
       >
         <div className="flex flex-col gap-5">

@@ -77,7 +77,7 @@ export const ChipGroup = ({
     <Label className={cx('type-micro text-ink-2', hideLabel && 'sr-only')}>{label}</Label>
     <TagList
       items={items}
-      className="flex flex-wrap gap-2"
+      className="flex min-w-0 flex-wrap gap-2"
       renderEmptyState={() => <span className="type-meta text-ink-3">{emptyText}</span>}
     >
       {(it) => {
@@ -88,7 +88,8 @@ export const ChipGroup = ({
             id={it.id}
             textValue={it.label}
             className={cx(
-              'bh-chip inline-flex h-8 items-center gap-1.5 rounded-sm pl-2 type-meta outline-none',
+              // A long host or path wraps inside the chip instead of widening the page (phones).
+              'bh-chip inline-flex min-h-8 max-w-full min-w-0 items-center gap-1.5 rounded-sm pl-2 type-meta outline-none',
               'data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-focus',
               removable ? 'pr-0' : 'pr-2',
               VARIANT[v],
@@ -97,9 +98,9 @@ export const ChipGroup = ({
             )}
           >
             {v === 'locked' && <span aria-hidden="true" className="hatch absolute inset-0 text-ink-2" />}
-            <span className="relative inline-flex items-center gap-1.5">
+            <span className="relative inline-flex min-w-0 items-center gap-1.5 py-1 [&>svg]:shrink-0">
               {ICON[v]}
-              <span>{it.label}</span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{it.label}</span>
               {it.note && <span>{it.note}</span>}
               {v === 'locked' && <span className="sr-only">{t('ui.chip.lockedAlwaysBlocked')}</span>}
             </span>

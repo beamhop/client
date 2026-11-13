@@ -17,7 +17,7 @@ const shot = async (page: Page, path: string, name: string, act?: (p: Page) => P
 
 test('screenshot policy + audit extras', async ({ page }) => {
   await shot(page, '/policy/helpdesk', 'policy_helpdesk_learning', async (p) => {
-    await p.getByRole('list', { name: 'Blocked requests to review' }).scrollIntoViewIfNeeded();
+    await p.getByRole('list', { name: 'Logged requests to review' }).scrollIntoViewIfNeeded();
   });
   await shot(page, '/policy/reviewer', 'policy_reviewer_review', async (p) => {
     const input = p.getByRole('textbox', { name: 'Add host' });

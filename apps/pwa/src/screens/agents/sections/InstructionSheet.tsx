@@ -12,7 +12,7 @@ import { t } from '../../../i18n/index.ts';
 import { Button } from '../../../ui/Button.tsx';
 import { CodeBlock, DiffView } from '../../../ui/CodeBlock.tsx';
 import { TextField } from '../../../ui/Field.tsx';
-import { Sheet } from '../../../ui/Sheet.tsx';
+import { Sheet, SheetActions } from '../../../ui/Sheet.tsx';
 import { useToast } from '../../../ui/Toast.tsx';
 import { unifiedDiff, writableMount } from '../model.ts';
 
@@ -79,7 +79,7 @@ export const InstructionSheet = ({
 
   const footer =
     mode.k === 'edit' ? (
-      <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+      <SheetActions>
         <Button
           variant="primary"
           fullWidth
@@ -91,9 +91,9 @@ export const InstructionSheet = ({
         <Button variant="secondary" fullWidth onPress={() => setMode({ k: 'view' })}>
           {t('common.cancel')}
         </Button>
-      </div>
+      </SheetActions>
     ) : mode.k === 'preview' ? (
-      <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+      <SheetActions>
         <Button
           variant="primary"
           fullWidth
@@ -105,9 +105,9 @@ export const InstructionSheet = ({
         <Button variant="secondary" fullWidth onPress={() => setMode({ ...mode, k: 'edit' })}>
           {t('agents.ov.fileBack')}
         </Button>
-      </div>
+      </SheetActions>
     ) : mode.k === 'conflict' ? (
-      <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+      <SheetActions>
         <Button
           variant="primary"
           fullWidth
@@ -123,7 +123,7 @@ export const InstructionSheet = ({
         >
           {t('agents.ov.fileOverwrite')}
         </Button>
-      </div>
+      </SheetActions>
     ) : undefined;
 
   return (

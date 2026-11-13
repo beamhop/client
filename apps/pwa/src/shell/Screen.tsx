@@ -150,7 +150,11 @@ export const Screen = ({
         >
           {children}
         </div>
-        {footer && <div className="sticky bottom-0 z-20 border-t border-line bg-bg pb-safe">{footer}</div>}
+        {footer && (
+          <div data-toast-avoid="" className="sticky bottom-0 z-20 border-t border-line bg-bg pb-safe">
+            {footer}
+          </div>
+        )}
       </div>
     );
   }
@@ -208,7 +212,11 @@ export const Screen = ({
           {children}
         </div>
       </div>
-      {footer && <div className="shrink-0 border-t border-line bg-bg">{footer}</div>}
+      {footer && (
+        <div data-toast-avoid="" className="shrink-0 border-t border-line bg-bg">
+          {footer}
+        </div>
+      )}
     </div>
   );
 };

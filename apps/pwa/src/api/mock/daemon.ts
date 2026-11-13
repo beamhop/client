@@ -987,6 +987,13 @@ export class MockDaemon {
       return h;
     },
     // Probes the command with an ACP `initialize` handshake. Unknown binaries fail like a real spawn would.
+    'harness.remove': (p) => {
+      const id = p.id.startsWith('acp:') ? p.id : `acp:${p.id}`;
+      if (!this.state.harnesses.some((h) => h.id === id))
+        fail('not_found', `${p.id} is not a custom harness`);
+      this.state.harnesses = this.state.harnesses.filter((h) => h.id !== id);
+      return OK;
+    },
     'harness.add': async (p) => {
       await sleep(700);
       const bin = p.command.trim().split(/\s+/)[0] ?? '';

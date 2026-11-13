@@ -16,7 +16,7 @@ import { Button } from '../../ui/Button.tsx';
 import { Radio, RadioGroup, SegmentedControl } from '../../ui/Choice.tsx';
 import { TextField } from '../../ui/Field.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
-import { Sheet } from '../../ui/Sheet.tsx';
+import { Sheet, SheetActions } from '../../ui/Sheet.tsx';
 import { useMe } from './me.ts';
 import { inputOf, quorumOf, reachOf, ruleChoices, ruleLine, type SlipGroup, scopeOptions } from './model.ts';
 import { QuorumRow } from './Slip.tsx';
@@ -94,7 +94,7 @@ const ScopeSheet = ({
         />
       }
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <SheetActions>
           <Button
             variant="allow"
             size="lg"
@@ -108,7 +108,7 @@ const ScopeSheet = ({
           <Button variant="secondary" size="lg" fullWidth onPress={onClose}>
             {t('inbox.btn.cancel')}
           </Button>
-        </div>
+        </SheetActions>
       }
     >
       <div className="flex flex-col gap-5">
@@ -216,14 +216,14 @@ const AccessSheet = ({
       title={t('inbox.access.sheetTitle', { who, agent: approval.agent })}
       subtitle={<MetaLine items={[{ value: approval.requestedBy.principal, truncate: 28 }]} />}
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <SheetActions>
           <Button variant="allow" size="lg" fullWidth isPending={busy} onPress={() => void submit()}>
             {t('inbox.access.allowAs', { role })}
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={onClose}>
             {t('inbox.btn.cancel')}
           </Button>
-        </div>
+        </SheetActions>
       }
     >
       <div className="flex flex-col gap-4">
@@ -263,7 +263,7 @@ const ReasonSheet = ({ ids, target, onClose }: { ids: string[]; target: string; 
       title={t('inbox.reason.title')}
       subtitle={<MetaLine items={[{ value: target, truncate: 40 }]} />}
       footer={
-        <div className="flex flex-col gap-2 expanded:flex-row-reverse">
+        <SheetActions>
           <Button
             variant="primary"
             size="lg"
@@ -277,7 +277,7 @@ const ReasonSheet = ({ ids, target, onClose }: { ids: string[]; target: string; 
           <Button variant="secondary" size="lg" fullWidth onPress={onClose}>
             {t('inbox.reason.skip')}
           </Button>
-        </div>
+        </SheetActions>
       }
     >
       <div className="flex flex-col gap-4">
