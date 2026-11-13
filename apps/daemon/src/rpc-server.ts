@@ -122,6 +122,8 @@ export interface ApiServerOptions {
   /** Directory with the built PWA to serve at / (SPA fallback to index.html). */
   staticDir?: string;
   maxBodyBytes?: number;
+  /** Extra HTTP routes (e.g. `POST /hooks/<id>` webhooks); return true when handled. Auth is theirs. */
+  routes?: (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
 }
 
 export interface ApiServer {
@@ -225,6 +227,7 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
           .end(JSON.stringify(out));
         return;
       }
+      if (opts.routes && (await opts.routes(req, res, url))) return;
       if (await serveStatic(req, res, url)) return;
       res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
     } catch (err) {
