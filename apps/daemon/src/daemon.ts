@@ -45,7 +45,7 @@ import {
   readDeployEnv,
 } from './home.ts';
 import { createMcpHandlers, type McpCtx } from './mcp-handlers.ts';
-import type { MeshProvider } from './mesh.ts';
+import { loadNostrMesh, type MeshProvider } from './mesh.ts';
 import { loadBuiltinPlugins, PluginRegistry, type PluginRegistryInit } from './registry.ts';
 import { type ApiServer, startApiServer } from './rpc-server.ts';
 import { Router } from './router.ts';
@@ -206,6 +206,7 @@ export class Daemon {
         this.log.info('plugins loaded', { loaded });
       }
 
+      if (!this.mesh) this.mesh = await loadNostrMesh(this);
       this.seedBudgets();
       if (this.opts.llmProxy !== false) {
         this.llmProxy = await createLlmProxy({
