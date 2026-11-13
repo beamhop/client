@@ -365,7 +365,11 @@ export const methods = {
     params: z.object({ agent: z.string().optional() }).default({}),
     result: z.object({ schedules: z.array(ScheduleConfig) }),
   },
-  'schedule.add': { params: ScheduleConfig.omit({ id: true }), result: ScheduleConfig },
+  /** For webhook schedules the result carries the hook URL and its secret (shown once). */
+  'schedule.add': {
+    params: ScheduleConfig.omit({ id: true }),
+    result: ScheduleConfig.extend({ webhook: z.object({ url: z.string(), secret: z.string() }).optional() }),
+  },
   'schedule.update': {
     params: z.object({ id: z.string(), patch: z.record(z.string(), z.unknown()) }),
     result: ScheduleConfig,
