@@ -227,20 +227,25 @@ describe('helpers', () => {
   });
 });
 
-describe('Select (compact: list in a bottom sheet)', () => {
-  const options = [
-    { id: 'claude', label: 'Claude Code 2.1.4' },
-    { id: 'gemini', label: 'Gemini CLI 1.3.0' },
-  ];
-  const Controlled = () => {
-    const [v, setV] = useState<string>('claude');
-    return (
-      <Select label="Harness" options={options} selectedKey={v} onSelectionChange={(k) => setV(String(k))} />
-    );
-  };
+const SELECT_OPTIONS = [
+  { id: 'claude', label: 'Claude Code 2.1.4' },
+  { id: 'gemini', label: 'Gemini CLI 1.3.0' },
+];
+const ControlledSelect = () => {
+  const [v, setV] = useState<string>('claude');
+  return (
+    <Select
+      label="Harness"
+      options={SELECT_OPTIONS}
+      selectedKey={v}
+      onSelectionChange={(k) => setV(String(k))}
+    />
+  );
+};
 
+describe('Select (compact: list in a bottom sheet)', () => {
   it('shows the selected value on the trigger while the sheet is closed, and after picking', async () => {
-    render(<Controlled />);
+    render(<ControlledSelect />);
     const trigger = screen.getByRole('button', { name: /Harness/ });
     expect(trigger).toHaveTextContent('Claude Code 2.1.4');
     await userEvent.click(trigger);

@@ -302,6 +302,10 @@ export const CommandPalette = () => {
                 <MagnifyingGlass size={20} aria-hidden="true" className="text-ink-2" />
                 <Input
                   placeholder={t('palette.placeholder')}
+                  // Esc closes the palette even with text typed (a SearchField alone would only clear it).
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') closeOverlay();
+                  }}
                   className="h-full min-w-0 flex-1 bg-transparent type-body text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:hidden"
                 />
                 <Kbd>Esc</Kbd>

@@ -21,6 +21,7 @@ export default defineConfig({
   projects: [
     {
       name: 'mobile',
+      testIgnore: /perf\.spec\.ts/,
       use: {
         ...devices['iPhone 13'],
         browserName: 'chromium',
@@ -33,6 +34,30 @@ export default defineConfig({
     },
     {
       name: 'desktop',
+      testIgnore: /perf\.spec\.ts/,
+      use: { browserName: 'chromium', viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
+    },
+    // Load budgets (LCP/CLS) run after everything else, one at a time, so parallel workers don't skew them.
+    {
+      name: 'perf-mobile',
+      testMatch: /perf\.spec\.ts/,
+      dependencies: ['mobile', 'desktop'],
+      fullyParallel: false,
+      use: {
+        ...devices['iPhone 13'],
+        browserName: 'chromium',
+        defaultBrowserType: 'chromium',
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 1,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'perf-desktop',
+      testMatch: /perf\.spec\.ts/,
+      dependencies: ['perf-mobile'],
+      fullyParallel: false,
       use: { browserName: 'chromium', viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
     },
   ],

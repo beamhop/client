@@ -14,7 +14,13 @@ pnpm --filter @beamhop/pwa test         # vitest (jsdom)
 pnpm --filter @beamhop/pwa test:e2e     # build first; Playwright: smoke + axe on every route, mobile + desktop
 pnpm --filter @beamhop/pwa screenshots  # every route → screenshots/{mobile,desktop}/*.png
 pnpm --filter @beamhop/pwa icons        # regenerate public/icons from scripts/gen-icons.mjs
+node apps/pwa/scripts/bundle-report.mjs apps/pwa/dist   # boot-path JS (entry + static imports), fails over 350 kB gz
 ```
+
+Boot path budget: **< 350 kB gzip** of JS before first render (`scripts/bundle-report.mjs`). The demo daemon
+(`api/mock`, seed data, zod schemas) is a separate chunk loaded only in mock mode (`loadMock` in main.tsx);
+screens are route-level lazy chunks; the palette/shortcut overlays load after first paint. `e2e/perf.spec.ts`
+keeps LCP < 2.5 s and CLS < 0.1 on Home, Inbox and a session (mobile at 4× CPU).
 
 ## Structure
 
@@ -89,6 +95,25 @@ Boot order (`connection.ts`): `?mock=1` > `#token=` > **active saved daemon → 
   Settings → Devices (§7A). The key is never logged or sent anywhere.
 - **Signers** (`signer.ts`): device key (default), NIP-07 (`hasNip07()`, needs `window.nostr.nip44`), NIP-46 bunker
   (`parseBunkerUrl` works; `nip46Signer` is a TODO stub).
+
+## Shell services
+
+- **Command palette** (`shell/Overlays.tsx`, lazy): `⌘K` / `Ctrl K`, the sidebar Search button, More → Search,
+  the status strip. Actions (allow the next low-risk approval with undo / review the next one, stop everything,
+  new agent, add channel, pair a device, new cloud agent, scan, theme), agents (+ stop), sessions, channels,
+  screens and settings sections. Open it from code with `openOverlay('palette')` (`shell/overlays.ts`).
+- **Shortcut sheet**: `?` anywhere. Every key lives in `shell/shortcut-list.ts` — when a screen adds a key,
+  list it there (the current screen's section is shown first). Global keys: `shell/shortcuts.ts`.
+- **Connection** (`shell/Connection.tsx`): one `useConnectionSummary()` → `link`
+  (`reachable | connecting | no-answer | unpaired | not-paired | offline`) drives the pill, the sheet, the
+  status strip and the banners. Hosted mode shows this browser's relays, daemon key, signer, queued requests,
+  "Pair again" and "Disconnect this browser" (`device.remove`, then `removeDaemon`).
+- **Push** (`screens/pair/push.tsx` over `api/push.ts`): `turnOnPush(client, deviceId)` (permission →
+  `device.pushKey` → PushManager → `device.pushSubscribe`), `usePushDeviceId()`, `usePushPrefs(id)` for the
+  per-device `device.pushPrefs` categories. A fresh hosted pairing asks inside the tap and `<PushResume/>`
+  registers the subscription after the app boots into the daemon.
+- **Install** (`lib/install.ts`): captures `beforeinstallprompt` at boot; Home shows a once-only install banner on
+  phones (real daemons only); `useInstall()` for your own button.
 
 ## Adding / building a screen
 

@@ -23,7 +23,7 @@ const measure = () =>
 for (const path of ['/', '/inbox', '/sessions/ses_842']) {
   test(`load budget ${path}`, async ({ page, browserName }, info) => {
     test.skip(browserName !== 'chromium', 'CDP throttling');
-    if (info.project.name === 'mobile') {
+    if (info.project.name === 'perf-mobile') {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
     }
