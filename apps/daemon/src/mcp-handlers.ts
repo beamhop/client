@@ -80,12 +80,17 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
         convId = t.id;
         threadId = route.via === 'reply' ? s.key.threadId : undefined;
         const m = matchMembership(agent, channel, kind, convId);
-        if (m?.membership.revokedAt) throw new BeamhopError('forbidden', `membership in ${input.target} was revoked`);
+        if (m?.membership.revokedAt)
+          throw new BeamhopError('forbidden', `membership in ${input.target} was revoked`);
         defaultRole = m?.membership.defaultRole ?? 'viewer';
       }
       const conn = d.channels.get(channel);
       if (!conn) throw new BeamhopError('unavailable', `channel ${channel} is not connected`);
-      const recipientRole = route2recipientRole(kind, turn?.role.name ?? 'viewer', input.target !== undefined);
+      const recipientRole = route2recipientRole(
+        kind,
+        turn?.role.name ?? 'viewer',
+        input.target !== undefined,
+      );
       const sent = await d.sendOutbound(
         conn,
         {
@@ -94,7 +99,11 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
           markdown: input.markdown,
           ...(turn?.hops ? { hops: turn.hops } : {}),
         },
-        { agent: agent.name, dlp: d.dlpFor(kind, recipientRole, defaultRole), recipient: `${channel}:${kind}/${convId}` },
+        {
+          agent: agent.name,
+          dlp: d.dlpFor(kind, recipientRole, defaultRole),
+          recipient: `${channel}:${kind}/${convId}`,
+        },
       );
       if (!sent) throw new BeamhopError('forbidden', 'message was blocked');
       return `sent message ${sent.id} to ${channel}:${kind}/${convId}`;
@@ -105,7 +114,8 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       const agent = d.agent(s.agent);
       const conn = s.conn();
       if (!conn) throw new BeamhopError('unavailable', 'this session has no channel');
-      if (!conn.capabilities.files) throw new BeamhopError('unavailable', `${conn.provider} cannot send files`);
+      if (!conn.capabilities.files)
+        throw new BeamhopError('unavailable', `${conn.provider} cannot send files`);
       const { roots, deny } = d.sessions.fileRoots(s);
       const f = await openConfinedFile(input.path, roots, deny, { maxBytes: MAX_FILE });
       let data: Buffer;
@@ -173,7 +183,12 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
           role:
             m.role === 'agent-self'
               ? 'you'
-              : (resolveRole({ principal: m.principal, agent, global: g, ...(s.membership ? { membership: s.membership } : {}) }) ?? 'none'),
+              : (resolveRole({
+                  principal: m.principal,
+                  agent,
+                  global: g,
+                  ...(s.membership ? { membership: s.membership } : {}),
+                }) ?? 'none'),
           at: m.at,
           text: m.text,
         })),
@@ -191,7 +206,12 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
         principal,
         name: name ?? principal,
         role:
-          resolveRole({ principal, agent, global: g, ...(s.membership ? { membership: s.membership } : {}) }) ?? 'none',
+          resolveRole({
+            principal,
+            agent,
+            global: g,
+            ...(s.membership ? { membership: s.membership } : {}),
+          }) ?? 'none',
       }));
     },
 
@@ -208,8 +228,15 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       if (agent.mesh.block.some((b) => b.toLowerCase().endsWith(npub)))
         throw new BeamhopError('forbidden', 'that agent is on the block list');
       const hops = meshHops(s);
-      if (roleOf(s).name === 'agent') throw new BeamhopError('forbidden', 'peer agents cannot start mesh conversations');
-      const answer = await d.mesh.ask({ npub, question: input.question, hops, timeoutSeconds: input.timeoutSeconds, signal: meta.signal });
+      if (roleOf(s).name === 'agent')
+        throw new BeamhopError('forbidden', 'peer agents cannot start mesh conversations');
+      const answer = await d.mesh.ask({
+        npub,
+        question: input.question,
+        hops,
+        timeoutSeconds: input.timeoutSeconds,
+        signal: meta.signal,
+      });
       return { from: npub, untrusted: true, answer };
     },
 
@@ -217,12 +244,24 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       const s = liveOf(ctx);
       if (!d.mesh) throw new BeamhopError('unavailable', 'mesh requires the nostr channel');
       const hops = meshHops(s);
-      return d.mesh.postJob({ kind: input.kind, input: input.input, inputType: input.inputType, ...(input.peer ? { peer: input.peer } : {}), hops });
+      return d.mesh.postJob({
+        kind: input.kind,
+        input: input.input,
+        inputType: input.inputType,
+        ...(input.peer ? { peer: input.peer } : {}),
+        hops,
+      });
     },
 
     async mesh_job_result(_ctx, input, meta) {
       if (!d.mesh) throw new BeamhopError('unavailable', 'mesh requires the nostr channel');
-      return { result: await d.mesh.jobResult({ jobId: input.jobId, waitSeconds: input.waitSeconds, signal: meta.signal }) };
+      return {
+        result: await d.mesh.jobResult({
+          jobId: input.jobId,
+          waitSeconds: input.waitSeconds,
+          signal: meta.signal,
+        }),
+      };
     },
 
     async session_status(ctx) {

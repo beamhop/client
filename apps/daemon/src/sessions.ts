@@ -27,7 +27,7 @@ import {
 } from '@beamhop/core';
 import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
-import type { DaemonSandbox, Daemon } from './daemon.ts';
+import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
 import { errMsg, Mutex, Semaphore, slugify, withTimeout } from './util.ts';
@@ -237,7 +237,12 @@ export class SessionManager {
     };
     let live = input.fresh ? undefined : this.findForThread(key);
     const idleCut = d.now() - input.agent.sessionIdleMinutes * 60_000;
-    if (live && !live.running && live.queue.length === 0 && Date.parse(live.record().lastActivityAt) < idleCut) {
+    if (
+      live &&
+      !live.running &&
+      live.queue.length === 0 &&
+      Date.parse(live.record().lastActivityAt) < idleCut
+    ) {
       void this.end(live, 'idle timeout');
       live = undefined;
     }
@@ -333,7 +338,10 @@ export class SessionManager {
     return this.createRuntime(live, agent, harnessId, model, profile, mode);
   }
 
-  private async prepareMounts(live: LiveSession, agent: AgentConfig): Promise<{ mounts: Runtime['mounts']; worktrees: Worktree[] }> {
+  private async prepareMounts(
+    live: LiveSession,
+    agent: AgentConfig,
+  ): Promise<{ mounts: Runtime['mounts']; worktrees: Worktree[] }> {
     const d = this.d;
     const mounts: Runtime['mounts'] = [];
     const worktrees: Worktree[] = [];
@@ -481,7 +489,10 @@ export class SessionManager {
       killSessionTree(live.id);
       void rt.harness.close().catch(() => {});
     } else {
-      await withTimeout(rt.harness.close().catch(() => {}), 5000);
+      await withTimeout(
+        rt.harness.close().catch(() => {}),
+        5000,
+      );
       killSessionTree(live.id);
     }
     rt.offViolation?.();
@@ -499,17 +510,28 @@ export class SessionManager {
     return this.d.dlpFor(live.conversationKind, turn.role.name, live.membership?.defaultRole);
   }
 
-  private async download(live: LiveSession, conn: ChannelConn | undefined, turn: Turn): Promise<Attachment[]> {
+  private async download(
+    live: LiveSession,
+    conn: ChannelConn | undefined,
+    turn: Turn,
+  ): Promise<Attachment[]> {
     const out: Attachment[] = [];
     const limit = attachmentLimit(turn.role.name);
     let i = 0;
     for (const a of turn.attachments) {
       i++;
-      const dest = join(live.inbox, `${Date.now().toString(36)}-${i}-${slugify(basename(a.name || 'file'), 80)}`);
+      const dest = join(
+        live.inbox,
+        `${Date.now().toString(36)}-${i}-${slugify(basename(a.name || 'file'), 80)}`,
+      );
       try {
-        if (a.size !== undefined && a.size > limit) throw new Error(`file exceeds ${limit} bytes for role ${turn.role.name}`);
-        const dl = (conn as unknown as { downloadFile?: (ref: string, dest: string, o: { maxBytes: number }) => Promise<unknown> })
-          ?.downloadFile;
+        if (a.size !== undefined && a.size > limit)
+          throw new Error(`file exceeds ${limit} bytes for role ${turn.role.name}`);
+        const dl = (
+          conn as unknown as {
+            downloadFile?: (ref: string, dest: string, o: { maxBytes: number }) => Promise<unknown>;
+          }
+        )?.downloadFile;
         if (a.url && typeof dl === 'function') await dl.call(conn, a.url, dest, { maxBytes: limit });
         else if (a.url && /^https:\/\//.test(a.url)) await httpDownload(a.url, dest, limit);
         else continue;
@@ -621,11 +643,14 @@ export class SessionManager {
       streamer?.start();
       if (minutes) {
         const left = Date.parse(rec.startedAt) + minutes * 60_000 - d.now();
-        watchdog = setTimeout(() => {
-          error = `session limit of ${minutes} minutes reached`;
-          abort.abort();
-          void rt.harness.cancel().catch(() => {});
-        }, Math.max(1000, left));
+        watchdog = setTimeout(
+          () => {
+            error = `session limit of ${minutes} minutes reached`;
+            abort.abort();
+            void rt.harness.cancel().catch(() => {});
+          },
+          Math.max(1000, left),
+        );
         watchdog.unref?.();
       }
       const it = rt.harness.prompt(
@@ -646,7 +671,12 @@ export class SessionManager {
             this.event(live.id, { kind: 'progress', text: ev.message });
             break;
           case 'tool_call': {
-            const entry: ToolLogEntry = { id: ev.id, name: ev.name, input: ev.input, at: new Date(d.now()).toISOString() };
+            const entry: ToolLogEntry = {
+              id: ev.id,
+              name: ev.name,
+              input: ev.input,
+              at: new Date(d.now()).toISOString(),
+            };
             if (ev.title) entry.title = ev.title;
             live.toolLog.push(entry);
             if (live.toolLog.length > 200) live.toolLog.shift();
@@ -684,7 +714,13 @@ export class SessionManager {
             break;
           }
           case 'usage':
-            this.usage(live, agent, turn, { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens, usd: ev.costUsd ?? 0 }, 'harness');
+            this.usage(
+              live,
+              agent,
+              turn,
+              { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens, usd: ev.costUsd ?? 0 },
+              'harness',
+            );
             this.event(live.id, {
               kind: 'usage',
               text: `${ev.inputTokens} in / ${ev.outputTokens} out${ev.costUsd !== undefined ? ` / $${ev.costUsd.toFixed(4)}` : ''}`,
@@ -712,11 +748,7 @@ export class SessionManager {
       if (text.trim()) this.event(live.id, { kind: 'assistant', text });
       this.usage(live, agent, turn, { minutes: elapsedMin }, 'clock');
       if (streamer) {
-        const fallback = error
-          ? `⚠️ ${error}`
-          : stopped
-            ? '⏹ Stopped.'
-            : undefined;
+        const fallback = error ? `⚠️ ${error}` : stopped ? '⏹ Stopped.' : undefined;
         if (error && text.trim()) streamer.onText(`\n\n⚠️ ${error}`);
         await streamer.finish(fallback).catch(() => {});
       }
@@ -741,7 +773,12 @@ export class SessionManager {
     const tokens = (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
     const usd = u.usd ?? 0;
     const minutes = u.minutes ?? 0;
-    if (tokens || usd) d.store.sessions.addUsage(live.id, { inputTokens: u.inputTokens ?? 0, outputTokens: u.outputTokens ?? 0, usd });
+    if (tokens || usd)
+      d.store.sessions.addUsage(live.id, {
+        inputTokens: u.inputTokens ?? 0,
+        outputTokens: u.outputTokens ?? 0,
+        usd,
+      });
     d.store.usage.add({
       agent: agent.name,
       channel: live.key.channel,
@@ -754,12 +791,22 @@ export class SessionManager {
     const delta = { tokens, usd, minutes };
     const crossings = d.budgets.record(budgetKey.agent(agent.name), delta, agent.budgets);
     if (turn) {
-      d.budgets.record(budgetKey.principal(agent.name, normalizePrincipal(turn.from.principal)), delta, turn.role.budget);
-      if (turn.peer) d.budgets.record(budgetKey.peer(agent.name, normalizePrincipal(turn.peer)), delta, agent.mesh.perPeerBudget);
+      d.budgets.record(
+        budgetKey.principal(agent.name, normalizePrincipal(turn.from.principal)),
+        delta,
+        turn.role.budget,
+      );
+      if (turn.peer)
+        d.budgets.record(
+          budgetKey.peer(agent.name, normalizePrincipal(turn.peer)),
+          delta,
+          agent.mesh.perPeerBudget,
+        );
     }
     for (const c of crossings) {
       const pct = Math.round(c.threshold * 100);
-      const what = c.metric === 'usd' ? `$${c.used.toFixed(2)} of $${c.limit}` : `${c.used} of ${c.limit} tokens`;
+      const what =
+        c.metric === 'usd' ? `$${c.used.toFixed(2)} of $${c.limit}` : `${c.used} of ${c.limit} tokens`;
       d.audit({
         type: 'budget.alert',
         severity: c.threshold >= 1 ? 'security' : 'warn',
@@ -779,11 +826,17 @@ export class SessionManager {
     if (!live) return;
     this.settleReservation(live.id);
     try {
-      this.usage(live, this.d.agent(live.agent), live.current?.turn ?? live.lastTurn, {
-        inputTokens: u.inputTokens,
-        outputTokens: u.outputTokens,
-        usd: u.costUsd ?? 0,
-      }, 'broker');
+      this.usage(
+        live,
+        this.d.agent(live.agent),
+        live.current?.turn ?? live.lastTurn,
+        {
+          inputTokens: u.inputTokens,
+          outputTokens: u.outputTokens,
+          usd: u.costUsd ?? 0,
+        },
+        'broker',
+      );
     } catch {
       /* agent deleted */
     }
@@ -817,7 +870,10 @@ export class SessionManager {
     if (agent.budgets.dailyTokens !== undefined && used.tokens >= agent.budgets.dailyTokens) return false;
     if (limit !== undefined) {
       const estimate = Math.max(0.01, limit * 0.02);
-      const reserved = [...this.reservations.values()].flat().filter((r) => now - r.at < 600_000).reduce((s, r) => s + r.usd, 0);
+      const reserved = [...this.reservations.values()]
+        .flat()
+        .filter((r) => now - r.at < 600_000)
+        .reduce((s, r) => s + r.usd, 0);
       if (used.usd + reserved + estimate > limit + 1e-9) return false;
       list.push({ usd: estimate, at: now });
     }
@@ -895,7 +951,9 @@ export class SessionManager {
 
   private kindOf(key: ThreadKey): string {
     const a = this.d.config.agents.get(key.agent);
-    const m = a?.memberships.find((x) => x.target.startsWith(`${key.channel}:`) && x.target.endsWith(`/${key.conversationId}`));
+    const m = a?.memberships.find(
+      (x) => x.target.startsWith(`${key.channel}:`) && x.target.endsWith(`/${key.conversationId}`),
+    );
     return m ? m.target.slice(m.target.indexOf(':') + 1).split('/')[0]! : 'dm';
   }
 
@@ -910,7 +968,13 @@ export class SessionManager {
         status: 'idle',
         harness: agent.harness,
       });
-      live = new LiveSession(this.d, rec.id, key, this.kindOf(key) as LiveSession['conversationKind'], undefined);
+      live = new LiveSession(
+        this.d,
+        rec.id,
+        key,
+        this.kindOf(key) as LiveSession['conversationKind'],
+        undefined,
+      );
       this.attach(live);
     }
     live.overrides = { ...live.overrides, ...patch };
@@ -931,7 +995,9 @@ export class SessionManager {
   }
 
   async closeAll(opts: { hard: boolean }): Promise<void> {
-    await Promise.all(this.all().map((s) => this.end(s, opts.hard ? 'emergency stop' : 'daemon shutdown', opts)));
+    await Promise.all(
+      this.all().map((s) => this.end(s, opts.hard ? 'emergency stop' : 'daemon shutdown', opts)),
+    );
   }
 
   /** Housekeeping: end idle sessions. */
@@ -949,9 +1015,11 @@ export class SessionManager {
       if (Date.parse(s.record().lastActivityAt) < now - idle * 60_000) await this.end(s, 'idle timeout');
     }
     for (const a of this.d.config.agents.list())
-      this.d.store.sessions.endIdle(a.name, new Date(now - a.sessionIdleMinutes * 60_000).toISOString()).forEach((id) => {
-        if (!this.lives.has(id)) this.emitSession(id);
-      });
+      this.d.store.sessions
+        .endIdle(a.name, new Date(now - a.sessionIdleMinutes * 60_000).toISOString())
+        .forEach((id) => {
+          if (!this.lives.has(id)) this.emitSession(id);
+        });
   }
 
   /** Effective roots for channel_send_file and deny list. */

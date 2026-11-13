@@ -68,6 +68,24 @@ importers:
       '@beamhop/deploy':
         specifier: workspace:*
         version: link:../../packages/deploy
+      '@beamhop/harness-acp':
+        specifier: workspace:*
+        version: link:../../packages/harness-acp
+      '@beamhop/harness-catalog':
+        specifier: workspace:*
+        version: link:../../packages/harness-catalog
+      '@beamhop/harness-claude':
+        specifier: workspace:*
+        version: link:../../packages/harness-claude
+      '@beamhop/harness-codex':
+        specifier: workspace:*
+        version: link:../../packages/harness-codex
+      '@beamhop/harness-discovery':
+        specifier: workspace:*
+        version: link:../../packages/harness-discovery
+      '@beamhop/harness-pi':
+        specifier: workspace:*
+        version: link:../../packages/harness-pi
       '@beamhop/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp

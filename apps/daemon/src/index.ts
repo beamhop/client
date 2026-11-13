@@ -7,8 +7,8 @@ export * from './home.ts';
 export type { MeshProvider } from './mesh.ts';
 export * from './output.ts';
 export * from './registry.ts';
-export * from './rpc-server.ts';
 export { conversationTarget, matchMembership } from './router.ts';
+export * from './rpc-server.ts';
 export { stricterProfile } from './sessions.ts';
 
 export interface RunDaemonOptions {

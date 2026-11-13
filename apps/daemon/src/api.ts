@@ -24,7 +24,7 @@ import {
   type SandboxPolicy,
   type ScheduleConfig,
 } from '@beamhop/core';
-import { probeSandbox, compilePolicy } from '@beamhop/sandbox';
+import { compilePolicy, probeSandbox } from '@beamhop/sandbox';
 import { channelSecretName } from './channels.ts';
 import { type Daemon, LOCAL_OWNER, VERSION } from './daemon.ts';
 import { isInternalSecret } from './home.ts';
@@ -92,16 +92,38 @@ export class ApiHandlers {
     for (const h of this.customHarnesses.values()) if (!ids.has(h.id)) list.push(h);
     for (const id of this.d.registry.harnesses.keys())
       if (!list.some((h) => h.id === id))
-        list.push({ id, displayName: this.d.registry.harness(id)?.displayName ?? id, command: id, status: 'ready', protocol: 'acp' });
+        list.push({
+          id,
+          displayName: this.d.registry.harness(id)?.displayName ?? id,
+          command: id,
+          status: 'ready',
+          protocol: 'acp',
+        });
     return list;
   }
 
   private async scan(): Promise<HarnessView[]> {
     const d = this.d;
     const out: HarnessView[] = [];
-    const add = (h: { id: string; displayName: string; command: string; status: HarnessView['status']; protocol: string; version?: string; path?: string; message?: string; install?: HarnessView['install'] }) => {
+    const add = (h: {
+      id: string;
+      displayName: string;
+      command: string;
+      status: HarnessView['status'];
+      protocol: string;
+      version?: string;
+      path?: string;
+      message?: string;
+      install?: HarnessView['install'];
+    }) => {
       if (out.some((x) => x.id === h.id)) return;
-      const v: HarnessView = { id: h.id, displayName: h.displayName, command: h.command, status: h.status, protocol: h.protocol };
+      const v: HarnessView = {
+        id: h.id,
+        displayName: h.displayName,
+        command: h.command,
+        status: h.status,
+        protocol: h.protocol,
+      };
       if (h.version) v.version = h.version;
       if (h.path) v.path = h.path;
       if (h.message) v.message = h.message;
@@ -119,9 +141,23 @@ export class ApiHandlers {
       try {
         const det = await p.detect();
         if (det) add(det);
-        else add({ id: p.id, displayName: p.displayName, command: p.id, status: 'not-installed', protocol: 'acp' });
+        else
+          add({
+            id: p.id,
+            displayName: p.displayName,
+            command: p.id,
+            status: 'not-installed',
+            protocol: 'acp',
+          });
       } catch (e) {
-        add({ id: p.id, displayName: p.displayName, command: p.id, status: 'error', protocol: 'acp', message: errMsg(e) });
+        add({
+          id: p.id,
+          displayName: p.displayName,
+          command: p.id,
+          status: 'error',
+          protocol: 'acp',
+          message: errMsg(e),
+        });
       }
     }
     for (const h of this.customHarnesses.values()) add(h);
@@ -186,15 +222,28 @@ export class ApiHandlers {
           id: 'harness.any',
           title: 'Harnesses',
           status: hs.some((x) => x.status === 'ready') ? 'ok' : 'warn',
-          message: hs.length ? hs.map((x) => `${x.id}: ${x.status}`).join(', ') : 'no harness adapters installed',
-          ...(hs.some((x) => x.status === 'ready') ? {} : { fix: 'Install a harness (e.g. `npm i -g @anthropic-ai/claude-code`) and run `beamhop harness scan`.' }),
+          message: hs.length
+            ? hs.map((x) => `${x.id}: ${x.status}`).join(', ')
+            : 'no harness adapters installed',
+          ...(hs.some((x) => x.status === 'ready')
+            ? {}
+            : {
+                fix: 'Install a harness (e.g. `npm i -g @anthropic-ai/claude-code`) and run `beamhop harness scan`.',
+              }),
         });
         for (const c of d.config.channels.list()) {
           const v = d.channels.view(c);
           checks.push({
             id: `channel.${c.name}`,
             title: `Channel ${c.name} (${c.provider})`,
-            status: v.status === 'connected' ? 'ok' : v.status === 'disabled' ? 'skip' : d.isPanic() ? 'warn' : 'fail',
+            status:
+              v.status === 'connected'
+                ? 'ok'
+                : v.status === 'disabled'
+                  ? 'skip'
+                  : d.isPanic()
+                    ? 'warn'
+                    : 'fail',
             message: v.error ?? v.status,
           });
         }
@@ -204,9 +253,18 @@ export class ApiHandlers {
           title: 'Secret storage',
           status: secretsBackend === 'memory' ? 'warn' : 'ok',
           message: `backend: ${secretsBackend}`,
-          ...(secretsBackend === 'memory' ? { fix: 'Install a keychain (libsecret) or set BEAMHOP_VAULT_PASSPHRASE.' } : {}),
+          ...(secretsBackend === 'memory'
+            ? { fix: 'Install a keychain (libsecret) or set BEAMHOP_VAULT_PASSPHRASE.' }
+            : {}),
         });
-        if (d.isPanic()) checks.push({ id: 'panic', title: 'Panic', status: 'warn', message: 'panic mode is active', fix: 'beamhop resume' });
+        if (d.isPanic())
+          checks.push({
+            id: 'panic',
+            title: 'Panic',
+            status: 'warn',
+            message: 'panic mode is active',
+            fix: 'beamhop resume',
+          });
         return { checks };
       },
       'system.panic': async (p, ctx) => {
@@ -231,18 +289,31 @@ export class ApiHandlers {
         const merged = deepMerge(base, config) as Record<string, unknown>;
         const parsed = AgentConfig.safeParse(merged);
         if (!parsed.success)
-          throw new BeamhopError('invalid_input', parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
-        if (d.config.agents.has(parsed.data.name)) throw new BeamhopError('conflict', `agent ${parsed.data.name} exists`);
+          throw new BeamhopError(
+            'invalid_input',
+            parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+          );
+        if (d.config.agents.has(parsed.data.name))
+          throw new BeamhopError('conflict', `agent ${parsed.data.name} exists`);
         const v = this.saveAgent(parsed.data);
-        d.audit({ type: 'agent.created', severity: 'info', summary: `Agent ${parsed.data.name} created${preset ? ` from ${preset}` : ''}`, actor: this.principal(ctx), agent: parsed.data.name });
+        d.audit({
+          type: 'agent.created',
+          severity: 'info',
+          summary: `Agent ${parsed.data.name} created${preset ? ` from ${preset}` : ''}`,
+          actor: this.principal(ctx),
+          agent: parsed.data.name,
+        });
         return v;
       },
       'agent.update': async ({ name, patch }, ctx) => {
         const cur = d.agent(name);
-        if (patch.name !== undefined && patch.name !== name) throw new BeamhopError('invalid_input', 'use agent.clone to rename');
+        if (patch.name !== undefined && patch.name !== name)
+          throw new BeamhopError('invalid_input', 'use agent.clone to rename');
         const next = deepMerge(cur, patch);
         const v = this.saveAgent(next);
-        const sensitive = ['sandbox', 'grants', 'mounts', 'routes', 'public', 'memberships', 'mesh'].filter((k) => k in patch);
+        const sensitive = ['sandbox', 'grants', 'mounts', 'routes', 'public', 'memberships', 'mesh'].filter(
+          (k) => k in patch,
+        );
         d.audit({
           type: 'agent.updated',
           severity: sensitive.length ? 'security' : 'info',
@@ -255,28 +326,49 @@ export class ApiHandlers {
       },
       'agent.delete': async ({ name }, ctx) => {
         d.agent(name);
-        for (const s of d.sessions.all()) if (s.agent === name) await d.sessions.end(s, 'agent deleted', { hard: true });
+        for (const s of d.sessions.all())
+          if (s.agent === name) await d.sessions.end(s, 'agent deleted', { hard: true });
         d.config.agents.delete(name);
         for (const sc of d.config.schedules.list().filter((s) => s.agent === name)) {
           d.scheduler.disarm(sc.id);
           d.config.schedules.delete(sc.id);
         }
-        d.audit({ type: 'agent.deleted', severity: 'warn', summary: `Agent ${name} deleted`, actor: this.principal(ctx), agent: name });
+        d.audit({
+          type: 'agent.deleted',
+          severity: 'warn',
+          summary: `Agent ${name} deleted`,
+          actor: this.principal(ctx),
+          agent: name,
+        });
         return OK;
       },
       'agent.start': async ({ name }, ctx) => {
         d.assertNotPanic();
         d.agent(name);
         d.store.kv.delete('agent-stopped', name);
-        d.audit({ type: 'agent.start', severity: 'info', summary: `Agent ${name} started`, actor: this.principal(ctx), agent: name });
+        d.audit({
+          type: 'agent.start',
+          severity: 'info',
+          summary: `Agent ${name} started`,
+          actor: this.principal(ctx),
+          agent: name,
+        });
         d.emitAgent(name);
         return this.agentView(name);
       },
       'agent.stop': async ({ name, hard }, ctx) => {
         d.agent(name);
         d.store.kv.set('agent-stopped', name, true);
-        for (const s of d.sessions.all()) if (s.agent === name) await d.sessions.end(s, hard ? 'agent hard-stopped' : 'agent stopped', { hard });
-        d.audit({ type: 'agent.stop', severity: hard ? 'security' : 'info', summary: `Agent ${name} stopped${hard ? ' (hard)' : ''}`, actor: this.principal(ctx), agent: name });
+        for (const s of d.sessions.all())
+          if (s.agent === name)
+            await d.sessions.end(s, hard ? 'agent hard-stopped' : 'agent stopped', { hard });
+        d.audit({
+          type: 'agent.stop',
+          severity: hard ? 'security' : 'info',
+          summary: `Agent ${name} stopped${hard ? ' (hard)' : ''}`,
+          actor: this.principal(ctx),
+          agent: name,
+        });
         d.emitAgent(name);
         return this.agentView(name);
       },
@@ -284,12 +376,29 @@ export class ApiHandlers {
         const cur = d.agent(name);
         if (d.config.agents.has(newName)) throw new BeamhopError('conflict', `agent ${newName} exists`);
         // A clone gets its own identity and no memberships (it must be joined explicitly).
-        const v = this.saveAgent({ ...cur, name: newName, identity: {}, memberships: [], displayName: cur.displayName ? `${cur.displayName} (copy)` : undefined });
-        d.audit({ type: 'agent.cloned', severity: 'info', summary: `Agent ${name} cloned to ${newName}`, actor: this.principal(ctx), agent: newName });
+        const v = this.saveAgent({
+          ...cur,
+          name: newName,
+          identity: {},
+          memberships: [],
+          displayName: cur.displayName ? `${cur.displayName} (copy)` : undefined,
+        });
+        d.audit({
+          type: 'agent.cloned',
+          severity: 'info',
+          summary: `Agent ${name} cloned to ${newName}`,
+          actor: this.principal(ctx),
+          agent: newName,
+        });
         return v;
       },
       'agent.presets': async () => ({
-        presets: PRESETS.map((p) => ({ id: p.id, title: p.title, description: p.description, config: p.config as Record<string, unknown> })),
+        presets: PRESETS.map((p) => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          config: p.config as Record<string, unknown>,
+        })),
       }),
       'agent.instructions': async ({ name }) => {
         const a = d.agent(name);
@@ -315,14 +424,29 @@ export class ApiHandlers {
       'harness.add': async ({ id, command, args }, ctx) => {
         const hid = id.startsWith('acp:') ? id : `acp:${id}`;
         const factory = d.registry.acpFactory;
-        let view: HarnessView = { id: hid, displayName: id, command: [command, ...args].join(' '), status: 'error', protocol: 'acp', message: 'ACP adapter (@beamhop/harness-acp) is not installed' };
+        let view: HarnessView = {
+          id: hid,
+          displayName: id,
+          command: [command, ...args].join(' '),
+          status: 'error',
+          protocol: 'acp',
+          message: 'ACP adapter (@beamhop/harness-acp) is not installed',
+        };
         if (factory) {
           const plugin = factory({ id: hid, command, args });
           d.registry.addHarness(plugin);
           try {
             const det = await plugin.detect();
             view = det
-              ? { id: hid, displayName: det.displayName, command: det.command, status: det.status, protocol: det.protocol, ...(det.version ? { version: det.version } : {}), ...(det.message ? { message: det.message } : {}) }
+              ? {
+                  id: hid,
+                  displayName: det.displayName,
+                  command: det.command,
+                  status: det.status,
+                  protocol: det.protocol,
+                  ...(det.version ? { version: det.version } : {}),
+                  ...(det.message ? { message: det.message } : {}),
+                }
               : { ...view, status: 'error', message: 'ACP initialize handshake failed' };
           } catch (e) {
             view = { ...view, message: errMsg(e) };
@@ -331,7 +455,12 @@ export class ApiHandlers {
         this.customHarnesses.set(hid, view);
         d.store.kv.set('harness', 'custom', [...this.customHarnesses.values()]);
         d.store.kv.set('harness-defs', hid, { command, args });
-        d.audit({ type: 'harness.added', severity: 'security', summary: `Custom ACP harness ${hid} added (${command})`, actor: this.principal(ctx) });
+        d.audit({
+          type: 'harness.added',
+          severity: 'security',
+          summary: `Custom ACP harness ${hid} added (${command})`,
+          actor: this.principal(ctx),
+        });
         return view;
       },
 
@@ -353,14 +482,27 @@ export class ApiHandlers {
         if (d.config.channels.has(name)) throw new BeamhopError('conflict', `channel ${name} exists`);
         const refs: string[] = [];
         for (const [field, value] of Object.entries(secrets)) {
-          if (!/^[A-Za-z0-9_-]{1,64}$/.test(field)) throw new BeamhopError('invalid_input', `invalid secret field ${field}`);
+          if (!/^[A-Za-z0-9_-]{1,64}$/.test(field))
+            throw new BeamhopError('invalid_input', `invalid secret field ${field}`);
           const ref = channelSecretName(name, field);
           await d.secrets.set(ref, value);
           refs.push(ref);
         }
         d.invalidateSecretCache();
-        const cfg: ChannelConfig = d.config.channels.save({ name, provider, settings: values, secretRefs: refs, enabled: true, createdAt: new Date(d.now()).toISOString() });
-        d.audit({ type: 'channel.added', severity: 'security', summary: `Channel ${name} (${provider}) added`, actor: this.principal(ctx) });
+        const cfg: ChannelConfig = d.config.channels.save({
+          name,
+          provider,
+          settings: values,
+          secretRefs: refs,
+          enabled: true,
+          createdAt: new Date(d.now()).toISOString(),
+        });
+        d.audit({
+          type: 'channel.added',
+          severity: 'security',
+          summary: `Channel ${name} (${provider}) added`,
+          actor: this.principal(ctx),
+        });
         if (!d.isPanic()) await d.channels.connect(cfg).catch(() => {});
         return d.channels.view(cfg);
       },
@@ -370,14 +512,29 @@ export class ApiHandlers {
         for (const ref of cfg.secretRefs) await d.secrets.delete(ref);
         d.invalidateSecretCache();
         d.config.channels.delete(name);
-        d.audit({ type: 'channel.removed', severity: 'security', summary: `Channel ${name} removed`, actor: this.principal(ctx) });
+        d.audit({
+          type: 'channel.removed',
+          severity: 'security',
+          summary: `Channel ${name} removed`,
+          actor: this.principal(ctx),
+        });
         return OK;
       },
       'channel.pair': async ({ name }, ctx) => {
         const cfg = d.config.channels.require(name);
         const code = createPairingCode({ now: d.now() });
-        d.store.pairingCodes.put({ code: code.code, purpose: 'channel-pair', expiresAt: code.expiresAt, data: { channel: name } });
-        d.audit({ type: 'pairing.started', severity: 'security', summary: `Pairing code issued for channel ${name}`, actor: this.principal(ctx) });
+        d.store.pairingCodes.put({
+          code: code.code,
+          purpose: 'channel-pair',
+          expiresAt: code.expiresAt,
+          data: { channel: name },
+        });
+        d.audit({
+          type: 'pairing.started',
+          severity: 'security',
+          summary: `Pairing code issued for channel ${name}`,
+          actor: this.principal(ctx),
+        });
         const conn = d.channels.get(name);
         const bot = conn?.self.handle ?? conn?.self.displayName ?? `the ${cfg.provider} bot`;
         return {
@@ -393,13 +550,26 @@ export class ApiHandlers {
         const { revokedAt: _r, ...m } = membership;
         const memberships = [...a.memberships.filter((x) => x.target !== m.target), m];
         const v = this.saveAgent({ ...a, memberships });
-        d.audit({ type: 'membership.join', severity: 'security', summary: `${agent} joined ${m.target} (default role ${m.defaultRole})`, actor: this.principal(ctx), agent, data: { target: m.target } });
+        d.audit({
+          type: 'membership.join',
+          severity: 'security',
+          summary: `${agent} joined ${m.target} (default role ${m.defaultRole})`,
+          actor: this.principal(ctx),
+          agent,
+          data: { target: m.target },
+        });
         return v;
       },
       'membership.leave': async ({ agent, target }, ctx) => {
         const a = d.agent(agent);
         const v = this.saveAgent({ ...a, memberships: a.memberships.filter((x) => x.target !== target) });
-        d.audit({ type: 'membership.leave', severity: 'info', summary: `${agent} left ${target}`, actor: this.principal(ctx), agent });
+        d.audit({
+          type: 'membership.leave',
+          severity: 'info',
+          summary: `${agent} left ${target}`,
+          actor: this.principal(ctx),
+          agent,
+        });
         return v;
       },
 
@@ -426,7 +596,8 @@ export class ApiHandlers {
           ...(live?.membership ? { membership: live.membership } : {}),
           turn: {
             text,
-            promptFor: () => `[beamhop] from=local owner via=${ctx.transport} (role=owner) time=${new Date(d.now()).toISOString()}\n\n${text}`,
+            promptFor: () =>
+              `[beamhop] from=local owner via=${ctx.transport} (role=owner) time=${new Date(d.now()).toISOString()}\n\n${text}`,
             from: { principal: this.principal(ctx), displayName: 'owner', role: 'owner' },
             role: owner,
             attachments: [],
@@ -450,7 +621,8 @@ export class ApiHandlers {
           ...(title ? { title } : {}),
           turn: {
             text,
-            promptFor: () => `[beamhop] from=local owner via=${ctx.transport} (role=owner) time=${new Date(d.now()).toISOString()}\n\n${text}`,
+            promptFor: () =>
+              `[beamhop] from=local owner via=${ctx.transport} (role=owner) time=${new Date(d.now()).toISOString()}\n\n${text}`,
             from: { principal: this.principal(ctx), displayName: 'owner', role: 'owner' },
             role: owner,
             attachments: [],
@@ -480,20 +652,39 @@ export class ApiHandlers {
         return { roles: allRoleDefs(g.roles as RoleOverride[]), grants: g.grants };
       },
       'role.grant': async ({ principal, role, agent }, ctx) => {
-        if (!effectiveRoleDef(role, d.global().roles as RoleOverride[])) throw new BeamhopError('invalid_input', `unknown role ${role}`);
+        if (!effectiveRoleDef(role, d.global().roles as RoleOverride[]))
+          throw new BeamhopError('invalid_input', `unknown role ${role}`);
         if (role === 'owner') throw new BeamhopError('invalid_input', 'use owner.add to add owners');
-        if (agent) d.config.agents.update(agent, (a) => ({ ...a, grants: { ...a.grants, [principal]: role } }));
+        if (agent)
+          d.config.agents.update(agent, (a) => ({ ...a, grants: { ...a.grants, [principal]: role } }));
         else d.updateGlobal((c) => ({ ...c, grants: { ...c.grants, [principal]: role } }));
-        d.audit({ type: 'role.grant', severity: 'security', summary: `Granted ${role} to ${principal}${agent ? ` on ${agent}` : ' globally'}`, actor: this.principal(ctx), ...(agent ? { agent } : {}), data: { principal, role } });
+        d.audit({
+          type: 'role.grant',
+          severity: 'security',
+          summary: `Granted ${role} to ${principal}${agent ? ` on ${agent}` : ' globally'}`,
+          actor: this.principal(ctx),
+          ...(agent ? { agent } : {}),
+          data: { principal, role },
+        });
         if (agent) d.emitAgent(agent);
         return OK;
       },
       'role.revoke': async ({ principal, agent }, ctx) => {
         const n = normalizePrincipal(principal);
-        const strip = (g: Record<string, string>) => Object.fromEntries(Object.entries(g).filter(([k]) => normalizePrincipal(k) !== n && k !== principal));
+        const strip = (g: Record<string, string>) =>
+          Object.fromEntries(
+            Object.entries(g).filter(([k]) => normalizePrincipal(k) !== n && k !== principal),
+          );
         if (agent) d.config.agents.update(agent, (a) => ({ ...a, grants: strip(a.grants) }));
         else d.updateGlobal((c) => ({ ...c, grants: strip(c.grants) }));
-        d.audit({ type: 'role.revoke', severity: 'security', summary: `Revoked role of ${principal}${agent ? ` on ${agent}` : ' globally'}`, actor: this.principal(ctx), ...(agent ? { agent } : {}), data: { principal } });
+        d.audit({
+          type: 'role.revoke',
+          severity: 'security',
+          summary: `Revoked role of ${principal}${agent ? ` on ${agent}` : ' globally'}`,
+          actor: this.principal(ctx),
+          ...(agent ? { agent } : {}),
+          data: { principal },
+        });
         return OK;
       },
       'principal.link': async ({ person, principal }, ctx) => {
@@ -502,7 +693,13 @@ export class ApiHandlers {
           if (list.some((p) => normalizePrincipal(p) === normalizePrincipal(principal))) return c;
           return { ...c, people: { ...c.people, [person]: [...list, principal] } };
         });
-        d.audit({ type: 'principal.link', severity: 'security', summary: `Linked ${principal} to ${person}`, actor: this.principal(ctx), data: { person, principal } });
+        d.audit({
+          type: 'principal.link',
+          severity: 'security',
+          summary: `Linked ${principal} to ${person}`,
+          actor: this.principal(ctx),
+          data: { person, principal },
+        });
         return OK;
       },
       'owner.add': async ({ principal }, ctx) => {
@@ -510,23 +707,44 @@ export class ApiHandlers {
         if (principal.startsWith('nostr:') && !d.global().nostr.ownerNpub)
           d.updateGlobal((c) => ({ ...c, nostr: { ...c.nostr, ownerNpub: principal.slice(6) } }));
         d.refreshControlAllowlist();
-        d.audit({ type: 'owner.add', severity: 'security', summary: `Added owner ${principal}`, actor: this.principal(ctx), data: { principal } });
+        d.audit({
+          type: 'owner.add',
+          severity: 'security',
+          summary: `Added owner ${principal}`,
+          actor: this.principal(ctx),
+          data: { principal },
+        });
         return OK;
       },
       'owner.remove': async ({ principal }, ctx) => {
         const g = d.global();
         const n = normalizePrincipal(principal);
         const rest = g.owners.filter((o) => normalizePrincipal(o) !== n);
-        if (rest.length === g.owners.length) throw new BeamhopError('not_found', `${principal} is not an owner`);
+        if (rest.length === g.owners.length)
+          throw new BeamhopError('not_found', `${principal} is not an owner`);
         if (rest.length === 0) throw new BeamhopError('conflict', 'at least one owner must remain');
         d.updateGlobal((c) => ({
           ...c,
           owners: rest,
-          people: Object.fromEntries(Object.entries(c.people).map(([k, v]) => [k, k === 'owner' ? v.filter((p) => normalizePrincipal(p) !== n) : v])),
-          nostr: c.nostr.ownerNpub && n === normalizePrincipal(`nostr:${c.nostr.ownerNpub}`) ? { ...c.nostr, ownerNpub: undefined } : c.nostr,
+          people: Object.fromEntries(
+            Object.entries(c.people).map(([k, v]) => [
+              k,
+              k === 'owner' ? v.filter((p) => normalizePrincipal(p) !== n) : v,
+            ]),
+          ),
+          nostr:
+            c.nostr.ownerNpub && n === normalizePrincipal(`nostr:${c.nostr.ownerNpub}`)
+              ? { ...c.nostr, ownerNpub: undefined }
+              : c.nostr,
         }));
         d.refreshControlAllowlist();
-        d.audit({ type: 'owner.remove', severity: 'security', summary: `Removed owner ${principal}`, actor: this.principal(ctx), data: { principal } });
+        d.audit({
+          type: 'owner.remove',
+          severity: 'security',
+          summary: `Removed owner ${principal}`,
+          actor: this.principal(ctx),
+          data: { principal },
+        });
         return OK;
       },
 
@@ -534,13 +752,28 @@ export class ApiHandlers {
       'policy.get': async ({ name }) => this.effectivePolicy(name),
       'policy.set': async ({ name, profile, policy }, ctx) => {
         const prof = profile as 'strict' | 'workspace' | 'custom';
-        if (!['strict', 'workspace', 'custom'].includes(prof)) throw new BeamhopError('invalid_input', `unknown profile ${profile}`);
-        d.config.agents.update(name, (a) => ({ ...a, sandbox: { profile: prof, ...(policy ? { policy } : a.sandbox.policy ? { policy: a.sandbox.policy } : {}) } }));
-        d.audit({ type: 'policy.set', severity: 'security', summary: `Sandbox policy of ${name} set to ${profile}`, actor: this.principal(ctx), agent: name });
+        if (!['strict', 'workspace', 'custom'].includes(prof))
+          throw new BeamhopError('invalid_input', `unknown profile ${profile}`);
+        d.config.agents.update(name, (a) => ({
+          ...a,
+          sandbox: {
+            profile: prof,
+            ...(policy ? { policy } : a.sandbox.policy ? { policy: a.sandbox.policy } : {}),
+          },
+        }));
+        d.audit({
+          type: 'policy.set',
+          severity: 'security',
+          summary: `Sandbox policy of ${name} set to ${profile}`,
+          actor: this.principal(ctx),
+          agent: name,
+        });
         d.emitAgent(name);
         return OK;
       },
-      'policy.suggestions': async ({ name }) => ({ suggestions: d.store.policySuggestions.list(name ? { agent: name } : {}) }),
+      'policy.suggestions': async ({ name }) => ({
+        suggestions: d.store.policySuggestions.list(name ? { agent: name } : {}),
+      }),
       'policy.applySuggestion': async ({ id, accept }, ctx) => {
         const s = d.store.policySuggestions.get(id);
         if (!s) throw new BeamhopError('not_found', `suggestion ${id} not found`);
@@ -548,14 +781,28 @@ export class ApiHandlers {
         if (accept) {
           d.config.agents.update(s.agent, (a) => {
             const pol = (a.sandbox.policy ?? {}) as Record<string, Record<string, string[]>>;
-            const [sect, key] = s.kind === 'net.allow' ? ['net', 'allow'] : s.kind === 'fs.read' ? ['fs', 'read'] : ['fs', 'write'];
+            const [sect, key] =
+              s.kind === 'net.allow'
+                ? ['net', 'allow']
+                : s.kind === 'fs.read'
+                  ? ['fs', 'read']
+                  : ['fs', 'write'];
             const cur = pol[sect!] ?? {};
             const list = [...new Set([...(cur[key!] ?? []), s.value])];
-            return { ...a, sandbox: { ...a.sandbox, policy: { ...pol, [sect!]: { ...cur, [key!]: list } } as never } };
+            return {
+              ...a,
+              sandbox: { ...a.sandbox, policy: { ...pol, [sect!]: { ...cur, [key!]: list } } as never },
+            };
           });
           d.emitAgent(s.agent);
         }
-        d.audit({ type: 'policy.suggestion', severity: 'security', summary: `${accept ? 'Accepted' : 'Rejected'} sandbox suggestion ${s.kind} ${s.value} for ${s.agent}`, actor: this.principal(ctx), agent: s.agent });
+        d.audit({
+          type: 'policy.suggestion',
+          severity: 'security',
+          summary: `${accept ? 'Accepted' : 'Rejected'} sandbox suggestion ${s.kind} ${s.value} for ${s.agent}`,
+          actor: this.principal(ctx),
+          agent: s.agent,
+        });
         return OK;
       },
 
@@ -568,14 +815,26 @@ export class ApiHandlers {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
         await d.secrets.set(name, value);
         d.invalidateSecretCache();
-        d.audit({ type: 'secret.set', severity: 'security', summary: `Secret ${name} set`, actor: this.principal(ctx), data: { name } });
+        d.audit({
+          type: 'secret.set',
+          severity: 'security',
+          summary: `Secret ${name} set`,
+          actor: this.principal(ctx),
+          data: { name },
+        });
         return OK;
       },
       'secret.delete': async ({ name }, ctx) => {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
         await d.secrets.delete(name);
         d.invalidateSecretCache();
-        d.audit({ type: 'secret.delete', severity: 'security', summary: `Secret ${name} deleted`, actor: this.principal(ctx), data: { name } });
+        d.audit({
+          type: 'secret.delete',
+          severity: 'security',
+          summary: `Secret ${name} deleted`,
+          actor: this.principal(ctx),
+          data: { name },
+        });
         return OK;
       },
 
@@ -595,7 +854,13 @@ export class ApiHandlers {
           webhook = { url: `${d.api?.url ?? `http://127.0.0.1:${d.global().api.port}`}/hooks/${id}`, secret };
         }
         d.scheduler.rearm(id);
-        d.audit({ type: 'schedule.added', severity: 'info', summary: `Schedule ${id} (${s.kind}) added for ${s.agent}`, actor: this.principal(ctx), agent: s.agent });
+        d.audit({
+          type: 'schedule.added',
+          severity: 'info',
+          summary: `Schedule ${id} (${s.kind}) added for ${s.agent}`,
+          actor: this.principal(ctx),
+          agent: s.agent,
+        });
         return { ...s, ...(webhook ? { webhook } : {}) };
       },
       'schedule.update': async ({ id, patch }, ctx) => {
@@ -604,7 +869,13 @@ export class ApiHandlers {
         d.scheduler.validate(next);
         const s = d.config.schedules.save(next);
         d.scheduler.rearm(id);
-        d.audit({ type: 'schedule.updated', severity: 'info', summary: `Schedule ${id} updated`, actor: this.principal(ctx), agent: s.agent });
+        d.audit({
+          type: 'schedule.updated',
+          severity: 'info',
+          summary: `Schedule ${id} updated`,
+          actor: this.principal(ctx),
+          agent: s.agent,
+        });
         return s;
       },
       'schedule.remove': async ({ id }, ctx) => {
@@ -612,7 +883,13 @@ export class ApiHandlers {
         d.scheduler.disarm(id);
         d.config.schedules.delete(id);
         await d.secrets.delete(webhookSecretName(id));
-        d.audit({ type: 'schedule.removed', severity: 'info', summary: `Schedule ${id} removed`, actor: this.principal(ctx), agent: s.agent });
+        d.audit({
+          type: 'schedule.removed',
+          severity: 'info',
+          summary: `Schedule ${id} removed`,
+          actor: this.principal(ctx),
+          agent: s.agent,
+        });
         return OK;
       },
       'schedule.run': async ({ id }) => {
@@ -626,7 +903,12 @@ export class ApiHandlers {
       'deploy.providers': async () => {
         const out = [];
         for (const dep of d.registry.deployers.values())
-          out.push({ id: dep.id, displayName: dep.displayName, kind: dep.kind, configured: (await d.secrets.get(`deploy.${dep.id}.token`)) !== undefined });
+          out.push({
+            id: dep.id,
+            displayName: dep.displayName,
+            kind: dep.kind,
+            configured: (await d.secrets.get(`deploy.${dep.id}.token`)) !== undefined,
+          });
         return { providers: out };
       },
       'deploy.options': async ({ provider }) => {
@@ -655,7 +937,14 @@ export class ApiHandlers {
           ...(plan ? { monthlyCostUsd: plan.monthlyCostUsd } : {}),
           ...(res.address ? { address: res.address } : {}),
         });
-        d.audit({ type: 'deploy.apply', severity: 'security', summary: `Deployed ${p.agent} to ${p.provider} (${p.mode})`, actor: this.principal(ctx), agent: p.agent, data: { id: res.id } });
+        d.audit({
+          type: 'deploy.apply',
+          severity: 'security',
+          summary: `Deployed ${p.agent} to ${p.provider} (${p.mode})`,
+          actor: this.principal(ctx),
+          agent: p.agent,
+          data: { id: res.id },
+        });
         const { address: _a, data: _d, ...view } = rec;
         return view;
       },
@@ -682,44 +971,85 @@ export class ApiHandlers {
         if (!r) throw new BeamhopError('not_found', `deployment ${id} not found`);
         await this.requireDeployer(r.provider).destroy(id);
         d.store.deployments.setStatus(id, 'destroyed');
-        d.audit({ type: 'deploy.destroy', severity: 'security', summary: `Destroyed deployment ${id}`, actor: this.principal(ctx), agent: r.agent });
+        d.audit({
+          type: 'deploy.destroy',
+          severity: 'security',
+          summary: `Destroyed deployment ${id}`,
+          actor: this.principal(ctx),
+          agent: r.agent,
+        });
         return OK;
       },
 
       // ── audit & usage ──
       'audit.query': async ({ agent, severity, limit, before }) => ({
-        events: d.store.audit.query({ ...(agent ? { agent } : {}), ...(severity ? { severity } : {}), limit, ...(before ? { before } : {}) }),
+        events: d.store.audit.query({
+          ...(agent ? { agent } : {}),
+          ...(severity ? { severity } : {}),
+          limit,
+          ...(before ? { before } : {}),
+        }),
       }),
-      'usage.query': async ({ days, agent }) => ({ rows: d.store.usage.query({ days, ...(agent ? { agent } : {}) }) }),
+      'usage.query': async ({ days, agent }) => ({
+        rows: d.store.usage.query({ days, ...(agent ? { agent } : {}) }),
+      }),
 
       // ── devices ──
       'device.list': async () => ({ devices: d.store.devices.list() }),
       'device.pairStart': async ({ name }, ctx) => {
         const code = createPairingCode({ now: d.now() });
-        d.store.pairingCodes.put({ code: code.code, purpose: 'device', expiresAt: code.expiresAt, data: { name } });
+        d.store.pairingCodes.put({
+          code: code.code,
+          purpose: 'device',
+          expiresAt: code.expiresAt,
+          data: { name },
+        });
         const q = new URLSearchParams({ code: code.code, name });
         const control = d.control as unknown as { npub?: string } | undefined;
         if (control?.npub) q.set('daemon', control.npub);
         if (d.api) q.set('url', d.api.url);
-        d.audit({ type: 'device.pairStart', severity: 'security', summary: `Device pairing started (${name})`, actor: this.principal(ctx) });
+        d.audit({
+          type: 'device.pairStart',
+          severity: 'security',
+          summary: `Device pairing started (${name})`,
+          actor: this.principal(ctx),
+        });
         return { uri: `beamhop://pair?${q.toString()}`, code: code.code, expiresAt: code.expiresAt };
       },
       'device.pairComplete': async ({ code, pubkey, name }, ctx) => {
         const res = d.store.pairingCodes.consume(code, 'device');
         if (!res.ok) {
-          d.audit({ type: 'pairing.failed', severity: 'security', summary: `Failed device pairing (${res.reason})`, actor: ctx.caller });
+          d.audit({
+            type: 'pairing.failed',
+            severity: 'security',
+            summary: `Failed device pairing (${res.reason})`,
+            actor: ctx.caller,
+          });
           throw new BeamhopError('unauthorized', `pairing code ${res.reason}`);
         }
-        if (!/^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{64})$/.test(pubkey)) throw new BeamhopError('invalid_input', 'pubkey must be an npub or 64-char hex key');
+        if (!/^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{64})$/.test(pubkey))
+          throw new BeamhopError('invalid_input', 'pubkey must be an npub or 64-char hex key');
         const dev = d.store.devices.add({ name: name || String(res.record.data.name ?? 'device'), pubkey });
         d.refreshControlAllowlist();
-        d.audit({ type: 'device.paired', severity: 'security', summary: `Paired device ${dev.name}`, actor: ctx.caller, data: { device: dev.id } });
+        d.audit({
+          type: 'device.paired',
+          severity: 'security',
+          summary: `Paired device ${dev.name}`,
+          actor: ctx.caller,
+          data: { device: dev.id },
+        });
         return dev;
       },
       'device.remove': async ({ id }, ctx) => {
         if (!d.store.devices.remove(id)) throw new BeamhopError('not_found', `device ${id} not found`);
         d.refreshControlAllowlist();
-        d.audit({ type: 'device.removed', severity: 'security', summary: `Removed device ${id}`, actor: this.principal(ctx), data: { device: id } });
+        d.audit({
+          type: 'device.removed',
+          severity: 'security',
+          summary: `Removed device ${id}`,
+          actor: this.principal(ctx),
+          data: { device: id },
+        });
         return OK;
       },
       'device.pushSubscribe': async ({ id, subscription }) => {
@@ -740,7 +1070,12 @@ export class ApiHandlers {
         };
       },
       'identity.nip05': async ({ domain, names }) => {
-        let mod: { buildNip05Json: (domain: string, names: Record<string, string>) => { body: string; snippets: Record<string, string> } };
+        let mod: {
+          buildNip05Json: (
+            domain: string,
+            names: Record<string, string>,
+          ) => { body: string; snippets: Record<string, string> };
+        };
         try {
           mod = (await import(/* @vite-ignore */ '@beamhop/channel-nostr')) as never;
         } catch {
@@ -749,7 +1084,8 @@ export class ApiHandlers {
         const map: Record<string, string> = names ?? {};
         if (!names)
           for (const a of d.config.agents.list()) if (a.identity.npub) map[a.name] = a.identity.npub;
-        if (!Object.keys(map).length) throw new BeamhopError('invalid_input', 'no agents with an npub; pass names');
+        if (!Object.keys(map).length)
+          throw new BeamhopError('invalid_input', 'no agents with an npub; pass names');
         try {
           const b = mod.buildNip05Json(domain, map);
           return { json: b.body, snippets: b.snippets };
@@ -761,12 +1097,24 @@ export class ApiHandlers {
       // ── data ──
       'data.export': async ({ agent }, ctx) => {
         const path = d.store.exportData(agent);
-        d.audit({ type: 'data.export', severity: 'security', summary: `Data exported${agent ? ` for ${agent}` : ''}`, actor: this.principal(ctx), ...(agent ? { agent } : {}) });
+        d.audit({
+          type: 'data.export',
+          severity: 'security',
+          summary: `Data exported${agent ? ` for ${agent}` : ''}`,
+          actor: this.principal(ctx),
+          ...(agent ? { agent } : {}),
+        });
         return { path };
       },
       'data.purge': async ({ agent, before }, ctx) => {
         const r = d.store.purge({ ...(agent ? { agent } : {}), ...(before ? { before } : {}) });
-        d.audit({ type: 'data.purge', severity: 'security', summary: `Purged ${r.deleted} records${agent ? ` for ${agent}` : ''}${before ? ` before ${before}` : ''}`, actor: this.principal(ctx), ...(agent ? { agent } : {}) });
+        d.audit({
+          type: 'data.purge',
+          severity: 'security',
+          summary: `Purged ${r.deleted} records${agent ? ` for ${agent}` : ''}${before ? ` before ${before}` : ''}`,
+          actor: this.principal(ctx),
+          ...(agent ? { agent } : {}),
+        });
         return { deleted: r.deleted };
       },
     };

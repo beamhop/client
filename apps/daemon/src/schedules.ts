@@ -89,8 +89,14 @@ export class Scheduler {
           } catch {
             throw new BeamhopError('invalid_input', 'nostr-event spec must be a JSON filter');
           }
-          a.unsubscribe = sub.call(this.d.mesh, filter, (ev) =>
-            void this.run(s.id, `Nostr event matched:\n\`\`\`json\n${JSON.stringify(ev).slice(0, 4000)}\n\`\`\``).catch(() => {}),
+          a.unsubscribe = sub.call(
+            this.d.mesh,
+            filter,
+            (ev) =>
+              void this.run(
+                s.id,
+                `Nostr event matched:\n\`\`\`json\n${JSON.stringify(ev).slice(0, 4000)}\n\`\`\``,
+              ).catch(() => {}),
           );
           break;
         }
@@ -173,7 +179,8 @@ export class Scheduler {
     const agent = d.agent(s.agent);
     if (d.isAgentStopped(agent.name)) throw new BeamhopError('unavailable', `agent ${agent.name} is stopped`);
     const roleName = resolveRole({ principal: s.owner, agent, global: d.authzGlobal() });
-    if (!roleName) throw new BeamhopError('forbidden', `schedule owner ${s.owner} has no role on ${agent.name}`);
+    if (!roleName)
+      throw new BeamhopError('forbidden', `schedule owner ${s.owner} has no role on ${agent.name}`);
     const role = d.roleDef(roleName);
     let channel = 'schedule';
     let conversation: { kind: 'dm' | 'group' | 'channel' | 'public'; id: string } = { kind: 'dm', id: id };
@@ -242,7 +249,9 @@ export class Scheduler {
     const m = /^\/hooks\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.exec(url.pathname);
     if (!m) return false;
     const send = (status: number, body: unknown) =>
-      res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(body));
+      res
+        .writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+        .end(JSON.stringify(body));
     if (req.method !== 'POST') {
       send(405, { error: 'use POST' });
       return true;

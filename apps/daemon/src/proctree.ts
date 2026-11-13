@@ -36,7 +36,10 @@ const envOf = (pid: number): string => {
     }
   }
   try {
-    return execFileSync('ps', ['eww', '-o', 'command=', '-p', String(pid)], { encoding: 'utf8', timeout: 5000 });
+    return execFileSync('ps', ['eww', '-o', 'command=', '-p', String(pid)], {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
   } catch {
     return '';
   }

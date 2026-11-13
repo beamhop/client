@@ -8,8 +8,20 @@ import type { Daemon } from './daemon.ts';
 
 export interface MeshProvider {
   listAgents(query?: string): Promise<unknown[]>;
-  ask(input: { npub: string; question: string; hops: number; timeoutSeconds: number; signal: AbortSignal }): Promise<string>;
-  postJob(input: { kind: number; input: string; inputType: string; peer?: string; hops: number }): Promise<{ jobId: string }>;
+  ask(input: {
+    npub: string;
+    question: string;
+    hops: number;
+    timeoutSeconds: number;
+    signal: AbortSignal;
+  }): Promise<string>;
+  postJob(input: {
+    kind: number;
+    input: string;
+    inputType: string;
+    peer?: string;
+    hops: number;
+  }): Promise<{ jobId: string }>;
   jobResult(input: { jobId: string; waitSeconds: number; signal: AbortSignal }): Promise<unknown>;
   /** Return true when the inbound message answers a pending ask (it is then not routed further). */
   onInbound?(conn: ChannelConn, msg: InboundMsg): boolean;
@@ -18,14 +30,26 @@ export interface MeshProvider {
 
 interface NostrLike extends ChannelConn {
   pool: {
-    query(filters: unknown[], opts?: { timeoutMs?: number }): Promise<{ id: string; pubkey: string; kind: number; tags: string[][]; content: string; created_at: number }[]>;
+    query(
+      filters: unknown[],
+      opts?: { timeoutMs?: number },
+    ): Promise<
+      { id: string; pubkey: string; kind: number; tags: string[][]; content: string; created_at: number }[]
+    >;
     subscribe(filters: unknown[], h: { onevent?: (ev: unknown) => void }): { close(): void };
   };
-  publish(t: { kind: number; tags: string[][]; content: string; created_at: number }): Promise<{ id: string; ok: string[] }>;
+  publish(t: {
+    kind: number;
+    tags: string[][];
+    content: string;
+    created_at: number;
+  }): Promise<{ id: string; ok: string[] }>;
 }
 
 type NostrMod = {
-  parseCapabilityCard: (ev: never) => { agent: string; owner?: string; jobKinds: number[]; name?: string; capabilities: string[] } | null;
+  parseCapabilityCard: (
+    ev: never,
+  ) => { agent: string; owner?: string; jobKinds: number[]; name?: string; capabilities: string[] } | null;
   decodePubkey: (k: string) => string;
   npubEncode: (hex: string) => string;
   CAPABILITY_CARD_KIND: number;
@@ -47,7 +71,10 @@ export class NostrMesh implements MeshProvider {
 
   async listAgents(query?: string): Promise<unknown[]> {
     const c = this.conn();
-    const evs = await c.pool.query([{ kinds: [this.mod.CAPABILITY_CARD_KIND], '#t': ['beamhop'], limit: 100 }], { timeoutMs: 8000 });
+    const evs = await c.pool.query(
+      [{ kinds: [this.mod.CAPABILITY_CARD_KIND], '#t': ['beamhop'], limit: 100 }],
+      { timeoutMs: 8000 },
+    );
     const q = query?.toLowerCase();
     return evs
       .map((e) => this.mod.parseCapabilityCard(e as never))
@@ -57,7 +84,13 @@ export class NostrMesh implements MeshProvider {
       .slice(0, 50);
   }
 
-  async ask(input: { npub: string; question: string; hops: number; timeoutSeconds: number; signal: AbortSignal }): Promise<string> {
+  async ask(input: {
+    npub: string;
+    question: string;
+    hops: number;
+    timeoutSeconds: number;
+    signal: AbortSignal;
+  }): Promise<string> {
     const c = this.conn();
     const principal = `nostr:${input.npub}`.toLowerCase();
     const reply = new Promise<string>((resolve, reject) => {
@@ -84,7 +117,11 @@ export class NostrMesh implements MeshProvider {
         resolve(text);
       };
     });
-    await c.send({ conversation: { kind: 'dm', id: input.npub }, markdown: input.question, hops: input.hops });
+    await c.send({
+      conversation: { kind: 'dm', id: input.npub },
+      markdown: input.question,
+      hops: input.hops,
+    });
     return reply;
   }
 
@@ -97,22 +134,42 @@ export class NostrMesh implements MeshProvider {
     return true;
   }
 
-  async postJob(input: { kind: number; input: string; inputType: string; peer?: string; hops: number }): Promise<{ jobId: string }> {
+  async postJob(input: {
+    kind: number;
+    input: string;
+    inputType: string;
+    peer?: string;
+    hops: number;
+  }): Promise<{ jobId: string }> {
     const c = this.conn();
-    const tags: string[][] = [['i', input.input, input.inputType], ['hops', String(input.hops)], ['t', 'beamhop']];
+    const tags: string[][] = [
+      ['i', input.input, input.inputType],
+      ['hops', String(input.hops)],
+      ['t', 'beamhop'],
+    ];
     if (input.peer) tags.push(['p', this.mod.decodePubkey(input.peer)]);
-    const r = await c.publish({ kind: input.kind, tags, content: '', created_at: Math.floor(Date.now() / 1000) });
+    const r = await c.publish({
+      kind: input.kind,
+      tags,
+      content: '',
+      created_at: Math.floor(Date.now() / 1000),
+    });
     if (!r.ok.length) throw new BeamhopError('unavailable', 'job could not be published to any relay');
     return { jobId: r.id };
   }
 
   async jobResult(input: { jobId: string; waitSeconds: number; signal: AbortSignal }): Promise<unknown> {
     const c = this.conn();
-    const filter = { kinds: Array.from({ length: 1000 }, (_, i) => 6000 + i).concat([7000]), '#e': [input.jobId] };
+    const filter = {
+      kinds: Array.from({ length: 1000 }, (_, i) => 6000 + i).concat([7000]),
+      '#e': [input.jobId],
+    };
     const found = await c.pool.query([filter], { timeoutMs: 6000 });
     const result = found.find((e) => e.kind >= 6000 && e.kind < 7000);
     if (result || input.waitSeconds === 0)
-      return result ? { status: 'success', content: result.content, from: this.mod.npubEncode(result.pubkey) } : { status: 'pending', feedback: found.map((e) => e.content) };
+      return result
+        ? { status: 'success', content: result.content, from: this.mod.npubEncode(result.pubkey) }
+        : { status: 'pending', feedback: found.map((e) => e.content) };
     return new Promise((resolve) => {
       const sub = c.pool.subscribe([filter], {
         onevent: (ev) => {

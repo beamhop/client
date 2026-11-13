@@ -42,6 +42,7 @@ export class ApprovalManager {
   private readonly waiters = new Map<string, Waiter>();
   private readonly settleTimers = new Map<string, NodeJS.Timeout>();
   private readonly grants = new Map<string, string>();
+  private readonly settled = new Set<string>();
 
   constructor(private readonly d: Daemon) {}
 
@@ -58,7 +59,8 @@ export class ApprovalManager {
     const grants = { ...g.grants, ...(agent?.grants ?? {}) };
     for (const [p, r] of Object.entries(grants)) {
       if (p.includes(':') && effectiveRoleDef(r, roles)?.canApprove) out.add(normalizePrincipal(p));
-      else if (effectiveRoleDef(r, roles)?.canApprove) for (const pp of g.people[p] ?? []) out.add(normalizePrincipal(pp));
+      else if (effectiveRoleDef(r, roles)?.canApprove)
+        for (const pp of g.people[p] ?? []) out.add(normalizePrincipal(pp));
     }
     return [...out];
   }
@@ -87,7 +89,12 @@ export class ApprovalManager {
 
   // ───────────────────────────── tool permissions ─────────────────────────────
 
-  async requestTool(live: LiveSession, agent: AgentConfig, turn: Turn, ev: PermissionRequest): Promise<PermissionDecision> {
+  async requestTool(
+    live: LiveSession,
+    agent: AgentConfig,
+    turn: Turn,
+    ev: PermissionRequest,
+  ): Promise<PermissionDecision> {
     const d = this.d;
     const { role, mode } = d.sessions.checkRole(live, turn.role);
     const check = checkToolDetailed({ role, tool: ev.tool, input: ev.input, ...(mode ? { mode } : {}) });
@@ -170,7 +177,12 @@ export class ApprovalManager {
       principals: [...approvers].filter((p) => p !== LOCAL_OWNER),
     });
     // The requester is an approver in a DM we have not recorded (e.g. first contact): answer there.
-    if (n === 0 && live && live.conversationKind === 'dm' && approvers.has(normalizePrincipal(a.requestedBy.principal))) {
+    if (
+      n === 0 &&
+      live &&
+      live.conversationKind === 'dm' &&
+      approvers.has(normalizePrincipal(a.requestedBy.principal))
+    ) {
       const conn = live.conn();
       if (conn)
         await conn
@@ -187,7 +199,11 @@ export class ApprovalManager {
   // ───────────────────────────── access requests ─────────────────────────────
 
   /** One pending access request per (agent, sender); denied requests are not re-raised for 24 h. */
-  async accessRequest(agent: AgentConfig, conn: ChannelConn, msg: InboundMsg): Promise<ApprovalView | undefined> {
+  async accessRequest(
+    agent: AgentConfig,
+    conn: ChannelConn,
+    msg: InboundMsg,
+  ): Promise<ApprovalView | undefined> {
     const d = this.d;
     const who = normalizePrincipal(msg.from.principal);
     const pending = d.store.approvals
@@ -267,7 +283,10 @@ export class ApprovalManager {
           agent: state.agent,
           data: { approval: id },
         });
-      throw new BeamhopError(res.reason === 'not_eligible' ? 'forbidden' : 'conflict', msg[res.reason] ?? res.reason);
+      throw new BeamhopError(
+        res.reason === 'not_eligible' ? 'forbidden' : 'conflict',
+        msg[res.reason] ?? res.reason,
+      );
     }
     d.store.approvals.put(res.state);
     const w = this.waiters.get(id);
@@ -301,6 +320,7 @@ export class ApprovalManager {
   }
 
   private async settle(state: ApprovalState): Promise<void> {
+    this.settled.add(state.id);
     const allow = state.status === 'approved';
     if (state.kind === 'access-request') {
       const input = state.input as { principal?: string } | undefined;
@@ -309,7 +329,10 @@ export class ApprovalManager {
         const role = this.grants.get(state.id) ?? 'user';
         if (!effectiveRoleDef(role, this.d.global().roles as RoleOverride[]))
           throw new BeamhopError('invalid_input', `unknown role ${role}`);
-        this.d.config.agents.update(state.agent, (a) => ({ ...a, grants: { ...a.grants, [principal]: role } }));
+        this.d.config.agents.update(state.agent, (a) => ({
+          ...a,
+          grants: { ...a.grants, [principal]: role },
+        }));
         this.d.audit({
           type: 'role.grant',
           severity: 'security',
@@ -319,7 +342,8 @@ export class ApprovalManager {
           data: { principal, role, approval: state.id },
         });
         this.d.emitAgent(state.agent);
-      } else this.d.store.kv.set('access-denied', `${state.agent}|${normalizePrincipal(principal)}`, this.d.now());
+      } else
+        this.d.store.kv.set('access-denied', `${state.agent}|${normalizePrincipal(principal)}`, this.d.now());
       this.grants.delete(state.id);
       return;
     }
@@ -328,7 +352,12 @@ export class ApprovalManager {
       const live = this.d.sessions.live(state.sessionId);
       for (const v of toolNameVariants(state.tool)) live?.alwaysAllow.add(v);
     }
-    this.finish(state, allow ? { allow: true, ...(w?.always ? { always: true } : {}) } : { allow: false, reason: `denied by ${state.decidedBy ?? 'owner'}` });
+    this.finish(
+      state,
+      allow
+        ? { allow: true, ...(w?.always ? { always: true } : {}) }
+        : { allow: false, reason: `denied by ${state.decidedBy ?? 'owner'}` },
+    );
   }
 
   private finish(state: ApprovalState, decision: PermissionDecision): void {
@@ -351,6 +380,7 @@ export class ApprovalManager {
     const d = this.d;
     const state = d.store.approvals.get(id);
     if (!state) throw new BeamhopError('not_found', `approval ${id} not found`);
+    if (this.settled.has(id)) throw new BeamhopError('conflict', 'the decision was already applied');
     const res = this.policy(this.agentOf(state.agent)).undo(state, by);
     if (!res.ok) {
       const m: Record<string, string> = {
@@ -400,7 +430,12 @@ export class ApprovalManager {
       if (w.sessionId !== sessionId) continue;
       const st = this.d.store.approvals.get(id);
       if (st?.status === 'pending') {
-        const next = { ...st, status: 'denied' as const, decidedAt: new Date(this.d.now()).toISOString(), decidedBy: 'system:stop' };
+        const next = {
+          ...st,
+          status: 'denied' as const,
+          decidedAt: new Date(this.d.now()).toISOString(),
+          decidedBy: 'system:stop',
+        };
         this.d.store.approvals.put(next);
         this.d.emit({ type: 'approval.updated', approval: this.view(next) });
       }

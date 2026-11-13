@@ -17,14 +17,18 @@ import {
   type OutboundMsgInput,
   type PermissionDecision,
   type SentMessage,
-  type SessionSpec,
   type ServerEvent,
+  type SessionSpec,
   silentLogger,
 } from '@beamhop/core';
-import { type Daemon, type DaemonOptions, type SandboxFactory, createDaemon } from '../src/index.ts';
+import { createDaemon, type Daemon, type DaemonOptions, type SandboxFactory } from '../src/index.ts';
 import { AsyncQueue } from '../src/util.ts';
 
-export const until = async (cond: () => boolean | Promise<boolean>, timeoutMs = 5000, what = 'condition'): Promise<void> => {
+export const until = async (
+  cond: () => boolean | Promise<boolean>,
+  timeoutMs = 5000,
+  what = 'condition',
+): Promise<void> => {
   const start = Date.now();
   while (!(await cond())) {
     if (Date.now() - start > timeoutMs) throw new Error(`until: timeout waiting for ${what}`);
@@ -126,9 +130,18 @@ export class FakeChannelPlugin implements ChannelPlugin {
   readonly conns = new Map<string, FakeConn>();
   caps: ChannelConn['capabilities'] = { edit: true, buttons: true, typing: true, files: true, threads: true };
   setup = {
-    steps: [{ id: 'token', title: 'Token', body: 'paste', fields: [{ kind: 'secret' as const, id: 'token', label: 'Token' }] }],
+    steps: [
+      {
+        id: 'token',
+        title: 'Token',
+        body: 'paste',
+        fields: [{ kind: 'secret' as const, id: 'token', label: 'Token' }],
+      },
+    ],
     validate: async (_v: Record<string, unknown>, s: Record<string, string>) =>
-      s.token === 'good' ? { ok: true, message: 'ok', identity: { name: 'Beam Bot' } } : { ok: false, message: 'bad token' },
+      s.token === 'good'
+        ? { ok: true, message: 'ok', identity: { name: 'Beam Bot' } }
+        : { ok: false, message: 'bad token' },
   };
   lastCtx: ChannelContext | undefined;
   async connect(ctx: ChannelContext): Promise<FakeConn> {
@@ -177,7 +190,10 @@ export class FakeHarnessSession implements HarnessSession {
   async cancel() {
     this.cancelled++;
     for (const w of this.cancelWaiters.splice(0)) w();
-    for (const [id, w] of this.waiters) w({ allow: false, reason: 'cancelled' }), this.waiters.delete(id);
+    for (const [id, w] of this.waiters) {
+      w({ allow: false, reason: 'cancelled' });
+      this.waiters.delete(id);
+    }
   }
   async close() {
     this.closed = true;
@@ -189,8 +205,7 @@ export type Script = (s: FakeHarnessSession, prompt: string) => AsyncIterable<Ha
 /** Body of the user message, without the beamhop preamble. */
 export const body = (prompt: string): string => prompt.split('\n\n').slice(1).join('\n\n') || prompt;
 
-export const defaultScript =
-  (secret = 'unset-secret'): Script =>
+export const defaultScript = (secret = 'unset-secret'): Script =>
   async function* (s, prompt) {
     const text = body(prompt);
     if (text.includes('RUN_SHELL')) {
@@ -230,7 +245,13 @@ export class FakeHarnessPlugin implements HarnessPlugin {
     readonly id = 'fake',
   ) {}
   async detect() {
-    return { id: this.id, displayName: this.displayName, command: 'fake', status: 'ready' as const, protocol: 'acp' as const };
+    return {
+      id: this.id,
+      displayName: this.displayName,
+      command: 'fake',
+      status: 'ready' as const,
+      protocol: 'acp' as const,
+    };
   }
   async start(spec: SessionSpec): Promise<FakeHarnessSession> {
     const s = new FakeHarnessSession(spec.sessionId, spec, (sess, p) => this.script(sess, p));
@@ -268,7 +289,13 @@ export interface TestEnv {
 
 export const tmpHome = (): string => realpathSync(mkdtempSync(join(tmpdir(), 'bh-daemon-')));
 
-export const makeEnv = async (opts: Partial<DaemonOptions> & { harness?: FakeHarnessPlugin; channel?: FakeChannelPlugin; home?: string } = {}): Promise<TestEnv> => {
+export const makeEnv = async (
+  opts: Partial<DaemonOptions> & {
+    harness?: FakeHarnessPlugin;
+    channel?: FakeChannelPlugin;
+    home?: string;
+  } = {},
+): Promise<TestEnv> => {
   const home = opts.home ?? tmpHome();
   const channel = opts.channel ?? new FakeChannelPlugin();
   const harness = opts.harness ?? new FakeHarnessPlugin();
@@ -292,10 +319,7 @@ export const makeEnv = async (opts: Partial<DaemonOptions> & { harness?: FakeHar
   const events: ServerEvent[] = [];
   d.subscribe((e) => events.push(e));
   const client = createClient(
-    directTransport(
-      (method, params) => d.call(method, params),
-      { subscribe: (fn) => d.subscribe(fn) },
-    ),
+    directTransport((method, params) => d.call(method, params), { subscribe: (fn) => d.subscribe(fn) }),
   );
   return {
     d,
@@ -316,7 +340,12 @@ export const makeEnv = async (opts: Partial<DaemonOptions> & { harness?: FakeHar
 
 /** Add the fake channel `fk` and an agent `bot` joined to `fk:dm` (and optionally a group). */
 export const setupBot = async (env: TestEnv, agent: Record<string, unknown> = {}) => {
-  await env.client.call('channel.add', { name: 'fk', provider: 'fake', values: {}, secrets: { token: 'good' } });
+  await env.client.call('channel.add', {
+    name: 'fk',
+    provider: 'fake',
+    values: {},
+    secrets: { token: 'good' },
+  });
   await env.client.call('agent.create', {
     config: {
       name: 'bot',

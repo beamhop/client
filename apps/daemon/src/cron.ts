@@ -42,7 +42,8 @@ const parseField = (field: string, min: number, max: number, names?: string[], n
   for (const part of field.split(',')) {
     const [range, stepS] = part.split('/');
     const step = stepS === undefined ? 1 : Number(stepS);
-    if (!Number.isInteger(step) || step < 1) throw new BeamhopError('invalid_input', `invalid cron step "${part}"`);
+    if (!Number.isInteger(step) || step < 1)
+      throw new BeamhopError('invalid_input', `invalid cron step "${part}"`);
     let lo: number;
     let hi: number;
     if (range === '*' || range === undefined) {

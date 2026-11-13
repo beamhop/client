@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   body,
-  type FakeHarnessSession,
   FakeHarnessPlugin,
+  type FakeHarnessSession,
   makeEnv,
   ownerAlice,
   setupBot,
@@ -76,10 +76,19 @@ describe('core loop', () => {
   it('group: ignored without mention, replies on mention', async () => {
     env = await makeEnv();
     const conn = await setupBot(env);
-    conn.inject({ conversation: group, from: { principal: 'fake:bob', displayName: 'Bob' }, text: 'just chatting' });
+    conn.inject({
+      conversation: group,
+      from: { principal: 'fake:bob', displayName: 'Bob' },
+      text: 'just chatting',
+    });
     await new Promise((r) => setTimeout(r, 100));
     expect(env.harness.sessions).toHaveLength(0);
-    conn.inject({ conversation: group, from: { principal: 'fake:bob', displayName: 'Bob' }, text: '@beambot summarize', mentionsAgent: true });
+    conn.inject({
+      conversation: group,
+      from: { principal: 'fake:bob', displayName: 'Bob' },
+      text: '@beambot summarize',
+      mentionsAgent: true,
+    });
     await until(() => lastText(env!, 'g1').includes('reply: @beambot summarize'));
     expect(env.harness.latest().prompts[0]).toContain('role=user');
   });
@@ -90,8 +99,16 @@ describe('core loop', () => {
     await ownerAlice(env);
     conn.inject({ text: 'hi, I am the owner' }); // records alice's DM for notifications
     await until(() => lastText(env!, 'alice').includes('reply:'));
-    conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve', displayName: 'Eve' }, text: 'let me in' });
-    conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve', displayName: 'Eve' }, text: 'please' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'eve' },
+      from: { principal: 'fake:eve', displayName: 'Eve' },
+      text: 'let me in',
+    });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'eve' },
+      from: { principal: 'fake:eve', displayName: 'Eve' },
+      text: 'please',
+    });
     await until(() => env!.d.store.approvals.list().length === 1);
     expect(conn.textsTo('eve')).toHaveLength(0);
     const [req] = env.d.store.approvals.list();
@@ -100,14 +117,22 @@ describe('core loop', () => {
     expect(lastText(env, 'alice')).toContain('Access request');
     await env.client.call('approval.decide', { id: req!.id, allow: true, grantRole: 'user' });
     await until(() => env!.d.agent('bot').grants['fake:eve'] === 'user', 3000, 'grant');
-    conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve', displayName: 'Eve' }, text: 'thanks' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'eve' },
+      from: { principal: 'fake:eve', displayName: 'Eve' },
+      text: 'thanks',
+    });
     await until(() => lastText(env!, 'eve').includes('reply: thanks'));
   });
 
   it('public agent answers strangers as viewer', async () => {
     env = await makeEnv();
     const conn = await setupBot(env, { public: true });
-    conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve' }, text: 'question' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'eve' },
+      from: { principal: 'fake:eve' },
+      text: 'question',
+    });
     await until(() => lastText(env!, 'eve').includes('reply: question'));
     expect(env.harness.latest().prompts[0]).toContain('role=viewer');
     expect(env.harness.latest().spec.permissionMode).toBe('read-only');
@@ -218,7 +243,11 @@ describe('commands', () => {
     expect(lastText(env, 'bob')).toContain('Paired');
     expect(auditTypes(env)).toContain('pairing.success');
     // code is single-use
-    conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve' }, text: `/pair ${code}` });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'eve' },
+      from: { principal: 'fake:eve' },
+      text: `/pair ${code}`,
+    });
     await until(() => auditTypes(env!).filter((t) => t === 'pairing.failed').length === 2);
     expect(env.d.global().owners).not.toContain('fake:eve');
     // owner can now talk
@@ -233,7 +262,15 @@ describe('commands', () => {
     const say = async (text: string, expectText: string | RegExp) => {
       const before = conn.textsTo('alice').length;
       conn.inject({ text });
-      await until(() => conn.textsTo('alice').slice(before).some((t) => (typeof expectText === 'string' ? t.includes(expectText) : expectText.test(t))), 3000, text);
+      await until(
+        () =>
+          conn
+            .textsTo('alice')
+            .slice(before)
+            .some((t) => (typeof expectText === 'string' ? t.includes(expectText) : expectText.test(t))),
+        3000,
+        text,
+      );
     };
     await say('/help', '/approve');
     await say('/status', 'No active session');
@@ -259,7 +296,11 @@ describe('commands', () => {
     env = await makeEnv();
     const conn = await setupBot(env);
     await env.client.call('role.grant', { principal: 'fake:bob', role: 'viewer', agent: 'bot' });
-    conn.inject({ conversation: { kind: 'dm', id: 'bob' }, from: { principal: 'fake:bob' }, text: '/mode auto' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'bob' },
+      from: { principal: 'fake:bob' },
+      text: '/mode auto',
+    });
     await until(() => lastText(env!, 'bob').includes('⛔'));
   });
 });
@@ -275,7 +316,11 @@ describe('security', () => {
     conn.inject({ text: 'hi' });
     await until(() => lastText(env!, 'alice').includes('reply: hi'));
     await env.client.call('role.grant', { principal: 'fake:bob', role: 'user', agent: 'bot' });
-    conn.inject({ conversation: { kind: 'dm', id: 'bob' }, from: { principal: 'fake:bob' }, text: 'LEAK it' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'bob' },
+      from: { principal: 'fake:bob' },
+      text: 'LEAK it',
+    });
     await until(() => lastText(env!, 'bob').includes('done'));
     for (const s of conn.sent.filter((x) => x.msg.conversation.id === 'bob')) {
       expect(s.text).not.toContain(secret);
@@ -285,7 +330,11 @@ describe('security', () => {
     await until(() => conn.textsTo('alice').some((t) => t.includes('DLP')));
     // viewer role blocks instead
     await env.client.call('role.grant', { principal: 'fake:carol', role: 'viewer', agent: 'bot' });
-    conn.inject({ conversation: { kind: 'dm', id: 'carol' }, from: { principal: 'fake:carol' }, text: 'LEAK it' });
+    conn.inject({
+      conversation: { kind: 'dm', id: 'carol' },
+      from: { principal: 'fake:carol' },
+      text: 'LEAK it',
+    });
     await until(() => lastText(env!, 'carol').includes('withheld'));
     // owners are only warned
     conn.inject({ text: 'LEAK it' });
@@ -312,7 +361,11 @@ describe('security', () => {
     env = await makeEnv();
     const conn = await setupBot(env, { public: true });
     for (let i = 0; i < 6; i++)
-      conn.inject({ conversation: { kind: 'dm', id: 'eve' }, from: { principal: 'fake:eve' }, text: `q${i}` });
+      conn.inject({
+        conversation: { kind: 'dm', id: 'eve' },
+        from: { principal: 'fake:eve' },
+        text: `q${i}`,
+      });
     await until(() => conn.textsTo('eve').some((t) => t.includes('rate limit')));
   });
 
@@ -320,7 +373,13 @@ describe('security', () => {
     env = await makeEnv();
     const conn = await setupBot(env);
     const peer = { principal: 'fake:otherbot', displayName: 'Other', isBot: true };
-    conn.inject({ conversation: group, from: peer, text: '@beambot hello peer', mentionsAgent: true, hops: 1 });
+    conn.inject({
+      conversation: group,
+      from: peer,
+      text: '@beambot hello peer',
+      mentionsAgent: true,
+      hops: 1,
+    });
     await until(() => lastText(env!, 'g1').includes('reply: @beambot hello peer'));
     expect(conn.sent.at(-1)!.msg.hops).toBe(2);
     expect(env.harness.latest().prompts[0]).toContain('role=agent');
@@ -330,9 +389,20 @@ describe('security', () => {
     conn.inject({ conversation: group, from: peer, text: '@beambot retry', mentionsAgent: true, hops: 1 });
     await new Promise((r) => setTimeout(r, 100));
     expect(env.d.store.audit.query({ type: 'mesh.limit' })).toHaveLength(2);
-    conn.inject({ conversation: group, from: { principal: 'fake:bob' }, text: '@beambot human here', mentionsAgent: true });
+    conn.inject({
+      conversation: group,
+      from: { principal: 'fake:bob' },
+      text: '@beambot human here',
+      mentionsAgent: true,
+    });
     await until(() => lastText(env!, 'g1').includes('human here'));
-    conn.inject({ conversation: group, from: peer, text: '@beambot back again', mentionsAgent: true, hops: 1 });
+    conn.inject({
+      conversation: group,
+      from: peer,
+      text: '@beambot back again',
+      mentionsAgent: true,
+      hops: 1,
+    });
     await until(() => lastText(env!, 'g1').includes('back again'));
   });
 
@@ -342,12 +412,25 @@ describe('security', () => {
     conn.kick('g1');
     await until(() => !!env!.d.agent('bot').memberships.find((m) => m.target === 'fk:group/g1')?.revokedAt);
     expect(auditTypes(env)).toContain('membership.revoked');
-    conn.inject({ conversation: group, from: { principal: 'fake:bob' }, text: '@beambot hi', mentionsAgent: true });
+    conn.inject({
+      conversation: group,
+      from: { principal: 'fake:bob' },
+      text: '@beambot hi',
+      mentionsAgent: true,
+    });
     await new Promise((r) => setTimeout(r, 100));
     expect(env.harness.sessions).toHaveLength(0);
     // explicit re-add clears the revocation
-    await env.client.call('membership.join', { agent: 'bot', membership: { target: 'fk:group/g1', defaultRole: 'user' } });
-    conn.inject({ conversation: group, from: { principal: 'fake:bob' }, text: '@beambot again', mentionsAgent: true });
+    await env.client.call('membership.join', {
+      agent: 'bot',
+      membership: { target: 'fk:group/g1', defaultRole: 'user' },
+    });
+    conn.inject({
+      conversation: group,
+      from: { principal: 'fake:bob' },
+      text: '@beambot again',
+      mentionsAgent: true,
+    });
     await until(() => lastText(env!, 'g1').includes('again'));
   });
 
@@ -358,8 +441,18 @@ describe('security', () => {
     });
     conn.kick('g9');
     await until(() => env!.d.agent('bot').memberships.some((m) => m.target === 'fk:group/g9' && m.revokedAt));
-    conn.inject({ conversation: { kind: 'group', id: 'g9' }, from: { principal: 'fake:bob' }, text: '@x', mentionsAgent: true });
-    conn.inject({ conversation: { kind: 'group', id: 'g2' }, from: { principal: 'fake:bob' }, text: '@beambot ok', mentionsAgent: true });
+    conn.inject({
+      conversation: { kind: 'group', id: 'g9' },
+      from: { principal: 'fake:bob' },
+      text: '@x',
+      mentionsAgent: true,
+    });
+    conn.inject({
+      conversation: { kind: 'group', id: 'g2' },
+      from: { principal: 'fake:bob' },
+      text: '@beambot ok',
+      mentionsAgent: true,
+    });
     await until(() => lastText(env!, 'g2').includes('ok'));
     expect(conn.textsTo('g9')).toHaveLength(0);
   });
@@ -398,7 +491,16 @@ describe('security', () => {
 
 describe('parallel sessions', () => {
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' } });
+    execFileSync('git', ['-C', cwd, ...args], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 't',
+        GIT_AUTHOR_EMAIL: 't@x',
+        GIT_COMMITTER_NAME: 't',
+        GIT_COMMITTER_EMAIL: 't@x',
+      },
+    });
 
   it('git rw mounts get a worktree per session; beyond maxSessions messages queue', async () => {
     const repo = join(tmpHome(), 'repo');
@@ -417,13 +519,34 @@ describe('parallel sessions', () => {
     });
     env = await makeEnv({ harness });
     const conn = await setupBot(env, {
-      mounts: [{ path: repo, mode: 'rw' }, { path: plain, mode: 'rw', parallelUnsafe: true }],
+      mounts: [
+        { path: repo, mode: 'rw' },
+        { path: plain, mode: 'rw', parallelUnsafe: true },
+      ],
       concurrency: { maxSessions: 2 },
     });
     const bob = { principal: 'fake:bob' };
-    conn.inject({ conversation: group, threadId: 't-1', from: bob, text: '@beambot one', mentionsAgent: true });
-    conn.inject({ conversation: group, threadId: 't-2', from: bob, text: '@beambot two', mentionsAgent: true });
-    conn.inject({ conversation: group, threadId: 't-3', from: bob, text: '@beambot three', mentionsAgent: true });
+    conn.inject({
+      conversation: group,
+      threadId: 't-1',
+      from: bob,
+      text: '@beambot one',
+      mentionsAgent: true,
+    });
+    conn.inject({
+      conversation: group,
+      threadId: 't-2',
+      from: bob,
+      text: '@beambot two',
+      mentionsAgent: true,
+    });
+    conn.inject({
+      conversation: group,
+      threadId: 't-3',
+      from: bob,
+      text: '@beambot three',
+      mentionsAgent: true,
+    });
     await until(() => harness.sessions.length === 2, 5000, 'two sessions');
     await until(() => env!.d.store.sessions.list({ status: 'queued' }).length === 1, 3000, 'queued');
     const [a, b] = harness.sessions;
@@ -459,8 +582,20 @@ describe('parallel sessions', () => {
     });
     env = await makeEnv({ harness });
     const conn = await setupBot(env, { mounts: [{ path: plain, mode: 'rw' }] });
-    conn.inject({ conversation: group, threadId: 'a', from: { principal: 'fake:bob' }, text: '@beambot a', mentionsAgent: true });
-    conn.inject({ conversation: group, threadId: 'b', from: { principal: 'fake:bob' }, text: '@beambot b', mentionsAgent: true });
+    conn.inject({
+      conversation: group,
+      threadId: 'a',
+      from: { principal: 'fake:bob' },
+      text: '@beambot a',
+      mentionsAgent: true,
+    });
+    conn.inject({
+      conversation: group,
+      threadId: 'b',
+      from: { principal: 'fake:bob' },
+      text: '@beambot b',
+      mentionsAgent: true,
+    });
     await until(() => release.length === 1);
     await new Promise((r) => setTimeout(r, 100));
     expect(release.length).toBe(1);

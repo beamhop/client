@@ -7,8 +7,13 @@ import { existsSync, rmSync } from 'node:fs';
 import { createConnection, createServer as createNetServer, type Server as NetServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { effectiveRoleDef, normalizePrincipal, type RoleOverride } from '@beamhop/authz';
-import { BudgetTracker, budgetKey } from '@beamhop/authz';
+import {
+  BudgetTracker,
+  budgetKey,
+  effectiveRoleDef,
+  normalizePrincipal,
+  type RoleOverride,
+} from '@beamhop/authz';
 import { applyDlp, createLlmProxy, createSecretStore, type DlpMode, type LlmProxy } from '@beamhop/broker';
 import {
   type AgentConfig,
@@ -31,7 +36,7 @@ import {
 } from '@beamhop/core';
 import { createMcpBridge, type McpBridge } from '@beamhop/mcp';
 import { createSandbox } from '@beamhop/sandbox';
-import { ConfigStore, type Store, openStore } from '@beamhop/store';
+import { ConfigStore, openStore, type Store } from '@beamhop/store';
 import { ApiHandlers } from './api.ts';
 import { ApprovalManager } from './approvals.ts';
 import { ChannelManager } from './channels.ts';
@@ -47,8 +52,8 @@ import {
 import { createMcpHandlers, type McpCtx } from './mcp-handlers.ts';
 import { loadNostrMesh, type MeshProvider } from './mesh.ts';
 import { loadBuiltinPlugins, PluginRegistry, type PluginRegistryInit } from './registry.ts';
-import { type ApiServer, startApiServer } from './rpc-server.ts';
 import { Router } from './router.ts';
+import { type ApiServer, startApiServer } from './rpc-server.ts';
 import { Scheduler } from './schedules.ts';
 import { SessionManager } from './sessions.ts';
 import { errMsg } from './util.ts';
@@ -60,7 +65,9 @@ export const LOCAL_OWNER = 'local:owner';
 /** What a sandbox factory must return (a subset of @beamhop/sandbox's BeamhopSandbox). */
 export interface DaemonSandbox extends SandboxHandle {
   warnings?: string[];
-  onViolation?(cb: (v: { kind: 'net.allow' | 'fs.read' | 'fs.write'; value: string; allowed?: boolean }) => void): () => void;
+  onViolation?(
+    cb: (v: { kind: 'net.allow' | 'fs.read' | 'fs.write'; value: string; allowed?: boolean }) => void,
+  ): () => void;
   close(): Promise<void>;
 }
 
@@ -147,7 +154,9 @@ export class Daemon {
   private stopping: Promise<void> | undefined;
   /** Agents stopped via agent.stop (persisted in kv). */
   readonly sandboxFactory: SandboxFactory;
-  control: { setAllowlist(p: string[]): void; notify(e: ServerEvent): Promise<void>; close(): void } | undefined;
+  control:
+    | { setAllowlist(p: string[]): void; notify(e: ServerEvent): Promise<void>; close(): void }
+    | undefined;
 
   constructor(opts: DaemonOptions) {
     this.opts = opts;
@@ -234,7 +243,10 @@ export class Daemon {
         this.listeners.add((e) => this.api?.broadcast(e));
         if (this.opts.socket !== false) await this.startSocket();
       }
-      if (this.opts.controlPlane) await this.startControlPlane().catch((e) => this.log.warn('control plane failed', { error: errMsg(e) }));
+      if (this.opts.controlPlane)
+        await this.startControlPlane().catch((e) =>
+          this.log.warn('control plane failed', { error: errMsg(e) }),
+        );
 
       const panic = this.global().panic;
       if (panic.active) {
@@ -245,7 +257,10 @@ export class Daemon {
       }
       const tickMs = this.opts.tickMs ?? 5000;
       if (tickMs > 0) {
-        this.timer = setInterval(() => void this.tick().catch((e) => this.log.error('tick failed', { error: errMsg(e) })), tickMs);
+        this.timer = setInterval(
+          () => void this.tick().catch((e) => this.log.error('tick failed', { error: errMsg(e) })),
+          tickMs,
+        );
         this.timer.unref?.();
       }
       return this;
@@ -372,7 +387,10 @@ export class Daemon {
 
   /** Call one API method in-process (validated like a remote call). Throws BeamhopError-like errors. */
   async call(method: string, params: unknown = {}): Promise<unknown> {
-    const res = await this.dispatch({ jsonrpc: '2.0', id: 1, method, params }, { caller: 'local', transport: 'direct' });
+    const res = await this.dispatch(
+      { jsonrpc: '2.0', id: 1, method, params },
+      { caller: 'local', transport: 'direct' },
+    );
     if ('error' in res) {
       const data = res.error.data as { code?: string } | undefined;
       throw new BeamhopError((data?.code as never) ?? 'internal', res.error.message, res.error.data);
@@ -395,8 +413,8 @@ export class Daemon {
     return this.config.loadGlobal();
   }
 
-  updateGlobal(fn: (c: BeamhopConfig) => BeamhopConfig | void): BeamhopConfig {
-    return this.config.updateGlobal((c) => fn(c) ?? c);
+  updateGlobal(fn: (c: BeamhopConfig) => BeamhopConfig): BeamhopConfig {
+    return this.config.updateGlobal((c) => fn(c));
   }
 
   ensureOwner(principal: string): void {
@@ -418,8 +436,7 @@ export class Daemon {
 
   roleDef(name: string): RoleDef {
     return (
-      effectiveRoleDef(name, this.global().roles as RoleOverride[]) ??
-      (effectiveRoleDef('viewer') as RoleDef)
+      effectiveRoleDef(name, this.global().roles as RoleOverride[]) ?? (effectiveRoleDef('viewer') as RoleDef)
     );
   }
 
@@ -604,7 +621,8 @@ export class Daemon {
     const owners = new Set(g.owners.map(normalizePrincipal));
     const out = new Set<string>(owners);
     for (const ps of Object.values(g.people)) {
-      if (ps.some((p) => owners.has(normalizePrincipal(p)))) for (const p of ps) out.add(normalizePrincipal(p));
+      if (ps.some((p) => owners.has(normalizePrincipal(p))))
+        for (const p of ps) out.add(normalizePrincipal(p));
     }
     return [...out];
   }

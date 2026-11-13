@@ -18,10 +18,10 @@ import {
   type AgentConfig,
   type ButtonPress,
   type ChannelConn,
+  formatPreamble,
   type InboundMsg,
   type Membership,
   type RoleDef,
-  formatPreamble,
 } from '@beamhop/core';
 import { meshThreadKey } from '@beamhop/store';
 import type { Daemon } from './daemon.ts';
@@ -52,7 +52,8 @@ const normTarget = (t: string): string => {
   return `${t.slice(0, c).toLowerCase()}:${kind.toLowerCase()}${s < 0 ? '' : rest.slice(s)}`;
 };
 
-export const conversationTarget = (channel: string, kind: string, id: string): string => `${channel}:${kind}/${id}`;
+export const conversationTarget = (channel: string, kind: string, id: string): string =>
+  `${channel}:${kind}/${id}`;
 
 export type MembershipMatch = { membership: Membership; exact: boolean };
 
@@ -113,8 +114,15 @@ export class Router {
     const botNames = [conn.self.handle, conn.self.displayName].filter((x): x is string => !!x);
 
     // Channel-level commands: /pair (anyone) and /approve, /deny (approvers), handled once.
-    if (parsed?.ok && (parsed.command.name === 'pair' || parsed.command.name === 'approve' || parsed.command.name === 'deny')) {
-      if (parsed.addressedTo && !botNames.some((b) => b.toLowerCase().replace(/^@/, '') === parsed.addressedTo?.toLowerCase())) return;
+    if (
+      parsed?.ok &&
+      (parsed.command.name === 'pair' || parsed.command.name === 'approve' || parsed.command.name === 'deny')
+    ) {
+      if (
+        parsed.addressedTo &&
+        !botNames.some((b) => b.toLowerCase().replace(/^@/, '') === parsed.addressedTo?.toLowerCase())
+      )
+        return;
       const addressed = isDm || msg.mentionsAgent || msg.replyToAgent || !!parsed.addressedTo;
       if (!addressed) return;
       if (parsed.command.name === 'pair') return this.pair(conn, msg, parsed.command.code);
@@ -141,9 +149,16 @@ export class Router {
       }
       if (d.isAgentStopped(agent.name)) continue;
       const isPeer = msg.from.isBot || msg.hops > 0;
-      const res = resolveRoleDetailed({ principal: msg.from.principal, agent, global: g, membership, isAgent: isPeer });
+      const res = resolveRoleDetailed({
+        principal: msg.from.principal,
+        agent,
+        global: g,
+        membership,
+        isAgent: isPeer,
+      });
       if (res.role === null) {
-        if (res.reason === 'unknown-sender' || res.reason === 'blocked') this.unknownSender(conn, agent, msg, res.reason);
+        if (res.reason === 'unknown-sender' || res.reason === 'blocked')
+          this.unknownSender(conn, agent, msg, res.reason);
         continue;
       }
       const role = d.roleDef(res.role);
@@ -152,8 +167,10 @@ export class Router {
       try {
         if (trig.command) {
           if (!trig.command.ok) {
-            if (isDm && trig.command.known) await this.reply(conn, msg, agent, role, membership, `⚠️ ${trig.command.error}`);
-            else if (isDm) await this.reply(conn, msg, agent, role, membership, `Unknown command. ${helpShort}`);
+            if (isDm && trig.command.known)
+              await this.reply(conn, msg, agent, role, membership, `⚠️ ${trig.command.error}`);
+            else if (isDm)
+              await this.reply(conn, msg, agent, role, membership, `Unknown command. ${helpShort}`);
             continue;
           }
           await this.command(conn, msg, agent, membership, role, trig.command.command);
@@ -182,7 +199,9 @@ export class Router {
       });
     }
     if (reason === 'unknown-sender' && msg.conversation.kind === 'dm' && !agent.public)
-      void d.approvals.accessRequest(agent, conn, msg).catch((e) => d.log.warn('access request failed', { error: errMsg(e) }));
+      void d.approvals
+        .accessRequest(agent, conn, msg)
+        .catch((e) => d.log.warn('access request failed', { error: errMsg(e) }));
   }
 
   /** A message that should reach the harness. */
@@ -226,7 +245,11 @@ export class Router {
       { key: budgetKey.agent(agent.name), budget: agent.budgets },
       { key: budgetKey.principal(agent.name, normalizePrincipal(principal)), budget: role.budget },
     ];
-    if (isPeer) entries.push({ key: budgetKey.peer(agent.name, normalizePrincipal(principal)), budget: agent.mesh.perPeerBudget });
+    if (isPeer)
+      entries.push({
+        key: budgetKey.peer(agent.name, normalizePrincipal(principal)),
+        budget: agent.mesh.perPeerBudget,
+      });
     const adm = d.budgets.admit(entries);
     if (!adm.ok) {
       d.audit({
@@ -287,7 +310,10 @@ export class Router {
       {
         agent: agent.name,
         dlp: this.d.dlpFor(msg.conversation.kind, role.name, membership?.defaultRole),
-        recipient: msg.conversation.kind === 'dm' ? msg.from.principal : `${conn.name}:${msg.conversation.kind}/${msg.conversation.id}`,
+        recipient:
+          msg.conversation.kind === 'dm'
+            ? msg.from.principal
+            : `${conn.name}:${msg.conversation.kind}/${msg.conversation.id}`,
       },
     );
   }
@@ -296,8 +322,17 @@ export class Router {
     const ownerish = this.d.ownerPrincipals().includes(normalizePrincipal(msg.from.principal));
     await this.d.sendOutbound(
       conn,
-      { conversation: { kind: msg.conversation.kind, id: msg.conversation.id }, threadId: msg.threadId, replyToId: msg.id, markdown },
-      { agent: '(daemon)', dlp: ownerish && msg.conversation.kind === 'dm' ? 'warn' : 'redact', recipient: msg.from.principal },
+      {
+        conversation: { kind: msg.conversation.kind, id: msg.conversation.id },
+        threadId: msg.threadId,
+        replyToId: msg.id,
+        markdown,
+      },
+      {
+        agent: '(daemon)',
+        dlp: ownerish && msg.conversation.kind === 'dm' ? 'warn' : 'redact',
+        recipient: msg.from.principal,
+      },
     );
   }
 
@@ -330,12 +365,15 @@ export class Router {
         actor: msg.from.principal,
         data: { channel: conn.name, reason: res.ok ? 'wrong-channel' : res.reason },
       });
-      if (msg.conversation.kind === 'dm') await this.plainReply(conn, msg, '⚠️ That pairing code is invalid or expired.');
+      if (msg.conversation.kind === 'dm')
+        await this.plainReply(conn, msg, '⚠️ That pairing code is invalid or expired.');
       return;
     }
     this.pairFails.delete(who);
     d.updateGlobal((c) => {
-      const owners = c.owners.some((o) => normalizePrincipal(o) === who) ? c.owners : [...c.owners, msg.from.principal];
+      const owners = c.owners.some((o) => normalizePrincipal(o) === who)
+        ? c.owners
+        : [...c.owners, msg.from.principal];
       const people = { ...c.people };
       const list = people.owner ?? [];
       if (!list.some((p) => normalizePrincipal(p) === who)) people.owner = [...list, msg.from.principal];
@@ -350,17 +388,27 @@ export class Router {
       actor: msg.from.principal,
       data: { channel: conn.name },
     });
-    await this.plainReply(conn, msg, `✅ Paired. ${msg.from.displayName ?? msg.from.principal} is now an owner of this beamhop.`);
+    await this.plainReply(
+      conn,
+      msg,
+      `✅ Paired. ${msg.from.displayName ?? msg.from.principal} is now an owner of this beamhop.`,
+    );
   }
 
   // ───────────────────────────── /approve, /deny ─────────────────────────────
 
-  private async approveCommand(conn: ChannelConn, msg: InboundMsg, allow: boolean, id: string): Promise<void> {
+  private async approveCommand(
+    conn: ChannelConn,
+    msg: InboundMsg,
+    allow: boolean,
+    id: string,
+  ): Promise<void> {
     try {
       const a = await this.d.approvals.decide(id, msg.from.principal, allow, {});
       await this.plainReply(conn, msg, `${allow ? '✅ Approved' : '🚫 Denied'}: ${a.title} (\`${a.id}\`)`);
     } catch (e) {
-      if (msg.conversation.kind === 'dm' || msg.mentionsAgent) await this.plainReply(conn, msg, `⚠️ ${errMsg(e)}`);
+      if (msg.conversation.kind === 'dm' || msg.mentionsAgent)
+        await this.plainReply(conn, msg, `⚠️ ${errMsg(e)}`);
     }
   }
 
@@ -368,17 +416,25 @@ export class Router {
     const [action, ...rest] = press.buttonId.split(':');
     const id = rest.join(':');
     const reply = async (text: string) => {
-      const dm = this.d.store.kv.get<{ channel: string; conversationId: string }>('dm', normalizePrincipal(press.principal));
+      const dm = this.d.store.kv.get<{ channel: string; conversationId: string }>(
+        'dm',
+        normalizePrincipal(press.principal),
+      );
       const convId = press.conversationId || dm?.conversationId;
       if (!convId) return;
       await conn
-        .send({ conversation: { kind: dm?.conversationId === convId ? 'dm' : 'group', id: convId }, markdown: text })
+        .send({
+          conversation: { kind: dm?.conversationId === convId ? 'dm' : 'group', id: convId },
+          markdown: text,
+        })
         .catch(() => {});
     };
     if (action === 'approve' || action === 'deny') {
       try {
         const a = await this.d.approvals.decide(id, press.principal, action === 'approve', {});
-        await reply(`${action === 'approve' ? '✅ Approved' : '🚫 Denied'}: ${a.title} — /undo within 30 s via the PWA`);
+        await reply(
+          `${action === 'approve' ? '✅ Approved' : '🚫 Denied'}: ${a.title} — /undo within 30 s via the PWA`,
+        );
       } catch (e) {
         await reply(`⚠️ ${errMsg(e)}`);
       }
@@ -411,9 +467,18 @@ export class Router {
       });
       // A wildcard group/channel membership: add an explicit revoked entry for this conversation.
       for (const kind of ['group', 'channel'] as const) {
-        const wild = agent.memberships.find((m) => !m.revokedAt && normTarget(m.target) === normTarget(`${conn.name}:${kind}`));
-        if (wild && !memberships.some((m) => m.target === conversationTarget(conn.name, kind, conversationId))) {
-          memberships.push({ ...wild, target: conversationTarget(conn.name, kind, conversationId), revokedAt: at });
+        const wild = agent.memberships.find(
+          (m) => !m.revokedAt && normTarget(m.target) === normTarget(`${conn.name}:${kind}`),
+        );
+        if (
+          wild &&
+          !memberships.some((m) => m.target === conversationTarget(conn.name, kind, conversationId))
+        ) {
+          memberships.push({
+            ...wild,
+            target: conversationTarget(conn.name, kind, conversationId),
+            revokedAt: at,
+          });
           changed = true;
         }
       }
@@ -443,13 +508,19 @@ export class Router {
     cmd: Command,
   ): Promise<void> {
     const d = this.d;
-    const say = (t: string, buttons: Parameters<Router['reply']>[6] = []) => this.reply(conn, msg, agent, role, membership, t, buttons);
+    const say = (t: string, buttons: Parameters<Router['reply']>[6] = []) =>
+      this.reply(conn, msg, agent, role, membership, t, buttons);
     const auth = authorizeCommand(role, cmd);
     if (!auth.allowed) {
       await say(`⛔ ${auth.reason}`);
       return;
     }
-    const key = { agent: agent.name, channel: conn.name, conversationId: msg.conversation.id, threadId: msg.threadId };
+    const key = {
+      agent: agent.name,
+      channel: conn.name,
+      conversationId: msg.conversation.id,
+      threadId: msg.threadId,
+    };
     const live = d.sessions.findForThread(key);
     switch (cmd.name) {
       case 'help':
@@ -506,8 +577,10 @@ export class Router {
         const parts = [
           `Today: ${today.tokens.toLocaleString('en-US')} tokens · $${today.usd.toFixed(2)}${lim.dailyUsd !== undefined ? ` of $${lim.dailyUsd}` : ''} · ${today.minutes.toFixed(1)} min`,
         ];
-        if (lim.dailyUsd !== undefined) parts.push(`Left: $${Math.max(0, lim.dailyUsd - today.usd).toFixed(2)}`);
-        if (lim.dailyTokens !== undefined) parts.push(`Tokens left: ${Math.max(0, lim.dailyTokens - today.tokens)}`);
+        if (lim.dailyUsd !== undefined)
+          parts.push(`Left: $${Math.max(0, lim.dailyUsd - today.usd).toFixed(2)}`);
+        if (lim.dailyTokens !== undefined)
+          parts.push(`Tokens left: ${Math.max(0, lim.dailyTokens - today.tokens)}`);
         if (live) {
           const u = live.record().usage;
           parts.push(`This session: ${u.inputTokens + u.outputTokens} tokens · $${u.usd.toFixed(2)}`);

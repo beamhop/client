@@ -81,12 +81,23 @@ type Loader = (mod: Record<string, unknown>, ctx: BuiltinContext) => void | Prom
  * daemon works with any subset installed. Add new channels/harnesses/deployers here.
  */
 export const BUILTIN_PLUGINS: { module: string; load: Loader }[] = [
-  { module: '@beamhop/channel-nostr', load: (m, c) => void c.registry.addChannel(m.nostrChannel as ChannelPlugin) },
+  {
+    module: '@beamhop/channel-nostr',
+    load: async (m, c) => {
+      const { proxyWebSocket } = await import('./net.ts');
+      const ws = proxyWebSocket();
+      const create = m.createNostrChannel as (deps: unknown) => ChannelPlugin;
+      c.registry.addChannel(ws ? create({ WebSocket: ws }) : (m.nostrChannel as ChannelPlugin));
+    },
+  },
   {
     module: '@beamhop/channel-telegram',
     load: (m, c) => void c.registry.addChannel(m.telegramPlugin as ChannelPlugin),
   },
-  { module: '@beamhop/channel-slack', load: (m, c) => void c.registry.addChannel(m.slackPlugin as ChannelPlugin) },
+  {
+    module: '@beamhop/channel-slack',
+    load: (m, c) => void c.registry.addChannel(m.slackPlugin as ChannelPlugin),
+  },
   {
     module: '@beamhop/channel-discord',
     load: (m, c) => void c.registry.addChannel(m.discordPlugin as ChannelPlugin),
@@ -99,33 +110,48 @@ export const BUILTIN_PLUGINS: { module: string; load: Loader }[] = [
       for (const d of Object.values(all)) c.registry.addDeployer(d);
     },
   },
-  // Harness adapters: each exports a HarnessPlugin (name varies by package; first match wins).
-  ...['harness-claude', 'harness-codex', 'harness-pi', 'harness-acp'].map((pkg) => ({
-    module: `@beamhop/${pkg}`,
-    load: ((m, c) => {
-      for (const v of Object.values(m)) if (isHarnessPlugin(v)) c.registry.addHarness(v);
-      const f = m.createAcpHarness ?? m.createAcpPlugin;
-      if (typeof f === 'function' && !c.registry.acpFactory)
-        c.registry.acpFactory = (def) => (f as AcpHarnessFactory)(def);
-    }) as Loader,
-  })),
+  // Harness adapters (§3.2). ACP covers every catalog entry whose preferred protocol is ACP.
+  {
+    module: '@beamhop/harness-acp',
+    load: (m, c) => {
+      const all = (m.acpHarnessesFromCatalog as (cat?: unknown, o?: unknown) => HarnessPlugin[])(undefined, {
+        log: c.log,
+      });
+      for (const h of all) c.registry.addHarness(h);
+      const custom = m.customAcpHarness as (o: {
+        id: string;
+        command: string;
+        args?: string[];
+        log?: Logger;
+      }) => HarnessPlugin;
+      c.registry.acpFactory = (def) => custom({ ...def, log: c.log });
+    },
+  },
+  {
+    module: '@beamhop/harness-claude',
+    load: (m, c) =>
+      void c.registry.addHarness((m.claudeHarness as (o: unknown) => HarnessPlugin)({ log: c.log })),
+  },
+  {
+    module: '@beamhop/harness-codex',
+    load: (m, c) =>
+      void c.registry.addHarness(
+        (m.codexHarness as (o: unknown) => HarnessPlugin)({ log: c.log, mode: 'auto' }),
+      ),
+  },
+  {
+    module: '@beamhop/harness-pi',
+    load: (m, c) =>
+      void c.registry.addHarness((m.piHarness as (o: unknown) => HarnessPlugin)({ log: c.log })),
+  },
   {
     module: '@beamhop/harness-discovery',
     load: (m, c) => {
-      const scan = (m.scanHarnesses ?? m.scan ?? m.discover) as
-        | ((...a: unknown[]) => Promise<HarnessDetection[]>)
-        | undefined;
-      if (typeof scan === 'function') c.registry.discovery = { scan: () => scan() };
+      const scan = m.scanHarnesses as () => Promise<HarnessDetection[]>;
+      c.registry.discovery = { scan: () => scan() };
     },
   },
 ];
-
-const isHarnessPlugin = (v: unknown): v is HarnessPlugin =>
-  !!v &&
-  typeof v === 'object' &&
-  typeof (v as HarnessPlugin).id === 'string' &&
-  typeof (v as HarnessPlugin).detect === 'function' &&
-  typeof (v as HarnessPlugin).start === 'function';
 
 const isMissing = (e: unknown): boolean => {
   const code = (e as NodeJS.ErrnoException)?.code;

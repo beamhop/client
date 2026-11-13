@@ -96,10 +96,11 @@ export class ChannelManager {
       }
       entry.conn = conn;
       entry.status = 'connected';
-      conn.onButton?.((press) =>
-        void this.d.router.handleButton(conn, press).catch((e) =>
-          this.d.log.error('button handling failed', { error: errMsg(e) }),
-        ),
+      conn.onButton?.(
+        (press) =>
+          void this.d.router
+            .handleButton(conn, press)
+            .catch((e) => this.d.log.error('button handling failed', { error: errMsg(e) })),
       );
       conn.onRemoved?.((conversationId) => this.d.router.handleRemoved(conn, conversationId));
       entry.pump = this.pump(entry, conn);
