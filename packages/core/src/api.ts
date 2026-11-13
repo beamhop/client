@@ -118,6 +118,10 @@ export const ApprovalView = z.object({
   decidedBy: z.string().optional(),
   decidedAt: z.string().optional(),
   kind: z.enum(['tool', 'access-request', 'policy-suggestion', 'deploy']).default('tool'),
+  /** N-of-M approvals (config `approvals.quorum` > 1): approvals needed out of the eligible pool. */
+  quorum: z.object({ needed: z.number().int(), pool: z.number().int() }).optional(),
+  /** Votes cast so far (multi-owner). `by` is the approver's display name or principal. */
+  votes: z.array(z.object({ by: z.string(), allow: z.boolean(), at: z.string() })).optional(),
 });
 export type ApprovalView = z.infer<typeof ApprovalView>;
 
@@ -322,6 +326,12 @@ export const methods = {
       allow: z.boolean(),
       always: z.boolean().default(false),
       grantRole: z.string().optional(),
+      /** Allow for the rest of this session (until it ends) instead of once. */
+      session: z.boolean().optional(),
+      /** With `always`: the exact policy value to add, e.g. `*.npmjs.org` instead of the host. */
+      rule: z.string().optional(),
+      /** With a deny: a short reason passed back to the agent. */
+      reason: z.string().max(500).optional(),
     }),
     result: ApprovalView,
   },
@@ -349,7 +359,11 @@ export const methods = {
     params: z.object({ name: z.string().optional() }).default({}),
     result: z.object({ suggestions: z.array(PolicySuggestion) }),
   },
-  'policy.applySuggestion': { params: z.object({ id: z.string(), accept: z.boolean() }), result: ok },
+  'policy.applySuggestion': {
+    /** `value` overrides the suggested value when accepting (e.g. `*.npmjs.org` for a host). */
+    params: z.object({ id: z.string(), accept: z.boolean(), value: z.string().optional() }),
+    result: ok,
+  },
 
   'secret.list': {
     params: empty,
