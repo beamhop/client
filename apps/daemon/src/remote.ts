@@ -432,7 +432,9 @@ export class RemoteManager {
   /** Mark remotes offline after `missedHeartbeats` intervals without a beat (alert once). */
   tick(): void {
     const now = this.d.now();
-    const limit = (this.opts.missedHeartbeats ?? 3) * this.heartbeatMs;
+    const configured = this.d.global().alerts?.heartbeatMinutes;
+    const limit =
+      configured !== undefined ? configured * 60_000 : (this.opts.missedHeartbeats ?? 3) * this.heartbeatMs;
     for (const [id] of this.clients) {
       const rec = this.d.store.deployments.get(id);
       if (!rec || rec.status === 'destroyed' || rec.status === 'stopped') continue;

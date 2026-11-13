@@ -134,6 +134,8 @@ export interface DaemonOptions {
   alerts?: AlertOptions;
   /** Cloud daemons: heartbeat interval, missed-beat limit, provisioning hello interval. */
   remote?: RemoteOptions;
+  /** Extra directories `fs.list` may browse besides the home directory. */
+  fsRoots?: string[];
 }
 
 export interface AuditInput {

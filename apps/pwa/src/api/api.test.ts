@@ -59,6 +59,18 @@ const SAMPLE: Partial<Record<MethodName, unknown>> = {
   'device.pushSubscribe': { id: 'dev_mac', subscription: {} },
   'device.pushPrefs': { id: 'dev_mac' },
   'identity.nip05': { domain: 'example.com' },
+  'agent.instructionsWrite': { name: 'reviewer', path: '~/code/app/CLAUDE.md', content: '# hi' },
+  'channel.connect': { name: 'tg' },
+  'channel.disconnect': { name: 'tg' },
+  'session.merge': { id: 'ses_836' },
+  'session.openPr': { id: 'ses_836' },
+  'approval.quorumSet': { quorum: 2 },
+  'role.define': { role: { name: 'reviewer-role', canPrompt: true } },
+  'role.delete': { name: 'reviewer-role' },
+  'principal.unlink': { person: 'alice', principal: 'telegram:5551' },
+  'alerts.set': { spikeEvents: 3 },
+  'updates.set': { appPrompt: false },
+  'fs.list': { path: '~/code' },
 };
 
 describe('mock daemon', () => {

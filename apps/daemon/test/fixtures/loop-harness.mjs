@@ -13,23 +13,32 @@ import { createInterface } from 'node:readline';
 
 const out = (ev) => process.stdout.write(`${JSON.stringify(ev)}\n`);
 
-const get = async (url, init) => {
+// Generous timeouts: under CPU load (parallel builds) sandbox start-up and the first requests can be
+// slow. Probes that are expected to fail use the short timeout (a timeout also counts as blocked).
+const SLOW_MS = 30_000;
+const BLOCKED_MS = 8_000;
+
+const get = async (url, init, timeoutMs = SLOW_MS) => {
   try {
-    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(8000) });
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     return { status: r.status, body: await r.text() };
   } catch (e) {
     return { error: String(e.cause?.code ?? e.message) };
   }
 };
 
-const curl = (args) =>
+const curl = (args, timeoutMs = SLOW_MS) =>
   new Promise((resolve) => {
-    execFile('curl', ['-sS', '-m', '8', ...args], { env: process.env }, (err, stdout, stderr) =>
-      resolve({
-        code: err ? (err.code ?? 1) : 0,
-        stdout: String(stdout),
-        stderr: String(stderr).slice(0, 200),
-      }),
+    execFile(
+      'curl',
+      ['-sS', '-m', String(Math.ceil(timeoutMs / 1000)), ...args],
+      { env: process.env },
+      (err, stdout, stderr) =>
+        resolve({
+          code: err ? (err.code ?? 1) : 0,
+          stdout: String(stdout),
+          stderr: String(stderr).slice(0, 200),
+        }),
     );
   });
 
@@ -62,7 +71,7 @@ const mcpSession = (server) => {
       const n = ++id;
       const t = setTimeout(
         () => reject(new Error(`mcp ${method} timed out; stderr: ${stderr.slice(-300)}`)),
-        20000,
+        60_000,
       );
       pending.set(n, (m) => {
         clearTimeout(t);
@@ -139,13 +148,12 @@ const run = async (req) => {
   own.close();
 
   // (d) some other host-loopback service
-  results.otherFetch = await get(`http://127.0.0.1:${req.otherPort}/`);
-  results.otherCurlProxy = await curl([
-    '--proxy',
-    process.env.HTTP_PROXY ?? '',
-    `http://127.0.0.1:${req.otherPort}/`,
-  ]);
-  results.otherCurlEnv = await curl(['--noproxy', '', `http://127.0.0.1:${req.otherPort}/`]);
+  results.otherFetch = await get(`http://127.0.0.1:${req.otherPort}/`, undefined, BLOCKED_MS);
+  results.otherCurlProxy = await curl(
+    ['--proxy', process.env.HTTP_PROXY ?? '', `http://127.0.0.1:${req.otherPort}/`],
+    BLOCKED_MS,
+  );
+  results.otherCurlEnv = await curl(['--noproxy', '', `http://127.0.0.1:${req.otherPort}/`], BLOCKED_MS);
   return results;
 };
 
