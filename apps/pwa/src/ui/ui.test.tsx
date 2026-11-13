@@ -255,3 +255,11 @@ describe('Select (compact: list in a bottom sheet)', () => {
     expect(screen.getByRole('button', { name: /Harness/ })).toHaveTextContent('Gemini CLI 1.3.0');
   });
 });
+
+describe('Button separators', () => {
+  it('spaces the middle dot in a separator span and keeps the accessible name', () => {
+    render(<Button>Continue · Identity</Button>);
+    const btn = screen.getByRole('button', { name: 'Continue · Identity' });
+    expect(btn.querySelector('[data-sep]')).not.toBeNull();
+  });
+});

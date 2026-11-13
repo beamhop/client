@@ -51,6 +51,27 @@ const SIZE: Record<ButtonSize, string> = {
   lg: 'h-14 px-6 gap-2 text-base',
 };
 
+/**
+ * Instrument Sans sets U+00B7 tight and its word space narrow, so `Continue · Identity` collapses into
+ * `Continue·Identity` at label size. Split string labels on ` · ` and render the dot in a separator span
+ * with its own side bearings. The spaces stay in the text, so the accessible name is unchanged.
+ */
+const SEP = /\s\u00B7\s/;
+export const withSeparators = (children: ReactNode): ReactNode => {
+  if (typeof children !== 'string' || !SEP.test(children)) return children;
+  const parts = children.split(SEP);
+  return parts.flatMap((part, i) =>
+    i === 0
+      ? [part]
+      : [
+          <span key={`s${i}`} data-sep="" className="inline-block px-[0.3em]">
+            {' \u00B7 '}
+          </span>,
+          part,
+        ],
+  );
+};
+
 export const buttonClass = (variant: ButtonVariant = 'secondary', size: ButtonSize = 'md', extra?: string) =>
   cx(
     'relative inline-flex shrink-0 select-none items-center justify-center rounded-md type-label whitespace-nowrap',
@@ -138,7 +159,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       >
         <span className={cx('inline-flex items-center gap-[inherit]', isPending && 'opacity-0')}>
           {icon}
-          {children}
+          {withSeparators(children)}
           {trailing}
         </span>
         {isPending && (
@@ -232,7 +253,7 @@ export const LinkButton = ({
     className={buttonClass(variant, size, cx(fullWidth && 'w-full', 'no-underline', className))}
   >
     {icon}
-    {children}
+    {withSeparators(children)}
   </RACLink>
 );
 
