@@ -282,6 +282,43 @@ describe('createLlmProxy', () => {
     expect(seen).toHaveLength(0);
   });
 
+  // docs/security/REVIEW-wave-a.md — LLM-1: provider-side fetch/MCP tools are an exfil channel.
+  it('LLM-1: refuses provider-side URL fetch / MCP / web tools by default', async () => {
+    const t = proxy.createSession();
+    const send = (path: string, body: unknown, ctype = 'application/json') =>
+      fetch(`${proxy.url}${path}`, {
+        method: 'POST',
+        headers: { 'x-beamhop-session': t, 'content-type': ctype },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      }).then((r) => r.status);
+    const msg = { model: 'm', messages: [{ role: 'user', content: 'hi' }] };
+    const bad: [string, unknown][] = [
+      ['/anthropic/v1/messages', { ...msg, mcp_servers: [{ type: 'url', url: 'https://evil.example/mcp' }] }],
+      ['/anthropic/v1/messages', { ...msg, tools: [{ type: 'web_fetch_20250910', name: 'web_fetch' }] }],
+      ['/anthropic/v1/messages', { ...msg, tools: [{ type: 'web_search_20250305', name: 'web_search' }] }],
+      [
+        '/openai/v1/responses',
+        { model: 'm', input: 'x', tools: [{ type: 'mcp', server_url: 'https://evil.example' }] },
+      ],
+      ['/openai/v1/responses', { model: 'm', input: 'x', tools: [{ type: 'web_search_preview' }] }],
+      ['/openai/v1/chat/completions', { ...msg, web_search_options: {} }],
+      ['/openrouter/api/v1/chat/completions', { ...msg, model: 'openai/gpt-5-mini:online' }],
+      ['/openrouter/api/v1/chat/completions', { ...msg, plugins: [{ id: 'web' }] }],
+      // Same body, content-type that hides it from a JSON-only check.
+      ['/anthropic/v1/messages', JSON.stringify({ ...msg, mcp_servers: [{ url: 'https://evil.example' }] })],
+    ];
+    for (const [i, [path, body]] of bad.entries()) {
+      const ctype = i === bad.length - 1 ? 'text/plain' : 'application/json';
+      expect(await send(path, body, ctype), `${path} #${i}`).toBe(403);
+    }
+    expect(await send('/anthropic/v1/messages', '{"model": "m", ', 'application/json')).toBe(400);
+    expect(seen).toHaveLength(0);
+    // Ordinary function tools still pass.
+    const ok = { ...msg, tools: [{ name: 'bash', input_schema: { type: 'object' } }] };
+    expect(await send('/anthropic/v1/messages', ok)).toBe(200);
+    expect(seen).toHaveLength(1);
+  });
+
   it('passes upstream error statuses through', async () => {
     handler = (res) => {
       res.writeHead(400, { 'content-type': 'application/json' });

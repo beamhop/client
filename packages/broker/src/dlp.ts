@@ -94,8 +94,8 @@ const RULES: Rule[] = [
 
 const MIN_KNOWN_SECRET_LENGTH = 6;
 
-/** Scan text for secrets. `knownSecrets` are exact values held by the broker. */
-export const scanOutbound = (text: string, knownSecrets: readonly string[] = []): DlpScan => {
+/** Pattern rules + exact known values over `text` (no normalization, no decoding). */
+const scanPlain = (text: string, known: readonly string[]): DlpFinding[] => {
   const raw: DlpFinding[] = [];
   for (const rule of RULES) {
     rule.re.lastIndex = 0;
@@ -107,7 +107,6 @@ export const scanOutbound = (text: string, knownSecrets: readonly string[] = [])
       raw.push({ type: rule.type, index: m.index + offset, length: value.length });
     }
   }
-  const known = [...new Set(knownSecrets)].filter((s) => s.length >= MIN_KNOWN_SECRET_LENGTH);
   for (const secret of known) {
     let i = text.indexOf(secret);
     while (i !== -1) {
@@ -115,6 +114,152 @@ export const scanOutbound = (text: string, knownSecrets: readonly string[] = [])
       i = text.indexOf(secret, i + secret.length);
     }
   }
+  return raw;
+};
+
+/**
+ * Invisible / formatting code points that render as nothing and are used to break up a secret
+ * (zero-width space/joiners, word joiner, BOM, soft hyphen, bidi controls, variation selectors,
+ * Hangul fillers, Mongolian vowel separator).
+ */
+const INVISIBLE_RANGES: [number, number][] = [
+  [0x00ad, 0x00ad],
+  [0x034f, 0x034f],
+  [0x061c, 0x061c],
+  [0x115f, 0x1160],
+  [0x17b4, 0x17b5],
+  [0x180b, 0x180f],
+  [0x200b, 0x200f],
+  [0x202a, 0x202e],
+  [0x2060, 0x206f],
+  [0x3164, 0x3164],
+  [0xfe00, 0xfe0f],
+  [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0],
+  [0xe0000, 0xe007f], // tag characters
+];
+const isInvisible = (ch: string): boolean => {
+  const cp = ch.codePointAt(0) ?? 0;
+  return INVISIBLE_RANGES.some(([lo, hi]) => cp >= lo && cp <= hi);
+};
+
+/**
+ * Strip invisible chars and NFKC-fold each code point (fullwidth / compatibility forms → ASCII).
+ * `starts[i]`/`ends[i]` map normalized UTF-16 index i back to its span in the original text.
+ */
+const normalizeForScan = (text: string) => {
+  let out = '';
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let i = 0;
+  for (const ch of text) {
+    if (!isInvisible(ch)) {
+      const n = ch.normalize('NFKC');
+      for (let k = 0; k < n.length; k++) {
+        starts.push(i);
+        ends.push(i + ch.length);
+      }
+      out += n;
+    }
+    i += ch.length;
+  }
+  return { out, starts, ends };
+};
+
+/**
+ * Substrings that appear in every base64 / base64url / hex encoding of `secret`, whatever the
+ * byte alignment inside a larger encoded blob (3 base64 alignments: only the chars whose 6 bits
+ * all come from the secret are kept).
+ */
+const encodedForms = (secret: string): string[] => {
+  const b = Buffer.from(secret, 'utf8');
+  const forms = new Set<string>([b.toString('hex'), b.toString('hex').toUpperCase()]);
+  for (let k = 0; k < 3; k++) {
+    const enc = Buffer.concat([Buffer.alloc(k), b]).toString('base64');
+    const core = enc.slice(Math.ceil((8 * k) / 6), Math.floor((8 * (k + b.length)) / 6));
+    if (core.length < 8) continue;
+    forms.add(core);
+    forms.add(core.replace(/\+/g, '-').replace(/\//g, '_'));
+  }
+  return [...forms];
+};
+
+const ENCODED_RUN_CHAR = /[A-Za-z0-9+/_=-]/;
+/** Extend [index, index+length) to the whole surrounding encoded token. */
+const widenToRun = (text: string, index: number, length: number): [number, number] => {
+  let a = index;
+  let b = index + length;
+  while (a > 0 && ENCODED_RUN_CHAR.test(text[a - 1] ?? '')) a--;
+  while (b < text.length && ENCODED_RUN_CHAR.test(text[b] ?? '')) b++;
+  return [a, b];
+};
+
+const MAX_DECODE_RUNS = 200;
+const printableRatio = (s: string): number => {
+  if (!s) return 0;
+  let ok = 0;
+  for (const ch of s) if (/[\x20-\x7e\t\r\n]/.test(ch)) ok++;
+  return ok / [...s].length;
+};
+
+/** Decode base64 / hex tokens and scan the decoded text; a hit flags the whole encoded token. */
+const scanDecoded = (text: string, known: readonly string[]): DlpFinding[] => {
+  const out: DlpFinding[] = [];
+  let runs = 0;
+  for (const m of text.matchAll(/[A-Za-z0-9+/_-]{24,}={0,2}/g)) {
+    if (m.index === undefined || ++runs > MAX_DECODE_RUNS) break;
+    const tok = m[0];
+    const decoded: string[] = [];
+    if (/^[0-9a-fA-F]+$/.test(tok) && tok.length % 2 === 0)
+      decoded.push(Buffer.from(tok, 'hex').toString('utf8'));
+    decoded.push(Buffer.from(tok, 'base64').toString('utf8'));
+    for (const d of decoded) {
+      if (printableRatio(d) < 0.9) continue;
+      const hits = scanPlain(d, known);
+      if (hits.length) {
+        const type = hits.some((h) => h.type === 'known-secret')
+          ? 'known-secret'
+          : `encoded-${hits[0]?.type}`;
+        out.push({ type, index: m.index, length: tok.length });
+        break;
+      }
+    }
+  }
+  return out;
+};
+
+/**
+ * Scan text for secrets. `knownSecrets` are exact values held by the broker.
+ *
+ * Resists cheap obfuscation: invisible chars are stripped and compatibility forms folded (NFKC)
+ * before matching, known secrets are also matched in base64 / base64url / hex form (any
+ * alignment), and base64 / hex tokens are decoded and re-scanned. Not caught (see
+ * docs/security/REVIEW-wave-a.md): secrets split across messages, cross-script homoglyphs,
+ * custom encodings (rot13, reversed, gzip, …).
+ */
+export const scanOutbound = (text: string, knownSecrets: readonly string[] = []): DlpScan => {
+  const known = [...new Set(knownSecrets)].filter((s) => s.length >= MIN_KNOWN_SECRET_LENGTH);
+  const norm = normalizeForScan(text);
+  const t = norm.out;
+  const inNorm: DlpFinding[] = [...scanPlain(t, known), ...scanDecoded(t, known)];
+  for (const secret of known) {
+    for (const form of encodedForms(secret)) {
+      let i = t.indexOf(form);
+      while (i !== -1) {
+        const [a, b] = widenToRun(t, i, form.length);
+        inNorm.push({ type: 'known-secret', index: a, length: b - a });
+        i = t.indexOf(form, i + form.length);
+      }
+    }
+  }
+  // Map back to original coordinates.
+  const raw: DlpFinding[] = inNorm
+    .filter((f) => f.length > 0)
+    .map((f) => {
+      const a = norm.starts[f.index] ?? 0;
+      const b = norm.ends[f.index + f.length - 1] ?? text.length;
+      return { type: f.type, index: a, length: b - a };
+    });
 
   // Merge overlaps: sort by start, prefer known-secret, then longer.
   raw.sort((a, b) => a.index - b.index || b.length - a.length);
