@@ -64,8 +64,12 @@ async function dispatch(method, params) {
         authMethods: [],
       };
     case 'session/new':
-      session = { id: 'sess-1', cwd: params.cwd, mcpServers: params.mcpServers };
-      return { sessionId: session.id };
+      session = { id: 'sess-1', cwd: params.cwd, mcpServers: params.mcpServers, model: 'fake/alpha' };
+      return { sessionId: session.id, configOptions: configOptions() };
+    case 'session/set_config_option':
+      if (params.configId !== 'model') throw new Error(`unknown config option ${params.configId}`);
+      session.model = params.value;
+      return { configOptions: configOptions() };
     case 'session/load':
       session = { id: params.sessionId, cwd: params.cwd, mcpServers: params.mcpServers, loaded: true };
       update({ sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'old prompt' } });
@@ -79,6 +83,23 @@ async function dispatch(method, params) {
     default:
       throw new Error(`unknown method ${method}`);
   }
+}
+
+/** A model select like real agents offer; `fake/alpha` is the agent's own default. */
+function configOptions() {
+  return [
+    {
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      type: 'select',
+      currentValue: session.model,
+      options: [
+        { value: 'fake/alpha', name: 'Alpha' },
+        { value: 'fake/beta', name: 'Beta' },
+      ],
+    },
+  ];
 }
 
 async function prompt(params) {
@@ -99,6 +120,7 @@ async function prompt(params) {
         cwd: session.cwd,
         mcpServers: session.mcpServers,
         loaded: !!session.loaded,
+        model: session.model,
         prompt: text,
       }),
     );

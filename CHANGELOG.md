@@ -13,6 +13,12 @@ All notable changes to beamhop are documented here. The format follows
   $5/day budget, and you set the rest on its own screens. A strict agent's folders are locked read-only,
   since the strict sandbox never writes.
 
+### Fixed
+
+- **ACP harnesses and "Harness default".** An agent left on the harness's default model no longer asks
+  the ACP agent for a model named `default` (and logs "model not offered" on every session); the
+  agent's own default is kept.
+
 ## [0.2.0] - 2026-11-13
 
 One version for everything from here on: the CLI, the daemon, the desktop app and the web UI share it

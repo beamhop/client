@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { checkToolDetailed, effectiveRoleDef } from '@beamhop/authz';
 import type { HarnessEvent, HarnessSession, RoleDef, SessionSpec } from '@beamhop/core';
+import { createLogger } from '@beamhop/core';
 import { loadCatalog } from '@beamhop/harness-catalog';
 import { unsafePassthroughSandbox, writeFakeAcpAgent, writeFakeBin } from '@beamhop/harness-kit';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -104,6 +105,28 @@ describe('ACP harness against a fake agent', () => {
       { name: 'beamhop', command: 'node', args: ['mcp.js'], env: [{ name: 'A', value: '1' }] },
     ]);
     expect(out.loaded).toBe(false);
+  });
+
+  it('keeps the agent default model for "default" and picks an offered model by id or suffix', async () => {
+    const logs: string[] = [];
+    const startLogged = async (model: string) => {
+      const s = await createAcpHarness({
+        id: 'fake',
+        displayName: 'Fake',
+        command: agentBin,
+        detect: async () => null,
+        log: createLogger({ level: 'debug', sink: (l) => logs.push(l) }),
+      }).start(spec({ model }), unsafePassthroughSandbox());
+      sessions.push(s);
+      return JSON.parse(textOf(await run(s, 'echo-setup'))).model as string;
+    };
+    expect(await startLogged('default')).toBe('fake/alpha');
+    expect(await startLogged('')).toBe('fake/alpha');
+    expect(logs.filter((l) => l.includes('model not offered'))).toEqual([]);
+    expect(await startLogged('beta')).toBe('fake/beta');
+    expect(await startLogged('fake/beta')).toBe('fake/beta');
+    expect(await startLogged('gamma')).toBe('fake/alpha');
+    expect(logs.filter((l) => l.includes('model not offered'))).toHaveLength(1);
   });
 
   it('resumes via session/load and ignores replayed history', async () => {

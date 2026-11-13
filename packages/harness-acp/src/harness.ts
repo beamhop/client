@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import * as acp from '@agentclientprotocol/sdk';
 import {
   BeamhopError,
+  explicitModel,
   type HarnessDetection,
   type HarnessEvent,
   type HarnessPlugin,
@@ -390,12 +391,13 @@ const applySessionSettings = async (
   modes: acp.SessionModeState | null | undefined,
   log: Logger,
 ) => {
-  if (spec.model) {
+  // "default" means the agent's own choice: leave its model option alone rather than look it up by that name.
+  const model = explicitModel(spec.model);
+  if (model) {
     const opt = configOptions?.find((o) => o.category === 'model' && o.type === 'select');
     if (opt && opt.type === 'select') {
       const flat = opt.options.flatMap((o) => ('options' in o ? o.options : [o]));
-      const match =
-        flat.find((o) => o.value === spec.model) ?? flat.find((o) => o.value.endsWith(`/${spec.model}`));
+      const match = flat.find((o) => o.value === model) ?? flat.find((o) => o.value.endsWith(`/${model}`));
       if (match && match.value !== opt.currentValue) {
         await conn.agent
           .request(acp.methods.agent.session.setConfigOption, {
@@ -404,7 +406,7 @@ const applySessionSettings = async (
             value: match.value,
           })
           .catch((e) => log.warn('could not set model', { error: (e as Error).message }));
-      } else if (!match) log.warn('model not offered by agent; using its default', { model: spec.model });
+      } else if (!match) log.warn('model not offered by agent; using its default', { model });
     }
   }
   if (spec.permissionMode === 'plan' && modes?.availableModes.some((m) => m.id === 'plan')) {
