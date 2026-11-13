@@ -31,7 +31,9 @@ test('panic from the UI kills sessions, flips system.status, shows the band; res
   await expect(sheet).toBeVisible();
   await axe(page);
   await sheet.getByRole('button', { name: 'Stop everything' }).click();
-  await expect(sheet.getByText('Everything is stopped.')).toBeVisible();
+  // After the press the sheet retitles itself, so find it by its new name.
+  const stopped = page.getByRole('alertdialog', { name: 'Everything is stopped.' });
+  await expect(stopped).toBeVisible();
 
   // The daemon really stopped: panic flag, the harness session cancelled, sessions ended.
   expect((await bh.rpc<Status>('system.status')).panic).toBe(true);
@@ -40,7 +42,7 @@ test('panic from the UI kills sessions, flips system.status, shows the band; res
     .poll(async () => (await bh.rpc<Sessions>('session.list')).sessions.map((s) => s.status))
     .toEqual(['ended']);
 
-  await sheet.getByRole('button', { name: 'Close' }).first().click();
+  await stopped.getByRole('button', { name: 'Close' }).first().click();
   await expect(page.getByRole('region', { name: /Everything is stopped/ })).toBeVisible();
   await axe(page);
   // The band survives a reload (state comes from the daemon, not the tab).
