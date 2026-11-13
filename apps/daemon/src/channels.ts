@@ -1,4 +1,12 @@
-/** Channel connections: connect enabled channels, pump inbound messages into the router. */
+/**
+ * Channel connections: connect enabled channels, pump inbound messages into the router.
+ *
+ * Agent-keyed channels (the default `nostr` channel, `settings.agentKeys: true`) open one
+ * connection per agent key, named `<channel>@<agent>`. Each connection only ever routes to its own
+ * agent, while memberships keep using the shared channel name (`nostr:dm`). Sessions record the
+ * connection name, so replies go out with the right key.
+ */
+import { baseChannelName } from '@beamhop/authz';
 import {
   BeamhopError,
   type ChannelConfig,
@@ -15,9 +23,14 @@ interface Entry {
   status: ChannelView['status'];
   error?: string;
   pump?: Promise<void>;
+  /** For agent-bound connections. */
+  agent?: string;
 }
 
 export const channelSecretName = (channel: string, field: string): string => `channel.${channel}.${field}`;
+export const agentConnName = (channel: string, agent: string): string => `${channel}@${agent}`;
+export const isAgentKeyed = (cfg: ChannelConfig): boolean =>
+  cfg.provider === 'nostr' && cfg.settings.agentKeys === true;
 
 export class ChannelManager {
   private readonly entries = new Map<string, Entry>();
@@ -28,6 +41,26 @@ export class ChannelManager {
     return this.entries.get(name)?.conn;
   }
 
+  /** The connection an agent uses on a channel: its own key on agent-keyed channels. */
+  forAgent(channel: string, agent: string): ChannelConn | undefined {
+    if (channel.includes('@')) return this.get(channel);
+    return this.get(agentConnName(channel, agent)) ?? this.get(channel);
+  }
+
+  /** Connection name an agent's sessions on `channel` use (`nostr` → `nostr@reviewer` when keyed). */
+  connName(channel: string, agent: string): string {
+    const cfg = this.d.config.channels.get(channel);
+    return cfg && isAgentKeyed(cfg) ? agentConnName(channel, agent) : channel;
+  }
+
+  /** `{ channel, agent }` for an agent-bound connection name, else undefined. */
+  binding(connName: string): { channel: string; agent: string } | undefined {
+    const e = this.entries.get(connName);
+    if (e?.agent) return { channel: e.cfg.name, agent: e.agent };
+    const at = connName.indexOf('@');
+    return at > 0 ? { channel: baseChannelName(connName), agent: connName.slice(at + 1) } : undefined;
+  }
+
   connected(): ChannelConn[] {
     return [...this.entries.values()].flatMap((e) => (e.conn ? [e.conn] : []));
   }
@@ -35,9 +68,22 @@ export class ChannelManager {
   view(cfg: ChannelConfig): ChannelView {
     const e = this.entries.get(cfg.name);
     const v: ChannelView = { config: cfg, status: cfg.enabled ? (e?.status ?? 'disconnected') : 'disabled' };
+    if (isAgentKeyed(cfg)) {
+      const kids = this.children(cfg.name);
+      const failed = kids.filter((k) => k.status === 'error');
+      if (cfg.enabled && e && failed.length) {
+        v.status = failed.length === kids.length ? 'error' : v.status;
+        v.error = failed.map((k) => `${k.agent}: ${k.error ?? 'error'}`).join('; ');
+      }
+      return v;
+    }
     if (e?.conn) v.self = { ...e.conn.self };
     if (e?.error) v.error = e.error;
     return v;
+  }
+
+  private children(channel: string): Entry[] {
+    return [...this.entries.values()].filter((e) => e.agent && e.cfg.name === channel);
   }
 
   async startAll(): Promise<void> {
@@ -69,12 +115,66 @@ export class ChannelManager {
     return out;
   }
 
-  async connect(cfg: ChannelConfig): Promise<ChannelConn> {
+  async connect(cfg: ChannelConfig): Promise<ChannelConn | undefined> {
     if (this.d.isPanic()) throw new BeamhopError('unavailable', 'panic mode is active');
     await this.disconnect(cfg.name);
+    if (!isAgentKeyed(cfg)) return this.open(cfg.name, cfg, cfg.settings, await this.secretsFor(cfg));
     const plugin = this.d.registry.channel(cfg.provider);
-    const entry: Entry = { cfg, status: 'connecting' };
+    const entry: Entry = { cfg, status: plugin ? 'connected' : 'error' };
+    if (!plugin) entry.error = `channel provider "${cfg.provider}" is not installed`;
     this.entries.set(cfg.name, entry);
+    this.emit(cfg.name);
+    if (!plugin) throw new BeamhopError('unavailable', entry.error ?? 'not installed');
+    await Promise.all(
+      this.d.config.agents
+        .list()
+        .filter((a) => a.identity.nostrKeyRef)
+        .map((a) => this.connectAgent(cfg, a.name).catch(() => {})),
+    );
+    this.emit(cfg.name);
+    return undefined;
+  }
+
+  /** Open (or re-open) one agent's connection on an agent-keyed channel. */
+  async connectAgent(cfg: ChannelConfig, agent: string): Promise<ChannelConn> {
+    const a = this.d.agent(agent);
+    const ref = a.identity.nostrKeyRef;
+    const nsec = ref ? await this.d.secrets.get(ref) : undefined;
+    if (!nsec) throw new BeamhopError('not_found', `agent ${agent} has no Nostr key`);
+    const name = agentConnName(cfg.name, agent);
+    await this.disconnect(name);
+    const settings = { ...cfg.settings, name: a.displayName ?? a.name };
+    delete (settings as Record<string, unknown>).agentKeys;
+    const conn = await this.open(name, cfg, settings, { nsec }, agent);
+    this.emit(cfg.name);
+    return conn;
+  }
+
+  /** Bring an agent's connections in line with its config (after create/delete/key change). */
+  async syncAgent(agent: string): Promise<void> {
+    const a = this.d.config.agents.get(agent);
+    for (const cfg of this.d.config.channels.list().filter(isAgentKeyed)) {
+      const name = agentConnName(cfg.name, agent);
+      if (!a?.identity.nostrKeyRef || !cfg.enabled) {
+        await this.disconnect(name);
+        this.emit(cfg.name);
+        continue;
+      }
+      if (this.d.isPanic() || !this.entries.has(cfg.name)) continue;
+      if (!this.get(name)) await this.connectAgent(cfg, agent).catch(() => {});
+    }
+  }
+
+  private async open(
+    name: string,
+    cfg: ChannelConfig,
+    settings: Record<string, unknown>,
+    secrets: Record<string, string>,
+    agent?: string,
+  ): Promise<ChannelConn> {
+    const plugin = this.d.registry.channel(cfg.provider);
+    const entry: Entry = { cfg, status: 'connecting', ...(agent ? { agent } : {}) };
+    this.entries.set(name, entry);
     if (!plugin) {
       entry.status = 'error';
       entry.error = `channel provider "${cfg.provider}" is not installed`;
@@ -84,13 +184,13 @@ export class ChannelManager {
     this.emit(cfg.name);
     try {
       const conn = await plugin.connect({
-        name: cfg.name,
-        settings: cfg.settings,
-        secrets: await this.secretsFor(cfg),
-        log: this.d.log.child({ channel: cfg.name }),
-        state: this.d.store.kv.namespace(`channel:${cfg.name}`),
+        name,
+        settings,
+        secrets,
+        log: this.d.log.child({ channel: name }),
+        state: this.d.store.kv.namespace(`channel:${name}`),
       });
-      if (this.entries.get(cfg.name) !== entry) {
+      if (this.entries.get(name) !== entry) {
         await conn.close().catch(() => {});
         throw new BeamhopError('conflict', 'channel was reconfigured while connecting');
       }
@@ -105,15 +205,15 @@ export class ChannelManager {
       conn.onRemoved?.((conversationId) => this.d.router.handleRemoved(conn, conversationId));
       entry.pump = this.pump(entry, conn);
       this.emit(cfg.name);
-      this.d.log.info('channel connected', { channel: cfg.name, provider: cfg.provider });
+      this.d.log.info('channel connected', { channel: name, provider: cfg.provider });
       return conn;
     } catch (e) {
-      if (this.entries.get(cfg.name) === entry) {
+      if (this.entries.get(name) === entry) {
         entry.status = 'error';
         entry.error = errMsg(e);
         this.emit(cfg.name);
       }
-      this.d.log.warn('channel connect failed', { channel: cfg.name, error: errMsg(e) });
+      this.d.log.warn('channel connect failed', { channel: name, error: errMsg(e) });
       throw e;
     }
   }
@@ -137,7 +237,7 @@ export class ChannelManager {
       if (entry.conn === conn) {
         entry.status = 'error';
         entry.error = errMsg(e);
-        this.emit(conn.name);
+        this.emit(entry.cfg.name);
       }
     }
   }
@@ -146,10 +246,15 @@ export class ChannelManager {
     const e = this.entries.get(name);
     if (!e) return;
     this.entries.delete(name);
+    if (!e.agent && isAgentKeyed(e.cfg))
+      await Promise.all(
+        this.children(e.cfg.name).map((k) => this.disconnect(agentConnName(k.cfg.name, k.agent!))),
+      );
     const conn = e.conn;
     e.conn = undefined;
     e.status = 'disconnected';
     if (conn) await conn.close().catch(() => {});
+    if (e.agent) return;
     const cfg = this.d.config.channels.get(name);
     if (cfg) this.d.emit({ type: 'channel.updated', channel: this.view(cfg) });
   }

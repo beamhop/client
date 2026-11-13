@@ -35,4 +35,16 @@ describe('browser compatibility', () => {
       expect(spec.startsWith('nostr-tools/'), spec).toBe(true);
     }
   });
+
+  it('pairing helpers (safety phrase, payload, completePairing) have no node-only runtime imports', () => {
+    for (const entry of ['pairing.ts', 'identity.ts']) {
+      const { files, bare } = graph(join(src, entry));
+      expect(files.size).toBeGreaterThan(1);
+      for (const spec of bare) {
+        expect(spec.startsWith('node:'), spec).toBe(false);
+        expect(spec, spec).not.toBe('@beamhop/core');
+        expect(spec.startsWith('nostr-tools/') || spec.startsWith('@noble/hashes/'), spec).toBe(true);
+      }
+    }
+  });
 });

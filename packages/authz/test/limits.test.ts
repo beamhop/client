@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BudgetTracker,
+  baseChannelName,
   budgetKey,
   canRoute,
   canRouteDetailed,
@@ -11,6 +12,7 @@ import {
   isWellFormedPairingCode,
   normalizePairingCode,
   PAIRING_ALPHABET,
+  PairingLimiter,
   utcDay,
   verifyPairingCode,
 } from '../src/index.ts';
@@ -267,5 +269,54 @@ describe('pairing codes', () => {
     expect(constantTimeEqual('a', 'a')).toBe(true);
     expect(constantTimeEqual('a', 'ab')).toBe(false);
     expect(normalizePairingCode('a_b-c d')).toBe('ABCD');
+  });
+});
+
+describe('pairing brute-force limiter', () => {
+  it('locks a sender after 5 failures in 10 minutes, then recovers', () => {
+    const c = clock();
+    const l = new PairingLimiter({ now: c.now });
+    for (let i = 0; i < 5; i++) {
+      expect(l.check('nostr:mallory').ok).toBe(true);
+      l.fail('nostr:mallory');
+    }
+    const locked = l.check('nostr:mallory');
+    expect(locked).toMatchObject({ ok: false, scope: 'sender' });
+    expect(locked.ok ? 0 : locked.retryAfterMs).toBe(600_000);
+    expect(l.check('nostr:alice').ok).toBe(true);
+    c.advance(600_001);
+    expect(l.check('nostr:mallory').ok).toBe(true);
+  });
+  it('locks everyone after 20 failures overall (key rotation does not help)', () => {
+    const c = clock();
+    const l = new PairingLimiter({ now: c.now });
+    for (let i = 0; i < 20; i++) l.fail(`nostr:rotating-${i}`);
+    expect(l.check('nostr:fresh')).toMatchObject({ ok: false, scope: 'global' });
+    c.advance(10 * 60_000);
+    expect(l.check('nostr:fresh').ok).toBe(true);
+  });
+  it('custom limits', () => {
+    const c = clock();
+    const l = new PairingLimiter({ perSender: 1, global: 100, windowMs: 1000, now: c.now });
+    l.fail('x');
+    expect(l.check('x').ok).toBe(false);
+    c.advance(1000);
+    expect(l.check('x').ok).toBe(true);
+  });
+});
+
+describe('agent-bound connection names', () => {
+  it('route like their channel', () => {
+    expect(baseChannelName('nostr@reviewer')).toBe('nostr');
+    expect(baseChannelName('nostr')).toBe('nostr');
+    expect(canRoute('nostr@reviewer:dm/npub1x', 'nostr:dm/npub1x')).toBe(true);
+    expect(
+      canRoute('nostr@reviewer:dm/npub1x', 'slack:channel/C1', [{ from: 'nostr:dm', to: 'slack:channel/*' }]),
+    ).toBe(false);
+    expect(
+      canRoute('nostr@reviewer:dm/npub1x', 'slack:channel/C1', [
+        { from: 'nostr:dm/*', to: 'slack:channel/*' },
+      ]),
+    ).toBe(true);
   });
 });

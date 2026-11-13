@@ -70,8 +70,20 @@ export const buildAttestation = (
   opts: AttestationOptions = {},
 ): VerifiedEvent => {
   const sk = decodeSecretKey(ownerKey);
+  return finalizeEvent(buildAttestationTemplate(getPublicKey(sk), agentPubkey, opts), sk);
+};
+
+/**
+ * The unsigned attestation for an owner whose key lives elsewhere (phone, NIP-07, NIP-46 bunker):
+ * the daemon hands this out and the owner's device signs it (§4, §7A).
+ */
+export const buildAttestationTemplate = (
+  ownerPubkey: string,
+  agentPubkey: string,
+  opts: AttestationOptions = {},
+): EventTemplate => {
+  const owner = decodePubkey(ownerPubkey);
   const agent = decodePubkey(agentPubkey);
-  const owner = getPublicKey(sk);
   if (owner === agent) throw new Error('owner and agent keys must differ');
   const content = {
     v: 1,
@@ -81,20 +93,17 @@ export const buildAttestation = (
     ...(opts.name ? { name: opts.name } : {}),
     ...(opts.revoked ? { revoked: true } : {}),
   };
-  return finalizeEvent(
-    {
-      kind: ATTESTATION_KIND,
-      created_at: opts.createdAt ?? nowSec(),
-      tags: [
-        ['d', attestationD(agent)],
-        ['p', agent],
-        ['t', 'beamhop-attestation'],
-        ['alt', `beamhop: ${npubEncode(owner)} operates AI agent ${npubEncode(agent)}`],
-      ],
-      content: JSON.stringify(content),
-    },
-    sk,
-  );
+  return {
+    kind: ATTESTATION_KIND,
+    created_at: opts.createdAt ?? nowSec(),
+    tags: [
+      ['d', attestationD(agent)],
+      ['p', agent],
+      ['t', 'beamhop-attestation'],
+      ['alt', `beamhop: ${npubEncode(owner)} operates AI agent ${npubEncode(agent)}`],
+    ],
+    content: JSON.stringify(content),
+  };
 };
 
 export type AttestationCheck =

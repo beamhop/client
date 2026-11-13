@@ -71,7 +71,7 @@ export class ApiHandlers {
       const npub = ctx.caller.slice(6);
       const owners = this.d.ownerPrincipals();
       if (owners.includes(normalizePrincipal(ctx.caller))) return ctx.caller;
-      if (this.d.store.devices.list().some((dev) => dev.pubkey === npub)) return LOCAL_OWNER;
+      if (this.d.pairing.activeDevices().some((dev) => dev.pubkey === npub)) return LOCAL_OWNER;
     }
     return ctx.caller;
   }
@@ -295,15 +295,20 @@ export class ApiHandlers {
           );
         if (d.config.agents.has(parsed.data.name))
           throw new BeamhopError('conflict', `agent ${parsed.data.name} exists`);
-        const v = this.saveAgent(parsed.data);
+        // §4: each agent gets its own Nostr key (kept in the secret store).
+        const withKey = await d.identity.ensureAgentKey(parsed.data);
+        this.saveAgent(withKey);
         d.audit({
           type: 'agent.created',
           severity: 'info',
-          summary: `Agent ${parsed.data.name} created${preset ? ` from ${preset}` : ''}`,
+          summary: `Agent ${parsed.data.name} created${preset ? ` from ${preset}` : ''}${withKey.identity.npub ? ` (${withKey.identity.npub})` : ''}`,
           actor: this.principal(ctx),
           agent: parsed.data.name,
         });
-        return v;
+        await d.identity
+          .onAgentCreated(withKey.name)
+          .catch((e) => d.log.warn('agent identity setup failed', { agent: withKey.name, error: errMsg(e) }));
+        return this.agentView(withKey.name);
       },
       'agent.update': async ({ name, patch }, ctx) => {
         const cur = d.agent(name);
@@ -325,10 +330,12 @@ export class ApiHandlers {
         return v;
       },
       'agent.delete': async ({ name }, ctx) => {
-        d.agent(name);
+        const cfg = d.agent(name);
         for (const s of d.sessions.all())
           if (s.agent === name) await d.sessions.end(s, 'agent deleted', { hard: true });
         d.config.agents.delete(name);
+        await d.channels.syncAgent(name);
+        await d.identity.deleteAgentKey(cfg);
         for (const sc of d.config.schedules.list().filter((s) => s.agent === name)) {
           d.scheduler.disarm(sc.id);
           d.config.schedules.delete(sc.id);
@@ -376,13 +383,20 @@ export class ApiHandlers {
         const cur = d.agent(name);
         if (d.config.agents.has(newName)) throw new BeamhopError('conflict', `agent ${newName} exists`);
         // A clone gets its own identity and no memberships (it must be joined explicitly).
-        const v = this.saveAgent({
-          ...cur,
-          name: newName,
-          identity: {},
-          memberships: [],
-          displayName: cur.displayName ? `${cur.displayName} (copy)` : undefined,
-        });
+        const cloned = await d.identity.ensureAgentKey(
+          AgentConfig.parse({
+            ...cur,
+            name: newName,
+            identity: {},
+            memberships: [],
+            displayName: cur.displayName ? `${cur.displayName} (copy)` : undefined,
+          }),
+        );
+        this.saveAgent(cloned);
+        await d.identity
+          .onAgentCreated(newName)
+          .catch((e) => d.log.warn('agent identity setup failed', { agent: newName, error: errMsg(e) }));
+        const v = this.agentView(newName);
         d.audit({
           type: 'agent.cloned',
           severity: 'info',
@@ -999,53 +1013,14 @@ export class ApiHandlers {
 
       // ── devices ──
       'device.list': async () => ({ devices: d.store.devices.list() }),
-      'device.pairStart': async ({ name }, ctx) => {
-        const code = createPairingCode({ now: d.now() });
-        d.store.pairingCodes.put({
-          code: code.code,
-          purpose: 'device',
-          expiresAt: code.expiresAt,
-          data: { name },
-        });
-        const q = new URLSearchParams({ code: code.code, name });
-        const control = d.control as unknown as { npub?: string } | undefined;
-        if (control?.npub) q.set('daemon', control.npub);
-        if (d.api) q.set('url', d.api.url);
-        d.audit({
-          type: 'device.pairStart',
-          severity: 'security',
-          summary: `Device pairing started (${name})`,
-          actor: this.principal(ctx),
-        });
-        return { uri: `beamhop://pair?${q.toString()}`, code: code.code, expiresAt: code.expiresAt };
-      },
-      'device.pairComplete': async ({ code, pubkey, name }, ctx) => {
-        const res = d.store.pairingCodes.consume(code, 'device');
-        if (!res.ok) {
-          d.audit({
-            type: 'pairing.failed',
-            severity: 'security',
-            summary: `Failed device pairing (${res.reason})`,
-            actor: ctx.caller,
-          });
-          throw new BeamhopError('unauthorized', `pairing code ${res.reason}`);
-        }
-        if (!/^(npub1[02-9ac-hj-np-z]{58}|[0-9a-f]{64})$/.test(pubkey))
-          throw new BeamhopError('invalid_input', 'pubkey must be an npub or 64-char hex key');
-        const dev = d.store.devices.add({ name: name || String(res.record.data.name ?? 'device'), pubkey });
-        d.refreshControlAllowlist();
-        d.audit({
-          type: 'device.paired',
-          severity: 'security',
-          summary: `Paired device ${dev.name}`,
-          actor: ctx.caller,
-          data: { device: dev.id },
-        });
-        return dev;
-      },
+      'device.pairStart': async ({ name, requireConfirm }, ctx) =>
+        d.pairing.start(name, requireConfirm, { actor: this.principal(ctx) }),
+      'device.pairComplete': async (p, ctx) => d.pairing.complete(p, ctx),
+      'device.pairStatus': async ({ pairingId }) => d.pairing.status(pairingId),
+      'device.pairConfirm': async ({ pairingId, accept }, ctx) =>
+        d.pairing.confirm(pairingId, accept, this.principal(ctx)),
       'device.remove': async ({ id }, ctx) => {
-        if (!d.store.devices.remove(id)) throw new BeamhopError('not_found', `device ${id} not found`);
-        d.refreshControlAllowlist();
+        if (!d.pairing.remove(id)) throw new BeamhopError('not_found', `device ${id} not found`);
         d.audit({
           type: 'device.removed',
           severity: 'security',
@@ -1063,15 +1038,69 @@ export class ApiHandlers {
       // ── identity ──
       'identity.get': async () => {
         const g = d.global();
+        const daemonNpub = d.control?.npub ?? (await d.controlKey().catch(() => undefined))?.npub;
         return {
           ...(g.nostr.ownerNpub ? { npub: g.nostr.ownerNpub } : {}),
+          ownerKeyHeld: await d.identity.ownerKeyHeld(),
+          ...(daemonNpub ? { daemonNpub } : {}),
           agents: d.config.agents.list().map((a) => ({
             name: a.name,
             ...(a.identity.npub ? { npub: a.identity.npub } : {}),
             ...(a.identity.nip05 ? { nip05: a.identity.nip05 } : {}),
+            attested: d.identity.attested(a.name),
           })),
         };
       },
+      'identity.ownerCreate': async ({ replace }, ctx) => {
+        const npub = await d.identity.createOwner(replace);
+        d.audit({
+          type: 'owner.created',
+          severity: 'security',
+          summary: `Created owner key ${npub}`,
+          actor: this.principal(ctx),
+          data: { npub },
+        });
+        return { npub };
+      },
+      'identity.ownerImport': async ({ npub }, ctx) => {
+        const n = await d.identity.importOwner(npub);
+        d.audit({
+          type: 'owner.imported',
+          severity: 'security',
+          summary: `Owner set to ${n} (key held on the owner's device)`,
+          actor: this.principal(ctx),
+          data: { npub: n },
+        });
+        return { npub: n };
+      },
+      'identity.ownerExport': async (_p, ctx) => {
+        // Never over the Nostr control plane: only a client on this computer can see the key.
+        if (ctx.transport === 'nostr')
+          throw new BeamhopError('forbidden', 'the owner key can only be exported on this computer');
+        const nsec = await d.identity.exportOwner();
+        d.audit({
+          type: 'owner.exported',
+          severity: 'security',
+          summary: 'Owner secret key exported (shown once)',
+          actor: this.principal(ctx),
+        });
+        return { nsec };
+      },
+      'identity.attestationTemplate': async ({ name }) => d.identity.attestationTemplate(name),
+      'identity.attest': async ({ name, event }, ctx) => {
+        await d.identity.attest(name, event);
+        d.audit({
+          type: 'identity.attested',
+          severity: 'security',
+          summary: `Owner attestation published for ${name}`,
+          actor: this.principal(ctx),
+          agent: name,
+        });
+        return OK;
+      },
+      'identity.publish': async ({ name }) => d.identity.publish(name),
+      'onboarding.hello': async ({ agent, text }) => d.identity.hello(agent, text),
+      'onboarding.helloStatus': async ({ agent }) => d.identity.helloStatus(agent),
       'identity.nip05': async ({ domain, names }) => {
         let mod: {
           buildNip05Json: (

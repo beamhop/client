@@ -155,6 +155,23 @@ export const DeviceView = z.object({
 });
 export type DeviceView = z.infer<typeof DeviceView>;
 
+export const PairingStatusView = z.object({
+  pairingId: z.string(),
+  status: z.enum(['waiting', 'awaiting-confirm', 'paired', 'rejected', 'expired']),
+  expiresAt: z.string(),
+  device: DeviceView.optional(),
+  /** 4 words derived from the daemon and device pubkeys; the phone shows the same words. */
+  safetyPhrase: z.array(z.string()).optional(),
+});
+export type PairingStatusView = z.infer<typeof PairingStatusView>;
+
+export const EventTemplateView = z.object({
+  kind: z.number().int(),
+  created_at: z.number().int(),
+  tags: z.array(z.array(z.string())),
+  content: z.string(),
+});
+
 export const DoctorCheck = z.object({
   id: z.string(),
   title: z.string(),
@@ -444,13 +461,39 @@ export const methods = {
   },
 
   'device.list': { params: empty, result: z.object({ devices: z.array(DeviceView) }) },
+  /**
+   * `uri` is the hosted PWA pairing URL (`https://app.beamhop.dev/pair#<payload>`), `link` the
+   * `beamhop://pair#<payload>` deep link; render `uri` as the QR code. With `requireConfirm` the
+   * device only joins the allowlist after `device.pairConfirm` (safety phrase checked on this side).
+   */
   'device.pairStart': {
-    params: z.object({ name: z.string().default('New device') }).default({ name: 'New device' }),
-    result: z.object({ uri: z.string(), code: z.string(), expiresAt: z.string() }),
+    params: z
+      .object({ name: z.string().default('New device'), requireConfirm: z.boolean().default(false) })
+      .default({ name: 'New device', requireConfirm: false }),
+    result: z.object({
+      uri: z.string(),
+      code: z.string(),
+      expiresAt: z.string(),
+      pairingId: z.string().optional(),
+      payload: z.string().optional(),
+      link: z.string().optional(),
+      daemonNpub: z.string().optional(),
+      relays: z.array(z.string()).optional(),
+    }),
   },
   'device.pairComplete': {
     params: z.object({ code: z.string(), pubkey: z.string(), name: z.string() }),
     result: DeviceView,
+  },
+  /** Poll a pairing started with device.pairStart (the safety phrase appears once a device answered). */
+  'device.pairStatus': {
+    params: z.object({ pairingId: z.string() }),
+    result: PairingStatusView,
+  },
+  /** Trusted-side confirmation of the safety phrase; `accept: false` cancels and logs a failed pairing. */
+  'device.pairConfirm': {
+    params: z.object({ pairingId: z.string(), accept: z.boolean() }),
+    result: PairingStatusView,
   },
   'device.remove': { params: z.object({ id: z.string() }), result: ok },
   'device.pushSubscribe': { params: z.object({ id: z.string(), subscription: z.unknown() }), result: ok },
@@ -459,9 +502,63 @@ export const methods = {
     params: empty,
     result: z.object({
       npub: z.string().optional(),
+      /** True when the daemon holds the owner's secret key (created by `identity.ownerCreate`). */
+      ownerKeyHeld: z.boolean().optional(),
+      /** Daemon control-plane npub (what paired devices talk to). */
+      daemonNpub: z.string().optional(),
       agents: z.array(
-        z.object({ name: z.string(), npub: z.string().optional(), nip05: z.string().optional() }),
+        z.object({
+          name: z.string(),
+          npub: z.string().optional(),
+          nip05: z.string().optional(),
+          attested: z.boolean().optional(),
+        }),
       ),
+    }),
+  },
+  /** Create a new owner key in the secret store; sets `owners` and `nostr.ownerNpub`. */
+  'identity.ownerCreate': {
+    params: z.object({ replace: z.boolean().default(false) }).default({ replace: false }),
+    result: z.object({ npub: z.string() }),
+  },
+  /** Use an existing owner key (signing stays on the owner's device; the daemon keeps only the npub). */
+  'identity.ownerImport': { params: z.object({ npub: z.string() }), result: z.object({ npub: z.string() }) },
+  /** Reveal the daemon-held owner nsec, once, to a local client. Never available over Nostr. */
+  'identity.ownerExport': { params: empty, result: z.object({ nsec: z.string() }) },
+  /** Unsigned owner attestation for an agent, for an owner whose key lives on another device. */
+  'identity.attestationTemplate': {
+    params: byName,
+    result: z.object({ template: EventTemplateView, ownerNpub: z.string(), agentNpub: z.string() }),
+  },
+  /** Publish an owner-signed attestation (verified against the agent and owner first). */
+  'identity.attest': {
+    params: z.object({ name: z.string(), event: z.record(z.string(), z.unknown()) }),
+    result: ok,
+  },
+  /** (Re)publish an agent's kind 0 profile, attestation (if possible) and NIP-89 card. */
+  'identity.publish': {
+    params: byName,
+    result: z.object({
+      npub: z.string(),
+      published: z.array(z.object({ kind: z.number(), id: z.string(), relays: z.array(z.string()) })),
+      attestation: z.enum(['published', 'needs-owner-signature', 'no-owner']),
+    }),
+  },
+  /** Onboarding step 06: the agent DMs the owner "hello" over Nostr. */
+  'onboarding.hello': {
+    params: z.object({ agent: z.string(), text: z.string().optional() }),
+    result: z.object({ to: z.string(), from: z.string(), id: z.string(), sentAt: z.string() }),
+  },
+  /** Has the owner (or a paired device) replied to the hello DM? */
+  'onboarding.helloStatus': {
+    params: z.object({ agent: z.string() }),
+    result: z.object({
+      sent: z.boolean(),
+      replied: z.boolean(),
+      sentAt: z.string().optional(),
+      repliedAt: z.string().optional(),
+      from: z.string().optional(),
+      text: z.string().optional(),
     }),
   },
   'identity.nip05': {
