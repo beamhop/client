@@ -44,7 +44,7 @@ test('screenshot panic band', async ({ page }, info) => {
   });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `screenshots/${info.project.name}/home-panic.png` });
-  await page.goto('/panic');
+  await page.getByRole('link', { name: 'Review & resume' }).first().click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `screenshots/${info.project.name}/panic-resume.png` });
 });

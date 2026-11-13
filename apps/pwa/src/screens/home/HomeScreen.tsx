@@ -190,7 +190,11 @@ const AgentCard = ({
   const last = [...(events.data?.events ?? [])]
     .reverse()
     .find((e) => e.kind === 'progress' || e.kind === 'assistant' || e.kind === 'permission');
-  const lastText = last?.kind === 'permission' ? `waiting for approval: ${last.text ?? ''}` : last?.text;
+  const lastText = !live
+    ? undefined
+    : last?.kind === 'permission'
+      ? `waiting for approval: ${last.text ?? ''}`
+      : last?.text;
   const membership = session
     ? `${session.channel}:${session.conversationId}`
     : a.config.memberships[0]?.target;
@@ -419,7 +423,7 @@ export const HomeScreen = () => {
             <Eyebrow id="home-agents" count={cards.length} href="/agents">
               Agents
             </Eyebrow>
-            <ul className="grid grid-cols-1 gap-3 medium:grid-cols-2 expanded:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
+            <ul className="grid grid-cols-1 gap-3 medium:grid-cols-2 expanded:grid-cols-[repeat(auto-fill,minmax(268px,1fr))]">
               {cards.map((c) => (
                 <li key={c.a.config.name} className="min-w-0">
                   <AgentCard a={c.a} lamp={c.lamp} session={c.session} channels={channels.data?.channels} />
