@@ -46,7 +46,8 @@ export const piArgs = (spec: SessionSpec, extra: string[] = [], gatePath = PI_GA
   const args = ['--mode', 'rpc'];
   if (spec.model) args.push('--model', spec.model);
   if (spec.resume) args.push('--session', spec.resume);
-  if (spec.permissionMode === 'read-only' || spec.permissionMode === 'plan') args.push('--tools', READ_ONLY_TOOLS);
+  if (spec.permissionMode === 'read-only' || spec.permissionMode === 'plan')
+    args.push('--tools', READ_ONLY_TOOLS);
   if (spec.permissionMode === 'ask') args.push('--extension', gatePath);
   return [...args, ...extra];
 };
@@ -56,7 +57,11 @@ type PiMsg = Record<string, unknown> & { type?: string };
 const textOfContent = (content: unknown): string | undefined => {
   if (!Array.isArray(content)) return typeof content === 'string' ? content : undefined;
   const parts = content
-    .map((c) => (c && typeof c === 'object' && (c as { type?: string }).type === 'text' ? (c as { text: string }).text : ''))
+    .map((c) =>
+      c && typeof c === 'object' && (c as { type?: string }).type === 'text'
+        ? (c as { text: string }).text
+        : '',
+    )
     .filter(Boolean);
   return parts.length ? parts.join('\n') : undefined;
 };
@@ -96,7 +101,9 @@ export const mapPiEvent = (m: PiMsg, acc: Omit<TurnAcc, 'queue'>): HarnessEvent[
       return [];
     }
     case 'tool_execution_start':
-      return [{ type: 'tool_call', id: String(m.toolCallId), name: String(m.toolName), input: m.args ?? null }];
+      return [
+        { type: 'tool_call', id: String(m.toolCallId), name: String(m.toolName), input: m.args ?? null },
+      ];
     case 'tool_execution_end': {
       const r = m.result as { content?: unknown; details?: { diff?: unknown } } | undefined;
       const diff = typeof r?.details?.diff === 'string' ? r.details.diff : undefined;
@@ -111,7 +118,12 @@ export const mapPiEvent = (m: PiMsg, acc: Omit<TurnAcc, 'queue'>): HarnessEvent[
       ];
     }
     case 'auto_retry_start':
-      return [{ type: 'progress', message: `retrying (${m.attempt}/${m.maxAttempts}): ${truncate(String(m.errorMessage ?? ''), 200)}` }];
+      return [
+        {
+          type: 'progress',
+          message: `retrying (${m.attempt}/${m.maxAttempts}): ${truncate(String(m.errorMessage ?? ''), 200)}`,
+        },
+      ];
     case 'compaction_start':
       return [{ type: 'progress', message: 'compacting context' }];
     case 'extension_error':
@@ -140,7 +152,8 @@ export const startPiSession = async (
   sandbox: SandboxHandle,
 ): Promise<HarnessSession> => {
   const log = (opts.log ?? silentLogger).child({ harness: 'pi', session: spec.sessionId });
-  if (spec.mcpServers.length) log.warn('pi does not support MCP servers; beamhop tools are unavailable in this session');
+  if (spec.mcpServers.length)
+    log.warn('pi does not support MCP servers; beamhop tools are unavailable in this session');
   const command = typeof opts.command === 'function' ? await opts.command() : (opts.command ?? 'pi');
   const child = await spawnInSandbox(
     sandbox,
@@ -246,7 +259,12 @@ export const startPiSession = async (
         const t = turn;
         const evs: HarnessEvent[] = [];
         if (t.input || t.output || t.cost) {
-          evs.push({ type: 'usage', inputTokens: t.input, outputTokens: t.output, ...(t.cost ? { costUsd: t.cost } : {}) });
+          evs.push({
+            type: 'usage',
+            inputTokens: t.input,
+            outputTokens: t.output,
+            ...(t.cost ? { costUsd: t.cost } : {}),
+          });
         }
         evs.push({ type: 'done', stopReason: piStop(t.stopReason), resume: resumeToken() });
         finishTurn(evs);
@@ -259,10 +277,17 @@ export const startPiSession = async (
     child.once('exit', (code, signal) => {
       exited = true;
       broker.denyAll('cancelled');
-      const err = new BeamhopError('unavailable', `pi exited (code=${code} signal=${signal}): ${truncate(stderr().trim(), 500)}`);
+      const err = new BeamhopError(
+        'unavailable',
+        `pi exited (code=${code} signal=${signal}): ${truncate(stderr().trim(), 500)}`,
+      );
       for (const p of pending.values()) p.reject(err);
       pending.clear();
-      if (!closing) finishTurn([{ type: 'error', message: err.message }, { type: 'done', stopReason: 'error', resume: resumeToken() }]);
+      if (!closing)
+        finishTurn([
+          { type: 'error', message: err.message },
+          { type: 'done', stopReason: 'error', resume: resumeToken() },
+        ]);
       resolve();
     });
     child.once('error', () => {
@@ -296,7 +321,10 @@ export const startPiSession = async (
           const images: { type: 'image'; data: string; mimeType: string }[] = [];
           let message = text;
           for (const a of attachments) {
-            const p = resolveInMounts(a.path, spec.mounts, 'read', { cwd: spec.cwd, deny: sandbox.policy.fs.deny });
+            const p = resolveInMounts(a.path, spec.mounts, 'read', {
+              cwd: spec.cwd,
+              deny: sandbox.policy.fs.deny,
+            });
             if (a.mime.startsWith('image/')) {
               images.push({ type: 'image', data: (await readFile(p)).toString('base64'), mimeType: a.mime });
             } else message += `\n\nAttached file: ${p} (${a.mime})`;

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type HarnessEvent, SandboxPolicy, type SandboxHandle, type SessionSpec } from '@beamhop/core';
+import { type HarnessEvent, type SandboxHandle, SandboxPolicy, type SessionSpec } from '@beamhop/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { piHarness } from '../src/index.ts';
 
@@ -73,7 +73,9 @@ describe('pi over RPC (live)', () => {
     const s = await piHarness({ command: piBin, startTimeoutMs: 90000 }).start(makeSpec(MODEL), passthrough);
     try {
       const events: HarnessEvent[] = [];
-      for await (const ev of s.prompt('Reply with the single word pong and nothing else. Do not use tools.')) {
+      for await (const ev of s.prompt(
+        'Reply with the single word pong and nothing else. Do not use tools.',
+      )) {
         events.push(ev);
         if (ev.type === 'permission_request') await s.respondPermission(ev.id, { allow: false });
       }

@@ -94,7 +94,9 @@ const runPong = async (model: string) => {
   const session = await harness.start(spec, passthrough);
   try {
     const events: HarnessEvent[] = [];
-    for await (const ev of session.prompt('Reply with the single word pong and nothing else. Do not use tools.')) {
+    for await (const ev of session.prompt(
+      'Reply with the single word pong and nothing else. Do not use tools.',
+    )) {
       events.push(ev);
       if (ev.type === 'permission_request') await session.respondPermission(ev.id, { allow: false });
     }

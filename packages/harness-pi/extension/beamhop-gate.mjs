@@ -8,7 +8,11 @@ export default function beamhopGate(pi) {
   pi.on('tool_call', async (event, ctx) => {
     if (READ_ONLY.has(event.toolName)) return undefined;
     if (!ctx.hasUI) return { block: true, reason: 'beamhop: no approval channel' };
-    const payload = JSON.stringify({ toolCallId: event.toolCallId, tool: event.toolName, input: event.input });
+    const payload = JSON.stringify({
+      toolCallId: event.toolCallId,
+      tool: event.toolName,
+      input: event.input,
+    });
     const ok = await ctx.ui.confirm(`${PREFIX}${payload}`, `Allow ${event.toolName}?`);
     return ok ? undefined : { block: true, reason: 'denied by the owner' };
   });

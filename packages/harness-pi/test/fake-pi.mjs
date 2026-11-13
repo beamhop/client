@@ -30,7 +30,11 @@ const assistant = (text, stopReason = 'stop') => ({
 const streamText = (text) => {
   out({ type: 'message_start', message: { role: 'assistant' } });
   for (const ch of [text.slice(0, 2), text.slice(2)]) {
-    out({ type: 'message_update', message: {}, assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ch } });
+    out({
+      type: 'message_update',
+      message: {},
+      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: ch },
+    });
   }
 };
 
@@ -53,7 +57,8 @@ async function handle(m) {
       return out({ id: m.id, type: 'response', command: m.type, success: false, error: 'unknown' });
   }
   const text = m.message;
-  if (text.includes('reject')) return out({ id: m.id, type: 'response', command: 'prompt', success: false, error: 'busy' });
+  if (text.includes('reject'))
+    return out({ id: m.id, type: 'response', command: 'prompt', success: false, error: 'busy' });
   respond({});
   out({ type: 'agent_start' });
   if (text.includes('crash')) process.exit(4);
@@ -74,7 +79,13 @@ async function handle(m) {
     if (argv.includes('--extension')) {
       const id = `ui-${Math.random()}`;
       const payload = JSON.stringify({ toolCallId: 'call_1', tool: 'edit', input: { path: 'a.txt' } });
-      out({ type: 'extension_ui_request', id, method: 'confirm', title: `beamhop-permission:${payload}`, message: 'Allow edit?' });
+      out({
+        type: 'extension_ui_request',
+        id,
+        method: 'confirm',
+        title: `beamhop-permission:${payload}`,
+        message: 'Allow edit?',
+      });
       const r = await new Promise((res) => uiWaiters.set(id, res));
       allowed = r.confirmed === true;
     }
@@ -83,14 +94,21 @@ async function handle(m) {
       toolCallId: 'call_1',
       toolName: 'edit',
       result: allowed
-        ? { content: [{ type: 'text', text: 'edited' }], details: { diff: '--- a/a.txt\n+++ b/a.txt\n-x\n+y' } }
+        ? {
+            content: [{ type: 'text', text: 'edited' }],
+            details: { diff: '--- a/a.txt\n+++ b/a.txt\n-x\n+y' },
+          }
         : { content: [{ type: 'text', text: 'denied by the owner' }] },
       isError: !allowed,
     });
     streamText(allowed ? 'did-it' : 'blocked');
     out({ type: 'message_end', message: assistant('') });
   } else {
-    out({ type: 'message_update', message: {}, assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm' } });
+    out({
+      type: 'message_update',
+      message: {},
+      assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm' },
+    });
     streamText('pong');
     out({ type: 'message_end', message: { role: 'user' } });
     out({ type: 'message_end', message: assistant('pong') });

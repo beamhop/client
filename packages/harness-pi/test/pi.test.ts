@@ -44,7 +44,12 @@ const start = async (over: Partial<SessionSpec> = {}) => {
   sessions.push(s);
   return s;
 };
-const run = async (s: HarnessSession, text: string, allow?: { allow: boolean; always?: boolean }, att?: { path: string; mime: string }[]) => {
+const run = async (
+  s: HarnessSession,
+  text: string,
+  allow?: { allow: boolean; always?: boolean },
+  att?: { path: string; mime: string }[],
+) => {
   const evs: HarnessEvent[] = [];
   for await (const ev of s.prompt(text, att)) {
     evs.push(ev);
@@ -52,12 +57,16 @@ const run = async (s: HarnessSession, text: string, allow?: { allow: boolean; al
   }
   return evs;
 };
-const text = (evs: HarnessEvent[]) =>
-  evs.flatMap((e) => (e.type === 'text' ? [e.delta] : [])).join('');
+const text = (evs: HarnessEvent[]) => evs.flatMap((e) => (e.type === 'text' ? [e.delta] : [])).join('');
 
 describe('piArgs', () => {
   it('builds rpc args per mode', () => {
-    expect(piArgs(spec({ permissionMode: 'auto' }))).toEqual(['--mode', 'rpc', '--model', 'openrouter/google/gemini-2.5-flash']);
+    expect(piArgs(spec({ permissionMode: 'auto' }))).toEqual([
+      '--mode',
+      'rpc',
+      '--model',
+      'openrouter/google/gemini-2.5-flash',
+    ]);
     expect(piArgs(spec({ permissionMode: 'read-only', model: '', resume: '/s/x.jsonl' }))).toEqual([
       '--mode',
       'rpc',
@@ -84,15 +93,31 @@ describe('pi harness against a fake RPC server', () => {
   it('passes model, session and gate extension args', async () => {
     const s = await start({ resume: '/sessions/old.jsonl' });
     const out = JSON.parse(text(await run(s, 'echo')));
-    expect(out.argv).toEqual(['--mode', 'rpc', '--model', 'openrouter/google/gemini-2.5-flash', '--session', '/sessions/old.jsonl', '--extension', PI_GATE_EXTENSION]);
+    expect(out.argv).toEqual([
+      '--mode',
+      'rpc',
+      '--model',
+      'openrouter/google/gemini-2.5-flash',
+      '--session',
+      '/sessions/old.jsonl',
+      '--extension',
+      PI_GATE_EXTENSION,
+    ]);
   });
 
   it('maps gate confirms to permission requests (allow, always, deny)', async () => {
     const s = await start();
     const evs = await run(s, 'tool', { allow: true });
-    expect(evs.find((e) => e.type === 'permission_request')).toMatchObject({ tool: 'edit', input: { path: 'a.txt' } });
+    expect(evs.find((e) => e.type === 'permission_request')).toMatchObject({
+      tool: 'edit',
+      input: { path: 'a.txt' },
+    });
     expect(evs.find((e) => e.type === 'tool_call')).toMatchObject({ id: 'call_1', name: 'edit' });
-    expect(evs.find((e) => e.type === 'tool_result')).toMatchObject({ ok: true, output: 'edited', diff: expect.stringContaining('+y') });
+    expect(evs.find((e) => e.type === 'tool_result')).toMatchObject({
+      ok: true,
+      output: 'edited',
+      diff: expect.stringContaining('+y'),
+    });
     expect(text(evs)).toBe('did-it');
 
     const denied = await run(s, 'tool', { allow: false });
@@ -113,7 +138,9 @@ describe('pi harness against a fake RPC server', () => {
 
   it('sends image attachments inside mounts and rejects others', async () => {
     const s = await start();
-    const out = JSON.parse(text(await run(s, 'echo', undefined, [{ path: path.join(work, 'img.png'), mime: 'image/png' }])));
+    const out = JSON.parse(
+      text(await run(s, 'echo', undefined, [{ path: path.join(work, 'img.png'), mime: 'image/png' }])),
+    );
     expect(out.images).toBe(1);
     const evs = await run(s, 'echo', undefined, [{ path: '/etc/hosts', mime: 'text/plain' }]);
     expect(evs.find((e) => e.type === 'error')).toMatchObject({ message: expect.stringMatching(/outside/) });
@@ -162,7 +189,9 @@ describe('pi harness against a fake RPC server', () => {
 
   it('fails start when pi does not answer', async () => {
     const dead = writeFakeBin(bin, 'deadpi', 'process.exit(1);');
-    await expect(piHarness({ command: dead }).start(spec(), unsafePassthroughSandbox())).rejects.toThrow(/pi/);
+    await expect(piHarness({ command: dead }).start(spec(), unsafePassthroughSandbox())).rejects.toThrow(
+      /pi/,
+    );
   });
 });
 
@@ -171,7 +200,9 @@ describe('mapPiEvent', () => {
     const acc = { input: 0, output: 0, cost: 0 };
     expect(mapPiEvent({ type: 'queue_update' }, acc)).toEqual([]);
     expect(mapPiEvent({ type: 'message_end', message: { role: 'toolResult' } }, acc)).toEqual([]);
-    expect(mapPiEvent({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, errorMessage: '529' }, acc)[0]).toMatchObject({
+    expect(
+      mapPiEvent({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, errorMessage: '529' }, acc)[0],
+    ).toMatchObject({
       type: 'progress',
     });
   });
