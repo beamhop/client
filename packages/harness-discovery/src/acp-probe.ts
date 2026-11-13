@@ -1,6 +1,6 @@
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
-import { BeamhopError, type SandboxHandle } from '@beamhop/core';
+import { BeamhopError, type SandboxHandle, VERSION } from '@beamhop/core';
 import {
   captureStderr,
   minimalEnv,
@@ -30,7 +30,7 @@ export interface AcpProbeOptions {
   sandbox?: SandboxHandle;
 }
 
-export const CLIENT_INFO = { name: 'beamhop', title: 'beamhop', version: '0.1.0' } as const;
+export const CLIENT_INFO = { name: 'beamhop', title: 'beamhop', version: VERSION } as const;
 
 export const mapAcpCapabilities = (c: acp.AgentCapabilities | undefined) => ({
   streaming: true,

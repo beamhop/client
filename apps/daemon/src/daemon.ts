@@ -29,6 +29,7 @@ import {
   type AgentConfig,
   type AgentView,
   type AuditEvent,
+  VERSION as BEAMHOP_VERSION,
   type BeamhopConfig,
   BeamhopError,
   type Button,
@@ -76,7 +77,8 @@ import { Scheduler } from './schedules.ts';
 import { SessionManager } from './sessions.ts';
 import { errMsg } from './util.ts';
 
-export const VERSION = '0.1.0';
+/** The beamhop version (shared by the CLI and desktop app); see @beamhop/core. */
+export const VERSION = BEAMHOP_VERSION;
 /** Control-plane methods an unpaired device may call. */
 export const PUBLIC_CONTROL_METHODS: readonly string[] = ['device.pairComplete'];
 /** The principal used for the local control plane (CLI, local PWA). Always an owner. */

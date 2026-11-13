@@ -6,8 +6,21 @@ All notable changes to beamhop are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-13
+
+One version for everything from here on: the CLI, the daemon, the desktop app and the web UI share it
+(`node scripts/version.mjs`), and CI fails if a package drifts.
+
 ### Added
 
+- **Model picker.** beamhop asks the harness which models its sign-in offers (Codex `model/list`, Claude
+  Code, ACP agents, pi) and the agent's Setup and the New agent flow offer them, plus "Harness default"
+  and a typed id. API `harness.models`.
+- **Sandbox network controls** (agent → Sandbox → Network): allow all network per agent (deny rules,
+  cloud metadata and private addresses still apply; not with the strict profile), your own allowlist,
+  the hosts the harness and its sign-in need, blocked hosts with one-click Allow/Reject, and **Test
+  connections** (API `sandbox.test`). A failed turn names the hosts the sandbox refused.
+- `beamhop harness rm` / `harness.remove` for custom ACP harnesses.
 - **Desktop app** (`apps/desktop`): the control panel in its own window with the daemon bundled, for macOS,
   Windows and Linux. Nothing else to install. Attaches to a daemon the CLI already runs, or starts its own;
   keeps running in the menu bar / tray when the window closes; open at login (starts hidden); Stop
@@ -31,6 +44,21 @@ All notable changes to beamhop are documented here. The format follows
 
 ### Fixed
 
+- Codex with a ChatGPT sign-in failed in the sandbox ("workspace routing discovery failed"): it needs
+  macOS trustd, which only ACP plugins took from the catalog. Every harness plugin now does.
+- Codex and pi passed the model "default" literally; a ChatGPT plan rejects it. They now leave it to the
+  harness.
+- A session on a harness that is not signed in fails at once with how to sign in, instead of hanging.
+- Desktop app: no admin/keychain password prompt after an update (Chromium's mock keychain; the vault's
+  keychain option stays opt-in), the window always shows the installed build's UI (the PWA service-worker
+  cache is cleared at launch), and the app records only the daemon it started (a leftover daemon was
+  never stopped or replaced after an update).
+- Builds always rebuild the web UI instead of shipping an older `apps/pwa/dist`.
+- Unsaved agent edits are no longer lost on a tab switch, quit or reload; the undo toast no longer covers
+  the next approval's Deny; dialog buttons stay inside their dialogs; long hosts no longer widen pages on
+  phones.
+- CLI exit codes and input checks (`doctor`, `harness add`, `secret rm`, `role revoke`, `alerts set`
+  units, `agent set` keys and mounts); the daemon runs with a long or relative `BEAMHOP_HOME`.
 - Agents without a mounted folder (and git worktree mounts) failed to start: their session dir and
   worktrees live in the beamhop home, which the sandbox denies as a whole, so the harness could not read
   its own working directory ("ACP connection closed"). The sandbox now carves out exactly that session's
@@ -46,6 +74,19 @@ All notable changes to beamhop are documented here. The format follows
 
 - Helpers the daemon starts with `process.execPath` (sandbox runner, MCP server) also run when the daemon
   runs on Electron's Node (`nodeExecEnv()` in `@beamhop/core`); the variable never reaches harnesses.
+
+### Security
+
+- `agent.instructions` no longer follows a symlinked instruction file out of the mount.
+- An agent's `secretEnv` cannot hand beamhop's own secrets (its keys, agent and channel keys) to a
+  harness; `agent.update` only accepts the agent's own identity key.
+- A session's copy of a subscription sign-in is removed when the session stops.
+- `secret.delete` refuses secrets still in use; `identity.ownerImport` needs `replace` to replace a held
+  owner key; an approval quorum cannot exceed the approvers.
+- An empty nostr relay list means no relays, not the public defaults.
+- `beamhop data purge` without a filter needs `--yes`; audit entries only with `--audit`.
+- Repeated sandbox denials (a harness retrying the same host) are warnings, so they no longer trip the
+  security-spike alert.
 
 ## [0.1.0] - unreleased
 

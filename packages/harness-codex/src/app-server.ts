@@ -8,6 +8,7 @@ import {
   type SandboxHandle,
   type SessionSpec,
   silentLogger,
+  VERSION,
 } from '@beamhop/core';
 import {
   AsyncQueue,
@@ -318,7 +319,7 @@ export const startCodexAppServer = async (
     await rpc.request(
       'initialize',
       {
-        clientInfo: { name: 'beamhop', title: 'beamhop', version: '0.1.0' },
+        clientInfo: { name: 'beamhop', title: 'beamhop', version: VERSION },
         capabilities: { experimentalApi: false, requestAttestation: false },
       },
       timeout,

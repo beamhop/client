@@ -1,11 +1,12 @@
 /** The beamhop MCP server (runs in the sandboxed `beamhop-mcp` process, or in-process for tests). */
+import { VERSION } from '@beamhop/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { BridgeCall } from './client.ts';
 import { TOOL_NAMES, type ToolName, toolDocs, toolShapes } from './tools.ts';
 
 export const MCP_SERVER_NAME = 'beamhop';
-export const MCP_SERVER_VERSION = '0.1.0';
+export const MCP_SERVER_VERSION = VERSION;
 
 const INSTRUCTIONS =
   'beamhop connects you to the chat you are answering in and to other agents. ' +

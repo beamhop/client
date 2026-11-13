@@ -30,6 +30,7 @@ import {
   type ServerEvent,
   type SessionEventView,
   type SessionView,
+  VERSION,
   type WhoamiView,
 } from '@beamhop/core';
 import { MockJobs } from './jobs.ts';
@@ -544,7 +545,7 @@ export class MockDaemon {
   private handlers: Handlers = {
     // ── system
     'system.status': () => ({
-      version: '0.1.0',
+      version: VERSION,
       uptimeSec: Math.round((Date.now() - this.state.startedAt) / 1000),
       panic: this.state.panic.active,
       agents: this.state.agents.size,
@@ -1635,7 +1636,7 @@ export class MockDaemon {
           detail: `${p.provider} ${p.size ?? 'default'} · ${p.region ?? 'default'}`,
         },
         { op: 'create', resource: 'firewall', detail: 'outbound only, 0 inbound ports' },
-        { op: 'install', resource: 'beamhopd', detail: 'beamhopd 0.1.0, srt, bubblewrap' },
+        { op: 'install', resource: 'beamhopd', detail: `beamhopd ${VERSION}, srt, bubblewrap` },
         ...(p.mode === 'move'
           ? [
               { op: 'move', resource: 'identity', detail: `${p.agent} → remote vault` },

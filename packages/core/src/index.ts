@@ -10,3 +10,4 @@ export * from './node-runtime.ts';
 export * from './paths.ts';
 export * from './plugins.ts';
 export * from './preamble.ts';
+export * from './version.ts';

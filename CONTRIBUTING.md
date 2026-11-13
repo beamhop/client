@@ -63,12 +63,33 @@ such a file, add it to `RUNTIME_FILES` in `apps/cli/scripts/build.mjs` and to th
 daemon loads dynamically need a literal `import()` in `apps/daemon/src/registry.ts` so the bundler sees
 them.
 
+## Versions and releases
+
+beamhop has **one** [semver](https://semver.org/) version for everything it ships: the CLI (npm package and
+standalone binary), the daemon, the desktop app and the web UI always carry the same number, and every
+`package.json` in the repo holds it. Code reads it from `VERSION` in `@beamhop/core`; never hard-code a
+version string.
+
+```bash
+node scripts/version.mjs                # print it
+node scripts/version.mjs check          # every package.json the same semver version (CI and `pnpm check`)
+node scripts/version.mjs patch          # or minor / major / set x.y.z: bumps every package.json together
+```
+
+Which bump: **patch** for fixes only; **minor** for new features or (while we are below 1.0) anything that
+breaks a config, the API or the CLI; **major** once we are at 1.0 and break something. Every change that
+users can notice goes under _Unreleased_ in `CHANGELOG.md` as you make it.
+
+To release: bump with the script, move _Unreleased_ to the new version (with the date) in the changelog,
+commit to `main`, then tag `vX.Y.Z` and push the tag. The tag starts `.github/workflows/release.yml`, which
+checks it against the version, publishes to npm and builds the signed apps. A build of `main` without a tag
+(e.g. a local `dist:dir`) still reports the version in `package.json`.
+
 ## Pull requests
 
 - One topic per PR, with tests. Describe user-visible changes in `CHANGELOG.md` under _Unreleased_.
 - Security-relevant changes (sandbox, broker, authz, channel parsing): say so in the description and link
   the threat (PLAN §7A).
-- Releases: bump `apps/cli/package.json` `version`, move _Unreleased_ to the new version in the changelog,
-  tag `vX.Y.Z`. `.github/workflows/release.yml` does the rest.
+- Releases: see [Versions and releases](#versions-and-releases).
 
 By contributing you agree that your contributions are licensed under [Apache-2.0](LICENSE).
