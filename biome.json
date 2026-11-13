@@ -1,0 +1,29 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!**/.vite",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!docs",
+      "!**/*.gen.ts"
+    ]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
+  "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always", "trailingCommas": "all" } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": { "noNonNullAssertion": "off", "useTemplate": "off" },
+      "suspicious": { "noExplicitAny": "warn", "noConsole": "off" },
+      "complexity": { "noForEach": "off" },
+      "a11y": { "recommended": true }
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+}
