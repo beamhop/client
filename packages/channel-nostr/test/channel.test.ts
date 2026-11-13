@@ -254,32 +254,89 @@ describe('NIP-29 groups', () => {
     expect(inbox.find((x) => x.id === root.id)!.text).toBe('Topic\n\nA thread');
   });
 
-  it('reports removal (kind 9001) and rejects unknown groups', async () => {
-    const conn = await connect({ relays: [A.url], groups: [`${G.url}'g1`] });
-    const removed: string[] = [];
-    conn.onRemoved!((c) => removed.push(c));
-    await subsReady(G);
+  describe('removal (kind 9001) is honored only from group admins (R-B4)', () => {
+    const relayKey = generateAgentKey();
     const admin = generateAgentKey();
-    G.inject(
+    const member = generateAgentKey();
+    let nip11: Record<string, unknown> = {};
+    const adminPlugin = createNostrChannel({
+      backoff: { initialMs: 50, maxMs: 200 },
+      fetch: async () => ({ ok: true, status: 200, json: async () => nip11 }),
+    });
+    const connectG = async () => {
+      const c = await adminPlugin.connect(
+        makeCtx({ relays: [A.url], groups: [`${G.url}'g1`] }, agent.nsec, memoryKV()),
+      );
+      conns.push(c);
+      const removed: string[] = [];
+      c.onRemoved!((x) => removed.push(x));
+      await subsReady(G);
+      return { c, removed };
+    };
+    const removal = (by: typeof admin, group = 'g1') =>
       finalizeEvent(
         {
           kind: 9001,
           created_at: now(),
           tags: [
-            ['h', 'g1'],
+            ['h', group],
             ['p', agent.pubkey],
           ],
           content: '',
         },
-        admin.secretKey,
-      ),
-    );
-    await waitFor(() => removed.length);
-    expect(removed).toEqual([groupConversationId(G.url, 'g1')]);
-    const err = await conn
-      .send({ conversation: { kind: 'group', id: "x.example'zzz" }, markdown: 'hi' })
-      .catch((e) => e);
-    expect(isBeamhopError(err) && err.code).toBe('not_found');
+        by.secretKey,
+      );
+    const adminList = (signer: typeof admin, admins: string[], createdAt = now()) =>
+      finalizeEvent(
+        {
+          kind: 39001,
+          created_at: createdAt,
+          tags: [['d', 'g1'], ...admins.map((a) => ['p', a, 'admin'])],
+          content: '',
+        },
+        signer.secretKey,
+      );
+
+    it('honors an admin listed in the relay-signed 39001 list, and rejects unknown groups', async () => {
+      nip11 = { pubkey: relayKey.pubkey, supported_nips: [29] };
+      G.inject(adminList(relayKey, [admin.pubkey], now() - 100));
+      const { c, removed } = await connectG();
+      G.inject(removal(admin));
+      await waitFor(() => removed.length);
+      expect(removed).toEqual([groupConversationId(G.url, 'g1')]);
+      const err = await c
+        .send({ conversation: { kind: 'group', id: "x.example'zzz" }, markdown: 'hi' })
+        .catch((e) => e);
+      expect(isBeamhopError(err) && err.code).toBe('not_found');
+    });
+
+    it('honors a removal signed by the relay key itself', async () => {
+      nip11 = { pubkey: relayKey.pubkey };
+      const { removed } = await connectG();
+      G.inject(removal(relayKey));
+      await waitFor(() => removed.length);
+      expect(removed).toHaveLength(1);
+    });
+
+    it('ignores removals by non-admins, forged admin lists, demoted admins and unknown relay keys', async () => {
+      nip11 = { pubkey: relayKey.pubkey };
+      // A member forges an admin list naming themselves; only the relay's list counts.
+      G.inject(adminList(member, [member.pubkey]));
+      // The newest relay-signed list no longer names `admin`.
+      G.inject(adminList(relayKey, [admin.pubkey], now() - 200));
+      G.inject(adminList(relayKey, [relayKey.pubkey], now() - 10));
+      const { removed } = await connectG();
+      G.inject(removal(member));
+      G.inject(removal(admin));
+      await sleep(300);
+      expect(removed).toEqual([]);
+
+      nip11 = {};
+      const second = await connectG();
+      G.inject(removal(relayKey));
+      await sleep(300);
+      expect(second.removed).toEqual([]);
+    });
   });
 
   it('parses group refs', () => {

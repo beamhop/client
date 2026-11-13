@@ -2,10 +2,8 @@
  * Session runner (§6A.5, §6A.8, §7): one live session per thread, sandbox + broker + MCP bridge +
  * git worktrees, harness start/resume, streaming output, usage and budgets.
  */
-import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import { budgetKey, modeRank, normalizePrincipal, stricterMode } from '@beamhop/authz';
 import { envForHarness } from '@beamhop/broker';
 import {
@@ -31,7 +29,7 @@ import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
-import { errMsg, Mutex, Semaphore, slugify, withTimeout } from './util.ts';
+import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from './util.ts';
 import { addWorktree, gitTopLevel, type Worktree } from './worktree.ts';
 
 export interface Turn {
@@ -534,8 +532,12 @@ export class SessionManager {
             downloadFile?: (ref: string, dest: string, o: { maxBytes: number }) => Promise<unknown>;
           }
         )?.downloadFile;
-        if (a.url && typeof dl === 'function') await dl.call(conn, a.url, dest, { maxBytes: limit });
-        else if (a.url && /^https:\/\//.test(a.url)) await httpDownload(a.url, dest, limit);
+        const isHttp = !!a.url && /^https?:\/\//i.test(a.url);
+        // Channel file references (e.g. `telegram-file:<id>`) go through the channel's own API;
+        // plain URLs (Nostr, Discord CDN, …) only through the SSRF-safe fetch, never a bare fetch.
+        if (a.url && !isHttp && typeof dl === 'function')
+          await dl.call(conn, a.url, dest, { maxBytes: limit });
+        else if (a.url && isHttp) await this.d.fetcher.download(a.url, dest, { maxBytes: limit });
         else continue;
         out.push({ ...a, localPath: dest });
       } catch (e) {
@@ -798,6 +800,8 @@ export class SessionManager {
         delta,
         turn.role.budget,
       );
+      const personKey = personBudgetKey(agent.name, d.global().people, turn.from.principal);
+      if (personKey) d.budgets.record(personKey, delta, turn.role.budget);
       if (turn.peer)
         d.budgets.record(
           budgetKey.peer(agent.name, normalizePrincipal(turn.peer)),
@@ -1049,21 +1053,6 @@ const expand = (p: string): string => {
 export const stripRecord = (s: SessionRecord) => {
   const { principal: _p, harness: _h, endedAt: _e, ...view } = s;
   return view;
-};
-
-const httpDownload = async (url: string, dest: string, maxBytes: number): Promise<void> => {
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok || !res.body) throw new Error(`download failed: HTTP ${res.status}`);
-  const len = Number(res.headers.get('content-length') ?? 0);
-  if (len > maxBytes) throw new Error(`file exceeds ${maxBytes} bytes`);
-  let size = 0;
-  const body = Readable.fromWeb(res.body as never);
-  body.on('data', (c: Buffer) => {
-    size += c.length;
-    if (size > maxBytes) body.destroy(new Error(`file exceeds ${maxBytes} bytes`));
-  });
-  await pipeline(body, createWriteStream(dest, { mode: 0o600 }));
-  if (!existsSync(dest)) throw new Error('download failed');
 };
 
 export { newId };

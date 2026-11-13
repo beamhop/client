@@ -149,16 +149,22 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
           throw new BeamhopError('forbidden', 'file looks like it contains a secret and was not sent');
         }
       }
-      const sent = await d.sendOutbound(
-        conn,
-        {
-          conversation: { kind: s.conversationKind, id: s.key.conversationId },
-          threadId: s.key.threadId,
-          markdown: input.caption ?? '',
-          attachments: [{ name, mime, size: f.size, localPath: copy }],
-        },
-        { agent: agent.name, dlp, recipient: s.target },
-      );
+      d.confinedOutbound.add(copy);
+      let sent: Awaited<ReturnType<typeof d.sendOutbound>>;
+      try {
+        sent = await d.sendOutbound(
+          conn,
+          {
+            conversation: { kind: s.conversationKind, id: s.key.conversationId },
+            threadId: s.key.threadId,
+            markdown: input.caption ?? '',
+            attachments: [{ name, mime, size: f.size, localPath: copy }],
+          },
+          { agent: agent.name, dlp, recipient: s.target },
+        );
+      } finally {
+        d.confinedOutbound.delete(copy);
+      }
       if (!sent) throw new BeamhopError('forbidden', 'caption was blocked');
       return { messageId: sent.id, file: name, bytes: f.size };
     },

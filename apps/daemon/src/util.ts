@@ -1,4 +1,19 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { linkedPeople } from '@beamhop/authz';
+
+/**
+ * Budget key shared by every principal linked to the same person (review wave B R-B3): one human
+ * with N linked accounts gets one per-person budget, in addition to the per-principal ones.
+ * `undefined` when the principal is not linked to anybody.
+ */
+export const personBudgetKey = (
+  agent: string,
+  people: Record<string, string[]>,
+  principal: string,
+): string | undefined => {
+  const persons = linkedPeople(people, principal).sort();
+  return persons.length ? `person:${agent}:${persons[0]}` : undefined;
+};
 
 /** Simple FIFO async mutex. */
 export class Mutex {

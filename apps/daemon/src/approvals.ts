@@ -7,10 +7,12 @@
 import {
   ApprovalPolicy,
   type ApprovalState,
+  authorizeCommand,
   checkToolDetailed,
   effectiveRoleDef,
   normalizePrincipal,
   type RoleOverride,
+  resolveRole,
   toolNameVariants,
 } from '@beamhop/authz';
 import {
@@ -68,6 +70,8 @@ export class ApprovalManager {
   policy(agent?: AgentConfig): ApprovalPolicy {
     return new ApprovalPolicy({
       approvers: this.approvers(agent),
+      // One vote per person across linked principals (review wave B AUTHZ-2).
+      people: this.d.global().people,
       quorum: this.d.global().approvals.quorum,
       timeoutMinutes: agent?.approvalTimeoutMinutes ?? 15,
       undoWindowMs: this.undoMs,
@@ -303,6 +307,42 @@ export class ApprovalManager {
     });
     if (res.final) this.scheduleSettle(res.state);
     return this.view(res.state);
+  }
+
+  /**
+   * A vote cast from a channel (`/approve`, `/deny` or an Approve/Deny button). Button data is
+   * untrusted (Telegram documents forgeable `callback_data`), so presses and commands share this one
+   * check: the sender's role for the approval's agent must be allowed the command and have
+   * `canApprove`, and the policy must count the sender as an approver.
+   */
+  async decideFromChannel(id: string, by: string, allow: boolean): Promise<ApprovalView> {
+    const d = this.d;
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new BeamhopError('invalid_input', 'invalid approval id');
+    const state = d.store.approvals.get(id);
+    if (!state) throw new BeamhopError('not_found', `approval ${id} not found`);
+    const agent = this.agentOf(state.agent);
+    const roleName = agent
+      ? resolveRole({ principal: by, agent, global: d.authzGlobal() })
+      : d.ownerPrincipals().includes(normalizePrincipal(by))
+        ? 'owner'
+        : null;
+    const auth = authorizeCommand(roleName ? d.roleDef(roleName) : null, {
+      name: allow ? 'approve' : 'deny',
+      id,
+      args: [],
+    });
+    if (!auth.allowed) {
+      d.audit({
+        type: 'approval.unauthorized',
+        severity: 'security',
+        summary: `${by} tried to decide approval ${id} without permission (${auth.reason})`,
+        actor: by,
+        agent: state.agent,
+        data: { approval: id, role: roleName ?? 'none' },
+      });
+      throw new BeamhopError('forbidden', 'you are not allowed to decide approvals for this agent');
+    }
+    return this.decide(id, by, allow, {});
   }
 
   /** Decisions take effect after the undo window (unless undone). */

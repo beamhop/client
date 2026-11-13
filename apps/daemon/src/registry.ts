@@ -66,6 +66,11 @@ export interface BuiltinContext {
   registry: PluginRegistry;
   secrets: SecretStore;
   log: Logger;
+  /**
+   * SSRF-safe, size/time-limited fetch for outbound URL attachments (review wave B SSRF-1). Slack and
+   * Discord refuse URL attachments without one; the daemon passes the broker's `createSafeFetch`.
+   */
+  fetchAttachment?: (url: string) => Promise<Response>;
   /** Supplies provisioning info for deployers (owner npub etc.). */
   provisioning: () => Promise<{
     ownerNpub: string;
@@ -96,11 +101,21 @@ export const BUILTIN_PLUGINS: { module: string; load: Loader }[] = [
   },
   {
     module: '@beamhop/channel-slack',
-    load: (m, c) => void c.registry.addChannel(m.slackPlugin as ChannelPlugin),
+    load: (m, c) =>
+      void c.registry.addChannel(
+        c.fetchAttachment
+          ? (m.createSlackPlugin as (o: unknown) => ChannelPlugin)({ fetchAttachment: c.fetchAttachment })
+          : (m.slackPlugin as ChannelPlugin),
+      ),
   },
   {
     module: '@beamhop/channel-discord',
-    load: (m, c) => void c.registry.addChannel(m.discordPlugin as ChannelPlugin),
+    load: (m, c) =>
+      void c.registry.addChannel(
+        c.fetchAttachment
+          ? (m.createDiscordPlugin as (o: unknown) => ChannelPlugin)({ fetchAttachment: c.fetchAttachment })
+          : (m.discordPlugin as ChannelPlugin),
+      ),
   },
   {
     module: '@beamhop/deploy',

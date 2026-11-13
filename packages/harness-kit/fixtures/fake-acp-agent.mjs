@@ -114,6 +114,24 @@ async function prompt(params) {
     }
     return { stopReason: 'end_turn' };
   }
+  // "acp-tool {json}": one nameless ACP tool call (kind/title/rawInput from the JSON) + permission.
+  const generic = /^acp-tool (\{[\s\S]*\})$/.exec(text.trim());
+  if (generic) {
+    const tc = JSON.parse(generic[1]);
+    update({ sessionUpdate: 'tool_call', toolCallId: 'tc-g', status: 'pending', ...tc });
+    const perm = await request('session/request_permission', {
+      sessionId: session.id,
+      toolCall: { toolCallId: 'tc-g', ...tc },
+      options: [
+        { optionId: 'allow', name: 'Allow', kind: 'allow_once' },
+        { optionId: 'reject', name: 'Reject', kind: 'reject_once' },
+      ],
+    });
+    const ok = perm.outcome.outcome === 'selected' && perm.outcome.optionId === 'allow';
+    update({ sessionUpdate: 'tool_call_update', toolCallId: 'tc-g', status: ok ? 'completed' : 'failed' });
+    say(ok ? 'tool-allowed' : 'tool-denied');
+    return { stopReason: 'end_turn' };
+  }
   const write = /write:(\S+)/.exec(text);
   if (text.includes('tool') && write) {
     update({
