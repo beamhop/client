@@ -32,6 +32,9 @@ importers:
       '@beamhop/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@beamhop/daemon':
+        specifier: workspace:*
+        version: link:../daemon
       commander:
         specifier: ^14.0.0
         version: 14.0.3

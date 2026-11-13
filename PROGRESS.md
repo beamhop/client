@@ -21,6 +21,7 @@ Deadline: 08:00 Europe/Berlin (07:00 UTC), 2026-11-13. Updated by the watchdog e
 | E2E, security suite, UX iteration                             | —             | ⏳                   |
 
 ## Needs your attention
+
 - ⚠️ `OPENROUTER_API_KEY` in the cloud environment is **expired** (OpenRouter returns 401). OpenRouter live tests can't pass until it's replaced. opencode's free default model was used for real agent runs instead.
 
 ## Log
