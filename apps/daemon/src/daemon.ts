@@ -283,7 +283,20 @@ export class Daemon {
       // One encrypted vault in the home; its key in vault.key, or the OS keychain if the user opted in.
       this.secrets = this.opts.secrets ?? (await createSecretStore({ home: this.home, log: this.log }));
       const key = this.opts.dataKey ?? (await ensureDataKey(this.home, this.secrets, this.log));
-      this.store = openStore({ key, home: this.home, logger: this.log, now: () => new Date(this.now()) });
+      try {
+        this.store = openStore({ key, home: this.home, logger: this.log, now: () => new Date(this.now()) });
+      } catch (e) {
+        if (e instanceof BeamhopError && e.code === 'unauthorized') {
+          const db = join(this.home, 'beamhop.db');
+          throw new BeamhopError(
+            'unauthorized',
+            `the data key does not match ${db}: the database was encrypted with a key this vault does not have ` +
+              '(builds before the encrypted vault kept it, and agent keys and tokens, in the system keychain). ' +
+              `To start fresh, move the beamhop home aside: mv "${this.home}" "${this.home}.old"`,
+          );
+        }
+        throw e;
+      }
       this.apiToken = ensureApiToken(this.home);
       await this.cloud.init();
 

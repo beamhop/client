@@ -56,6 +56,12 @@ export const explainStartFailure = (log: string, url: string): string => {
     return `Another program is using ${new URL(url).host}. Quit it, or set BEAMHOP_PORT to a free port.`;
   if (/another beamhop daemon is running/i.test(log))
     return 'A beamhop daemon for this home is already running on a different port. Stop it, or point the app at it with BEAMHOP_PORT.';
+  // beamhopd prints its fatal error as `beamhopd: <message>`; the last one is this start's.
+  const fatal = log
+    .split(/\r?\n/)
+    .reverse()
+    .find((l) => l.startsWith('beamhopd: '));
+  if (fatal) return `The beamhop daemon did not start: ${fatal.slice('beamhopd: '.length)}`;
   return 'The beamhop daemon did not start.';
 };
 

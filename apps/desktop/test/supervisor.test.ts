@@ -142,5 +142,13 @@ describe('explainStartFailure', () => {
       /already running on a different port/,
     );
     expect(explainStartFailure('', 'http://127.0.0.1:7878')).toBe('The beamhop daemon did not start.');
+    const log = [
+      'INFO relay disconnected',
+      'beamhopd: the data key does not match /h/.beamhop/beamhop.db: move the beamhop home aside',
+      'INFO relay disconnected',
+    ].join('\n');
+    expect(explainStartFailure(log, 'http://127.0.0.1:7878')).toBe(
+      'The beamhop daemon did not start: the data key does not match /h/.beamhop/beamhop.db: move the beamhop home aside',
+    );
   });
 });
