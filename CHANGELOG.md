@@ -6,6 +6,8 @@ All notable changes to beamhop are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-13
+
 ### Changed
 
 - **One page to create an agent, and it ends reachable.** First-run setup and Agents → New now share one
@@ -202,7 +204,8 @@ First public build.
 - Standalone binaries are a binary plus a `lib/` folder, not a single file (native modules and sandboxed
   helper scripts must exist on disk).
 
-[Unreleased]: https://github.com/beamhop/client/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/beamhop/client/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/beamhop/client/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/beamhop/client/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/beamhop/client/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/beamhop/client/releases/tag/v0.1.0
