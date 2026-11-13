@@ -5,14 +5,14 @@
  */
 import { ArrowRight, Check, Stop } from '@phosphor-icons/react';
 import { createContext, type ReactNode, useContext, useMemo, useState } from 'react';
-import { Link } from 'react-aria-components';
+import { Link, Button as RACButton } from 'react-aria-components';
 import { useApi, useMutationApi } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { clock } from '../lib/format.ts';
 import { haptic } from '../lib/haptics.ts';
 import { announce } from '../lib/live.ts';
-import { Button, IconButton } from '../ui/Button.tsx';
+import { Button } from '../ui/Button.tsx';
 import { Readout } from '../ui/Meta.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
 
@@ -205,14 +205,21 @@ export const PanicButton = () => {
   const { open } = usePanicSheet();
   const { panic } = usePanicState();
   if (panic) return null;
+  // A labelled kill switch, not a stray red square: the word is visible, so is the shape.
   return (
-    <IconButton
-      label={t('panic.button')}
-      shortcut="⌘⇧."
-      icon={<Stop size={20} weight="fill" />}
-      variant="destructive-ghost"
+    <RACButton
+      aria-label={t('panic.button')}
       onPress={open}
-    />
+      className="ml-0.5 inline-flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 type-label text-stop-text outline-none transition-colors duration-[var(--dur-fast)] data-[hovered]:bg-stop-wash data-[pressed]:bg-stop-wash data-[focus-visible]:outline-2 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-focus"
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-[18px] place-items-center rounded-xs border-[1.5px] border-current"
+      >
+        <span className="size-2 rounded-[1px] bg-current" />
+      </span>
+      {t('panic.short')}
+    </RACButton>
   );
 };
 

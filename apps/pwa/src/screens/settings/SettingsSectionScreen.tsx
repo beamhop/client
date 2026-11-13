@@ -7,9 +7,12 @@ import type { ReactNode } from 'react';
 import { t } from '../../i18n/index.ts';
 import { useAppearance } from '../../lib/appearance.ts';
 import { Screen } from '../../shell/Screen.tsx';
-import { LinkButton } from '../../ui/Button.tsx';
+import { buttonClass, LinkButton } from '../../ui/Button.tsx';
 import { SegmentedControl, Switch } from '../../ui/Choice.tsx';
+import { Perforation } from '../../ui/glyphs/index.tsx';
+import { Readout } from '../../ui/Meta.tsx';
 import { EmptyState } from '../../ui/States.tsx';
+import { StatusDot } from '../../ui/Status.tsx';
 import { DangerSection } from './DangerSection.tsx';
 import { DevicesSection } from './DevicesSection.tsx';
 import { IdentitySection } from './IdentitySection.tsx';
@@ -32,10 +35,50 @@ const BODY: Record<string, () => ReactNode> = {
   stop: DangerSection,
 };
 
+/**
+ * A live specimen of the current look: lamp, slug line, an agent sentence and the decision pair on
+ * a perforated slip. Built from the real tokens, so theme, contrast and motion changes show at once.
+ */
+const AppearancePreview = ({ caption }: { caption: string }) => (
+  <figure className="flex flex-col gap-2">
+    <div aria-hidden="true" className="overflow-hidden rounded-lg border border-line bg-surface">
+      <div className="flex items-center justify-between gap-3 px-4 pt-3">
+        <span className="type-meta text-ink-2">{t('settings.preview.slug')}</span>
+        <StatusDot state="live" />
+      </div>
+      <p className="px-4 pt-1.5 pb-3 type-body text-ink">{t('settings.preview.line')}</p>
+      <Perforation />
+      <div className="flex items-center justify-between gap-2 bg-sunken/60 px-4 py-2.5">
+        <Readout size="md">{t('settings.preview.clock')}</Readout>
+        <span className="flex gap-2">
+          <span className={buttonClass('deny', 'sm', 'pointer-events-none h-9!')}>
+            {t('settings.preview.deny')}
+          </span>
+          <span className={buttonClass('allow', 'sm', 'pointer-events-none h-9!')}>
+            {t('settings.preview.allow')}
+          </span>
+        </span>
+      </div>
+    </div>
+    <figcaption className="type-meta text-ink-2">{caption}</figcaption>
+  </figure>
+);
+
 export const AppearanceSettings = () => {
   const [prefs, resolved, set] = useAppearance();
+  const themeWord =
+    resolved.theme === 'dark'
+      ? t('settings.settingsSection.nightShift')
+      : t('settings.settingsSection.paper');
   return (
     <div className="flex flex-col gap-6">
+      <AppearancePreview
+        caption={t('settings.preview.caption', {
+          theme: themeWord,
+          contrast: prefs.contrast === 'more' ? 'more' : 'system',
+          motion: prefs.motion === 'reduced' ? 'reduced' : 'system',
+        })}
+      />
       <div className="flex flex-col gap-2">
         <span className="type-label text-ink">{t('settings.settingsSection.theme')}</span>
         <SegmentedControl
@@ -48,14 +91,6 @@ export const AppearanceSettings = () => {
             { id: 'dark', label: t('settings.settingsSection.nightShift') },
           ]}
         />
-        <p className="type-meta text-ink-2">
-          {t('settings.settingsSection.showing', {
-            theme:
-              resolved.theme === 'dark'
-                ? t('settings.settingsSection.nightShift')
-                : t('settings.settingsSection.paper'),
-          })}
-        </p>
       </div>
       <div className="flex flex-col gap-2">
         <span className="type-label text-ink">{t('settings.settingsSection.contrast')}</span>
