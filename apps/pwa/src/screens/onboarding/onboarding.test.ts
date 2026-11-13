@@ -5,12 +5,14 @@ import { freeName, npubFromBunker } from './StepSetup.tsx';
 
 describe('onboarding progress', () => {
   it('resumes at the first step neither done nor skipped', () => {
-    expect(resumeAt(EMPTY)).toBe('doctor');
+    // Outcome first: only "agent" and "hello" are steps; the others are pages setup sends you to.
+    expect(resumeAt(EMPTY)).toBe('agent');
     let p = markDone(EMPTY, 'doctor');
-    p = markDone(p, 'harnesses');
     p = markSkipped(p, 'identity');
-    expect(resumeAt(p)).toBe('phone');
-    expect(completedCount(p)).toBe(2);
+    expect(resumeAt(p)).toBe('agent');
+    p = markDone(p, 'agent');
+    expect(resumeAt(p)).toBe('hello');
+    expect(completedCount(p)).toBe(1);
   });
 
   it('done and skipped are exclusive; marking twice is idempotent', () => {
@@ -30,7 +32,8 @@ describe('onboarding progress', () => {
   });
 
   it('next step ends at the summary', () => {
-    expect(nextStep('doctor')).toBe('harnesses');
+    expect(nextStep('doctor')).toBe('agent');
+    expect(nextStep('agent')).toBe('hello');
     expect(nextStep('hello')).toBe('next');
     const all = (['doctor', 'harnesses', 'identity', 'phone', 'agent', 'hello'] as const).reduce(
       (acc, s) => markDone(acc, s),

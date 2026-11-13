@@ -164,7 +164,7 @@ const setupIndex = createRoute({
   getParentRoute: () => rootRoute,
   path: 'setup',
   beforeLoad: () => {
-    throw redirect({ to: '/setup/$step', params: { step: 'doctor' } });
+    throw redirect({ to: '/setup/$step', params: { step: 'agent' } });
   },
 });
 const setup = createRoute({

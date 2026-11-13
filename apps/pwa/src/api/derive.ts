@@ -144,3 +144,34 @@ export const approvalTarget = (a: ApprovalView): string => {
   const i = (a.input ?? {}) as Record<string, unknown>;
   return String(i.command ?? i.host ?? i.path ?? i.principal ?? a.title);
 };
+
+/**
+ * One plain sentence under the exact command, host or file of an approval, for owners who don't read
+ * shell (desktop UX audit: the exact text stays the headline; this explains it).
+ */
+export const explainApproval = (a: Pick<ApprovalView, 'kind' | 'tool' | 'input'>): string => {
+  const i = (a.input ?? {}) as Record<string, unknown>;
+  if (a.kind === 'access-request') return 'Someone asks to be allowed to talk to this agent.';
+  if (a.kind === 'policy-suggestion')
+    return 'beamhop suggests a rule change from what this agent tried to do.';
+  if (a.kind === 'deploy') return 'Wants to start or change a cloud server, which costs money.';
+  if (typeof i.host === 'string') return "Wants to reach a website it hasn't been allowed to use yet.";
+  if (typeof i.command === 'string') {
+    const c = i.command;
+    if (/\bgit\s+push\b/.test(c)) return 'Wants to upload code changes to a shared repository.';
+    if (/\b(rm|rmdir|del|shred)\s|\bgit\s+(reset\s+--hard|clean)\b/.test(c))
+      return 'Wants to run a command that deletes files.';
+    if (/\b(npm|pnpm|yarn|bun|pip3?|brew|apt(-get)?|cargo|go)\s+(i|install|add|get)\b/.test(c))
+      return 'Wants to install software on this computer.';
+    if (/\b(deploy|kubectl|terraform|helm|fly|vercel|wrangler)\b/.test(c))
+      return 'Wants to change a live service.';
+    if (/\b(curl|wget|ssh|scp)\b/.test(c)) return 'Wants to run a command that talks to the internet.';
+    return 'Wants to run a command on this computer.';
+  }
+  if (typeof i.path === 'string')
+    return /write|edit|create|delete|move|patch/i.test(a.tool)
+      ? 'Wants to change a file.'
+      : 'Wants to read a file it needs your OK for.';
+  if (typeof i.principal === 'string') return 'Wants to send a message to someone.';
+  return 'Wants to do something that needs your OK.';
+};

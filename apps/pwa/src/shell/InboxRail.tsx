@@ -1,8 +1,8 @@
 /**
- * Wide (≥1440) right rail: pending approvals docked beside every screen except Inbox (SCREENS §0.3).
- * Compact rows only; deciding happens in the Inbox (owned by the inbox screen builder).
+ * The Needs-you panel: pending approvals in a panel that slides over any screen (the status strip's
+ * "need you" count, or `n`). It replaced a rail docked beside every screen, which repeated Home's list and
+ * squeezed conversations and setup flows (desktop UX audit). Compact rows only; deciding happens in the Inbox.
  */
-import { CaretDoubleRight } from '@phosphor-icons/react';
 import { Link } from 'react-aria-components';
 import { approvalTarget, RISK_LABEL, useApi } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
@@ -10,11 +10,33 @@ import { countdown } from '../lib/format.ts';
 import { useMe } from '../screens/inbox/me.ts';
 import { decisionsOf } from '../screens/inbox/needs.ts';
 import { hiddenStore, queuedIds, queueStore, useStore } from '../screens/inbox/store.ts';
-import { IconButton } from '../ui/Button.tsx';
-import { Badge, Eyebrow, RiskTag } from '../ui/Meta.tsx';
+import { LinkButton } from '../ui/Button.tsx';
+import { Badge, RiskTag } from '../ui/Meta.tsx';
+import { Sheet } from '../ui/Sheet.tsx';
 import { StatusDot } from '../ui/Status.tsx';
+import { closeOverlay, useOverlay } from './overlays.ts';
 
-export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
+export const InboxPanel = () => {
+  const open = useOverlay() === 'inbox';
+  return (
+    <Sheet
+      isOpen={open}
+      onOpenChange={(o) => !o && closeOverlay()}
+      title={t('inbox.panel.title')}
+      subtitle={t('inbox.panel.subtitle')}
+      desktop="pane"
+      footer={
+        <LinkButton href="/inbox" variant="secondary" fullWidth onPress={closeOverlay}>
+          {t('inbox.panel.all')}
+        </LinkButton>
+      }
+    >
+      {open && <NeedsYouList onPick={closeOverlay} />}
+    </Sheet>
+  );
+};
+
+const NeedsYouList = ({ onPick }: { onPick: () => void }) => {
   const approvals = useApi('approval.list', { status: 'pending' });
   const me = useMe();
   const hidden = useStore(hiddenStore);
@@ -22,20 +44,7 @@ export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
   // Same slips as the Inbox: identical requests collapse (×3), so the count matches the tab badge.
   const groups = decisionsOf(approvals.data?.approvals ?? [], me, hidden, queuedIds(queue));
   return (
-    <aside
-      aria-label={t('ui.inboxRail.pendingApprovals')}
-      className="pane-scroll h-full w-[360px] shrink-0 border-l border-line bg-bg px-5 py-3"
-    >
-      <div className="flex items-center justify-between">
-        <Eyebrow count={groups.length} href="/inbox">
-          {t('ui.inboxRail.needsYou')}
-        </Eyebrow>
-        <IconButton
-          label={t('ui.inboxRail.hideApprovalsRail')}
-          icon={<CaretDoubleRight size={18} />}
-          onPress={onCollapse}
-        />
-      </div>
+    <div aria-label={t('ui.inboxRail.pendingApprovals')} className="flex flex-col gap-2">
       {groups.length === 0 && (
         <p className="type-body-sm text-ink-2">{t('ui.inboxRail.inboxClearNothingIs')}</p>
       )}
@@ -44,6 +53,7 @@ export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
           <li key={a.id}>
             <Link
               href={`/inbox/${a.id}`}
+              onPress={onPick}
               className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-3 outline-none bh-focus-inset data-[hovered]:border-line-strong"
             >
               <span className="flex items-center gap-2">
@@ -62,6 +72,6 @@ export const InboxRail = ({ onCollapse }: { onCollapse: () => void }) => {
           </li>
         ))}
       </ul>
-    </aside>
+    </div>
   );
 };

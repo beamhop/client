@@ -13,7 +13,7 @@ import { deployMonogram, useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { shortDate } from '../../lib/format.ts';
-import { Screen, SplitView } from '../../shell/Screen.tsx';
+import { EmptyPane, Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { BarAction, LinkButton } from '../../ui/Button.tsx';
 import { ListGroup, listRowClass } from '../../ui/Card.tsx';
@@ -75,6 +75,17 @@ export const DeployScreen = () => {
   return (
     <SplitView
       hasDetail={hasDetail}
+      empty={
+        <EmptyPane
+          title={t('empty.deploy.title')}
+          body={t('empty.deploy.body')}
+          action={
+            <LinkButton href="/deploy/new" variant="primary" size="sm">
+              {t('empty.deploy.action')}
+            </LinkButton>
+          }
+        />
+      }
       list={
         <Screen
           title={t('deploy.deploy.deploy')}

@@ -13,6 +13,22 @@ All notable changes to beamhop are documented here. The format follows
   under Advanced), folders, and **where it listens**. Tick the channels you already have, or pick a new one
   (Telegram, Slack, Discord, Nostr); its setup opens next with the agent already chosen to join, and
   finishing it brings you back to the agent.
+- **Five places instead of ten.** The sidebar is Home, Inbox, Conversations, Agents and Settings.
+  Connections (channels), AI accounts (harnesses), Sandboxes & roles (policy), Activity (audit) and Cloud
+  (deploy) open from Settings → Your setup; their old links still work.
+- **Needs you slides over, it no longer docks.** The approvals rail beside every wide screen is gone; the top
+  strip's "N need you" (or `n`) opens the list over any screen. The strip says only whether beamhop is
+  connected; version, uptime and relays are on hover.
+- **An agent's page has four parts:** Overview · Who can reach it · What it can do (folders, internet and
+  safety, spending) · Advanced (AI program and model, schedules, identity). Old section links land in the
+  part that holds them now.
+- **First run starts with your agent.** Setup is two steps, your agent and saying hello. The owner key is
+  created quietly, the machine check shows up only when something needs a fix, and pairing a phone is
+  offered after the first reply.
+- **Approvals explain themselves.** Under the exact command, host or file, one plain sentence says what it
+  does ("Wants to upload code changes to a shared repository.").
+- **Smaller fixes.** List screens say what they are for and offer the next step instead of "Select an item";
+  a cold start shows a loading screen instead of a blank window.
 - **Chat with any agent from its page.** A Chat button sits next to Stop. An agent no channel can reach says
   so at the top of its page ("Only you can reach it, here in the app") with Connect a channel and Chat.
 

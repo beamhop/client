@@ -75,7 +75,7 @@ test('desktop app: no screen names a beamhop command while the setting is off', 
     await page.waitForTimeout(1600);
     // biome-ignore lint/performance/useDomNodeTextContent: only rendered, visible text counts here
     const text = await page.evaluate(() => document.body.innerText);
-    expect(text.match(COMMAND)?.[0], `${path} shows a command`).toBeUndefined();
+    expect(text.match(COMMAND)?.[0], `${path} shows a command: ${text.match(COMMAND)?.[0]}`).toBeUndefined();
   }
 });
 

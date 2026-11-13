@@ -5,7 +5,7 @@
  * polled). Live waiting timer (Doto). After 2 min: Resend · Open in another Nostr app (npub copy) ·
  * Finish without testing. Success: "It works." with the measured round trip.
  */
-import { ArrowRight, CloudArrowUp, IdentificationBadge, Plugs } from '@phosphor-icons/react';
+import { ArrowRight, CloudArrowUp, DeviceMobile, IdentificationBadge, Plugs } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
@@ -114,6 +114,12 @@ export const NextSteps = ({ agent }: { agent?: string }) => (
   <nav aria-label={t('setup.hello.nextSteps')}>
     <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
       {[
+        {
+          href: '/setup/phone',
+          icon: DeviceMobile,
+          title: t('setup.hello.pairPhone'),
+          slug: t('setup.hello.pairPhoneSlug'),
+        },
         {
           href: '/channels/add',
           icon: Plugs,

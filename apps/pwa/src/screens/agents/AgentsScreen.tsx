@@ -26,7 +26,7 @@ import { since, usd } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { useExpanded } from '../../lib/media.ts';
 import { usePanicState } from '../../shell/panic.tsx';
-import { Screen, SplitView } from '../../shell/Screen.tsx';
+import { EmptyPane, Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { BarAction, IconButton, LinkButton } from '../../ui/Button.tsx';
 import { Card } from '../../ui/Card.tsx';
@@ -233,6 +233,17 @@ export const AgentsScreen = () => {
     <SplitView
       hasDetail={hasDetail}
       listWidth={320}
+      empty={
+        <EmptyPane
+          title={t('empty.agents.title')}
+          body={t('empty.agents.body')}
+          action={
+            <LinkButton href="/agents/new" variant="primary" size="sm">
+              {t('empty.agents.action')}
+            </LinkButton>
+          }
+        />
+      }
       list={
         <Screen
           title={t('nav.agents')}

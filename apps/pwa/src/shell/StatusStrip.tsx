@@ -30,31 +30,37 @@ export const StatusStrip = () => {
           ? t('strip.via.local')
           : t('conn.link.not-paired');
   const healthy = link === 'reachable';
+  // The details an operator wants (daemon version, how it connects, uptime, relays) on hover, not in
+  // everyone's face: the strip itself says only whether beamhop is working and what needs you.
+  const details = [
+    `beamhopd ${s?.version ?? '—'}`,
+    via,
+    ...(s ? [t('strip.up', { time: since(Date.now() - s.uptimeSec * 1000) })] : []),
+    ...(relays ? [t('strip.relays', { up: relays.up, total: relays.total })] : []),
+    ...(s ? [t('strip.counts', { agents: s.agents, channels: s.channels, pending: needs })] : []),
+  ].join(' · ');
   return (
     <section
       aria-label={t('strip.region')}
       className="flex h-8 shrink-0 items-center gap-4 border-b border-line px-8 type-micro text-ink-3"
       data-status-strip=""
     >
-      <span className="flex items-center gap-2">
-        <span className="text-ink-2">beamhopd {s?.version ?? '—'}</span>
-        <span aria-hidden="true">·</span>
-        <span>{via}</span>
-        {s && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>{t('strip.up', { time: since(Date.now() - s.uptimeSec * 1000) })}</span>
-          </>
-        )}
-      </span>
-      <span className="flex items-center gap-2">
+      <span className="flex items-center gap-2" title={details}>
         <StatusDot
           state={panic ? 'panic' : healthy ? 'ready' : link === 'no-answer' ? 'needs-you' : 'offline'}
           label={panic ? t('strip.panic') : t(`conn.link.${link}`)}
         />
+        <span className="sr-only">{details}</span>
       </span>
-      {relays && <span>{t('strip.relays', { up: relays.up, total: relays.total })}</span>}
-      {s && <span>{t('strip.counts', { agents: s.agents, channels: s.channels, pending: needs })}</span>}
+      {needs > 0 && (
+        <RACButton
+          onPress={() => openOverlay('inbox')}
+          className="flex items-center gap-1.5 rounded-sm px-1 text-caution-text outline-none data-[hovered]:text-ink data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
+        >
+          <span>{t('strip.needYou', { count: needs })}</span>
+          <Kbd>N</Kbd>
+        </RACButton>
+      )}
       <span className="ml-auto flex items-center gap-3">
         {conn.kind === 'mock' && <Badge tone="flare">{t('strip.demo')}</Badge>}
         <RACButton

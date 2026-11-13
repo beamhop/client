@@ -223,7 +223,16 @@ export const AddMount = ({
   );
 };
 
-export const SetupSection = ({ agent }: { agent: AgentView }) => {
+export type SetupPart = 'harness' | 'folders' | 'limits';
+
+export const SetupSection = ({
+  agent,
+  parts = ['harness', 'folders', 'limits'],
+}: {
+  agent: AgentView;
+  /** Which blocks to show (the agent page puts folders under "What it can do", the rest in Advanced). */
+  parts?: SetupPart[];
+}) => {
   const showCli = useShowCli();
   const d = useAgentDraft(agent);
   const c = d.draft;
@@ -236,121 +245,131 @@ export const SetupSection = ({ agent }: { agent: AgentView }) => {
 
   return (
     <div className="flex flex-col gap-10">
-      <Block
-        id="setup-harness"
-        title={t('agents.setup.harness')}
-        cli={`beamhop agent set ${name} --harness ${c.harness} --model ${c.model}`}
-      >
-        <Select
-          label={t('agents.setup.harnessRuns', { name })}
-          selectedKey={c.harness}
-          onSelectionChange={(k) => k && d.set((x) => ({ ...x, harness: String(k) }))}
-          options={list.map((h) => ({
-            id: h.id,
-            label: h.displayName,
-            description: harnessDescription(h),
-            isDisabled: h.status !== 'ready' && h.status !== 'needs-login',
-          }))}
-        />
-        {current && current.status !== 'ready' && (
-          <div className="flex flex-col gap-2 rounded-md bg-caution-wash px-3 py-2.5">
-            <StatusDot
-              state={harnessLamp(current)}
-              label={t('agents.setup.harnessNeeds', { name: current.displayName })}
-            />
-            <HarnessJobControls h={current} />
-            {current.status === 'needs-login' && showCli && (
-              <div className="flex items-center gap-2 rounded-sm bg-surface pl-3">
-                <code className="min-w-0 flex-1 truncate type-code text-ink">{loginCommand(current)}</code>
-                <CopyButton value={loginCommand(current)} label={t('agents.setup.copyLogin')} compact />
-              </div>
-            )}
-          </div>
-        )}
-        <ModelField harness={current} value={c.model} onChange={(model) => d.set((x) => ({ ...x, model }))} />
-        <RadioGroup
-          label={t('agents.setup.auth')}
-          value={c.harnessAuth}
-          onChange={(v) => d.set((x) => ({ ...x, harnessAuth: v as 'api-key' | 'subscription' }))}
-          variant="cards"
+      {parts.includes('harness') && (
+        <Block
+          id="setup-harness"
+          title={t('agents.setup.harness')}
+          cli={`beamhop agent set ${name} --harness ${c.harness} --model ${c.model}`}
         >
-          <Radio value="api-key" description={t('agents.setup.authKeyHint')}>
-            {t('agents.setup.authKey')}
-          </Radio>
-          <Radio value="subscription" description={t('agents.setup.authSubHint')}>
-            {t('agents.setup.authSub')}
-          </Radio>
-        </RadioGroup>
-      </Block>
-
-      <Block
-        id="setup-mounts"
-        title={t('agents.setup.mounts', { count: c.mounts.length })}
-        description={t('agents.setup.mountsHint')}
-        cli={`beamhop agent set ${name} 'mounts=[{"path":"${c.mounts[0]?.path ?? '~/code/app'}","mode":"${c.mounts[0]?.mode ?? 'ro'}"}]'`}
-      >
-        {c.mounts.length > 0 ? (
-          <Rows label={t('agents.setup.mountsLabel')}>
-            {c.mounts.map((m, i) => (
-              <MountRow
-                key={m.path}
-                m={m}
-                i={i}
-                count={c.mounts.length}
-                lockRo={strictLock}
-                onChange={(nm) => setMounts((ms) => ms.map((x, j) => (j === i ? nm : x)))}
-                onMove={(dir) =>
-                  setMounts((ms) => {
-                    const next = ms.slice();
-                    const [it] = next.splice(i, 1);
-                    next.splice(i + dir, 0, it!);
-                    return next;
-                  })
-                }
-                onRemove={() => setMounts((ms) => ms.filter((_, j) => j !== i))}
+          <Select
+            label={t('agents.setup.harnessRuns', { name })}
+            selectedKey={c.harness}
+            onSelectionChange={(k) => k && d.set((x) => ({ ...x, harness: String(k) }))}
+            options={list.map((h) => ({
+              id: h.id,
+              label: h.displayName,
+              description: harnessDescription(h),
+              isDisabled: h.status !== 'ready' && h.status !== 'needs-login',
+            }))}
+          />
+          {current && current.status !== 'ready' && (
+            <div className="flex flex-col gap-2 rounded-md bg-caution-wash px-3 py-2.5">
+              <StatusDot
+                state={harnessLamp(current)}
+                label={t('agents.setup.harnessNeeds', { name: current.displayName })}
               />
-            ))}
-          </Rows>
-        ) : (
-          <p className="type-body-sm text-ink-2">{t('agents.setup.noMounts', { name })}</p>
-        )}
-        <AddMount mounts={c.mounts} lockRo={!!strictLock} onAdd={(m) => setMounts((ms) => [...ms, m])} />
-      </Block>
+              <HarnessJobControls h={current} />
+              {current.status === 'needs-login' && showCli && (
+                <div className="flex items-center gap-2 rounded-sm bg-surface pl-3">
+                  <code className="min-w-0 flex-1 truncate type-code text-ink">{loginCommand(current)}</code>
+                  <CopyButton value={loginCommand(current)} label={t('agents.setup.copyLogin')} compact />
+                </div>
+              )}
+            </div>
+          )}
+          <ModelField
+            harness={current}
+            value={c.model}
+            onChange={(model) => d.set((x) => ({ ...x, model }))}
+          />
+          <RadioGroup
+            label={t('agents.setup.auth')}
+            value={c.harnessAuth}
+            onChange={(v) => d.set((x) => ({ ...x, harnessAuth: v as 'api-key' | 'subscription' }))}
+            variant="cards"
+          >
+            <Radio value="api-key" description={t('agents.setup.authKeyHint')}>
+              {t('agents.setup.authKey')}
+            </Radio>
+            <Radio value="subscription" description={t('agents.setup.authSubHint')}>
+              {t('agents.setup.authSub')}
+            </Radio>
+          </RadioGroup>
+        </Block>
+      )}
 
-      <Block
-        id="setup-concurrency"
-        title={t('agents.setup.concurrency')}
-        cli={`beamhop agent set ${name} --max-sessions ${c.concurrency.maxSessions}`}
-      >
-        <div className="grid gap-5 medium:grid-cols-2">
-          <NumberField
-            label={t('agents.setup.maxSessions')}
-            value={c.concurrency.maxSessions}
-            minValue={1}
-            maxValue={20}
-            onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, concurrency: { maxSessions: v } }))}
-            description={t('agents.setup.maxSessionsHint')}
-          />
-          <NumberField
-            label={t('agents.setup.idle')}
-            value={c.sessionIdleMinutes}
-            minValue={5}
-            maxValue={1440}
-            step={5}
-            unit="min"
-            onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, sessionIdleMinutes: v }))}
-          />
-          <NumberField
-            label={t('agents.setup.approvalTimeout')}
-            value={c.approvalTimeoutMinutes}
-            minValue={1}
-            maxValue={240}
-            unit="min"
-            onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, approvalTimeoutMinutes: v }))}
-            description={t('agents.setup.approvalTimeoutHint')}
-          />
-        </div>
-      </Block>
+      {parts.includes('folders') && (
+        <Block
+          id="setup-mounts"
+          title={t('agents.setup.mounts', { count: c.mounts.length })}
+          description={t('agents.setup.mountsHint')}
+          cli={`beamhop agent set ${name} 'mounts=[{"path":"${c.mounts[0]?.path ?? '~/code/app'}","mode":"${c.mounts[0]?.mode ?? 'ro'}"}]'`}
+        >
+          {c.mounts.length > 0 ? (
+            <Rows label={t('agents.setup.mountsLabel')}>
+              {c.mounts.map((m, i) => (
+                <MountRow
+                  key={m.path}
+                  m={m}
+                  i={i}
+                  count={c.mounts.length}
+                  lockRo={strictLock}
+                  onChange={(nm) => setMounts((ms) => ms.map((x, j) => (j === i ? nm : x)))}
+                  onMove={(dir) =>
+                    setMounts((ms) => {
+                      const next = ms.slice();
+                      const [it] = next.splice(i, 1);
+                      next.splice(i + dir, 0, it!);
+                      return next;
+                    })
+                  }
+                  onRemove={() => setMounts((ms) => ms.filter((_, j) => j !== i))}
+                />
+              ))}
+            </Rows>
+          ) : (
+            <p className="type-body-sm text-ink-2">{t('agents.setup.noMounts', { name })}</p>
+          )}
+          <AddMount mounts={c.mounts} lockRo={!!strictLock} onAdd={(m) => setMounts((ms) => [...ms, m])} />
+        </Block>
+      )}
+
+      {parts.includes('limits') && (
+        <Block
+          id="setup-concurrency"
+          title={t('agents.setup.concurrency')}
+          cli={`beamhop agent set ${name} --max-sessions ${c.concurrency.maxSessions}`}
+        >
+          <div className="grid gap-5 medium:grid-cols-2">
+            <NumberField
+              label={t('agents.setup.maxSessions')}
+              value={c.concurrency.maxSessions}
+              minValue={1}
+              maxValue={20}
+              onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, concurrency: { maxSessions: v } }))}
+              description={t('agents.setup.maxSessionsHint')}
+            />
+            <NumberField
+              label={t('agents.setup.idle')}
+              value={c.sessionIdleMinutes}
+              minValue={5}
+              maxValue={1440}
+              step={5}
+              unit="min"
+              onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, sessionIdleMinutes: v }))}
+            />
+            <NumberField
+              label={t('agents.setup.approvalTimeout')}
+              value={c.approvalTimeoutMinutes}
+              minValue={1}
+              maxValue={240}
+              unit="min"
+              onChange={(v) => !Number.isNaN(v) && d.set((x) => ({ ...x, approvalTimeoutMinutes: v }))}
+              description={t('agents.setup.approvalTimeoutHint')}
+            />
+          </div>
+        </Block>
+      )}
       <SaveBar agent={agent} d={d} />
     </div>
   );

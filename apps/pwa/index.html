@@ -20,9 +20,10 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <!-- Sets data-theme / data-contrast / data-motion before first paint. External file: the daemon's CSP forbids inline scripts. -->
     <script src="/boot.js"></script>
+    <link rel="stylesheet" href="/boot.css" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="bh-boot" role="status" aria-label="Loading beamhop"><span>beamhop<i></i></span></div></div>
     <noscript>beamhop needs JavaScript to control your agents.</noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -25,8 +25,9 @@ test('main navigation reaches every top-level screen', async ({ page }, info) =>
   const nav = page.getByRole('navigation', { name: 'Main' });
   for (const [label, path] of [
     ['Inbox', '/inbox'],
-    ['Sessions', '/sessions'],
+    ['Conversations', '/sessions'],
     ['Agents', '/agents'],
+    ['Settings', '/settings'],
     ['Home', '/'],
   ] as const) {
     await nav.getByRole('link', { name: new RegExp(`\\b${label}\\b`) }).click();
@@ -36,13 +37,12 @@ test('main navigation reaches every top-level screen', async ({ page }, info) =>
       'page',
     );
   }
-  if (info.project.name === 'mobile') {
-    await nav.getByRole('link', { name: 'More' }).click();
-    await page.getByRole('link', { name: /Channels/ }).click();
-    await expect(page).toHaveURL(/\/channels/);
-  } else {
-    await nav.getByRole('link', { name: 'Channels' }).click();
-    await expect(page).toHaveURL(/\/channels/);
+  // Connections, AI accounts & co live under Settings.
+  await nav.getByRole('link', { name: /Settings/ }).click();
+  await page.getByRole('link', { name: /Connections/ }).click();
+  await expect(page).toHaveURL(/\/channels/);
+  await expect(nav.getByRole('link', { name: /Settings/ })).toHaveAttribute('aria-current', 'page');
+  if (info.project.name !== 'mobile') {
     // split view: list + detail side by side
     await page.getByRole('link', { name: /@reviewer_alice_bot/ }).click();
     await expect(page).toHaveURL(/\/channels\/tg/);

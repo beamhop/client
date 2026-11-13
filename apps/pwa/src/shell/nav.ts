@@ -26,14 +26,27 @@ export interface NavItem {
 export const NAV: Record<string, NavItem> = {
   home: { to: '/', label: 'Home', icon: Broadcast, chord: 'h', match: ['/'] },
   inbox: { to: '/inbox', label: 'Inbox', icon: Tray, chord: 'i', match: ['/inbox'] },
-  sessions: { to: '/sessions', label: 'Sessions', icon: ChatsTeardrop, chord: 's', match: ['/sessions'] },
+  sessions: {
+    to: '/sessions',
+    label: 'Conversations',
+    icon: ChatsTeardrop,
+    chord: 's',
+    match: ['/sessions'],
+  },
   agents: { to: '/agents', label: 'Agents', icon: Cpu, chord: 'a', match: ['/agents'] },
-  channels: { to: '/channels', label: 'Channels', icon: Plugs, chord: 'c', match: ['/channels'] },
-  harnesses: { to: '/harnesses', label: 'Harnesses', icon: Toolbox, match: ['/harnesses'] },
-  policy: { to: '/policy', label: 'Policy', icon: ShieldCheck, chord: 'p', match: ['/policy'] },
-  deploy: { to: '/deploy', label: 'Deploy', icon: CloudArrowUp, chord: 'd', match: ['/deploy'] },
-  audit: { to: '/audit', label: 'Audit', icon: Pulse, chord: 'u', match: ['/audit'] },
-  settings: { to: '/settings', label: 'Settings', icon: SlidersHorizontal, match: ['/settings'] },
+  channels: { to: '/channels', label: 'Connections', icon: Plugs, chord: 'c', match: ['/channels'] },
+  harnesses: { to: '/harnesses', label: 'AI accounts', icon: Toolbox, match: ['/harnesses'] },
+  policy: { to: '/policy', label: 'Sandboxes & roles', icon: ShieldCheck, chord: 'p', match: ['/policy'] },
+  deploy: { to: '/deploy', label: 'Cloud', icon: CloudArrowUp, chord: 'd', match: ['/deploy'] },
+  audit: { to: '/audit', label: 'Activity', icon: Pulse, chord: 'u', match: ['/audit'] },
+  settings: {
+    to: '/settings',
+    label: 'Settings',
+    icon: SlidersHorizontal,
+    chord: ',',
+    // Connections, AI accounts, sandboxes & roles, activity and cloud live under Settings.
+    match: ['/settings', '/channels', '/harnesses', '/policy', '/deploy', '/audit', '/more', '/panic'],
+  },
   more: {
     to: '/more',
     label: 'More',
@@ -52,14 +65,15 @@ export const NAV: Record<string, NavItem> = {
   },
 };
 
-/** Compact bottom tab bar (DESIGN §9.4): exactly five. */
-export const TABS = [NAV.home!, NAV.inbox!, NAV.sessions!, NAV.agents!, NAV.more!];
+/** Compact bottom tab bar (DESIGN §9.4): exactly five, the same five as the sidebar. */
+export const TABS = [NAV.home!, NAV.inbox!, NAV.sessions!, NAV.agents!, NAV.settings!];
 
-/** Expanded sidebar groups. */
+/**
+ * Expanded sidebar: agent-centric (desktop UX audit). Everything about one agent lives on that agent;
+ * connections, AI accounts, sandboxes & roles, activity and cloud are under Settings.
+ */
 export const SIDEBAR_GROUPS: Array<{ label: string; items: NavItem[] }> = [
-  { label: 'Operate', items: [NAV.home!, NAV.inbox!, NAV.sessions!] },
-  { label: 'Configure', items: [NAV.agents!, NAV.channels!, NAV.harnesses!, NAV.policy!] },
-  { label: 'Run', items: [NAV.deploy!, NAV.audit!, NAV.settings!] },
+  { label: '', items: [NAV.home!, NAV.inbox!, NAV.sessions!, NAV.agents!, NAV.settings!] },
 ];
 
 /** "More" list on compact. */

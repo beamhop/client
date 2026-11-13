@@ -7,18 +7,25 @@ import { type AgentConfig, ALWAYS_DENY_READ, type Mount, type SandboxPolicy } fr
 
 // ───────────────────────────── Sections ─────────────────────────────
 
-export const AGENT_SECTIONS = [
-  'overview',
-  'setup',
-  'sandbox',
-  'channels',
-  'schedules',
-  'budgets',
-  'identity',
-] as const;
+/**
+ * One agent's page in four parts (desktop UX audit): what's going on · who can reach it · what it can do ·
+ * advanced. The older seven section URLs still work and land in the part that now holds them.
+ */
+export const AGENT_SECTIONS = ['overview', 'reach', 'abilities', 'advanced'] as const;
 export type AgentSection = (typeof AGENT_SECTIONS)[number];
+export const LEGACY_SECTION: Record<string, { section: AgentSection; anchor?: string }> = {
+  setup: { section: 'advanced', anchor: 'setup-harness' },
+  sandbox: { section: 'abilities', anchor: 'agent-sandbox' },
+  channels: { section: 'reach' },
+  schedules: { section: 'advanced', anchor: 'agent-schedules' },
+  budgets: { section: 'abilities', anchor: 'agent-budgets' },
+  identity: { section: 'advanced', anchor: 'agent-identity' },
+};
 export const isSection = (s: string | undefined): s is AgentSection =>
   !!s && (AGENT_SECTIONS as readonly string[]).includes(s);
+/** The part of the page a section URL (new or old) shows. */
+export const sectionOf = (s: string | undefined): AgentSection =>
+  isSection(s) ? s : ((s ? LEGACY_SECTION[s]?.section : undefined) ?? 'overview');
 
 // ───────────────────────────── Cron ─────────────────────────────
 

@@ -47,7 +47,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['boot.js', 'push-sw.js', 'favicon.svg', 'icons/*.png', 'icons/*.svg'],
+      includeAssets: ['boot.js', 'boot.css', 'push-sw.js', 'favicon.svg', 'icons/*.png', 'icons/*.svg'],
       manifest: {
         id: '/',
         name: 'beamhop',

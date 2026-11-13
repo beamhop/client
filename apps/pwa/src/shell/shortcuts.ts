@@ -8,7 +8,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { NAV } from './nav.ts';
-import { openOverlay } from './overlays.ts';
+import { currentOverlay, openOverlay } from './overlays.ts';
 
 export const typing = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
@@ -49,6 +49,16 @@ export const useGlobalShortcuts = ({
       if (e.key === '?') {
         e.preventDefault();
         openOverlay('shortcuts');
+        return;
+      }
+      // Not while the palette, a sheet or a dialog is open: those keys belong to what's on top.
+      if (
+        e.key === 'n' &&
+        !currentOverlay() &&
+        !document.querySelector('[role="dialog"], [role="alertdialog"]')
+      ) {
+        e.preventDefault();
+        openOverlay('inbox');
         return;
       }
       if (e.key === 'g') {

@@ -8,7 +8,7 @@
 import { npubEncode, tryDecodePubkey } from '@beamhop/channel-nostr/keys';
 import { Check, Key } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Disclosure, DisclosurePanel, Heading, Button as RACButton } from 'react-aria-components';
 import { useApi, useMutationApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
@@ -99,7 +99,7 @@ export const StepIdentity = () => {
               label: t('setup.setup.continuePhone'),
               onPress: () => {
                 update((p) => markDone(p, 'identity'));
-                go('phone');
+                go('agent');
               },
             }
           : {
@@ -236,11 +236,11 @@ export const StepPhone = () => {
       lede="Approve requests and stop agents from your pocket. The phone gets its own key; your owner key stays here."
       cli="beamhop device pair"
       primary={{
-        label: t('setup.setup.continueAgent'),
+        label: t('setup.phone.done'),
         disabled: !paired,
         onPress: () => {
           update((p) => markDone(p, 'phone'));
-          go('agent');
+          go('next');
         },
       }}
       skip={
@@ -250,7 +250,7 @@ export const StepPhone = () => {
               label: t('setup.checks.skipForNow'),
               onPress: () => {
                 update((p) => markSkipped(p, 'phone'));
-                go('agent');
+                go('next');
               },
             }
       }
@@ -278,6 +278,18 @@ export const StepAgent = () => {
   const existing = progress.agent
     ? agents.data?.agents.find((a) => a.config.name === progress.agent)
     : undefined;
+  // Quietly done for you: the owner key (backed up later from Settings → Identity) and the machine check,
+  // which only speaks up when something needs a fix.
+  const identity = useApi('identity.get');
+  const ownerCreate = useMutationApi('identity.ownerCreate', {
+    invalidate: ['identity.get', 'system.status'],
+  });
+  const doctor = useApi('system.doctor');
+  const needsFix = (doctor.data?.checks ?? []).some((x) => x.status === 'warn' || x.status === 'fail');
+  useEffect(() => {
+    if (identity.data && !identity.data.npub && !ownerCreate.isPending && !ownerCreate.isSuccess)
+      ownerCreate.mutate({ replace: false });
+  }, [identity.data, ownerCreate]);
   const c = useCreateAgent({
     onCreated: ({ agent, connect }) => {
       update((x) => markDone(x, 'agent', { agent: agent.config.name }));
@@ -360,6 +372,18 @@ export const StepAgent = () => {
         },
       }}
     >
+      {needsFix && (
+        <div
+          className="flex flex-col gap-2 rounded-lg border-l-[3px] border-caution-text bg-caution-wash px-4 py-3"
+          data-setup="needs-fix"
+        >
+          <p className="type-body text-ink">{t('setup.agent.fixTitle')}</p>
+          <p className="type-body-sm text-ink-2">{t('setup.agent.fixBody')}</p>
+          <Button variant="secondary" size="sm" className="self-start" onPress={() => go('doctor')}>
+            {t('setup.agent.fix')}
+          </Button>
+        </div>
+      )}
       {c.loading ? (
         <Skeleton variant="detail" count={3} label={t('setup.setup.loadingPresets')} />
       ) : (

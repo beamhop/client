@@ -88,6 +88,8 @@ Setup is Doctor → Harnesses → Identity → Phone → Agent → Hello.
 
 ## Phases
 
+All five shipped on 2026-11-13.
+
 1. **Agent creation + reachability.**
    - One create-agent page with name, AI provider, folders and "Where it listens".
    - Inline channel connect.

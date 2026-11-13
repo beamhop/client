@@ -69,15 +69,15 @@ export const Sidebar = ({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
       <nav aria-label={t('nav.main')} className="pane-scroll flex-1 px-3 pb-4">
         {SIDEBAR_GROUPS.map((g) => (
-          <div key={g.label} className="mt-3 first:mt-1">
-            {!collapsed && <h2 className="px-2 pt-2 pb-1 type-micro text-ink-3">{g.label}</h2>}
-            {collapsed && <div aria-hidden="true" className="mx-3 my-2 h-px bg-line" />}
+          <div key={g.label || 'main'} className="mt-3 first:mt-1">
+            {!collapsed && g.label && <h2 className="px-2 pt-2 pb-1 type-micro text-ink-3">{g.label}</h2>}
+            {collapsed && g.label && <div aria-hidden="true" className="mx-3 my-2 h-px bg-line" />}
             <ul className="flex flex-col gap-0.5">
               {g.items.map((item) => {
                 const active = isActive(item, pathname);
                 const Icon = item.icon;
                 const badge = item.to === '/inbox' ? pending : 0;
-                const dot = item.to === '/policy' && (findings.data?.suggestions.length ?? 0) > 0;
+                const dot = item.to === '/settings' && (findings.data?.suggestions.length ?? 0) > 0;
                 return (
                   <li key={item.to}>
                     <Link

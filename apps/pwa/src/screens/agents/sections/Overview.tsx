@@ -36,7 +36,7 @@ const AppOnly = ({ agent }: { agent: AgentView }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         <LinkButton
-          href={`/agents/${name}/channels`}
+          href={`/agents/${name}/reach`}
           variant="primary"
           size="sm"
           icon={<Plugs size={16} aria-hidden="true" />}
@@ -180,7 +180,7 @@ export const OverviewSection = ({ agent }: { agent: AgentView }) => {
         id="ov-where"
         title={t('agents.ov.where', { count: cfg.memberships.length })}
         action={
-          <LinkButton href={`/agents/${name}/channels`} variant="quiet" size="sm">
+          <LinkButton href={`/agents/${name}/reach`} variant="quiet" size="sm">
             {t('agents.ov.edit')}
           </LinkButton>
         }

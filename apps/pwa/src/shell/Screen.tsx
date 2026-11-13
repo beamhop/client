@@ -250,6 +250,20 @@ export const SplitView = ({
   );
 };
 
+/**
+ * What a list/detail screen shows before anything is picked: what this place is for and the one thing to
+ * do next, instead of an empty half window.
+ */
+export const EmptyPane = ({ title, body, action }: { title: string; body?: string; action?: ReactNode }) => (
+  <div id="bh-main-content" className="grid h-full place-items-center p-8">
+    <div className="flex max-w-[44ch] flex-col items-center gap-3 text-center">
+      <p className="type-title-3 text-ink">{title}</p>
+      {body && <p className="type-body-sm text-ink-2">{body}</p>}
+      {action}
+    </div>
+  </div>
+);
+
 const EmptyDetail = () => (
   <div id="bh-main-content" className="grid h-full place-items-center p-8">
     <p className="type-body-sm text-ink-2">{t('a11y.selectItem')}</p>

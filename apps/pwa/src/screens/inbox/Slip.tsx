@@ -6,7 +6,7 @@
 import type { ApprovalView } from '@beamhop/core';
 import { ArrowsClockwise, Check, CheckSquare, Globe, Square, Warning, X } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
-import { approvalTarget, RISK_LABEL } from '../../api/index.ts';
+import { approvalTarget, explainApproval, RISK_LABEL } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { countdown } from '../../lib/format.ts';
@@ -67,7 +67,16 @@ const MiniDiff = ({ diff }: { diff: string }) => {
 };
 
 /** The "what": plain sentence first (title), raw value second. */
-export const WhatBlock = ({ a, full }: { a: ApprovalView; full?: boolean }) => {
+export const WhatBlock = ({ a, full }: { a: ApprovalView; full?: boolean }) => (
+  <>
+    <WhatExact a={a} full={full} />
+    <p className="mt-1.5 type-body-sm text-ink-2" data-explain="">
+      {explainApproval(a)}
+    </p>
+  </>
+);
+
+const WhatExact = ({ a, full }: { a: ApprovalView; full?: boolean }) => {
   const i = inputOf(a);
   const r = reachOf(a);
   if (r === 'access')

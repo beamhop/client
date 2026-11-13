@@ -225,7 +225,7 @@ export const StepDoctor = () => {
         disabled: !finished || fails > 0,
         onPress: () => {
           update((p) => markDone(p, 'doctor'));
-          go('harnesses');
+          go('agent');
         },
       }}
       skip={
@@ -234,7 +234,7 @@ export const StepDoctor = () => {
               label: tr('setup.checks.skipForNow'),
               onPress: () => {
                 update((p) => markSkipped(p, 'doctor'));
-                go('harnesses');
+                go('agent');
               },
             }
           : undefined

@@ -59,6 +59,15 @@ test('stop from the list card is one tap (mobile)', async ({ page }, info) => {
   await expect(page.getByRole('button', { name: 'Start reviewer' })).toBeVisible();
 });
 
+test('old section links land in the part that holds them now', async ({ page }) => {
+  await open(page, '/agents/reviewer/budgets');
+  await expect(sectionNav(page).getByRole('link', { name: 'What it can do' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('heading', { name: 'Spending', exact: true })).toBeVisible();
+});
+
 test('sections are routes; overview opens an instruction file', async ({ page }) => {
   await open(page, '/agents/reviewer');
   await expect(sectionNav(page).getByRole('link', { name: 'Overview' })).toHaveAttribute(
@@ -69,8 +78,9 @@ test('sections are routes; overview opens an instruction file', async ({ page })
   const sheet = page.getByRole('dialog', { name: '~/code/app/CLAUDE.md' });
   await expect(sheet.getByText('Never push to main')).toBeVisible();
   await page.keyboard.press('Escape');
-  await sectionNav(page).getByRole('link', { name: 'Schedules' }).click();
-  await expect(page).toHaveURL(/\/agents\/reviewer\/schedules/);
+  await sectionNav(page).getByRole('link', { name: 'Advanced' }).click();
+  await expect(page).toHaveURL(/\/agents\/reviewer\/advanced/);
+  await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
   await expect(page.getByText('Every weekday at 09:00 Berlin time')).toBeVisible();
 });
 
@@ -129,7 +139,7 @@ test('instruction file in a read-only mount cannot be edited', async ({ page }) 
 });
 
 test('setup: making a folder read-write is a widening change, reviewed before save', async ({ page }) => {
-  await open(page, '/agents/reviewer/setup');
+  await open(page, '/agents/reviewer/abilities');
   await page.getByRole('radio', { name: 'Read-write' }).nth(1).click(); // ~/notes RO → RW
   await expect(page.getByText('1 change')).toBeVisible();
   await expect(page.getByText('Widens access')).toBeVisible();
@@ -268,12 +278,9 @@ test('new agent: a taken name is caught with a suggestion', async ({ page }) => 
 for (const path of [
   '/agents',
   '/agents/reviewer',
-  '/agents/reviewer/setup',
-  '/agents/reviewer/sandbox',
-  '/agents/reviewer/channels',
-  '/agents/reviewer/schedules',
-  '/agents/reviewer/budgets',
-  '/agents/reviewer/identity',
+  '/agents/reviewer/reach',
+  '/agents/reviewer/abilities',
+  '/agents/reviewer/advanced',
   '/agents/new',
 ]) {
   test(`a11y ${path}`, async ({ page }) => {
@@ -293,12 +300,9 @@ test('a11y new-agent with a folder sheet open', async ({ page }) => {
 const SHOTS: Array<[string, string]> = [
   ['/agents', 'agents'],
   ['/agents/reviewer', 'agents_reviewer'],
-  ['/agents/reviewer/setup', 'agents_reviewer_setup'],
-  ['/agents/reviewer/sandbox', 'agents_reviewer_sandbox'],
-  ['/agents/reviewer/channels', 'agents_reviewer_channels'],
-  ['/agents/reviewer/schedules', 'agents_reviewer_schedules'],
-  ['/agents/reviewer/budgets', 'agents_reviewer_budgets'],
-  ['/agents/reviewer/identity', 'agents_reviewer_identity'],
+  ['/agents/reviewer/reach', 'agents_reviewer_reach'],
+  ['/agents/reviewer/abilities', 'agents_reviewer_abilities'],
+  ['/agents/reviewer/advanced', 'agents_reviewer_advanced'],
   ['/agents/new', 'agents_new'],
 ];
 
@@ -329,7 +333,7 @@ test.describe('screenshots', () => {
       await page.getByRole('button', { name: /Skip · Review/ }).click();
       await page.waitForTimeout(300);
       await page.screenshot({ path: `screenshots/${info.project.name}/agents_new_review${suffix}.png` });
-      await open(page, '/agents/reviewer/setup');
+      await open(page, '/agents/reviewer/abilities');
       await page.getByRole('radio', { name: 'Read-write' }).nth(1).click();
       await page.getByRole('button', { name: 'Review & save' }).click();
       await page.waitForTimeout(500);

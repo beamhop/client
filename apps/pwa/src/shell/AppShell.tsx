@@ -1,17 +1,10 @@
-/**
- * App shell (SCREENS §0): compact = screen + bottom tab bar; expanded (≥64rem) = sidebar + status
- * strip + main (+ Inbox rail ≥90rem). Routes opt out of chrome with `staticData: { chrome: 'bare' }`
- * (onboarding, pairing) or hide the tab bar with `staticData: { hideTabBar: true }` (session view).
- */
-import { CaretDoubleLeft } from '@phosphor-icons/react';
-import { Outlet, useMatches, useRouterState } from '@tanstack/react-router';
+import { Outlet, useMatches } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useState } from 'react';
 import { useConnection } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
-import { useExpanded, useWide } from '../lib/media.ts';
-import { IconButton } from '../ui/Button.tsx';
-import { InboxRail } from './InboxRail.tsx';
+import { useExpanded } from '../lib/media.ts';
+import { InboxPanel } from './InboxRail.tsx';
 import { usePanicSheet } from './panic.tsx';
 import { ShellBanners } from './ShellBanners.tsx';
 import { Sidebar } from './Sidebar.tsx';
@@ -91,13 +84,10 @@ export const SkipLink = () => (
 export const AppShell = () => {
   const expanded = useExpanded();
   const conn = useConnection();
-  const wide = useWide();
   const matches = useMatches();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const flags: { chrome?: string; ownMain?: boolean; hideTabBar?: boolean; hideInboxRail?: boolean } = {};
   for (const m of matches) Object.assign(flags, m.staticData ?? {});
   const [collapsed, setCollapsed] = useState(() => readBool('bh.sidebar.collapsed'));
-  const [railHidden, setRailHidden] = useState(() => readBool('bh.inboxRail.hidden'));
   const { open: openPanic } = usePanicSheet();
   const toggleSidebar = useCallback(() => {
     setCollapsed((c) => {
@@ -152,7 +142,6 @@ export const AppShell = () => {
     );
   }
 
-  const showRail = wide && !flags.hideInboxRail && !pathname.startsWith('/inbox');
   return (
     <>
       <SkipLink />
@@ -165,29 +154,10 @@ export const AppShell = () => {
             <main className="h-full min-h-0 min-w-0 flex-1">
               <Outlet />
             </main>
-            {showRail && !railHidden && (
-              <InboxRail
-                onCollapse={() => {
-                  setRailHidden(true);
-                  writeBool('bh.inboxRail.hidden', true);
-                }}
-              />
-            )}
-            {showRail && railHidden && (
-              <div className="border-l border-line px-2 py-3">
-                <IconButton
-                  label={t('ui.appShell.showApprovalsRail')}
-                  icon={<CaretDoubleLeft size={18} />}
-                  onPress={() => {
-                    setRailHidden(false);
-                    writeBool('bh.inboxRail.hidden', false);
-                  }}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>
+      <InboxPanel />
       <UpdatePrompt />
       <ShellExtras />
     </>

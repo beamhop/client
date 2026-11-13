@@ -19,6 +19,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
     keys: [
       { keys: ['mod+K'], label: 'keys.palette' },
       { keys: ['?'], label: 'keys.help' },
+      { keys: ['N'], label: 'keys.needsYou' },
       { keys: ['g', 'h'], label: 'keys.goHome', chord: true },
       { keys: ['g', 'i'], label: 'keys.goInbox', chord: true },
       { keys: ['g', 's'], label: 'keys.goSessions', chord: true },
@@ -27,6 +28,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
       { keys: ['g', 'p'], label: 'keys.goPolicy', chord: true },
       { keys: ['g', 'd'], label: 'keys.goDeploy', chord: true },
       { keys: ['g', 'u'], label: 'keys.goAudit', chord: true },
+      { keys: ['g', ','], label: 'keys.goSettings', chord: true },
       { keys: ['mod+⇧+.'], label: 'keys.panic' },
       { keys: ['mod+\\'], label: 'keys.sidebar' },
       { keys: ['F6'], label: 'keys.toast' },

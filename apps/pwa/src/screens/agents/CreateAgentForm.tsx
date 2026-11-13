@@ -86,7 +86,7 @@ export const listenOptions = (channels: ChannelView[]): ListenOption[] =>
     .flatMap((c) => {
       const name = c.config.name;
       const provider = c.config.provider;
-      const who = c.self?.handle ?? c.self?.displayName ?? name;
+      const who = c.self?.handle ?? name;
       const pname = placeName(provider);
       return [
         {

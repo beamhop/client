@@ -85,7 +85,7 @@ describe('ConnectionPill', () => {
       ),
     );
     const pill = screen.getByRole('button', { name: /Connection/ });
-    expect(pill).toHaveTextContent('no answer');
+    expect(pill).toHaveTextContent('not answering');
     expect(pill).toHaveTextContent('2 queued');
   });
 

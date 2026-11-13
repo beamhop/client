@@ -11,6 +11,7 @@ import {
   Bell,
   CaretRight,
   ClockCounterClockwise,
+  CloudArrowUp,
   Crown,
   DeviceMobile,
   type Icon,
@@ -18,8 +19,12 @@ import {
   Info,
   Key,
   Palette,
+  Plugs,
+  Pulse,
+  ShieldCheck,
   SlidersHorizontal,
   Stop,
+  Toolbox,
 } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -30,7 +35,7 @@ import { cx } from '../../lib/cx.ts';
 import { isDesktop } from '../../lib/desktop.ts';
 import { middleTruncate } from '../../lib/format.ts';
 import { usePanicState } from '../../shell/panic.tsx';
-import { Screen, SplitView } from '../../shell/Screen.tsx';
+import { EmptyPane, Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { Badge, Eyebrow } from '../../ui/Meta.tsx';
 import { inactiveDays, useThisDevice } from './DevicesSection.tsx';
@@ -39,13 +44,55 @@ export interface SettingsSectionMeta {
   id: string;
   title: string;
   slug: string;
-  group: 'trust' | 'data' | 'app' | 'kill';
+  group: 'setup' | 'trust' | 'data' | 'app' | 'kill';
   icon: Icon;
+  /** A screen of its own (Connections, AI accounts…) rather than a /settings section. */
+  href?: string;
   /** Only in the desktop app (window.beamhopDesktop). */
   desktopOnly?: boolean;
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
+  {
+    id: 'connections',
+    title: t('settings.section.connections'),
+    slug: t('settings.section.connectionsSlug'),
+    group: 'setup',
+    icon: Plugs,
+    href: '/channels',
+  },
+  {
+    id: 'ai',
+    title: t('settings.section.ai'),
+    slug: t('settings.section.aiSlug'),
+    group: 'setup',
+    icon: Toolbox,
+    href: '/harnesses',
+  },
+  {
+    id: 'access',
+    title: t('settings.section.access'),
+    slug: t('settings.section.accessSlug'),
+    group: 'setup',
+    icon: ShieldCheck,
+    href: '/policy',
+  },
+  {
+    id: 'activity',
+    title: t('settings.section.activity'),
+    slug: t('settings.section.activitySlug'),
+    group: 'setup',
+    icon: Pulse,
+    href: '/audit',
+  },
+  {
+    id: 'cloud',
+    title: t('settings.section.cloud'),
+    slug: t('settings.section.cloudSlug'),
+    group: 'setup',
+    icon: CloudArrowUp,
+    href: '/deploy',
+  },
   {
     id: 'devices',
     title: t('settings.section.devices'),
@@ -201,6 +248,7 @@ export const SettingsScreen = () => {
   return (
     <SplitView
       hasDetail={hasDetail}
+      empty={<EmptyPane title={t('empty.settings.title')} body={t('empty.settings.body')} />}
       list={
         <Screen title={t('settings.settings.settings')} pane="list">
           <nav aria-label={t('settings.settings.settingsSections')} className="flex flex-col gap-4">
@@ -211,7 +259,7 @@ export const SettingsScreen = () => {
                   {sections
                     .filter((s) => s.group === g)
                     .map((s) => {
-                      const href = `/settings/${s.id}`;
+                      const href = s.href ?? `/settings/${s.id}`;
                       const active = pathname === href;
                       const Ico = s.icon;
                       return (

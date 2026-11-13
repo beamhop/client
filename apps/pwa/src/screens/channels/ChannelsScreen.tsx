@@ -14,7 +14,7 @@ import { channelLamp, PROVIDER_NAMES, providerMonogram, relayHealth, useApi } fr
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { usePanicState } from '../../shell/panic.tsx';
-import { Screen, SplitView } from '../../shell/Screen.tsx';
+import { EmptyPane, Screen, SplitView } from '../../shell/Screen.tsx';
 import { useHasDetail } from '../../shell/ScreenStub.tsx';
 import { BarAction, LinkButton } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
@@ -158,6 +158,17 @@ export const ChannelsScreen = () => {
   return (
     <SplitView
       hasDetail={hasDetail}
+      empty={
+        <EmptyPane
+          title={t('empty.channels.title')}
+          body={t('empty.channels.body')}
+          action={
+            <LinkButton href="/channels/add" variant="primary" size="sm">
+              {t('empty.channels.action')}
+            </LinkButton>
+          }
+        />
+      }
       list={
         <Screen
           title={t('nav.channels')}

@@ -22,7 +22,7 @@ import {
   XCircle,
 } from '@phosphor-icons/react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { type ReactNode, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-aria-components';
 import { agentLamp, harnessMonogram, useApi, useMutationApi } from '../../api/index.ts';
 import { type MessageKey, t } from '../../i18n/index.ts';
@@ -42,7 +42,14 @@ import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/St
 import { SegmentedMeter, StatusDot } from '../../ui/Status.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { NewSessionSheet } from '../sessions/Inspector.tsx';
-import { AGENT_SECTIONS, type AgentSection, isSection, suggestName, validateName } from './model.ts';
+import {
+  AGENT_SECTIONS,
+  type AgentSection,
+  LEGACY_SECTION,
+  sectionOf,
+  suggestName,
+  validateName,
+} from './model.ts';
 import { OverflowMenu } from './parts.tsx';
 import { BudgetsSection } from './sections/Budgets.tsx';
 import { ChannelsSection } from './sections/Channels.tsx';
@@ -374,20 +381,70 @@ const Lifecycle = ({ a, panic }: { a: AgentView; panic: boolean }) => {
 
 // ─────────── Screen ───────────
 
+/** A titled part of a section (the page stacks the older sections under plain headings). */
+const Part = ({
+  id,
+  title,
+  hint,
+  children,
+}: {
+  id: string;
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) => (
+  <section id={id} aria-labelledby={`${id}-h`} className="flex scroll-mt-4 flex-col gap-4">
+    <div className="border-b border-line pb-2">
+      <h3 id={`${id}-h`} className="type-title-2 text-ink">
+        {title}
+      </h3>
+      {hint && <p className="mt-0.5 type-body-sm text-ink-2">{hint}</p>}
+    </div>
+    {children}
+  </section>
+);
+
 const SECTION: Record<AgentSection, (p: { agent: AgentView }) => ReactNode> = {
   overview: OverviewSection,
-  setup: SetupSection,
-  sandbox: SandboxSection,
-  channels: ChannelsSection,
-  schedules: SchedulesSection,
-  budgets: BudgetsSection,
-  identity: IdentitySection,
+  reach: ChannelsSection,
+  abilities: ({ agent }) => (
+    <div className="flex flex-col gap-12">
+      <Part id="agent-folders" title={t('agents.part.folders')} hint={t('agents.part.foldersHint')}>
+        <SetupSection agent={agent} parts={['folders']} />
+      </Part>
+      <Part id="agent-sandbox" title={t('agents.part.sandbox')} hint={t('agents.part.sandboxHint')}>
+        <SandboxSection agent={agent} />
+      </Part>
+      <Part id="agent-budgets" title={t('agents.part.budgets')} hint={t('agents.part.budgetsHint')}>
+        <BudgetsSection agent={agent} />
+      </Part>
+    </div>
+  ),
+  advanced: ({ agent }) => (
+    <div className="flex flex-col gap-12">
+      <Part id="agent-program" title={t('agents.part.program')} hint={t('agents.part.programHint')}>
+        <SetupSection agent={agent} parts={['harness', 'limits']} />
+      </Part>
+      <Part id="agent-schedules" title={t('agents.part.schedules')} hint={t('agents.part.schedulesHint')}>
+        <SchedulesSection agent={agent} />
+      </Part>
+      <Part id="agent-identity" title={t('agents.part.identity')} hint={t('agents.part.identityHint')}>
+        <IdentitySection agent={agent} />
+      </Part>
+    </div>
+  ),
 };
 
 export const AgentDetailScreen = () => {
   const params = useParams({ strict: false }) as { name: string; section?: string };
   const name = params.name;
-  const section: AgentSection = isSection(params.section) ? params.section : 'overview';
+  const section: AgentSection = sectionOf(params.section);
+  // An old section URL (…/sandbox, …/budgets): scroll to the part that now holds it.
+  const anchor = params.section ? LEGACY_SECTION[params.section]?.anchor : undefined;
+  useEffect(() => {
+    if (anchor)
+      window.setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ block: 'start' }), 50);
+  }, [anchor]);
   const q = useApi('agent.get', { name });
   const approvals = useApi('approval.list');
   const { panic } = usePanicState();

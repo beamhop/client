@@ -14,7 +14,14 @@ import { Wordmark } from '../../shell/Wordmark.tsx';
 import { Button } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
-import { completedCount, SETUP_STEPS, type SetupStep, STEP_LABEL, useSetupProgress } from './progress.ts';
+import {
+  completedCount,
+  isNumbered,
+  SETUP_STEPS,
+  type SetupStep,
+  STEP_LABEL,
+  useSetupProgress,
+} from './progress.ts';
 
 export const useGoStep = () => {
   const navigate = useNavigate();
@@ -50,9 +57,11 @@ export const StepFrame = ({
   const expanded = useExpanded();
   const go = useGoStep();
   const [progress] = useSetupProgress();
-  const i = step === 'next' ? SETUP_STEPS.length : SETUP_STEPS.indexOf(step);
+  // A page setup sent you to (machine check, AI accounts, owner key, phone): not a numbered step.
+  const extra = step !== 'next' && !isNumbered(step);
+  const i = step === 'next' ? SETUP_STEPS.length : extra ? -1 : SETUP_STEPS.indexOf(step);
   const labels = SETUP_STEPS.map((s) => STEP_LABEL[s]);
-  const prev = i > 0 ? SETUP_STEPS[i - 1] : undefined;
+  const prev: SetupStep | undefined = extra ? 'agent' : i > 0 ? SETUP_STEPS[i - 1] : undefined;
   const done = completedCount(progress);
 
   const actions = (primary || skip || prev) && (
@@ -98,7 +107,9 @@ export const StepFrame = ({
         <p className="type-micro text-ink-2">
           {step === 'next'
             ? t('setup.frame.done')
-            : `${String(i + 1).padStart(2, '0')} · ${STEP_LABEL[step]}`}
+            : extra
+              ? STEP_LABEL[step]
+              : `${String(i + 1).padStart(2, '0')} · ${STEP_LABEL[step]}`}
         </p>
       )}
       <h1 className="type-title-1 text-ink">{title}</h1>
@@ -123,7 +134,11 @@ export const StepFrame = ({
         >
           <Wordmark />
           <p className="mt-8 type-meta text-ink-2">
-            {step === 'next' ? t('setup.frame.setupComplete') : `Step ${i + 1} of ${SETUP_STEPS.length}`}
+            {step === 'next'
+              ? t('setup.frame.setupComplete')
+              : extra
+                ? STEP_LABEL[step]
+                : `Step ${i + 1} of ${SETUP_STEPS.length}`}
             {done > 0 && step !== 'next' ? ` · ${done} done` : ''}
           </p>
           <Stepper
@@ -151,7 +166,7 @@ export const StepFrame = ({
         <div className="mb-5 flex items-center justify-between">
           <Wordmark />
           <span className="type-meta text-ink-2">
-            {step === 'next' ? 'done' : `${i + 1} of ${SETUP_STEPS.length}`}
+            {step === 'next' ? 'done' : extra ? STEP_LABEL[step] : `${i + 1} of ${SETUP_STEPS.length}`}
           </span>
         </div>
         <Stepper
