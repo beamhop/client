@@ -148,7 +148,9 @@ test('roles: edit a role with a plain-language confirm; owner and agent are lock
   const sheet = page.getByRole('dialog', { name: 'Edit user' });
   const review = sheet.getByRole('button', { name: 'Review changes' });
   await expect(review).toBeDisabled();
-  await sheet.getByRole('switch', { name: /Can approve other people/ }).click({ force: true });
+  // Tap the switch's visible label (the input itself is visually hidden).
+  await sheet.getByText(/^Can approve other people/).click();
+  await expect(sheet.getByRole('switch', { name: /Can approve other people/ })).toBeChecked();
   await review.click();
   const confirm = page.getByRole('alertdialog', { name: 'Change the user role?' });
   await expect(confirm.getByText('· Can approve other people’s requests: no → yes')).toBeVisible();
