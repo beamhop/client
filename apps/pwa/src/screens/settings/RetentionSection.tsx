@@ -138,9 +138,11 @@ const PurgeSheet = ({
               try {
                 const before =
                   age === '0' ? undefined : new Date(Date.now() - Number(age) * 86_400_000).toISOString();
+                // The dialog says audit entries go too (and is confirmed by typing).
                 const r = await purge.mutateAsync({
                   ...(agent === ALL ? {} : { agent }),
                   ...(before ? { before } : {}),
+                  includeAudit: true,
                 });
                 haptic('confirm');
                 toast.show({ message: `Purged · ${r.deleted} records deleted`, tone: 'success' });

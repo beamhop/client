@@ -123,7 +123,9 @@ export const parseSettings = (
 ): Required<Omit<NostrChannelSettings, 'name'>> & {
   name?: string;
 } => {
-  const relays = Array.isArray(raw.relays) && raw.relays.length ? raw.relays : DEFAULT_RELAYS;
+  // The defaults only when no list is given: an explicit empty list means no relays (offline), never the
+  // public ones behind the user's back.
+  const relays = Array.isArray(raw.relays) ? raw.relays : DEFAULT_RELAYS;
   for (const r of relays)
     if (!isRelayUrl(r)) throw new BeamhopError('invalid_input', `invalid relay URL: ${String(r)}`);
   const groups = Array.isArray(raw.groups) ? raw.groups.map((g) => parseGroupRef(g as NostrGroupRef)) : [];

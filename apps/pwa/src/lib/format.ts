@@ -54,6 +54,10 @@ export const countdown = (ms: number): string => {
 
 export const usd = (n: number, digits = 2): string => `$${n.toFixed(digits)}`;
 
+/** Usage minutes for display: one decimal under 10 (no trailing .0), whole minutes above. */
+export const minutes = (n: number): string =>
+  n < 10 ? String(Math.round(n * 10) / 10) : String(Math.round(n));
+
 export const tokens = (n: number): string => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1000) return `${Math.round(n / 1000)}k`;

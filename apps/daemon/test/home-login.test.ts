@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SecretStore } from '@beamhop/core';
@@ -78,5 +78,33 @@ describe('home logins', () => {
     writeFileSync(join(dir, 'auth.json'), '');
     await sync.stop();
     expect(decodeBlob(m.get(method.secret))?.files['auth.json']).toBe('{"refresh":"r2"}');
+  });
+
+  it('removes the sign-in copy when the session stops, keeping the rest of the home', async () => {
+    const { m, store } = memSecrets();
+    const blob = { v: 1 as const, files: { 'auth.json': '{"refresh":"r1"}' } };
+    m.set(method.secret, encodeBlob(blob.files));
+    const sync = await HomeLoginSync.open(store, method, dir, blob);
+    writeFileSync(join(dir, 'history.jsonl'), 'resume me\n');
+    writeFileSync(join(dir, 'auth.json'), '{"refresh":"r3"}'); // refreshed during the session
+    await sync.stop();
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(existsSync(join(dir, 'history.jsonl'))).toBe(true);
+    expect(existsSync(join(dir, 'config.toml'))).toBe(true);
+    // Saved before it was removed.
+    expect(decodeBlob(m.get(method.secret))?.files['auth.json']).toBe('{"refresh":"r3"}');
+  });
+
+  it('keeps the copy when the last save failed (it may hold the only refreshed token)', async () => {
+    const { m, store } = memSecrets();
+    const blob = { v: 1 as const, files: { 'auth.json': '{"refresh":"r1"}' } };
+    m.set(method.secret, encodeBlob(blob.files));
+    const errors: unknown[] = [];
+    const failing = { ...store, set: async () => Promise.reject(new Error('vault locked')) } as SecretStore;
+    const sync = await HomeLoginSync.open(failing, method, dir, blob, { onError: (e) => errors.push(e) });
+    writeFileSync(join(dir, 'auth.json'), '{"refresh":"r4"}');
+    await sync.stop();
+    expect(readFileSync(join(dir, 'auth.json'), 'utf8')).toBe('{"refresh":"r4"}');
+    expect(errors.length).toBeGreaterThan(0);
   });
 });

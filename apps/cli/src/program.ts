@@ -1935,12 +1935,22 @@ export const buildProgram = (deps: CliDeps): Command => {
     );
   data
     .command('purge')
-    .description('delete transcripts and audit data')
+    .description('delete transcripts and usage data (the audit log too with --audit)')
     .option('--agent <name>', 'only this agent')
     .option('--before <isoDate>', 'only records older than this date')
+    .option('--audit', 'also delete audit entries')
+    .option('-y, --yes', 'confirm deleting everything (needed without --agent or --before)')
     .action(
-      act(async (c, o: { agent?: string; before?: string }) => {
-        const r = await c.call('data.purge', { agent: o.agent, before: o.before });
+      act(async (c, o: { agent?: string; before?: string; audit?: boolean; yes?: boolean }) => {
+        if (!o.agent && !o.before && !o.yes)
+          throw new Error(
+            'this deletes every transcript of every agent and cannot be undone; narrow it with --agent or --before, or add --yes',
+          );
+        const r = await c.call('data.purge', {
+          agent: o.agent,
+          before: o.before,
+          includeAudit: o.audit === true,
+        });
         return { data: r, human: () => `deleted ${r.deleted} records` };
       }),
     );

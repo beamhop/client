@@ -67,12 +67,14 @@ describe('network mode', () => {
     expect(compilePolicy('workspace', []).net.mode).toBe('restricted');
   });
 
-  it('allow all is kept for every profile and does not drop the deny list', () => {
-    for (const profile of ['strict', 'workspace'] as const) {
-      const p = compilePolicy(profile, [], { net: { mode: 'all', deny: ['evil.example'] } });
-      expect(p.net.mode).toBe('all');
-      expect(p.net.deny).toContain('evil.example');
-    }
+  it('allow all is kept for workspace and does not drop the deny list', () => {
+    const p = compilePolicy('workspace', [], { net: { mode: 'all', deny: ['evil.example'] } });
+    expect(p.net.mode).toBe('all');
+    expect(p.net.deny).toContain('evil.example');
+  });
+
+  it('strict never opens the network, even with an earlier "allow all" override', () => {
+    expect(compilePolicy('strict', [], { net: { mode: 'all' } }).net.mode).toBe('restricted');
   });
 
   it('a custom profile keeps its own mode', () => {

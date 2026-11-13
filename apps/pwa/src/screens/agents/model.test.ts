@@ -1,4 +1,4 @@
-import { AgentConfig } from '@beamhop/core';
+import { AgentConfig, SandboxPolicy } from '@beamhop/core';
 import { describe, expect, it } from 'vitest';
 import { parseDiff } from '../../ui/CodeBlock.tsx';
 import {
@@ -103,6 +103,11 @@ describe('reach', () => {
     });
     expect(r.writes).toEqual([]);
     expect(r.talksTo).toEqual(['api.anthropic.com']);
+  });
+  it('lists the hosts the harness sign-in adds before the policy allowlist', () => {
+    const effective = SandboxPolicy.parse({ net: { allow: ['api.openai.com', 'chatgpt.com'] } });
+    const r = reachOf(base, effective, ['chatgpt.com', 'auth.openai.com']);
+    expect(r.talksTo).toEqual(['chatgpt.com', 'auth.openai.com', 'api.openai.com']);
   });
 });
 

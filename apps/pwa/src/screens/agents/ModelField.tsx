@@ -78,15 +78,19 @@ export const ModelField = ({
           ? t('agents.model.cannotList', { error: q.data.error })
           : q.isError
             ? t('agents.model.cannotList', { error: q.error.message })
-            : t('agents.model.hint');
+            : listed
+              ? t('agents.model.hint')
+              : t('agents.model.noneListed', { name: harness.displayName });
 
   if (!listed) {
     return (
       <div className="flex flex-col gap-2">
+        {/* Empty means the harness default, so the field can be cleared instead of snapping back. */}
         <TextField
           label={t('agents.setup.model')}
-          value={value}
+          value={value === DEFAULT_MODEL ? '' : value}
           onChange={(v) => onChange(v.trim() || DEFAULT_MODEL)}
+          placeholder={t('agents.model.defaultPlaceholder')}
           mono
           description={hint}
         />

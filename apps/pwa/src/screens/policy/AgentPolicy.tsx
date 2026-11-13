@@ -142,7 +142,8 @@ const Editor = ({
   const sugg = useApi('policy.suggestions', { name });
   const secrets = useApi('secret.list');
   const sessions = useApi('session.list', { agent: name });
-  const set = useMutationApi('policy.set', { invalidate: ['agent.list'] });
+  // Decided suggestions leave the Inbox, Home and Audit lists too.
+  const set = useMutationApi('policy.set', { invalidate: ['agent.list', 'policy.suggestions'] });
 
   const [base, setBase] = useState<Snapshot>(server);
   const [draft, setDraft] = useState<Snapshot>(server);

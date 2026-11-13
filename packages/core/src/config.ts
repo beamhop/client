@@ -14,6 +14,14 @@ export const SecretBinding = z.object({
 });
 export type SecretBinding = z.infer<typeof SecretBinding>;
 
+/**
+ * Secrets beamhop keeps for itself: its own keys (`beamhop.*`: database key, owner/control keys), each
+ * agent's Nostr identity key and each channel's credentials. An agent's `secretEnv` may never hand these
+ * to a harness.
+ */
+export const isReservedSecretName = (name: string): boolean =>
+  name.startsWith('beamhop.') || /^agent\..+\.nsec$/.test(name) || name.startsWith('channel.');
+
 export const SandboxPolicy = z.object({
   fs: z
     .object({
@@ -246,6 +254,10 @@ export const AgentConfig = z.object({
         .regex(
           /^[A-Z_][A-Z0-9_]*(=[A-Za-z0-9_.:@/-]{1,200})?$/,
           'ENV (secret of the same name) or ENV=SECRET, e.g. COPILOT_GITHUB_TOKEN=TEAM_TOKEN',
+        )
+        .refine(
+          (e) => !isReservedSecretName(e.split('=')[1] ?? e),
+          'beamhop keeps that secret for itself (its own keys, agent and channel keys); it cannot be passed to a harness',
         ),
     )
     .default([]),

@@ -23,6 +23,7 @@ import {
   DEFAULT_MODEL,
   type HarnessSession,
   type HarnessView,
+  isReservedSecretName,
   type ModelOption,
   paths,
   type SecretStore,
@@ -109,6 +110,12 @@ export const sessionCredentials = async (
   const env: Record<string, string> = {};
   for (const entry of agent.secretEnv ?? []) {
     const [name, secretName = name] = entry.split('=') as [string, string?];
+    // Also checked by the config schema; repeated here for configs written by hand.
+    if (isReservedSecretName(secretName))
+      throw new BeamhopError(
+        'forbidden',
+        `agent ${agent.name} asks for ${secretName}, which beamhop keeps for itself; remove it from secretEnv`,
+      );
     const value = await secrets.get(secretName);
     if (!value)
       throw new BeamhopError(

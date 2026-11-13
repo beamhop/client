@@ -1,6 +1,6 @@
 /** API handlers for every method in `@beamhop/core` api.ts. */
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -72,7 +72,7 @@ import { type ChildLike, HarnessJobs, type SpawnFn } from './harness-jobs.ts';
 import { isInternalSecret } from './home.ts';
 import { encodeBlob, exportTransfer, homeEnv, readHome, writeHome } from './home-login.ts';
 import { type CallContext, createDispatcher, type Handler, type Handlers } from './rpc-server.ts';
-import { suggestionValue, withPolicyValue } from './rules.ts';
+import { normalizeHostPattern, suggestionValue, withPolicyValue } from './rules.ts';
 import { probeHosts, requiredHosts } from './sandbox-hosts.ts';
 import { webhookSecretName } from './schedules.ts';
 import { stripRecord } from './sessions.ts';
@@ -347,7 +347,9 @@ export class ApiHandlers {
     } catch (e) {
       checks.push({ id: 'sandbox', title: 'Sandbox', status: 'fail', message: errMsg(e) });
     }
-    const hs = await this.scan();
+    // With beamhop's own sign-in state, as the Harnesses screen shows it: a harness the user is logged in
+    // to on this computer still needs a login for its agents (theirs is not usable inside the sandbox).
+    const hs = await this.withLogins(await this.scan());
     // Agents with `harnessAuth: api-key` (the default) reach their LLM only through the broker,
     // which needs the provider key in beamhop's secret store.
     const llmKeys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY'];
@@ -836,7 +838,10 @@ export class ApiHandlers {
           for (const f of INSTRUCTION_FILES) {
             const p = join(root, f.file);
             try {
-              if (existsSync(p) && statSync(p).isFile() && statSync(p).size < 256 * 1024)
+              // lstat: a symlinked instruction file (a cloned repo can carry one) could point anywhere,
+              // e.g. at the vault key; it is not read, as instructionsWrite already refuses it.
+              const st = existsSync(p) ? lstatSync(p) : undefined;
+              if (st?.isFile() && st.size < 256 * 1024)
                 files.push({ path: p, harness: f.harness, content: readFileSync(p, 'utf8') });
             } catch {
               /* unreadable */
@@ -1367,11 +1372,17 @@ export class ApiHandlers {
         const prof = profile as 'strict' | 'workspace' | 'custom';
         if (!['strict', 'workspace', 'custom'].includes(prof))
           throw new BeamhopError('invalid_input', `unknown profile ${profile}`);
+        // Hosts are checked here, not when a session starts: a bad entry ("*", a URL, "") would
+        // otherwise only fail later, as a raw schema error from the sandbox.
+        const checked = policy && {
+          ...policy,
+          net: { ...policy.net, allow: [...new Set(policy.net.allow.map(normalizeHostPattern))] },
+        };
         d.config.agents.update(name, (a) => ({
           ...a,
           sandbox: {
             profile: prof,
-            ...(policy ? { policy } : a.sandbox.policy ? { policy: a.sandbox.policy } : {}),
+            ...(checked ? { policy: checked } : a.sandbox.policy ? { policy: a.sandbox.policy } : {}),
           },
         }));
         d.audit({
@@ -1769,12 +1780,16 @@ export class ApiHandlers {
         });
         return { path };
       },
-      'data.purge': async ({ agent, before }, ctx) => {
-        const r = d.store.purge({ ...(agent ? { agent } : {}), ...(before ? { before } : {}) });
+      'data.purge': async ({ agent, before, includeAudit }, ctx) => {
+        const r = d.store.purge({
+          ...(agent ? { agent } : {}),
+          ...(before ? { before } : {}),
+          ...(includeAudit ? { includeAudit: true } : {}),
+        });
         d.audit({
           type: 'data.purge',
           severity: 'security',
-          summary: `Purged ${r.deleted} records${agent ? ` for ${agent}` : ''}${before ? ` before ${before}` : ''}`,
+          summary: `Purged ${r.deleted} records${includeAudit ? ' (with audit)' : ''}${agent ? ` for ${agent}` : ''}${before ? ` before ${before}` : ''}`,
           actor: this.principal(ctx),
           ...(agent ? { agent } : {}),
         });

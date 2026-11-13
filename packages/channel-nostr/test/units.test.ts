@@ -242,3 +242,14 @@ describe('relay pool', () => {
     pool.close();
   });
 });
+
+describe('relay settings', () => {
+  it('uses the public relays only when no list is given; an empty list means offline', async () => {
+    const { DEFAULT_RELAYS, parseSettings } = await import('../src/channel.ts');
+    expect(parseSettings({}).relays).toEqual(DEFAULT_RELAYS);
+    expect(parseSettings({ relays: [] }).relays).toEqual([]);
+    expect(parseSettings({ relays: ['wss://relay.example.org'] }).relays).toEqual([
+      'wss://relay.example.org',
+    ]);
+  });
+});

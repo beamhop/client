@@ -1408,9 +1408,29 @@ export class MockDaemon {
     'policy.set': (p) => {
       const a = this.agent(p.name);
       const prev = this.state.policies.get(p.name);
+      // Like the daemon: `policy` holds the agent's overrides, compiled over what the agent already has
+      // (seeded learning, secrets and the profile's hosts stay; only the overridden fields change).
+      const base = prev?.effective ?? SandboxPolicy.parse({});
+      const prevUser = prev?.userAllow ?? [];
+      const effective = p.policy
+        ? {
+            ...base,
+            learning: p.policy.learning,
+            secrets: p.policy.secrets.length ? p.policy.secrets : base.secrets,
+            net: {
+              ...base.net,
+              mode: p.policy.net.mode,
+              allow: [
+                ...new Set([...base.net.allow.filter((h) => !prevUser.includes(h)), ...p.policy.net.allow]),
+              ],
+            },
+          }
+        : base;
       this.state.policies.set(p.name, {
         profile: p.profile,
-        effective: p.policy ?? prev?.effective ?? SandboxPolicy.parse({}),
+        effective,
+        required: prev?.required ?? [],
+        userAllow: p.policy ? p.policy.net.allow : prevUser,
       });
       this.putAgent({
         ...a,

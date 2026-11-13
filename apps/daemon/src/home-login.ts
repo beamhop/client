@@ -232,9 +232,25 @@ export class HomeLoginSync {
     return this.saving;
   }
 
+  /**
+   * Stop watching, save a last change, then remove the sign-in files from the session's home: the vault
+   * keeps the login, and a copy left in an ended session would only be another place to steal it from.
+   * The rest of the home (history a resume needs) stays. A copy whose last save failed is kept, since it
+   * may hold the only refreshed token.
+   */
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     await this.sync();
+    const home = homeOf(this.method);
+    if (!home.transfer) {
+      const now = readHome(this.dir, home);
+      if (now && encodeBlob(now) !== this.last) {
+        this.onError(new Error('the refreshed sign-in was not saved; its copy is kept in the session'));
+        return;
+      }
+    }
+    for (const entry of home.files)
+      for (const rel of entry.split('|')) rmSync(join(this.dir, rel), { force: true });
   }
 }

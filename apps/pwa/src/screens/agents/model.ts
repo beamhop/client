@@ -318,6 +318,8 @@ export interface Reach {
 export const reachOf = (
   cfg: Pick<AgentConfig, 'harness' | 'mounts' | 'sandbox'>,
   effective?: SandboxPolicy,
+  /** Hosts the harness and its sign-in add at session start (`policy.get` → `required`). */
+  required: string[] = [],
 ): Reach => {
   const uniq = (xs: string[]) => [...new Set(xs)];
   const mountReads = cfg.mounts.map((m) => m.path);
@@ -327,7 +329,7 @@ export const reachOf = (
     return {
       reads: uniq([...mountReads, ...effective.fs.read]),
       writes: uniq([...mountWrites, ...effective.fs.write]),
-      talksTo: effective.net.allow,
+      talksTo: uniq([...required, ...effective.net.allow]),
       never: uniq([...ALWAYS_DENY_READ, ...effective.fs.deny]),
       secrets: effective.secrets.map((s) => s.host),
     };

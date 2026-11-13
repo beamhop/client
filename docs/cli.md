@@ -1364,7 +1364,7 @@ Options:
 
 Commands:
   export [options]  export transcripts and audit data to a file
-  purge [options]   delete transcripts and audit data
+  purge [options]   delete transcripts and usage data (the audit log too with --audit)
   help [command]    display help for command
 ```
 
@@ -1385,10 +1385,12 @@ Options:
 ```text
 Usage: beamhop data purge [options]
 
-delete transcripts and audit data
+delete transcripts and usage data (the audit log too with --audit)
 
 Options:
   --agent <name>      only this agent
   --before <isoDate>  only records older than this date
+  --audit             also delete audit entries
+  -y, --yes           confirm deleting everything (needed without --agent or --before)
   -h, --help          display help for command
 ```

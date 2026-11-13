@@ -453,6 +453,10 @@ export const NewAgentScreen = () => {
           <p className="flex items-center gap-2 type-body text-ink">
             <LetterTile code={harnessMonogram(harness)} /> {harnessName}
           </p>
+          <MetaLine
+            items={[model === DEFAULT_MODEL ? t('agents.model.harnessDefault') : model]}
+            className="whitespace-normal"
+          />
         </ReviewGroup>
         <ReviewGroup title={stepLabel('folders')} onEdit={() => go(2)}>
           {mounts.length ? (

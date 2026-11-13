@@ -94,9 +94,11 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
       >
         <Switch
           isSelected={mode === 'all'}
-          isDisabled={save.isPending}
+          isDisabled={save.isPending || profile === 'strict'}
           onChange={(v) => (v ? setConfirmAll(true) : void saveNet({ mode: 'restricted' }))}
-          description={t('agents.sandbox.allowAllHint')}
+          description={
+            profile === 'strict' ? t('agents.sandbox.allowAllStrict') : t('agents.sandbox.allowAllHint')
+          }
         >
           {t('agents.sandbox.allowAll')}
         </Switch>
@@ -150,6 +152,7 @@ const NetworkSection = ({ name, profile, raw, mode, userAllow, required, blocked
                 setHostError(undefined);
               }}
               errorMessage={hostError}
+              isInvalid={!!hostError}
               mono
             />
           </div>
@@ -287,7 +290,15 @@ export const SandboxSection = ({ agent }: { agent: AgentView }) => {
   const showSkel = useDelayedLoading(policy.isPending);
   const eff = policy.data?.effective;
   // While the profile is being changed, preview the new reach instead of the compiled one.
-  const reach = reachOf(c, c.sandbox.profile === agent.config.sandbox.profile ? eff : undefined);
+  const sameProfile = c.sandbox.profile === agent.config.sandbox.profile;
+  const base = reachOf(
+    c,
+    sameProfile ? eff : undefined,
+    (policy.data?.required ?? []).map((r) => r.host),
+  );
+  // Allow all: the list would only show a sample; say what is true instead.
+  const reach =
+    sameProfile && eff?.net.mode === 'all' ? { ...base, talksTo: [t('agents.sandbox.anyHost')] } : base;
   const pending = (suggestions.data?.suggestions ?? []).filter((s) => s.kind !== 'net.allow').length;
 
   const setLearning = (on: boolean) => {

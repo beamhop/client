@@ -184,6 +184,8 @@ export class SessionManager {
   private readonly reservations = new Map<string, { usd: number; at: number }[]>();
   /** Hosts the sandbox refused during the current turn of each session (for failure messages). */
   private readonly blockedHosts = new Map<string, Set<string>>();
+  /** When each agent last hit each sandbox denial (`agent|kind|value`), to tell new ones from repeats. */
+  private readonly lastViolation = new Map<string, number>();
 
   constructor(private readonly d: Daemon) {}
 
@@ -547,13 +549,19 @@ export class SessionManager {
         if (policy.learning || refused) d.store.policySuggestions.record(agent.name, v.kind, v.value);
         if (seen.has(k)) return;
         seen.add(k);
+        // A denial this agent already hit in the last day (a harness that tries the same host at every
+        // start) is a repeat, not news: logged as a warning, so it does not trip the security-spike alert.
+        const vk = `${agent.name}|${k}`;
+        const at = d.now();
+        const repeat = at - (this.lastViolation.get(vk) ?? Number.NEGATIVE_INFINITY) < 24 * 3_600_000;
+        this.lastViolation.set(vk, at);
         d.audit({
           type: 'sandbox.violation',
-          severity: 'security',
+          severity: repeat ? 'warn' : 'security',
           summary: `Sandbox ${v.allowed ? 'logged' : 'blocked'} ${v.kind === 'net.allow' ? 'network access to' : v.kind === 'fs.write' ? 'a write to' : 'a read of'} ${v.value}`,
           actor: `agent:${agent.name}`,
           agent: agent.name,
-          data: { kind: v.kind, value: v.value, session: live.id, learning: policy.learning },
+          data: { kind: v.kind, value: v.value, session: live.id, learning: policy.learning, repeat },
         });
       });
       const cwd = mounts.find((m) => m.mode === 'rw')?.path ?? mounts[0]?.path ?? live.dir;

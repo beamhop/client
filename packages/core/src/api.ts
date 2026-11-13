@@ -1026,7 +1026,14 @@ export const methods = {
     result: z.object({ path: z.string() }),
   },
   'data.purge': {
-    params: z.object({ agent: z.string().optional(), before: z.string().optional() }).default({}),
+    /** Transcripts and usage; the audit log too only with `includeAudit`. */
+    params: z
+      .object({
+        agent: z.string().optional(),
+        before: z.string().optional(),
+        includeAudit: z.boolean().default(false),
+      })
+      .default({ includeAudit: false }),
     result: z.object({ deleted: z.number() }),
   },
 } as const;

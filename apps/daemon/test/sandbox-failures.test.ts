@@ -87,6 +87,25 @@ describe('sandbox failures', () => {
     );
   });
 
+  it('counts a denial the agent already hit as a repeat, not a new security event', async () => {
+    const e = await setup(async function* (refuse) {
+      refuse('plugins.example.dev');
+      yield { type: 'text', delta: 'ok' };
+      yield { type: 'done', stopReason: 'end_turn' };
+    });
+    for (const text of ['one', 'two']) {
+      const s = await e.client.call('session.start', { agent: 'bot', text });
+      await until(
+        async () =>
+          (await e.client.call('session.events', { id: s.id })).events.some((x) => x.kind === 'assistant'),
+        5000,
+        'reply',
+      );
+    }
+    const audits = e.d.store.audit.query({ type: 'sandbox.violation' });
+    expect(audits.map((a) => a.severity).sort()).toEqual(['security', 'warn']);
+  });
+
   it('adds a follow-up note when the refusal arrives after the error', async () => {
     const e = await setup(async function* (refuse) {
       yield { type: 'error', message: 'error sending request: connect failed' };

@@ -189,7 +189,13 @@ export const compilePolicy = (
   return SandboxPolicy.parse({
     // `own` comes only from the daemon's option: an override (or a custom profile) cannot set it.
     fs: { read: readSet, write: writeSet, deny, own },
-    net: { allow: netAllow, deny: netDeny, denyPrivateIps: true, mode: o.net?.mode ?? base.net.mode },
+    // Strict only ever reaches the model API: like extra hosts, "allow all" does not apply to it.
+    net: {
+      allow: netAllow,
+      deny: netDeny,
+      denyPrivateIps: true,
+      mode: profile === 'strict' ? 'restricted' : (o.net?.mode ?? base.net.mode),
+    },
     secrets: o.secrets ?? base.secrets,
     env: { passthrough: uniq(o.env?.passthrough ?? base.env.passthrough) },
     proc: { maxSessionMinutes: o.proc?.maxSessionMinutes ?? base.proc.maxSessionMinutes },

@@ -4,7 +4,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { useApi } from '../../api/index.ts';
 import { t } from '../../i18n/index.ts';
 import { cx } from '../../lib/cx.ts';
-import { shortDate, tokens, usd } from '../../lib/format.ts';
+import { minutes, shortDate, tokens, usd } from '../../lib/format.ts';
 import { BarChart } from '../../ui/Charts.tsx';
 import { SegmentedControl } from '../../ui/Choice.tsx';
 import { Eyebrow, Readout } from '../../ui/Meta.tsx';
@@ -88,7 +88,10 @@ export const UsageTab = ({ alertButton }: { alertButton: ReactNode }) => {
             </span>
           )}
           <span>
-            {t('audit.usage.tokens', { tokens: tokens(view.total.tokens), minutes: view.total.minutes })}
+            {t('audit.usage.tokens', {
+              tokens: tokens(view.total.tokens),
+              minutes: minutes(view.total.minutes),
+            })}
           </span>
           <span>{t('audit.usage.pace', { amount: usd(forecast) })}</span>
         </p>
