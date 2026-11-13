@@ -374,7 +374,8 @@ export const describeChanges = (
 export const isWidening = (changes: Change[]) => changes.some((c) => c.kind === 'widen');
 
 // ─────────── YAML + unified diff ───────────
-const q = (s: string) => (/^[\w./~-]+$/.test(s) && !/^[*~]$/.test(s) && !s.startsWith('*') ? s : JSON.stringify(s));
+const q = (s: string) =>
+  /^[\w./~-]+$/.test(s) && !/^[*~]$/.test(s) && !s.startsWith('*') ? s : JSON.stringify(s);
 const list = (indent: string, key: string, xs: string[]) =>
   xs.length ? [`${indent}${key}:`, ...xs.map((x) => `${indent}  - ${q(x)}`)] : [`${indent}${key}: []`];
 

@@ -189,7 +189,9 @@ export const ReachSummary = ({
                 aria-expanded={allLocked}
                 className="-my-3 min-h-11 type-meta text-ink-2 underline underline-offset-[3px] hover:text-ink"
               >
-                {allLocked ? t('policy.reach.less') : t('policy.reach.more', { count: Math.max(0, extraLocked) })}
+                {allLocked
+                  ? t('policy.reach.less')
+                  : t('policy.reach.more', { count: Math.max(0, extraLocked) })}
               </button>
             </li>
           </ul>

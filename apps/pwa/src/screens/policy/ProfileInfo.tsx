@@ -23,18 +23,41 @@ const MARK: Record<Mark, ReactNode> = {
 
 /** Rows of the comparison: capability → per-profile mark + short word. */
 const ROWS: Array<{ id: string; cells: Record<Profile, [Mark, string]> }> = [
-  { id: 'read', cells: { strict: ['yes', 'mounted'], workspace: ['yes', 'mounted'], custom: ['some', 'your list'] } },
-  { id: 'write', cells: { strict: ['no', 'nothing'], workspace: ['yes', 'rw mounts'], custom: ['some', 'your list'] } },
-  { id: 'net', cells: { strict: ['some', 'AI provider'], workspace: ['yes', '+ registries'], custom: ['some', 'your list'] } },
-  { id: 'private', cells: { strict: ['no', 'blocked'], workspace: ['no', 'blocked'], custom: ['some', 'your choice'] } },
-  { id: 'locked', cells: { strict: ['locked', 'never'], workspace: ['locked', 'never'], custom: ['locked', 'never'] } },
+  {
+    id: 'read',
+    cells: { strict: ['yes', 'mounted'], workspace: ['yes', 'mounted'], custom: ['some', 'your list'] },
+  },
+  {
+    id: 'write',
+    cells: { strict: ['no', 'nothing'], workspace: ['yes', 'rw mounts'], custom: ['some', 'your list'] },
+  },
+  {
+    id: 'net',
+    cells: {
+      strict: ['some', 'AI provider'],
+      workspace: ['yes', '+ registries'],
+      custom: ['some', 'your list'],
+    },
+  },
+  {
+    id: 'private',
+    cells: { strict: ['no', 'blocked'], workspace: ['no', 'blocked'], custom: ['some', 'your choice'] },
+  },
+  {
+    id: 'locked',
+    cells: { strict: ['locked', 'never'], workspace: ['locked', 'never'], custom: ['locked', 'never'] },
+  },
 ];
 
 export const ProfileCompare = () => {
   const agents = useApi('agent.list');
   const roles = useApi('role.list');
   return (
-    <Screen title={t('policy.compare.title')} pane="detail" slug={<MetaLine items={[t('policy.compare.slug')]} />}>
+    <Screen
+      title={t('policy.compare.title')}
+      pane="detail"
+      slug={<MetaLine items={[t('policy.compare.slug')]} />}
+    >
       <p className="mb-6 max-w-[62ch] type-body text-ink-2">{t('policy.compare.lead')}</p>
       <div className="overflow-x-auto rounded-lg border border-line bg-surface">
         <table className="w-full min-w-[34rem] border-collapse">
@@ -46,7 +69,11 @@ export const ProfileCompare = () => {
               </th>
               {PROFILES.map((p) => (
                 <th key={p} scope="col" className="px-4 py-3 text-left">
-                  <Link to="/policy/$profile" params={{ profile: p }} className="font-mono text-[15px] font-medium text-ink underline-offset-[3px] hover:underline">
+                  <Link
+                    to="/policy/$profile"
+                    params={{ profile: p }}
+                    className="font-mono text-[15px] font-medium text-ink underline-offset-[3px] hover:underline"
+                  >
                     {p}
                   </Link>
                 </th>
@@ -63,7 +90,9 @@ export const ProfileCompare = () => {
                   const [m, word] = r.cells[p];
                   return (
                     <td key={p} className={m === 'locked' ? 'relative px-4 py-3' : 'px-4 py-3'}>
-                      {m === 'locked' && <span aria-hidden="true" className="hatch absolute inset-0 text-ink-3" />}
+                      {m === 'locked' && (
+                        <span aria-hidden="true" className="hatch absolute inset-0 text-ink-3" />
+                      )}
                       <span className="relative inline-flex items-center gap-1.5 type-meta text-ink-2">
                         {MARK[m]}
                         {word}
@@ -78,13 +107,17 @@ export const ProfileCompare = () => {
                 {t('policy.compare.used')}
               </th>
               {PROFILES.map((p) => {
-                const names = (agents.data?.agents ?? []).filter((a) => a.config.sandbox.profile === p).map((a) => a.config.name);
+                const names = (agents.data?.agents ?? [])
+                  .filter((a) => a.config.sandbox.profile === p)
+                  .map((a) => a.config.name);
                 const rs = (roles.data?.roles ?? []).filter((r) => r.sandboxProfile === p).map((r) => r.name);
                 return (
                   <td key={p} className="px-4 py-3 align-top type-meta text-ink">
                     {names.join(', ') || '—'}
                     {rs.length > 0 && (
-                      <span className="block text-ink-2">{t('policy.compare.roles', { names: rs.join(', ') })}</span>
+                      <span className="block text-ink-2">
+                        {t('policy.compare.roles', { names: rs.join(', ') })}
+                      </span>
                     )}
                   </td>
                 );
@@ -111,7 +144,9 @@ export const ProfileScreen = ({ profile }: { profile: Profile }) => {
       pane="detail"
       maxWidth="prose"
       crumbs={[{ label: t('nav.policy'), href: '/policy' }, { label: profile }]}
-      slug={<MetaLine items={[t('policy.profile.slug'), t('policy.list.agentsCount', { count: using.length })]} />}
+      slug={
+        <MetaLine items={[t('policy.profile.slug'), t('policy.list.agentsCount', { count: using.length })]} />
+      }
     >
       <p className="type-body text-ink">{t(`policy.profile.${profile}.blurb`)}</p>
       <Section id="p-means" title={t('policy.profile.means')} className="mt-8">

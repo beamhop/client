@@ -188,7 +188,15 @@ const Editor = ({
     let live = true;
     const parents = [...new Set(folders.map((f) => f.path.slice(0, f.path.lastIndexOf('/')) || '~'))];
     void Promise.all(parents.map((p) => demoListDir(p))).then((lists) => {
-      if (live) setGitPaths(new Set(lists.flat().filter((e) => e.git).map((e) => e.path)));
+      if (live)
+        setGitPaths(
+          new Set(
+            lists
+              .flat()
+              .filter((e) => e.git)
+              .map((e) => e.path),
+          ),
+        );
     });
     return () => {
       live = false;
@@ -218,7 +226,8 @@ const Editor = ({
   const widen = isWidening(changes);
   const running = (sessions.data?.sessions ?? []).filter((s) => s.status === 'running');
 
-  const update = (fn: (p: SandboxPolicy) => SandboxPolicy) => setDraft((d) => ({ ...d, policy: fn(clone(d.policy)) }));
+  const update = (fn: (p: SandboxPolicy) => SandboxPolicy) =>
+    setDraft((d) => ({ ...d, policy: fn(clone(d.policy)) }));
   const fix = (f: Finding) => {
     if (!f.fix) return;
     update(f.fix.apply);
@@ -249,7 +258,8 @@ const Editor = ({
 
   const save = async (restart: boolean) => {
     try {
-      for (const [id, d] of Object.entries(decisions)) await call('policy.applySuggestion', { id, accept: d.accept });
+      for (const [id, d] of Object.entries(decisions))
+        await call('policy.applySuggestion', { id, accept: d.accept });
       await set.mutateAsync({ name, profile: draft.profile, policy: draft.policy });
       if (restart) for (const s of running) await call('session.stop', { id: s.id });
       setBase(draft);
@@ -327,14 +337,26 @@ const Editor = ({
         <div className="flex min-w-0 flex-col gap-8 @min-[60rem]:col-start-1 @min-[60rem]:row-start-1">
           <RulesIndex
             items={[
-              ['learning', t('policy.learn.title'), draft.policy.learning ? t('policy.index.on') : t('policy.index.off')],
+              [
+                'learning',
+                t('policy.learn.title'),
+                draft.policy.learning ? t('policy.index.on') : t('policy.index.off'),
+              ],
               ['profile', t('policy.profile.title'), draft.profile],
               ['files', t('policy.files.title'), String(folders.length)],
-              ['network', t('policy.net.title'), t('policy.list.hosts', { count: draft.policy.net.allow.length })],
+              [
+                'network',
+                t('policy.net.title'),
+                t('policy.list.hosts', { count: draft.policy.net.allow.length }),
+              ],
               ['secrets', t('policy.index.keys'), String(draft.policy.secrets.length)],
               ['env', t('policy.env.title'), String(draft.policy.env.passthrough.length)],
               ['limits', t('policy.limits.title'), `${draft.policy.proc.maxSessionMinutes} min`],
-              ['people', t('policy.index.people'), String(agent.config.memberships.length + Object.keys(agent.config.grants).length)],
+              [
+                'people',
+                t('policy.index.people'),
+                String(agent.config.memberships.length + Object.keys(agent.config.grants).length),
+              ],
             ]}
           />
           <LearningSection
@@ -367,7 +389,9 @@ const Editor = ({
           <SecretsSection
             name={name}
             policy={draft.policy}
-            available={(secrets.data?.secrets ?? []).map((s) => s.name).filter((n) => !n.startsWith('channel/'))}
+            available={(secrets.data?.secrets ?? [])
+              .map((s) => s.name)
+              .filter((n) => !n.startsWith('channel/'))}
             backend={secrets.data?.backend}
             onChange={(s) => update((p) => ({ ...p, secrets: s }))}
           />
@@ -504,11 +528,17 @@ const LearningSection = ({
     title={t('policy.learn.title')}
     aside={
       pending.length > 0 ? (
-        <span className="type-meta text-caution-text">{t('policy.learn.count', { count: pending.length })}</span>
+        <span className="type-meta text-caution-text">
+          {t('policy.learn.count', { count: pending.length })}
+        </span>
       ) : undefined
     }
   >
-    <Switch isSelected={policy.learning} onChange={onToggle} description={t('policy.learn.desc', { agent: name })}>
+    <Switch
+      isSelected={policy.learning}
+      onChange={onToggle}
+      description={t('policy.learn.desc', { agent: name })}
+    >
       {t('policy.learn.toggle')}
     </Switch>
     {(policy.learning || pending.length > 0 || decided.length > 0) && (
@@ -543,7 +573,11 @@ const ProfileSection = ({
   value: Profile;
   onAsk: (p: Profile) => void;
 }) => (
-  <Section id="profile" title={t('policy.profile.title')} aside={<TextLink href={`/policy/${value}`}>{t('policy.profile.more')}</TextLink>}>
+  <Section
+    id="profile"
+    title={t('policy.profile.title')}
+    aside={<TextLink href={`/policy/${value}`}>{t('policy.profile.more')}</TextLink>}
+  >
     <RadioGroup
       label={t('policy.profile.label', { agent: name })}
       hideLabel
@@ -575,8 +609,12 @@ const ProfileSheet = ({
   onClose: () => void;
   onApply: (s: Snapshot) => void;
 }) => {
-  const next = target ? { profile: target, policy: applyProfile(target, current.policy, agent.config.mounts) } : null;
-  const changes = next ? describeChanges(name, current, next).filter((c) => !c.text.startsWith('Profile')) : [];
+  const next = target
+    ? { profile: target, policy: applyProfile(target, current.policy, agent.config.mounts) }
+    : null;
+  const changes = next
+    ? describeChanges(name, current, next).filter((c) => !c.text.startsWith('Profile'))
+    : [];
   return (
     <Sheet
       isOpen={!!target}
@@ -637,7 +675,11 @@ const FoldersSection = ({
   const denies = userDenies(policy);
   return (
     <>
-      <Section id="files" title={t('policy.files.title')} description={t('policy.files.desc', { agent: name })}>
+      <Section
+        id="files"
+        title={t('policy.files.title')}
+        description={t('policy.files.desc', { agent: name })}
+      >
         {folders.length === 0 ? (
           <p className="mb-3 type-body-sm text-ink-2">{t('policy.files.none', { agent: name })}</p>
         ) : (
@@ -668,7 +710,9 @@ const FoldersSection = ({
                     size="sm"
                     className="[&>*]:flex-auto"
                     value={f.mode}
-                    onChange={(m) => onChange(folders.map((x) => (x.path === f.path ? { ...x, mode: m } : x)))}
+                    onChange={(m) =>
+                      onChange(folders.map((x) => (x.path === f.path ? { ...x, mode: m } : x)))
+                    }
                     options={[
                       { id: 'ro', label: t('policy.files.ro') },
                       { id: 'rw', label: t('policy.files.rw') },
@@ -740,8 +784,18 @@ const FoldersSection = ({
 };
 
 const LOCKED_ALL = [
-  '~/.ssh', '~/.aws', '~/.gnupg', '~/.config/gh', '~/.config/gcloud', '~/.azure', '~/.kube',
-  '~/.docker/config.json', '~/.netrc', '~/.npmrc', '~/.beamhop', '~/Library/Keychains',
+  '~/.ssh',
+  '~/.aws',
+  '~/.gnupg',
+  '~/.config/gh',
+  '~/.config/gcloud',
+  '~/.azure',
+  '~/.kube',
+  '~/.docker/config.json',
+  '~/.netrc',
+  '~/.npmrc',
+  '~/.beamhop',
+  '~/Library/Keychains',
 ];
 const LockedPaths = () => {
   const [all, setAll] = useState(false);
@@ -751,7 +805,13 @@ const LockedPaths = () => {
   return (
     <div className="flex flex-col gap-1">
       <LockedStrip label={t('policy.never.locked')} items={shown} />
-      <Button variant="quiet" size="sm" className="-ml-3 self-start" onPress={() => setAll((x) => !x)} aria-expanded={all}>
+      <Button
+        variant="quiet"
+        size="sm"
+        className="-ml-3 self-start"
+        onPress={() => setAll((x) => !x)}
+        aria-expanded={all}
+      >
         {all ? t('policy.never.fewer') : t('policy.never.all')}
       </Button>
     </div>
@@ -786,7 +846,12 @@ const NetworkSection = ({
         <ChipGroup
           className="mt-4"
           label={t('policy.net.suggested')}
-          items={pending.map((s) => ({ id: s.id, label: s.value, note: `${s.count}×`, variant: 'suggested' as const }))}
+          items={pending.map((s) => ({
+            id: s.id,
+            label: s.value,
+            note: `${s.count}×`,
+            variant: 'suggested' as const,
+          }))}
           onAction={() => scrollTo('learning')}
         />
       )}
@@ -841,7 +906,10 @@ const SecretsSection = ({
       ) : (
         <ul className="mb-4 flex flex-col rounded-lg border border-line bg-surface">
           {policy.secrets.map((s) => (
-            <li key={`${s.name}@${s.host}`} className="flex items-center gap-3 border-b border-line py-2 pr-1 pl-3 last:border-b-0">
+            <li
+              key={`${s.name}@${s.host}`}
+              className="flex items-center gap-3 border-b border-line py-2 pr-1 pl-3 last:border-b-0"
+            >
               <LockSimple size={18} aria-hidden="true" className="shrink-0 text-ink-2" />
               <span className="min-w-0 flex-1">
                 <span className="block type-meta text-ink [overflow-wrap:anywhere]">{s.name}</span>
@@ -870,38 +938,41 @@ const SecretsSection = ({
           {t('policy.secrets.bindNew')}
         </Button>
       ) : (
-      <div className="grid grid-cols-1 gap-3 @min-[28rem]:grid-cols-[1fr_1fr_auto] @min-[28rem]:items-end">
-        <Select
-          label={t('policy.secrets.key')}
-          placeholder={t('policy.secrets.keyPh')}
-          options={free.map((n) => ({ id: n, label: n }))}
-          selectedKey={secret}
-          onSelectionChange={(k) => setSecret(k ? String(k) : null)}
-          isDisabled={free.length === 0}
-        />
-        <Select
-          label={t('policy.secrets.host')}
-          placeholder={t('policy.secrets.hostPh')}
-          options={hosts.map((h) => ({ id: h, label: h }))}
-          selectedKey={host}
-          onSelectionChange={(k) => setHost(k ? String(k) : null)}
-          isDisabled={hosts.length === 0}
-        />
-        <Button
-          variant="secondary"
-          icon={<Plus size={16} aria-hidden="true" />}
-          isDisabled={!secret || !host}
-          onPress={() => {
-            if (!secret || !host) return;
-            onChange([...policy.secrets, { name: secret, host, header: 'Authorization', prefix: 'Bearer' }]);
-            setSecret(null);
-            setHost(null);
-            setAdding(false);
-          }}
-        >
-          {t('policy.secrets.addButton')}
-        </Button>
-      </div>
+        <div className="grid grid-cols-1 gap-3 @min-[28rem]:grid-cols-[1fr_1fr_auto] @min-[28rem]:items-end">
+          <Select
+            label={t('policy.secrets.key')}
+            placeholder={t('policy.secrets.keyPh')}
+            options={free.map((n) => ({ id: n, label: n }))}
+            selectedKey={secret}
+            onSelectionChange={(k) => setSecret(k ? String(k) : null)}
+            isDisabled={free.length === 0}
+          />
+          <Select
+            label={t('policy.secrets.host')}
+            placeholder={t('policy.secrets.hostPh')}
+            options={hosts.map((h) => ({ id: h, label: h }))}
+            selectedKey={host}
+            onSelectionChange={(k) => setHost(k ? String(k) : null)}
+            isDisabled={hosts.length === 0}
+          />
+          <Button
+            variant="secondary"
+            icon={<Plus size={16} aria-hidden="true" />}
+            isDisabled={!secret || !host}
+            onPress={() => {
+              if (!secret || !host) return;
+              onChange([
+                ...policy.secrets,
+                { name: secret, host, header: 'Authorization', prefix: 'Bearer' },
+              ]);
+              setSecret(null);
+              setHost(null);
+              setAdding(false);
+            }}
+          >
+            {t('policy.secrets.addButton')}
+          </Button>
+        </div>
       )}
       <p className="mt-2 flex items-start gap-1.5 type-meta text-ink-2">
         <Info size={14} aria-hidden="true" className="mt-px shrink-0" />
@@ -924,7 +995,10 @@ const PeopleSection = ({ agent }: { agent: AgentView }) => {
     >
       <ul className="flex flex-col rounded-lg border border-line bg-surface">
         {memberships.map((m) => (
-          <li key={m.target} className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0">
+          <li
+            key={m.target}
+            className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0"
+          >
             <span className="min-w-0 flex-1 type-meta text-ink [overflow-wrap:anywhere]">
               {t('policy.people.everyone', { target: m.target })}
             </span>
@@ -932,7 +1006,10 @@ const PeopleSection = ({ agent }: { agent: AgentView }) => {
           </li>
         ))}
         {grants.map(([who, role]) => (
-          <li key={who} className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0">
+          <li
+            key={who}
+            className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0"
+          >
             <span className="min-w-0 flex-1 truncate type-meta text-ink" title={who}>
               {middleTruncate(who, 28)}
             </span>
@@ -1032,4 +1109,3 @@ const ReviewSheet = ({
     </Sheet>
   );
 };
-

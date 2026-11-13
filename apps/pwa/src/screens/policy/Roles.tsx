@@ -16,7 +16,7 @@ import { CliStrip } from '../../ui/CliStrip.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
 import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { Mono, Section } from './parts.tsx';
-import { type Cell, CELL_WORD, cellFor, DLP_WORD, limitsOf, ROLE_ACTIONS } from './roles.ts';
+import { CELL_WORD, type Cell, cellFor, DLP_WORD, limitsOf, ROLE_ACTIONS } from './roles.ts';
 
 const CellMark = ({ c }: { c: Cell }) => (
   <span
@@ -46,7 +46,11 @@ const RoleTable = ({ roles }: { roles: RoleDef[] }) => (
             {t('policy.roles.action')}
           </th>
           {roles.map((r) => (
-            <th key={r.name} scope="col" className="px-3 py-3 text-left font-mono text-[14px] font-medium text-ink">
+            <th
+              key={r.name}
+              scope="col"
+              className="px-3 py-3 text-left font-mono text-[14px] font-medium text-ink"
+            >
               {r.name}
             </th>
           ))}
@@ -117,13 +121,20 @@ const RoleAccordion = ({ roles }: { roles: RoleDef[] }) => (
               <span className="font-mono text-[15px] font-medium text-ink">{r.name}</span>
               <span className="type-body-sm text-ink-2">{r.description}</span>
             </span>
-            <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-2 group-data-[expanded]:rotate-90" />
+            <CaretRight
+              size={16}
+              aria-hidden="true"
+              className="shrink-0 text-ink-2 group-data-[expanded]:rotate-90"
+            />
           </RACButton>
         </Heading>
         <DisclosurePanel>
           <dl className="px-4 pb-3">
             {ROLE_ACTIONS.map((a) => (
-              <div key={a.id} className="flex min-h-10 items-center justify-between gap-3 border-t border-line py-1.5">
+              <div
+                key={a.id}
+                className="flex min-h-10 items-center justify-between gap-3 border-t border-line py-1.5"
+              >
                 <dt className="type-body-sm text-ink">{a.label}</dt>
                 <dd>
                   <CellMark c={cellFor(r, a)} />
@@ -163,11 +174,17 @@ export const RolesScreen = () => {
     >
       <p className="mb-6 max-w-[62ch] type-body text-ink-2">{t('policy.roles.lead')}</p>
       {roles.error ? (
-        <ErrorState title={t('policy.roles.error')} details={roles.error} onRetry={() => void roles.refetch()}>
+        <ErrorState
+          title={t('policy.roles.error')}
+          details={roles.error}
+          onRetry={() => void roles.refetch()}
+        >
           {roles.error.message}
         </ErrorState>
       ) : roles.isPending ? (
-        showSkeleton ? <Skeleton variant="detail" /> : null
+        showSkeleton ? (
+          <Skeleton variant="detail" />
+        ) : null
       ) : (
         <>
           <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1">
@@ -184,7 +201,10 @@ export const RolesScreen = () => {
             ) : (
               <ul className="flex flex-col rounded-lg border border-line bg-surface">
                 {grants.map(([who, role]) => (
-                  <li key={who} className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0">
+                  <li
+                    key={who}
+                    className="flex min-h-12 items-center gap-3 border-b border-line px-3 py-2 last:border-b-0"
+                  >
                     <span className="min-w-0 flex-1 type-meta text-ink [overflow-wrap:anywhere]">{who}</span>
                     <Mono className="type-meta text-ink-2">{role}</Mono>
                   </li>

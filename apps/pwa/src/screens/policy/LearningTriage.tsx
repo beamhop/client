@@ -72,9 +72,7 @@ const SuggestionSlip = ({
       >
         {({ commit }) => (
           <TicketCard
-            eyebrow={
-              s.kind === 'net.allow' ? t('policy.learn.eyebrowHost') : t('policy.learn.eyebrowPath')
-            }
+            eyebrow={s.kind === 'net.allow' ? t('policy.learn.eyebrowHost') : t('policy.learn.eyebrowPath')}
             tag={
               locked ? (
                 <Badge tone="outline">
@@ -148,7 +146,10 @@ const SuggestionSlip = ({
                   value={scope}
                   onChange={setScope}
                   className="self-start"
-                  options={scopes.map((x) => ({ id: x, label: <span className="font-mono text-[12px]">{x}</span> }))}
+                  options={scopes.map((x) => ({
+                    id: x,
+                    label: <span className="font-mono text-[12px]">{x}</span>,
+                  }))}
                 />
                 {scope.startsWith('*.') && (
                   <p className="type-body-sm text-caution-text">

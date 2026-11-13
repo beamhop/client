@@ -37,16 +37,18 @@ const AgentRow = ({ a, path }: { a: AgentView; path: string }) => {
   const active = path === href;
   return (
     <li>
-      <Link to="/policy/$profile" params={{ profile: name }} aria-current={active ? 'page' : undefined} className={rowClass(active)}>
+      <Link
+        to="/policy/$profile"
+        params={{ profile: name }}
+        aria-current={active ? 'page' : undefined}
+        className={rowClass(active)}
+      >
         <LetterTile code={harnessMonogram(a.config.harness)} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="truncate type-title-3 text-ink">{name}</span>
           {p ? (
             <MetaLine
-              items={[
-                pol.data?.profile ?? '',
-                t('policy.list.hosts', { count: p.net.allow.length }),
-              ]}
+              items={[pol.data?.profile ?? '', t('policy.list.hosts', { count: p.net.allow.length })]}
             />
           ) : (
             <span className="h-4" />
@@ -85,7 +87,11 @@ export const PolicyScreen = () => {
               {t('policy.list.agents')}
             </Eyebrow>
             {agents.error ? (
-              <ErrorState title={t('policy.list.error')} details={agents.error} onRetry={() => void agents.refetch()}>
+              <ErrorState
+                title={t('policy.list.error')}
+                details={agents.error}
+                onRetry={() => void agents.refetch()}
+              >
                 {agents.error.message}
               </ErrorState>
             ) : agents.isPending ? (
@@ -93,7 +99,15 @@ export const PolicyScreen = () => {
                 <Skeleton variant="list" count={4} />
               ) : null
             ) : list.length === 0 ? (
-              <EmptyState title={t('policy.list.emptyTitle')} cli="beamhop agent create" action={<Link to="/agents/new" className="type-label underline">{t('policy.list.emptyAction')}</Link>}>
+              <EmptyState
+                title={t('policy.list.emptyTitle')}
+                cli="beamhop agent create"
+                action={
+                  <Link to="/agents/new" className="type-label underline">
+                    {t('policy.list.emptyAction')}
+                  </Link>
+                }
+              >
                 {t('policy.list.emptyBody')}
               </EmptyState>
             ) : (
@@ -112,12 +126,21 @@ export const PolicyScreen = () => {
                 const active = path === `/policy/${p}`;
                 return (
                   <li key={p}>
-                    <Link to="/policy/$profile" params={{ profile: p }} aria-current={active ? 'page' : undefined} className={rowClass(active)}>
+                    <Link
+                      to="/policy/$profile"
+                      params={{ profile: p }}
+                      aria-current={active ? 'page' : undefined}
+                      className={rowClass(active)}
+                    >
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="font-mono text-[15px] font-medium text-ink">{p}</span>
                         <span className="type-body-sm text-ink-2">{t(`policy.profile.${p}.short`)}</span>
                         <MetaLine
-                          items={[used.length ? t('policy.list.usedBy', { names: used.join(', ') }) : t('policy.list.unused')]}
+                          items={[
+                            used.length
+                              ? t('policy.list.usedBy', { names: used.join(', ') })
+                              : t('policy.list.unused'),
+                          ]}
                         />
                       </span>
                       <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />
@@ -131,7 +154,12 @@ export const PolicyScreen = () => {
             <Eyebrow id="pol-roles">{t('policy.list.rolesTitle')}</Eyebrow>
             <ul className="-mx-2 flex flex-col">
               <li>
-                <Link to="/policy/$profile" params={{ profile: 'roles' }} aria-current={path === '/policy/roles' ? 'page' : undefined} className={rowClass(path === '/policy/roles')}>
+                <Link
+                  to="/policy/$profile"
+                  params={{ profile: 'roles' }}
+                  aria-current={path === '/policy/roles' ? 'page' : undefined}
+                  className={rowClass(path === '/policy/roles')}
+                >
                   <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-sunken text-ink-2">
                     <UsersThree size={16} aria-hidden="true" />
                   </span>
