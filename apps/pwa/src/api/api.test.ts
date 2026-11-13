@@ -7,6 +7,14 @@ import { apiKey, invalidationsFor } from './keys.ts';
 import { createMockTransport } from './mock/index.ts';
 
 const SAMPLE: Partial<Record<MethodName, unknown>> = {
+  'device.pairStatus': { pairingId: 'p1' },
+  'device.pairConfirm': { pairingId: 'p1', accept: true },
+  'identity.ownerImport': { npub: 'npub1x' },
+  'identity.attestationTemplate': { name: 'reviewer' },
+  'identity.attest': { name: 'reviewer', event: {} },
+  'identity.publish': { name: 'reviewer' },
+  'onboarding.hello': { agent: 'reviewer' },
+  'onboarding.helloStatus': { agent: 'reviewer' },
   'agent.get': { name: 'reviewer' },
   'agent.create': { config: { name: 'tester', harness: 'claude' }, preset: 'code-reviewer' },
   'agent.update': { name: 'reviewer', patch: { description: 'x' } },
