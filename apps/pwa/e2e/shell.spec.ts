@@ -111,13 +111,9 @@ test('a browser that was never paired says so and offers pairing', async ({ page
   // No ?mock=1 and nothing saved: a production build has nothing to talk to.
   await page.goto('/');
   await expect(page.locator('#bh-main-content').first()).toBeVisible();
-  await expect(page.getByText("This browser isn't paired with a computer yet.")).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Connect this browser to your computer' })).toBeVisible();
   await expect(page.getByText('Offline.')).toHaveCount(0);
-  await page
-    .getByRole('button', { name: /Connection/ })
-    .first()
-    .click();
-  const sheet = page.getByRole('dialog', { name: 'Connection' });
-  await expect(sheet.getByRole('link', { name: 'Pair this browser' })).toBeVisible();
   await expectAccessible(page);
+  await page.getByRole('link', { name: 'Pair this browser' }).click();
+  await expect(page).toHaveURL(/\/pair/);
 });

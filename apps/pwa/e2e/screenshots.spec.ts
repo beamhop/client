@@ -119,6 +119,8 @@ test('screenshot command palette, shortcut sheet, connection sheet', async ({ pa
     else await page.keyboard.press('Control+k');
     await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
     await page.keyboard.type('re');
+    // On touch devices RAC reveals the modal once the on-screen keyboard settles (<= 600 ms).
+    await page.waitForTimeout(mobile ? 900 : 0);
     await page.waitForTimeout(300);
     await page.screenshot({ path: `screenshots/${info.project.name}/palette${suffix}.png` });
     await page.keyboard.press('Escape');

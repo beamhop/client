@@ -6,6 +6,7 @@
 import { CaretDoubleLeft } from '@phosphor-icons/react';
 import { Outlet, useMatches, useRouterState } from '@tanstack/react-router';
 import { lazy, Suspense, useCallback, useState } from 'react';
+import { useConnection } from '../api/index.ts';
 import { t } from '../i18n/index.ts';
 import { cx } from '../lib/cx.ts';
 import { useExpanded, useWide } from '../lib/media.ts';
@@ -17,6 +18,7 @@ import { Sidebar } from './Sidebar.tsx';
 import { StatusStrip } from './StatusStrip.tsx';
 import { useGlobalShortcuts } from './shortcuts.ts';
 import { TabBar } from './TabBar.tsx';
+import { Unpaired } from './Unpaired.tsx';
 import { UpdatePrompt } from './UpdatePrompt.tsx';
 
 declare module '@tanstack/react-router' {
@@ -86,6 +88,7 @@ export const SkipLink = () => (
 
 export const AppShell = () => {
   const expanded = useExpanded();
+  const conn = useConnection();
   const wide = useWide();
   const matches = useMatches();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -101,6 +104,18 @@ export const AppShell = () => {
     });
   }, []);
   useGlobalShortcuts({ onPanic: openPanic, onToggleSidebar: toggleSidebar });
+
+  // Nothing to talk to yet (not paired, no token): a landing instead of a shell of endless skeletons.
+  if (conn.kind === 'none' && flags.chrome !== 'bare') {
+    return (
+      <>
+        <SkipLink />
+        <Unpaired />
+        <UpdatePrompt />
+        <ShellExtras />
+      </>
+    );
+  }
 
   if (flags.chrome === 'bare') {
     return (
