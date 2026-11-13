@@ -4,6 +4,8 @@ import {
   BeamhopError,
   type ChannelConn,
   type ChannelContext,
+  type ChannelHistoryMessage,
+  type ChannelHistoryQuery,
   type ChannelPlugin,
   type InboundMsg,
   type InboundMsgInput,
@@ -731,6 +733,101 @@ class NostrConnection implements NostrConn {
     this.pool.publish(selfWrap, { relays: this.mainRelays }).catch(() => {});
     this.recordSent(rumor.id, msg.threadId ?? msg.conversation.id);
     return { id: rumor.id };
+  }
+
+  // ───────────────────────────── history ─────────────────────────────
+
+  /**
+   * Earlier messages of a conversation, from the relays: DMs by unwrapping our gift wraps (both sides: ours
+   * carry a self-copy), groups from the group's relay (NIP-29 kinds 9/11), public notes by thread. Oldest first.
+   */
+  async fetchHistory(q: ChannelHistoryQuery): Promise<ChannelHistoryMessage[]> {
+    const limit = Math.max(1, Math.min(q.limit, 500));
+    const beforeMs = q.before ? Date.parse(q.before) : Number.NaN;
+    const sinceMs = q.since ? Date.parse(q.since) : Number.NaN;
+    const until = Number.isNaN(beforeMs) ? undefined : Math.ceil(beforeMs / 1000);
+    const since = Number.isNaN(sinceMs) ? undefined : Math.floor(sinceMs / 1000);
+    const conv = q.conversation.id;
+    const thread = q.threadId && q.threadId !== conv ? q.threadId : undefined;
+    const range = { ...(until !== undefined ? { until } : {}), ...(since !== undefined ? { since } : {}) };
+    const opts = { timeoutMs: 6000 };
+    let items: { id: string; pubkey: string; created_at: number; content: string; tags: string[][] }[] = [];
+    if (q.conversation.kind === 'dm') {
+      const wraps = await this.pool.query(
+        [
+          {
+            kinds: [1059],
+            '#p': [this.pubkey],
+            // Gift wraps carry a randomized created_at up to two days back (NIP-59).
+            ...(since !== undefined ? { since: since - TWO_DAYS } : {}),
+            ...(until !== undefined ? { until: until + TWO_DAYS } : {}),
+            limit: limit * 4,
+          },
+        ],
+        { relays: this.mainRelays, ...opts },
+      );
+      for (const w of wraps) {
+        let r: Rumor;
+        try {
+          r = unwrapGiftWrap(w, this.sk);
+        } catch {
+          continue;
+        }
+        if (r.kind !== 14 && r.kind !== 15) continue;
+        const others = [...new Set([r.pubkey, ...tagValues(r.tags, 'p')])].filter(
+          (p) => p !== this.pubkey && /^[0-9a-f]{64}$/.test(p),
+        );
+        const id =
+          others.length > 1 ? others.map(npubEncode).sort().join(',') : others[0] && npubEncode(others[0]);
+        if (id !== conv) continue;
+        if (thread && r.id !== thread && threadRefs(r.tags).root !== thread) continue;
+        items.push({
+          ...r,
+          content: r.kind === 15 ? '' : r.content,
+          tags: r.kind === 15 ? [['file', '1'], ...r.tags] : r.tags,
+        });
+      }
+    } else if (q.conversation.kind === 'group') {
+      const g = this.groupFor(conv);
+      items = await this.pool.query(
+        thread
+          ? [{ ids: [thread] }, { kinds: [9, 11], '#h': [g.id], '#e': [thread], ...range, limit }]
+          : [{ kinds: [9, 11], '#h': [g.id], ...range, limit }],
+        { relays: [g.relayUrl], ...opts },
+      );
+      items = items.filter((e) => tagValue(e.tags, 'h') === g.id);
+    } else if (thread) {
+      items = await this.pool.query([{ ids: [thread] }, { kinds: [1], '#e': [thread], ...range, limit }], {
+        relays: this.mainRelays,
+        ...opts,
+      });
+    }
+    const seen = new Set<string>();
+    return items
+      .filter((e) => !seen.has(e.id) && seen.add(e.id))
+      .filter(
+        (e) =>
+          (Number.isNaN(beforeMs) || e.created_at * 1000 < beforeMs) &&
+          (Number.isNaN(sinceMs) || e.created_at * 1000 >= sinceMs),
+      )
+      .sort((a, b) => a.created_at - b.created_at)
+      .slice(-limit)
+      .map((e) => {
+        const self = e.pubkey === this.pubkey;
+        const files = extractAttachments(e as Event).length + (tagValue(e.tags, 'file') ? 1 : 0);
+        return {
+          id: e.id,
+          from: {
+            principal: `nostr:${npubEncode(e.pubkey)}`,
+            ...(self ? { displayName: this.self.displayName } : {}),
+            ...(hasHopsTag(e.tags) ? { isBot: true } : {}),
+          },
+          ...(self ? { self } : {}),
+          text: e.content,
+          at: new Date(e.created_at * 1000).toISOString(),
+          ...(files ? { attachments: files } : {}),
+        };
+      });
   }
 
   private groupFor(convId: string) {

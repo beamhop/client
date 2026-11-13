@@ -63,7 +63,36 @@ export interface ChannelConn {
   onRemoved?(handler: (conversationId: string) => void): void;
   send(msg: OutboundMsgInput): Promise<SentMessage>;
   typing?(conversationId: string): Promise<void>;
+  /**
+   * Earlier messages of a conversation or thread as the platform keeps them (also ones not addressed to the
+   * agent), oldest first. Optional: channels without a history API (Telegram's bot API) leave it out and the
+   * agent gets beamhop's own transcript only.
+   */
+  fetchHistory?(q: ChannelHistoryQuery): Promise<ChannelHistoryMessage[]>;
   close(): Promise<void>;
+}
+
+export interface ChannelHistoryQuery {
+  conversation: { kind: 'dm' | 'group' | 'channel' | 'public'; id: string };
+  /** A thread inside the conversation; absent (or equal to the conversation id) for the conversation itself. */
+  threadId?: string;
+  /** Newest messages to return at most. */
+  limit: number;
+  /** Only messages strictly before this ISO time. */
+  before?: string;
+  /** Only messages at or after this ISO time. */
+  since?: string;
+}
+
+export interface ChannelHistoryMessage {
+  id: string;
+  from: { principal: string; displayName?: string; isBot?: boolean };
+  /** Sent by this bot itself (its replies are already in beamhop's own transcript). */
+  self?: boolean;
+  text: string;
+  /** ISO time. */
+  at: string;
+  attachments?: number;
 }
 
 export interface ChannelPlugin {
@@ -111,7 +140,11 @@ export interface SessionSpec {
   env: Record<string, string>;
   /** MCP servers to inject (beamhop's channel/mesh server). */
   mcpServers: { name: string; command: string; args: string[]; env?: Record<string, string> }[];
-  /** Harness-native resume token, if resuming. */
+  /**
+   * Harness-native resume token. The daemon never sets it: every harness start gets the conversation
+   * replayed from beamhop's own transcript instead (a native token only works for the harness and home that
+   * wrote it). Plugins may still use it internally.
+   */
   resume?: string;
 }
 

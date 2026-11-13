@@ -223,6 +223,11 @@ export const AgentConfig = z.object({
   concurrency: z.object({ maxSessions: z.number().int().positive().default(3) }).default({ maxSessions: 3 }),
   budgets: Budget.default({ dailyUsd: 5 }),
   sessionIdleMinutes: z.number().int().positive().default(120),
+  /**
+   * Share of the model's context window filled with the conversation's earlier messages when a harness
+   * starts (a new session, a harness or model switch, a restart). 0 turns the replay off.
+   */
+  historyShare: z.number().min(0).max(0.8).default(0.4),
   approvalTimeoutMinutes: z.number().int().positive().default(15),
   mesh: MeshConfig.default({
     allow: [],

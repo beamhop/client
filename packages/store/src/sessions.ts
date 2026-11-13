@@ -23,8 +23,6 @@ export interface SessionPatch {
   status?: SessionStatus;
   worktree?: { path: string; branch: string } | null;
   harness?: string;
-  /** Harness-native resume token (stored encrypted). null clears it. */
-  resume?: string | null;
   lastActivityAt?: string;
 }
 
@@ -187,18 +185,39 @@ export class SessionRepo {
       set('worktree_branch', patch.worktree?.branch ?? null);
     }
     if (patch.harness !== undefined) set('harness', patch.harness);
-    if (patch.resume !== undefined)
-      set('resume_enc', this.cipher.encryptOpt('sessions.resume', patch.resume));
     set('last_activity_at', patch.lastActivityAt ?? this.now().toISOString());
     const r = this.db.run(`UPDATE sessions SET ${sets.join(', ')} WHERE id = ?`, ...params, id);
     if (r.changes === 0) throw new BeamhopError('not_found', `session ${id} not found`);
     return this.get(id)!;
   }
 
-  /** Harness resume token (decrypted). */
-  resumeToken(id: string): string | undefined {
-    const r = this.db.get<{ resume_enc: string | null }>('SELECT resume_enc FROM sessions WHERE id = ?', id);
-    return this.cipher.decryptOpt('sessions.resume', r?.resume_enc);
+  /**
+   * Transcript of a whole conversation thread across all its sessions (a harness switch, an idle timeout
+   * or `/new` in a thread starts a new session; the conversation goes on), oldest first. `since` drops
+   * events before a context reset; `limit` keeps the newest events.
+   */
+  threadEvents(
+    key: { agent: string; channel: string; conversationId: string; threadId: string },
+    opts: { since?: string; excludeSession?: string; limit?: number } = {},
+  ): (SessionEventView & { sessionId: string; harness?: string })[] {
+    const rows = this.db.all(
+      `SELECT e.*, s.harness AS s_harness FROM session_events e JOIN sessions s ON s.id = e.session_id
+        WHERE s.agent = ? AND s.channel = ? AND s.conversation_id = ? AND s.thread_id = ? AND e.at >= ?
+          AND e.kind IN ('user', 'assistant', 'tool_call', 'tool_result', 'error')
+        ORDER BY e.at DESC, e.session_id DESC, e.seq DESC LIMIT ?`,
+      key.agent,
+      key.channel,
+      key.conversationId,
+      key.threadId,
+      opts.since ?? '',
+      opts.limit ?? 2000,
+    );
+    return rows.reverse().map((r) => {
+      const ev = this.eventView(r) as SessionEventView & { sessionId: string; harness?: string };
+      ev.sessionId = r.session_id as string;
+      if (r.s_harness) ev.harness = r.s_harness as string;
+      return ev;
+    });
   }
 
   addUsage(id: string, u: { inputTokens?: number; outputTokens?: number; usd?: number }): void {

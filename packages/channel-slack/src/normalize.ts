@@ -55,7 +55,13 @@ export interface SlackSelf {
 }
 
 /** Message subtypes that carry real user content; everything else (edits, joins, deletes…) is ignored. */
-const CONTENT_SUBTYPES = new Set([undefined, 'file_share', 'thread_broadcast', 'bot_message', 'me_message']);
+export const CONTENT_SUBTYPES = new Set([
+  undefined,
+  'file_share',
+  'thread_broadcast',
+  'bot_message',
+  'me_message',
+]);
 
 export const MESH_EVENT_TYPE = 'beamhop_mesh';
 

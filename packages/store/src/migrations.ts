@@ -168,4 +168,11 @@ CREATE INDEX dedupe_seen ON dedupe(seen_at);
     // Failed pairing guesses are counted against every live code (security review wave B, STORE-1).
     sql: 'ALTER TABLE pairing_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;',
   },
+  {
+    version: 3,
+    name: 'drop-harness-resume',
+    // Conversations are replayed from beamhop's own transcript at every harness start; a harness-native
+    // resume token only worked for the harness that wrote it and broke every harness or model switch.
+    sql: 'UPDATE sessions SET resume_enc = NULL;',
+  },
 ];

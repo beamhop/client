@@ -6,6 +6,7 @@ export * from './events.ts';
 export * from './ids.ts';
 export * from './logger.ts';
 export * from './messages.ts';
+export * from './models.ts';
 export * from './node-runtime.ts';
 export * from './paths.ts';
 export * from './plugins.ts';

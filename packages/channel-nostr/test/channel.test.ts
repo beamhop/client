@@ -538,3 +538,43 @@ describe('connection', () => {
 });
 
 export type { Event };
+
+describe('history', () => {
+  it('reads a DM conversation from gift wraps (both directions) and a group from its relay, oldest first', async () => {
+    const conn = await connect({ relays: [A.url], groups: [{ relay: G.url, id: 'g1' }] });
+    await subsReady(A);
+    const t0 = now() - 100;
+    A.inject(dmToAgent('first', [], t0).wrap, true);
+    A.inject(dmToAgent('second', [], t0 + 10).wrap, true);
+    // a DM from someone else is another conversation
+    const other = generateAgentKey();
+    const foreign = createRumor(
+      { kind: 14, content: 'not yours', tags: [['p', agent.pubkey]], created_at: t0 + 5 },
+      other.secretKey,
+    );
+    A.inject(createWrap(createSeal(foreign, other.secretKey, agent.pubkey), agent.pubkey), true);
+    const sent = await conn.send({ conversation: { kind: 'dm', id: user.npub }, markdown: 'my reply' });
+    await waitFor(() => unwrapFor(A, agent).find((r) => r.id === sent.id));
+
+    const dm = await conn.fetchHistory!({ conversation: { kind: 'dm', id: user.npub }, limit: 10 });
+    expect(dm.map((m) => [m.text, !!m.self])).toEqual([
+      ['first', false],
+      ['second', false],
+      ['my reply', true],
+    ]);
+    expect(dm[0]!.from.principal).toBe(`nostr:${user.npub}`);
+
+    const convId = groupConversationId(G.url, 'g1');
+    G.inject(
+      finalizeEvent({ kind: 9, created_at: t0, tags: [['h', 'g1']], content: 'group hello' }, user.secretKey),
+    );
+    G.inject(
+      finalizeEvent(
+        { kind: 9, created_at: t0 + 1, tags: [['h', 'g2']], content: 'elsewhere' },
+        user.secretKey,
+      ),
+    );
+    const grp = await conn.fetchHistory!({ conversation: { kind: 'group', id: convId }, limit: 10 });
+    expect(grp.map((m) => m.text)).toEqual(['group hello']);
+  });
+});

@@ -144,8 +144,18 @@ requires N of M; one person's linked accounts count once. Every decision lands i
 
 ## Sessions
 
-- Each DM or thread maps to a resumable harness session; it ends after `sessionIdleMinutes` (default 120)
-  or on `/new`.
+- beamhop owns the conversation, not the harness. Each DM or thread keeps its transcript in beamhop, and every
+  time a harness starts (a new session, a harness or model switch, a changed mount or sandbox, an idle
+  timeout, a daemon restart or a move to another host) its first prompt carries the conversation so far.
+  No harness-native resume token is used, so switching harness or model never breaks a conversation.
+- The replay holds beamhop's transcript (tool calls as one line each) plus, on Slack, Discord and Nostr, the
+  channel's own messages the agent wasn't addressed in. It fills up to `historyShare` (default 0.4) of the
+  model's context window, newest first; a thread's opening message is always kept. `historyShare: 0` turns
+  it off.
+- A thread keeps its whole history. In a DM or a channel's main line, `/new` starts a clean context and
+  `/resume` brings it back.
+- A harness process ends after `sessionIdleMinutes` (default 120) or on `/new`; the conversation goes on.
+  Setting changes take effect at the next message, never mid-turn.
 - Up to `concurrency.maxSessions` (default 3) run in parallel; more wait in a queue.
 - A read-write mount that is a git repo gets one **git worktree per session** on branch
   `beamhop/<thread>`; a read-write mount that isn't git is shared with a write lock (unless

@@ -626,8 +626,14 @@ export class Router {
       case 'help':
         return say(helpText(role));
       case 'new': {
+        // A DM or channel starts a clean context; a thread keeps its history (start a new thread instead).
+        const cleared = d.sessions.resetContext(key);
         await d.sessions.endThread(key, 'new session requested');
-        return say('🆕 Started a new session. The next message begins fresh.');
+        return say(
+          cleared
+            ? '🆕 Started a new session. The next message begins fresh.'
+            : '🆕 Restarted the agent for this thread. Threads keep their history; start a new thread for a clean slate.',
+        );
       }
       case 'stop': {
         const stopped = await d.sessions.stopThread(key);

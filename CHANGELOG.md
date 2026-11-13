@@ -13,8 +13,17 @@ All notable changes to beamhop are documented here. The format follows
   $5/day budget, and you set the rest on its own screens. A strict agent's folders are locked read-only,
   since the strict sandbox never writes.
 
+- **Conversations survive any agent change.** Changing an agent's harness, model, mounts, sandbox or
+  secrets, an idle timeout, a daemon restart or a move to another host no longer loses the conversation:
+  every harness start gets the conversation so far in its first prompt, from beamhop's own transcript plus
+  the channel's history on Slack, Discord and Nostr (other people's messages included). It is sized to
+  `historyShare` of the model's context window (default 0.4). A thread always keeps its history; in a DM or
+  channel `/new` clears it and `/resume` brings it back. Setting changes apply at the next message.
+
 ### Fixed
 
+- **"No session found" after a harness switch.** beamhop no longer hands a harness the resume token another
+  harness wrote (pi exited with `No session found matching '…'`); stored resume tokens are cleared.
 - **ACP harnesses and "Harness default".** An agent left on the harness's default model no longer asks
   the ACP agent for a model named `default` (and logs "model not offered" on every session); the
   agent's own default is kept.

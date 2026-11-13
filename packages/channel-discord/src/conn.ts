@@ -7,6 +7,8 @@ import {
   type Button,
   type ButtonPress,
   type ChannelConn,
+  type ChannelHistoryMessage,
+  type ChannelHistoryQuery,
   type InboundMsg,
   type Logger,
   OutboundMsg,
@@ -24,6 +26,8 @@ import {
   type Message,
   type MessageCreateOptions,
   type MessageEditOptions,
+  MessageType,
+  Routes,
 } from 'discord.js';
 import { markdownToDiscord } from './format.ts';
 import { type DiscordSelf, normalizeDiscordMessage } from './normalize.ts';
@@ -56,6 +60,25 @@ type SendableLike = {
   id: string;
   send(options: MessageCreateOptions): Promise<Message>;
   sendTyping(): Promise<void>;
+};
+
+/** The fields of a REST message object we read. */
+interface RawDiscordMessage {
+  id: string;
+  type: number;
+  content?: string;
+  timestamp: string;
+  author: { id: string; username?: string; global_name?: string | null; bot?: boolean };
+  member?: { nick?: string | null };
+  webhook_id?: string | null;
+  attachments?: unknown[];
+}
+
+const DISCORD_EPOCH = 1_420_070_400_000n;
+/** The smallest snowflake at an ISO time (for `before`). */
+export const isoToSnowflake = (iso: string): string | undefined => {
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : ((BigInt(t) - DISCORD_EPOCH) << 22n).toString();
 };
 
 export interface DiscordConnDeps {
@@ -258,6 +281,54 @@ export class DiscordConn implements ChannelConn {
       }
     }
     return out;
+  }
+
+  /**
+   * Earlier messages of a channel, DM or thread (threads are channels): GET /channels/{id}/messages, newest
+   * first in pages of 100, returned oldest first.
+   * https://discord.com/developers/docs/resources/message#get-channel-messages
+   */
+  async fetchHistory(q: ChannelHistoryQuery): Promise<ChannelHistoryMessage[]> {
+    const channelId = q.threadId && q.threadId !== q.conversation.id ? q.threadId : q.conversation.id;
+    const limit = Math.max(1, Math.min(q.limit, 500));
+    const since = q.since ? Date.parse(q.since) : Number.NaN;
+    let before = q.before ? isoToSnowflake(q.before) : undefined;
+    const raw: RawDiscordMessage[] = [];
+    while (raw.length < limit) {
+      const query = new URLSearchParams({ limit: String(Math.min(100, limit - raw.length)) });
+      if (before) query.set('before', before);
+      const page = (await this.d.client.rest.get(Routes.channelMessages(channelId), {
+        query,
+      })) as RawDiscordMessage[];
+      if (!Array.isArray(page) || page.length === 0) break;
+      raw.push(...page);
+      before = page.at(-1)!.id;
+      if (!Number.isNaN(since) && Date.parse(page.at(-1)!.timestamp) < since) break;
+      if (page.length < 100) break;
+    }
+    const me = this.d.self;
+    const mention = new RegExp(`<@!?${me.id}>`, 'g');
+    return raw
+      .filter((m) => (m.type === MessageType.Default || m.type === MessageType.Reply) && m.author?.id)
+      .filter((m) => Number.isNaN(since) || Date.parse(m.timestamp) >= since)
+      .reverse()
+      .map((m) => {
+        const self = m.author.id === me.id;
+        const isBot = !!m.author.bot || m.webhook_id != null;
+        const name = m.member?.nick ?? m.author.global_name ?? m.author.username;
+        return {
+          id: m.id,
+          from: {
+            principal: `discord:${m.author.id}`,
+            ...(name ? { displayName: name } : {}),
+            ...(isBot ? { isBot } : {}),
+          },
+          ...(self ? { self } : {}),
+          text: (m.content ?? '').replace(mention, `@${me.name}`).trim(),
+          at: new Date(Date.parse(m.timestamp)).toISOString(),
+          ...(m.attachments?.length ? { attachments: m.attachments.length } : {}),
+        };
+      });
   }
 
   async typing(conversationId: string): Promise<void> {

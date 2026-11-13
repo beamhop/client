@@ -6,6 +6,8 @@ import {
   type Button,
   type ButtonPress,
   type ChannelConn,
+  type ChannelHistoryMessage,
+  type ChannelHistoryQuery,
   type InboundMsg,
   type Logger,
   OutboundMsg,
@@ -13,8 +15,9 @@ import {
   type SentMessage,
 } from '@beamhop/core';
 import type { FetchLike, SlackApi } from './api.ts';
-import { markdownToMrkdwn } from './mrkdwn.ts';
+import { decodeSlackEntities, markdownToMrkdwn } from './mrkdwn.ts';
 import {
+  CONTENT_SUBTYPES,
   MESH_EVENT_TYPE,
   normalizeSlackMessage,
   type SlackEventCallback,
@@ -260,6 +263,69 @@ export class SlackConn implements ChannelConn {
       this.d.log.debug('slack users.info failed', { err: String(err) });
       return undefined;
     }
+  }
+
+  // ───────────── history ─────────────
+
+  /**
+   * Earlier messages: `conversations.replies` for a thread, `conversations.history` for a DM or channel
+   * (scopes `*:history`, already in the manifest). Oldest first.
+   */
+  async fetchHistory(q: ChannelHistoryQuery): Promise<ChannelHistoryMessage[]> {
+    const channel = q.conversation.id;
+    const thread = q.threadId && q.threadId !== channel ? q.threadId : undefined;
+    const toTs = (iso: string | undefined) => {
+      const t = iso ? Date.parse(iso) : Number.NaN;
+      return Number.isNaN(t) ? undefined : (t / 1000).toFixed(6);
+    };
+    const latest = toTs(q.before);
+    const oldest = toTs(q.since);
+    const limit = Math.max(1, Math.min(q.limit, 1000));
+    const r = await this.d.api.call<{ ok: true; messages?: SlackMessageEvent[] }>(
+      thread ? 'conversations.replies' : 'conversations.history',
+      {
+        channel,
+        ...(thread ? { ts: thread } : {}),
+        limit,
+        ...(latest ? { latest } : {}),
+        ...(oldest ? { oldest } : {}),
+        inclusive: false,
+      },
+    );
+    // `history` is newest first, `replies` oldest first (starting with the thread's root).
+    const msgs = (r.messages ?? []).filter((m) => (!latest || m.ts < latest) && (!oldest || m.ts >= oldest));
+    msgs.sort((a, b) => Number(a.ts) - Number(b.ts));
+    const out: ChannelHistoryMessage[] = [];
+    const me = this.d.self;
+    for (const m of msgs.slice(-limit)) {
+      if (!CONTENT_SUBTYPES.has(m.subtype)) continue;
+      const sender = m.user ?? m.bot_profile?.user_id ?? m.bot_id;
+      if (!sender) continue;
+      const self = sender === me.userId || (me.botId !== undefined && m.bot_id === me.botId);
+      const isBot = m.bot_id !== undefined || m.subtype === 'bot_message';
+      const name = self
+        ? me.name
+        : (m.bot_profile?.name ?? m.username ?? (isBot ? undefined : await this.lookupName(sender)));
+      const text = decodeSlackEntities(
+        (typeof m.text === 'string' ? m.text : '').replace(
+          new RegExp(`<@${me.userId}(\\|[^>]*)?>`, 'g'),
+          `@${me.name}`,
+        ),
+      ).trim();
+      out.push({
+        id: m.ts,
+        from: {
+          principal: `slack:${m.user_team ?? m.team ?? me.teamId}/${sender}`,
+          ...(name ? { displayName: name } : {}),
+          ...(isBot ? { isBot } : {}),
+        },
+        ...(self ? { self } : {}),
+        text,
+        at: new Date(Number(m.ts) * 1000).toISOString(),
+        ...(Array.isArray(m.files) && m.files.length ? { attachments: m.files.length } : {}),
+      });
+    }
+    return out;
   }
 
   // ───────────── outbound ─────────────

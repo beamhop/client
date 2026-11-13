@@ -172,12 +172,8 @@ describe('sessions', () => {
     newSession({ threadId: 't2', status: 'queued' });
     expect(store.sessions.countActive('reviewer')).toBe(1);
   });
-  it('encrypts title, resume token and accumulates usage', () => {
+  it('encrypts title and accumulates usage', () => {
     const s = newSession({ title: 'TOP-SECRET-TITLE' });
-    store.sessions.update(s.id, { resume: 'resume-token-123' });
-    expect(store.sessions.resumeToken(s.id)).toBe('resume-token-123');
-    store.sessions.update(s.id, { resume: null });
-    expect(store.sessions.resumeToken(s.id)).toBeUndefined();
     store.sessions.addUsage(s.id, { inputTokens: 10, outputTokens: 5, usd: 0.01 });
     store.sessions.addUsage(s.id, { inputTokens: 1, outputTokens: -5, usd: 0.02 });
     expect(store.sessions.get(s.id)!.usage).toEqual({ inputTokens: 11, outputTokens: 5, usd: 0.03 });

@@ -684,3 +684,48 @@ describe('markdownToDiscord', () => {
     expect(markdownToDiscord('```\n#### not a heading\n```')).toBe('```\n#### not a heading\n```');
   });
 });
+
+describe('discord history', () => {
+  it('reads a thread channel newest-first and returns it oldest first, marking its own messages', async () => {
+    const { fake, conn } = await setup();
+    const json = (d: unknown) =>
+      new Response(JSON.stringify(d), { headers: { 'content-type': 'application/json' } });
+    fake.override('GET', new RegExp(`^/channels/${h.THREAD}/messages$`), () =>
+      json([
+        h.messagePayload({
+          id: '3',
+          channel_id: h.THREAD,
+          author: h.botUser,
+          member: undefined,
+          content: 'on it',
+          timestamp: '2026-11-13T00:00:03.000000+00:00',
+        }),
+        h.messagePayload({
+          id: '2',
+          channel_id: h.THREAD,
+          type: 7,
+          content: 'joined',
+          timestamp: '2026-11-13T00:00:02.000000+00:00',
+        }),
+        h.messagePayload({
+          id: '1',
+          channel_id: h.THREAD,
+          content: `<@${h.BOT_ID}> help`,
+          timestamp: '2026-11-13T00:00:01.000000+00:00',
+        }),
+      ]),
+    );
+    const out = await conn.fetchHistory!({
+      conversation: { kind: 'channel', id: h.GENERAL },
+      threadId: h.THREAD,
+      limit: 50,
+      before: '2026-11-13T00:01:00Z',
+    });
+    expect(out.map((m) => [m.id, m.text, !!m.self])).toEqual([
+      ['1', '@beamhop-agent help', false],
+      ['3', 'on it', true],
+    ]);
+    expect(out[0]!.from).toMatchObject({ principal: `discord:${h.ALICE}`, displayName: 'Ally' });
+    expect(fake.req('GET', new RegExp(`^/channels/${h.THREAD}/messages$`))).toHaveLength(1);
+  });
+});

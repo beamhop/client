@@ -8,6 +8,8 @@ import {
   type ButtonPress,
   type ChannelConn,
   type ChannelContext,
+  type ChannelHistoryMessage,
+  type ChannelHistoryQuery,
   type ChannelPlugin,
   type HarnessEvent,
   type HarnessPlugin,
@@ -54,6 +56,18 @@ export class FakeConn implements ChannelConn {
   readonly typings: string[] = [];
   readonly queue = new AsyncQueue<InboundMsg>();
   closed = false;
+  /** The platform's own history (tests set it to enable `fetchHistory`). */
+  history: ChannelHistoryMessage[] | undefined;
+  readonly historyQueries: ChannelHistoryQuery[] = [];
+  fetchHistory = async (q: ChannelHistoryQuery): Promise<ChannelHistoryMessage[]> => {
+    this.historyQueries.push(q);
+    if (!this.history) throw new Error('no history api');
+    const inThread = (m: ChannelHistoryMessage & { threadId?: string }) =>
+      q.threadId && q.threadId !== q.conversation.id ? m.threadId === q.threadId : !m.threadId;
+    return this.history
+      .filter((m) => inThread(m) && (!q.before || m.at < q.before) && (!q.since || m.at >= q.since))
+      .slice(-q.limit);
+  };
   private n = 0;
   private buttonHandler: ((p: ButtonPress) => void) | undefined;
   private removedHandler: ((c: string) => void) | undefined;
@@ -202,8 +216,11 @@ export class FakeHarnessSession implements HarnessSession {
 
 export type Script = (s: FakeHarnessSession, prompt: string) => AsyncIterable<HarnessEvent>;
 
-/** Body of the user message, without the beamhop preamble. */
-export const body = (prompt: string): string => prompt.split('\n\n').slice(1).join('\n\n') || prompt;
+/** Body of the user message, without the replayed history and the beamhop preamble. */
+export const body = (prompt: string): string => {
+  const p = prompt.replace(/^<conversation-history[\s\S]*?<\/conversation-history>\n\n/, '');
+  return p.split('\n\n').slice(1).join('\n\n') || p;
+};
 
 export const defaultScript = (secret = 'unset-secret'): Script =>
   async function* (s, prompt) {

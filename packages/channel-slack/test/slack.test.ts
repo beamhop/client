@@ -580,3 +580,76 @@ describe('slack rate limiting', () => {
     expect(JSON.stringify(err)).not.toContain('xoxb-secret-value');
   });
 });
+
+describe('slack history', () => {
+  it('reads a thread with conversations.replies and a DM with conversations.history, oldest first', async () => {
+    const http = new fx.FakeSlackHttp()
+      .on('conversations.replies', () => ({
+        ok: true,
+        messages: [
+          {
+            type: 'message',
+            channel: 'C1',
+            ts: '1700000000.000100',
+            user: fx.ALICE,
+            text: `<@${fx.BOT_USER}> look &amp; see`,
+          },
+          {
+            type: 'message',
+            channel: 'C1',
+            ts: '1700000001.000100',
+            user: fx.BOT_USER,
+            bot_id: fx.BOT_ID,
+            text: 'on it',
+          },
+          {
+            type: 'message',
+            subtype: 'channel_join',
+            channel: 'C1',
+            ts: '1700000002.000100',
+            user: 'U0BOB0001',
+            text: 'joined',
+          },
+          {
+            type: 'message',
+            channel: 'C1',
+            ts: '1700000003.000100',
+            user: 'U0BOB0001',
+            text: 'later',
+            files: [{ id: 'F1' }],
+          },
+        ],
+      }))
+      .on('conversations.history', () => ({
+        ok: true,
+        messages: [
+          { type: 'message', channel: 'D1', ts: '1700000005.000000', user: fx.ALICE, text: 'second' },
+          { type: 'message', channel: 'D1', ts: '1700000004.000000', user: fx.ALICE, text: 'first' },
+        ],
+      }));
+    const { conn } = await setup({}, http);
+    const thread = await conn.fetchHistory!({
+      conversation: { kind: 'channel', id: 'C1' },
+      threadId: '1700000000.000100',
+      limit: 50,
+      before: '2023-11-14T22:13:23.000Z',
+    });
+    expect(thread.map((m) => [m.id, m.text, !!m.self])).toEqual([
+      ['1700000000.000100', '@beamhop_agent look & see', false],
+      ['1700000001.000100', 'on it', true],
+    ]);
+    expect(thread[0]!.from).toMatchObject({
+      principal: `slack:${fx.TEAM}/${fx.ALICE}`,
+      displayName: 'alice',
+    });
+    const replies = http.calls.find((c) => c.method === 'conversations.replies')!;
+    expect(replies.args).toMatchObject({
+      channel: 'C1',
+      ts: '1700000000.000100',
+      latest: '1700000003.000000',
+    });
+
+    const dm = await conn.fetchHistory!({ conversation: { kind: 'dm', id: 'D1' }, limit: 10 });
+    expect(dm.map((m) => m.text)).toEqual(['first', 'second']);
+  });
+});

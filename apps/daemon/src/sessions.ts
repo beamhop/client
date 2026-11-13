@@ -16,6 +16,7 @@ import {
   type InboundMsg,
   type Membership,
   type Mount,
+  modelContextWindow,
   newId,
   type PermissionMode,
   paths,
@@ -29,6 +30,7 @@ import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { sandboxGitWritePaths } from './git-ops.ts';
 import { activeMethod, loginProblem, sessionCredentials } from './harness-auth.ts';
+import { buildReplay, historyBudget } from './history.ts';
 import { decodeBlob, HomeLoginSync, homeEnv, homeOf } from './home-login.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
@@ -37,6 +39,21 @@ import { errMsg, Mutex, personBudgetKey, Semaphore, slugify, withTimeout } from 
 import { addWorktree, gitTopLevel, type Worktree } from './worktree.ts';
 
 const CONV_KIND_NS = 'conv-kind';
+/** Per thread: where the agent's context starts (`/new` in a DM or channel moves it; threads never reset). */
+const CONV_CONTEXT_NS = 'conv-context';
+/** Per thread: the harness and model the conversation last ran on (named to the next one after a switch). */
+const CONV_RUNTIME_NS = 'conv-runtime';
+const HISTORY_FETCH_MS = 5000;
+
+interface ContextMark {
+  since: string;
+  /** The mark before the last `/new`, for `/resume`. */
+  prev?: string;
+}
+
+/** A real thread inside a conversation (not the conversation's own main line, e.g. a DM). */
+export const isThread = (k: { conversationId: string; threadId: string }): boolean =>
+  k.threadId !== k.conversationId;
 const CONV_KINDS = ['dm', 'group', 'channel', 'public'] as const;
 
 export interface Turn {
@@ -87,7 +104,19 @@ interface Runtime {
   offViolation?: () => void;
   /** Subscription login copy in the session (saved back to the vault on token refresh). */
   homeSync?: HomeLoginSync;
+  /** The agent settings this runtime was built from; a change restarts it at the next message. */
+  fingerprint: string;
+  /** Fresh harness: its first prompt carries the conversation's history. */
+  replayPending: boolean;
 }
+
+/**
+ * Agent settings that shape a runtime beyond harness/model/mode/profile (those are compared on their own):
+ * mounts, the sandbox policy and the secrets handed to the harness. Any change means a new harness process
+ * at the next message, with the conversation replayed.
+ */
+export const runtimeFingerprint = (agent: AgentConfig): string =>
+  JSON.stringify({ mounts: agent.mounts, sandbox: agent.sandbox, secretEnv: agent.secretEnv ?? [] });
 
 export interface ToolLogEntry {
   id: string;
@@ -399,6 +428,7 @@ export class SessionManager {
       rt &&
       rt.harnessId === harnessId &&
       rt.model === model &&
+      rt.fingerprint === runtimeFingerprint(agent) &&
       PROFILE_RANK[rt.profile] <= PROFILE_RANK[profile] &&
       modeRank(rt.mode) <= modeRank(mode)
     )
@@ -570,7 +600,6 @@ export class SessionManager {
         });
       });
       const cwd = mounts.find((m) => m.mode === 'rw')?.path ?? mounts[0]?.path ?? live.dir;
-      const resume = d.store.sessions.resumeToken(live.id);
       const harness = await plugin.start(
         {
           sessionId: live.id,
@@ -581,7 +610,6 @@ export class SessionManager {
           permissionMode: mode,
           env: { ...env },
           mcpServers: [mcp],
-          ...(resume ? { resume } : {}),
         },
         sandbox,
       );
@@ -597,6 +625,8 @@ export class SessionManager {
         mounts,
         deny: policy.fs.deny,
         own: policy.fs.own,
+        fingerprint: runtimeFingerprint(agent),
+        replayPending: true,
         ...(proxyToken ? { proxyToken } : {}),
         ...(offViolation ? { offViolation } : {}),
         ...(homeSync ? { homeSync } : {}),
@@ -787,8 +817,20 @@ export class SessionManager {
         locks.push(await mu.acquire());
       }
       const files = await this.download(live, conn, turn);
-      const prompt = turn.msg ? turn.promptFor({ ...turn.msg, attachments: files }) : turn.promptFor();
-      this.event(live.id, { kind: 'user', from: turn.from, text: turn.text });
+      let prompt = turn.msg ? turn.promptFor({ ...turn.msg, attachments: files }) : turn.promptFor();
+      if (rt.replayPending) {
+        rt.replayPending = false;
+        const history = await this.replay(live, agent, rt, turn).catch((e) => {
+          d.log.warn('conversation history not replayed', { session: live.id, error: errMsg(e) });
+          return undefined;
+        });
+        if (history) prompt = `${history}\n\n${prompt}`;
+      }
+      this.event(live.id, {
+        kind: 'user',
+        from: { ...turn.from, ...(turn.msg?.id ? { msgId: turn.msg.id } : {}) },
+        text: turn.text,
+      });
       streamer?.start();
       if (minutes) {
         const left = Date.parse(rec.startedAt) + minutes * 60_000 - d.now();
@@ -895,7 +937,6 @@ export class SessionManager {
             }
             break;
           case 'done':
-            if (ev.resume) d.store.sessions.update(live.id, { resume: ev.resume });
             break;
         }
       }
@@ -933,6 +974,98 @@ export class SessionManager {
       void Promise.allSettled(pendingPerms);
       turn.done?.({ ok: !error, text, ...(error ? { error } : {}) });
     }
+  }
+
+  // ───────────────────────────── conversation history ─────────────────────────────
+
+  /** Where this thread's context starts (`/new` in a DM or channel); threads keep everything. */
+  contextSince(key: ThreadKey): string | undefined {
+    if (isThread(key)) return undefined;
+    return this.d.store.kv.get<ContextMark>(CONV_CONTEXT_NS, threadKeyStr(key))?.since;
+  }
+
+  /**
+   * `/new` in a DM or channel: the agent forgets what came before (the transcript stays for the owner).
+   * Threads never reset. Returns false for a thread.
+   */
+  resetContext(key: ThreadKey): boolean {
+    if (isThread(key)) return false;
+    const k = threadKeyStr(key);
+    const cur = this.d.store.kv.get<ContextMark>(CONV_CONTEXT_NS, k);
+    const mark: ContextMark = { since: new Date(this.d.now()).toISOString() };
+    if (cur?.since) mark.prev = cur.since;
+    this.d.store.kv.set(CONV_CONTEXT_NS, k, mark);
+    return true;
+  }
+
+  /** `/resume` in a DM or channel: bring back the context the last `/new` cleared. */
+  private restoreContext(key: ThreadKey): void {
+    if (isThread(key)) return;
+    const k = threadKeyStr(key);
+    const cur = this.d.store.kv.get<ContextMark>(CONV_CONTEXT_NS, k);
+    if (!cur) return;
+    if (cur.prev) this.d.store.kv.set(CONV_CONTEXT_NS, k, { since: cur.prev });
+    else this.d.store.kv.delete(CONV_CONTEXT_NS, k);
+  }
+
+  /** Earlier messages from the channel itself (also ones not addressed to the agent), when it can say. */
+  private async channelHistory(live: LiveSession, before: string, since: string | undefined) {
+    const conn = live.conn();
+    if (!conn?.fetchHistory) return [];
+    const conversation = { kind: live.conversationKind, id: live.key.conversationId };
+    const fetch = (q: Parameters<NonNullable<ChannelConn['fetchHistory']>>[0]) =>
+      withTimeout(conn.fetchHistory!(q), HISTORY_FETCH_MS).then((r) => r ?? []);
+    try {
+      if (!isThread(live.key))
+        return await fetch({
+          conversation,
+          limit: live.conversationKind === 'dm' ? 100 : 50,
+          before,
+          ...(since ? { since } : {}),
+        });
+      const thread = await fetch({ conversation, threadId: live.key.threadId, limit: 200, before });
+      if (live.conversationKind === 'dm') return thread;
+      // What the channel was talking about when the thread started ("what do you think of the above?").
+      const start = thread[0]?.at ?? before;
+      const around = await fetch({ conversation, limit: 15, before: start });
+      return [...around, ...thread];
+    } catch (e) {
+      this.d.log.warn('channel history unavailable', { session: live.id, error: errMsg(e) });
+      return [];
+    }
+  }
+
+  /** The history block for a fresh harness's first prompt (undefined when there is nothing earlier). */
+  private async replay(
+    live: LiveSession,
+    agent: AgentConfig,
+    rt: Runtime,
+    turn: Turn,
+  ): Promise<string | undefined> {
+    const d = this.d;
+    const k = threadKeyStr(live.key);
+    const before = d.store.kv.get<{ harness?: string; model?: string }>(CONV_RUNTIME_NS, k);
+    d.store.kv.set(CONV_RUNTIME_NS, k, { harness: rt.harnessId, model: rt.model });
+    const share = agent.historyShare ?? 0.4;
+    if (share <= 0) return undefined;
+    const since = this.contextSince(live.key);
+    const events = d.store.sessions.threadEvents(live.key, since ? { since } : {});
+    const now = turn.msg?.receivedAt ?? new Date(d.now()).toISOString();
+    const channel = await this.channelHistory(live, now, since);
+    const out = buildReplay({
+      events,
+      channel,
+      budgetTokens: historyBudget(modelContextWindow(rt.model), share),
+      where: { channel: live.key.channel, kind: live.conversationKind, thread: isThread(live.key) },
+      now: { harness: rt.harnessId, model: rt.model },
+      ...(before ? { before } : {}),
+    });
+    if (!out) return undefined;
+    this.event(live.id, {
+      kind: 'system',
+      text: `Conversation history given to ${rt.harnessId}: ${out.entries} message${out.entries === 1 ? '' : 's'}${out.omitted ? ` (${out.omitted} older left out)` : ''}.`,
+    });
+    return out.text;
   }
 
   // ───────────────────────────── usage & budgets ─────────────────────────────
@@ -1123,8 +1256,12 @@ export class SessionManager {
         await this.end(s, 'membership revoked', { hard: true });
   }
 
-  /** /resume: reactivate the latest ended session of the thread (its harness resume token is reused). */
+  /**
+   * /resume: reactivate the latest session of the thread and, in a DM or channel, bring back the context
+   * the last `/new` cleared (the next harness start replays it).
+   */
   resumeThread(key: ThreadKey): string | undefined {
+    this.restoreContext(key);
     if (this.findForThread(key)) return this.findForThread(key)?.id;
     const rec = this.d.store.sessions.findLatest(key.agent, key.channel, key.conversationId, key.threadId);
     if (!rec) return undefined;

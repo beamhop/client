@@ -13,7 +13,7 @@ import type { MeshProvider } from '../src/mesh.ts';
 import { loadBuiltinPlugins, PluginRegistry } from '../src/registry.ts';
 import { meshListIncludes } from '../src/router.ts';
 import { personBudgetKey } from '../src/util.ts';
-import { makeEnv, ownerAlice, setupBot, sleep, type TestEnv, tmpHome, until } from './helpers.ts';
+import { body, makeEnv, ownerAlice, setupBot, sleep, type TestEnv, tmpHome, until } from './helpers.ts';
 
 let env: TestEnv | undefined;
 afterEach(async () => {
@@ -144,7 +144,8 @@ describe('inbound guards', () => {
     env.conn().inject({ id: 'evt-1', text: 'first' });
     env.conn().inject({ id: 'evt-2', text: 'second' });
     await until(() => lastText(env!, 'alice').includes('reply: second'), 5000);
-    expect(env.harness.sessions.flatMap((s) => s.prompts).some((p) => p.includes('first'))).toBe(false);
+    // The replayed history may mention "first"; the message itself must not be prompted again.
+    expect(env.harness.sessions.flatMap((s) => s.prompts).some((p) => body(p).includes('first'))).toBe(false);
   });
 
   it('/approve@otherbot is ignored; /approve@<our handle> works (isAddressedTo)', async () => {

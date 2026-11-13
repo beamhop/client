@@ -184,7 +184,13 @@ export const SessionEventView = z.object({
   ]),
   /** Who said it (for user messages). */
   from: z
-    .object({ principal: z.string(), displayName: z.string().optional(), role: z.string().optional() })
+    .object({
+      principal: z.string(),
+      displayName: z.string().optional(),
+      role: z.string().optional(),
+      /** The channel message id (to tell it apart in the platform's own history). */
+      msgId: z.string().optional(),
+    })
     .optional(),
   text: z.string().optional(),
   tool: z

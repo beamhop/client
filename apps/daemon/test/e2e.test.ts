@@ -45,8 +45,8 @@ describe('core loop', () => {
     expect(kinds).toContain('user');
     expect(kinds).toContain('assistant');
     expect(env.events.some((e) => e.type === 'session.event')).toBe(true);
-    // resume token stored
-    await until(() => env!.d.store.sessions.resumeToken(session!.id) !== undefined);
+    // no harness-native resume: the conversation lives in beamhop's transcript
+    expect(env.harness.latest().spec.resume).toBeUndefined();
     // tool calls are hidden: no message mentions the harness internals
     expect(conn.sent.every((s) => !s.text.includes('tool_call'))).toBe(true);
   });

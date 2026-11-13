@@ -34,10 +34,10 @@ export type ParsedCommand =
   | { ok: false; name: string; error: string; known: boolean; addressedTo?: string };
 
 export const COMMAND_HELP: Record<CommandName, string> = {
-  new: 'Start a new session',
+  new: 'Start fresh (threads keep their history)',
   stop: 'Stop the current run',
   status: 'Show session and agent status',
-  resume: 'Resume the last session',
+  resume: 'Bring back the context /new cleared',
   details: 'Show hidden tool calls',
   approve: 'Approve a pending action: /approve <id>',
   deny: 'Deny a pending action: /deny <id>',
