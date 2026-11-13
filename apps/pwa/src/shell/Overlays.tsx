@@ -312,7 +312,6 @@ export const CommandPalette = () => {
             <div
               role="region"
               aria-label={t('palette.results')}
-              // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users must be able to scroll it
               tabIndex={0}
               className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
             >

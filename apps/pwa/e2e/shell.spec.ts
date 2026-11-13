@@ -61,10 +61,10 @@ test('notifications: turning push on registers with the daemon; alert types are 
   await context.grantPermissions(['notifications']);
   // Headless Chromium reports notifications as denied regardless; stand in for a browser that allows them.
   await page.addInitScript(() => {
-    class FakeNotification {
-      static permission = 'granted';
-      static requestPermission = async () => 'granted';
-    }
+    const FakeNotification = Object.assign(function Notification() {}, {
+      permission: 'granted',
+      requestPermission: async () => 'granted',
+    });
     Object.defineProperty(window, 'Notification', { value: FakeNotification, configurable: true });
   });
   await open(page, '/more');
