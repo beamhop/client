@@ -36,7 +36,10 @@ export const Group = ({
 
 /** Hairline list group: surface, 1px line, radius-lg, rows divided by hairlines. */
 export const List = ({ children, label }: { children: ReactNode; label?: string }) => (
-  <ul aria-label={label} className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+  <ul
+    aria-label={label}
+    className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
+  >
     {children}
   </ul>
 );

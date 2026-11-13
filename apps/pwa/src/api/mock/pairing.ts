@@ -117,7 +117,8 @@ export class MockPairing {
 
   status(id: string): PairingStatusView {
     const rec = this.pairings.get(id);
-    if (!rec) throw Object.assign(new Error(`pairing ${id} not found`), { code: 'not_found' });
+    // Unknown or forgotten pairing (e.g. after a reload of the mock): report it as expired.
+    if (!rec) return { pairingId: id, status: 'expired', expiresAt: new Date().toISOString() };
     const cur = this.tick(rec);
     return {
       pairingId: cur.id,
@@ -132,7 +133,7 @@ export class MockPairing {
 
   confirm(id: string, accept: boolean): PairingStatusView {
     const rec = this.pairings.get(id);
-    if (!rec) throw Object.assign(new Error(`pairing ${id} not found`), { code: 'not_found' });
+    if (!rec) return this.status(id);
     const cur = this.tick(rec);
     if (!accept && (cur.status === 'waiting' || cur.status === 'awaiting-confirm')) {
       cur.status = 'rejected';
@@ -144,7 +145,11 @@ export class MockPairing {
     } else if (accept && cur.status === 'awaiting-confirm' && cur.device) {
       cur.status = 'paired';
       this.hooks.addDevice(cur.device);
-      this.hooks.audit('device.paired', `Paired device ${cur.device.name} (safety phrase confirmed)`, 'security');
+      this.hooks.audit(
+        'device.paired',
+        `Paired device ${cur.device.name} (safety phrase confirmed)`,
+        'security',
+      );
     } else if (accept) {
       throw Object.assign(new Error(`pairing is ${cur.status}, nothing to confirm`), { code: 'conflict' });
     }

@@ -80,8 +80,8 @@ const BackupSheet = ({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
     >
       <div className="flex flex-col gap-3 type-body text-ink-2">
         <p>
-          Anyone with this key can act as you: change roles, pair devices, approve requests. Put it in a password
-          manager, not in a chat or a note.
+          Anyone with this key can act as you: change roles, pair devices, approve requests. Put it in a
+          password manager, not in a chat or a note.
         </p>
         <p className="type-body-sm">Shown once, only on this computer. Never sent over Nostr.</p>
         {exp.isError && (
@@ -151,8 +151,9 @@ const Nip05 = ({ agents }: { agents: Array<{ name: string; npub?: string }> }) =
   return (
     <div className="flex flex-col gap-4">
       <p className="type-body-sm text-ink-2">
-        A NIP-05 handle lets people find an agent as <span className="font-mono text-ink">reviewer@example.com</span>{' '}
-        instead of a 63-character npub. You host one small JSON file on your domain.
+        A NIP-05 handle lets people find an agent as{' '}
+        <span className="font-mono text-ink">reviewer@example.com</span> instead of a 63-character npub. You
+        host one small JSON file on your domain.
       </p>
       <form
         className="flex flex-col gap-4"
@@ -281,7 +282,8 @@ export const IdentitySection = () => {
         {q.error.message}
       </ErrorState>
     );
-  if (q.isPending) return showSkeleton ? <Skeleton variant="detail" count={3} label="Loading identities" /> : null;
+  if (q.isPending)
+    return showSkeleton ? <Skeleton variant="detail" count={3} label="Loading identities" /> : null;
   const id = q.data;
 
   return (
@@ -301,8 +303,8 @@ export const IdentitySection = () => {
               </div>
               <KeyLine value={id.npub} label="owner npub" />
               <p className="type-body-sm text-ink-2">
-                Signs role changes, pairings and control messages. Agents have their own keys, so a leaked agent
-                key never lets anyone act as you.
+                Signs role changes, pairings and control messages. Agents have their own keys, so a leaked
+                agent key never lets anyone act as you.
               </p>
               {id.ownerKeyHeld && (
                 <Button
@@ -317,7 +319,8 @@ export const IdentitySection = () => {
             </>
           ) : (
             <p className="type-body-sm text-ink-2">
-              No owner key yet. Create one in setup, or run <code className="font-mono text-ink">beamhop identity create</code>.
+              No owner key yet. Create one in setup, or run{' '}
+              <code className="font-mono text-ink">beamhop identity create</code>.
             </p>
           )}
         </div>
@@ -335,7 +338,11 @@ export const IdentitySection = () => {
         </Group>
       )}
 
-      <Group title="Agents" id="id-agents" note="Attested: your owner key signed that this agent is yours, so Nostr clients can show who operates it.">
+      <Group
+        title="Agents"
+        id="id-agents"
+        note="Attested: your owner key signed that this agent is yours, so Nostr clients can show who operates it."
+      >
         <List>
           {id.agents.map((a) => (
             <Row

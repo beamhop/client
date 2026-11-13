@@ -68,14 +68,17 @@ const CheckRow = ({ c, revealed }: { c: DoctorCheck; revealed: boolean }) => {
                 cmd={`sudo tee /etc/apparmor.d/bwrap <<'EOF'\nabi <abi/4.0>,\ninclude <tunables/global>\nprofile bwrap /usr/bin/bwrap flags=(unconfined) {\n  userns,\n}\nEOF\nsudo systemctl reload apparmor`}
               />
               <p className="type-label text-ink">Or turn the restriction off system-wide</p>
-              <p className="type-body-sm text-ink-2">Simpler, but every program gets user namespaces again.</p>
+              <p className="type-body-sm text-ink-2">
+                Simpler, but every program gets user namespaces again.
+              </p>
               {c.fix && <CommandLine cmd={c.fix} label="Copy sysctl command" />}
             </>
           ) : (
             c.fix && <CommandLine cmd={c.fix} label={`Copy fix for ${c.title}`} />
           )}
           <p className="type-meta text-ink-2">
-            Or run <span className="text-ink">beamhop doctor --fix</span> in a terminal; it asks for your password there.
+            Or run <span className="text-ink">beamhop doctor --fix</span> in a terminal; it asks for your
+            password there.
           </p>
         </div>
       )}
@@ -106,14 +109,16 @@ export const StepDoctor = () => {
       if (n >= checks.length) window.clearInterval(t);
     }, 220);
     return () => window.clearInterval(t);
-  }, [q.data, q.dataUpdatedAt, reduce, checks.length]);
+  }, [q.data, reduce, checks.length]);
 
   const finished = q.data && shown >= checks.length;
   const fails = checks.filter((c) => c.status === 'fail').length;
   const warns = checks.filter((c) => c.status === 'warn').length;
   useEffect(() => {
     if (finished)
-      announce(`${checks.length} checks: ${checks.length - fails - warns} ok, ${warns} need attention, ${fails} missing.`);
+      announce(
+        `${checks.length} checks: ${checks.length - fails - warns} ok, ${warns} need attention, ${fails} missing.`,
+      );
   }, [finished, checks.length, fails, warns]);
 
   return (
@@ -144,7 +149,8 @@ export const StepDoctor = () => {
     >
       {q.isError ? (
         <ErrorState title="Couldn't run the checks." details={q.error} onRetry={() => void q.refetch()}>
-          {q.error.message} Is beamhopd running? Start it with <code className="font-mono">beamhop start</code>.
+          {q.error.message} Is beamhopd running? Start it with{' '}
+          <code className="font-mono">beamhop start</code>.
         </ErrorState>
       ) : !q.data ? (
         <Skeleton variant="list" count={5} label="Running checks" />
@@ -165,13 +171,19 @@ export const StepDoctor = () => {
                 ? `${checks.length} checks · ${checks.length - fails - warns} ok${warns ? ` · ${warns} attention` : ''}${fails ? ` · ${fails} missing` : ''}`
                 : `checking ${Math.min(shown + 1, checks.length)} of ${checks.length}…`}
             </p>
-            <Button variant="quiet" size="sm" onPress={() => void q.refetch()} isPending={q.isFetching && !!q.data}>
+            <Button
+              variant="quiet"
+              size="sm"
+              onPress={() => void q.refetch()}
+              isPending={q.isFetching && !!q.data}
+            >
               Run again
             </Button>
           </div>
           {finished && warns > 0 && fails === 0 && (
             <Banner tone="caution" className="rounded-md border-x px-4">
-              You can continue. Fix the item above when you can; until then the sandbox is weaker on this computer.
+              You can continue. Fix the item above when you can; until then the sandbox is weaker on this
+              computer.
             </Banner>
           )}
           {finished && fails > 0 && (
@@ -186,7 +198,15 @@ export const StepDoctor = () => {
 };
 
 // ─────────── 02 Harnesses ───────────
-const InstallSheet = ({ h, onClose, onCheck }: { h: HarnessView; onClose: () => void; onCheck: () => void }) => {
+const InstallSheet = ({
+  h,
+  onClose,
+  onCheck,
+}: {
+  h: HarnessView;
+  onClose: () => void;
+  onCheck: () => void;
+}) => {
   const opts = Object.entries(h.install ?? {}).filter(([k]) => k !== 'url') as Array<[string, string]>;
   return (
     <Sheet
@@ -209,7 +229,9 @@ const InstallSheet = ({ h, onClose, onCheck }: { h: HarnessView; onClose: () => 
             </div>
           ))
         ) : (
-          <p className="type-body-sm text-ink-2">See {h.install?.url ?? 'the vendor’s site'} for install steps.</p>
+          <p className="type-body-sm text-ink-2">
+            See {h.install?.url ?? 'the vendor’s site'} for install steps.
+          </p>
         )}
       </div>
     </Sheet>
@@ -262,7 +284,10 @@ export const StepHarnesses = () => {
           <p className="type-meta text-ink-2" role="status">
             {hs.length} found · {ready.length} ready
           </p>
-          <ul aria-label="Harnesses" className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
+          <ul
+            aria-label="Harnesses"
+            className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface"
+          >
             {hs.map((h) => (
               <li key={h.id} className="flex flex-col gap-2 px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -275,19 +300,38 @@ export const StepHarnesses = () => {
                   </span>
                   <StatusDot
                     state={harnessLamp(h)}
-                    label={{ ready: 'ready', 'needs-login': 'needs login', 'not-installed': 'not installed', 'unsupported-version': 'too old', error: 'error' }[h.status]}
+                    label={
+                      {
+                        ready: 'ready',
+                        'needs-login': 'needs login',
+                        'not-installed': 'not installed',
+                        'unsupported-version': 'too old',
+                        error: 'error',
+                      }[h.status]
+                    }
                   />
                 </div>
                 {h.status === 'needs-login' && (
                   <div className="flex flex-col gap-2 pl-10">
                     <CommandLine cmd={`${h.command} login`} label={`Copy ${h.displayName} login command`} />
-                    <Button variant="quiet" size="sm" className="-ml-3 self-start" isPending={q.isFetching} onPress={() => void q.refetch()}>
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      className="-ml-3 self-start"
+                      isPending={q.isFetching}
+                      onPress={() => void q.refetch()}
+                    >
                       Check again
                     </Button>
                   </div>
                 )}
                 {h.status === 'not-installed' && (
-                  <Button variant="secondary" size="sm" className="ml-10 self-start" onPress={() => setInstalling(h)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="ml-10 self-start"
+                    onPress={() => setInstalling(h)}
+                  >
                     Install…
                   </Button>
                 )}
@@ -315,10 +359,21 @@ export const StepHarnesses = () => {
                 placeholder="my-agent --acp"
                 description="Any program that speaks the Agent Client Protocol on stdio."
               />
-              <Button type="submit" variant="secondary" className="self-start" isPending={add.isPending} isDisabled={!cmd.trim()}>
+              <Button
+                type="submit"
+                variant="secondary"
+                className="self-start"
+                isPending={add.isPending}
+                isDisabled={!cmd.trim()}
+              >
                 Test handshake
               </Button>
-              {add.data && <StatusDot state="ready" label={`${add.data.displayName}: ${add.data.message ?? 'handshake ok'}`} />}
+              {add.data && (
+                <StatusDot
+                  state="ready"
+                  label={`${add.data.displayName}: ${add.data.message ?? 'handshake ok'}`}
+                />
+              )}
               {add.isError && <p className="type-body-sm text-stop-text">{add.error.message}</p>}
             </form>
           ) : (

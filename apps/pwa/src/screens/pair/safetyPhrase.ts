@@ -5,7 +5,7 @@
  */
 import { decodePairingPayload, type PairingPayload, safetyPhrase } from '@beamhop/channel-nostr/pairing';
 
-export { decodePairingPayload, safetyPhrase, type PairingPayload };
+export { decodePairingPayload, type PairingPayload, safetyPhrase };
 
 /** Uppercase for display: `AMBER · RELAY · OTTER · NINE`. */
 export const phraseWords = (words: readonly string[] | undefined): string[] | undefined =>

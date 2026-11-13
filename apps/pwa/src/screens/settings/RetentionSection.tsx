@@ -44,7 +44,10 @@ const EditRetention = ({ agent, onClose }: { agent: AgentView; onClose: () => vo
                   name: agent.config.name,
                   patch: { retention: { transcriptDays: t, auditDays: a } },
                 });
-                toast.show({ message: `Saved · ${agent.config.name} keeps transcripts ${days(t)}`, tone: 'success' });
+                toast.show({
+                  message: `Saved · ${agent.config.name} keeps transcripts ${days(t)}`,
+                  tone: 'success',
+                });
                 onClose();
               } catch (e) {
                 toast.show({ message: (e as Error).message, tone: 'error' });
@@ -134,7 +137,10 @@ const PurgeSheet = ({
               try {
                 const before =
                   age === '0' ? undefined : new Date(Date.now() - Number(age) * 86_400_000).toISOString();
-                const r = await purge.mutateAsync({ ...(agent === ALL ? {} : { agent }), ...(before ? { before } : {}) });
+                const r = await purge.mutateAsync({
+                  ...(agent === ALL ? {} : { agent }),
+                  ...(before ? { before } : {}),
+                });
                 haptic('confirm');
                 toast.show({ message: `Purged · ${r.deleted} records deleted`, tone: 'success' });
                 close();
@@ -153,8 +159,8 @@ const PurgeSheet = ({
     >
       <div className="flex flex-col gap-5">
         <p className="type-body text-ink-2">
-          Transcripts and audit entries are deleted from this computer for good. Export first if you might need
-          them. Cloud daemons purge on their next heartbeat.
+          Transcripts and audit entries are deleted from this computer for good. Export first if you might
+          need them. Cloud daemons purge on their next heartbeat.
         </p>
         <RadioGroup
           label="Agent"
@@ -194,14 +200,15 @@ export const RetentionSection = () => {
         {q.error.message}
       </ErrorState>
     );
-  if (q.isPending) return showSkeleton ? <Skeleton variant="list" count={4} label="Loading retention" /> : null;
+  if (q.isPending)
+    return showSkeleton ? <Skeleton variant="list" count={4} label="Loading retention" /> : null;
   const agents = q.data.agents;
 
   return (
     <div className="flex flex-col gap-8">
       <p className="type-body-sm text-ink-2">
-        Defaults: transcripts 30 days, audit log 1 year. Everything is encrypted at rest; the key is in your OS
-        keychain.
+        Defaults: transcripts 30 days, audit log 1 year. Everything is encrypted at rest; the key is in your
+        OS keychain.
       </p>
       <Group title="Per agent" id="ret-agents">
         <List>
@@ -218,7 +225,12 @@ export const RetentionSection = () => {
                 />
               }
               actions={
-                <Button variant="quiet" size="sm" onPress={() => setEditing(a)} aria-label={`Edit retention for ${a.config.name}`}>
+                <Button
+                  variant="quiet"
+                  size="sm"
+                  onPress={() => setEditing(a)}
+                  aria-label={`Edit retention for ${a.config.name}`}
+                >
                   Edit
                 </Button>
               }
@@ -229,7 +241,8 @@ export const RetentionSection = () => {
 
       <Group title="Export" id="ret-export">
         <p className="type-body-sm text-ink-2">
-          One archive with config (no secrets), transcripts and the audit log, saved on the computer running beamhop.
+          One archive with config (no secrets), transcripts and the audit log, saved on the computer running
+          beamhop.
         </p>
         <Button
           variant="secondary"
@@ -250,7 +263,9 @@ export const RetentionSection = () => {
       </Group>
 
       <Group title="Purge" id="ret-purge">
-        <p className="type-body-sm text-ink-2">Delete transcripts and audit entries now, before retention would.</p>
+        <p className="type-body-sm text-ink-2">
+          Delete transcripts and audit entries now, before retention would.
+        </p>
         <Button
           variant="destructive-outline"
           className="mt-2 self-start"

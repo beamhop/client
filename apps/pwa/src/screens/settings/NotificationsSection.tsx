@@ -45,7 +45,8 @@ export const NotificationsSection = () => {
     try {
       const r = await requestPush();
       refresh();
-      if (r.permission === 'granted' && me) await call('device.pushSubscribe', { id: me.id, subscription: r.subscription });
+      if (r.permission === 'granted' && me)
+        await call('device.pushSubscribe', { id: me.id, subscription: r.subscription });
       if (r.permission === 'granted') haptic('confirm');
     } finally {
       setBusy(false);
@@ -69,16 +70,26 @@ export const NotificationsSection = () => {
             <span className="min-w-0 flex-1 type-title-3 text-ink">{me?.name ?? 'This browser'}</span>
             <StatusDot
               state={on ? 'ready' : env.permission === 'denied' ? 'error' : 'stopped'}
-              label={on ? 'push on' : env.permission === 'denied' ? 'blocked' : env.permission === 'unsupported' ? 'unsupported' : 'push off'}
+              label={
+                on
+                  ? 'push on'
+                  : env.permission === 'denied'
+                    ? 'blocked'
+                    : env.permission === 'unsupported'
+                      ? 'unsupported'
+                      : 'push off'
+              }
             />
           </div>
           {env.needsInstall ? (
             <p className="type-body-sm text-ink-2">
-              iPhone sends alerts only to the installed app (iOS 16.4+). Tap Share, then Add to Home Screen, and turn
-              notifications on from there.
+              iPhone sends alerts only to the installed app (iOS 16.4+). Tap Share, then Add to Home Screen,
+              and turn notifications on from there.
             </p>
           ) : env.permission === 'unsupported' ? (
-            <p className="type-body-sm text-ink-2">This browser can't show notifications. Use the Nostr DM fallback below.</p>
+            <p className="type-body-sm text-ink-2">
+              This browser can't show notifications. Use the Nostr DM fallback below.
+            </p>
           ) : env.permission === 'denied' ? (
             <p className="type-body-sm text-ink-2">
               Blocked for this site. Allow notifications in your browser's site settings, then come back.
@@ -97,8 +108,8 @@ export const NotificationsSection = () => {
           ) : (
             <>
               <p className="type-body-sm text-ink-2">
-                Get approvals on this device? You'll be notified when an agent needs a decision, a budget runs out, or
-                an agent stops. Nothing else.
+                Get approvals on this device? You'll be notified when an agent needs a decision, a budget runs
+                out, or an agent stops. Nothing else.
               </p>
               <Button variant="primary" className="self-start" isPending={busy} onPress={() => void turnOn()}>
                 Turn on notifications
@@ -110,11 +121,19 @@ export const NotificationsSection = () => {
 
       <Group title="Send me" id="ntf-rules" note="These apply to every device with notifications on.">
         <div className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
-          <Switch isSelected={a.approvals} onChange={(v) => set({ approvals: v })} description="Always on the lock screen, with Allow / Deny where the platform supports it.">
+          <Switch
+            isSelected={a.approvals}
+            onChange={(v) => set({ approvals: v })}
+            description="Always on the lock screen, with Allow / Deny where the platform supports it."
+          >
             Approvals waiting
           </Switch>
           <div className="flex flex-col gap-2 py-1">
-            <Switch isSelected={a.budget} onChange={(v) => set({ budget: v })} description="Once per agent per day.">
+            <Switch
+              isSelected={a.budget}
+              onChange={(v) => set({ budget: v })}
+              description="Once per agent per day."
+            >
               Budget threshold
             </Switch>
             {a.budget && (
@@ -130,11 +149,19 @@ export const NotificationsSection = () => {
               />
             )}
           </div>
-          <Switch isSelected={a.crash} onChange={(v) => set({ crash: v })} description="Exit codes and the last log line.">
+          <Switch
+            isSelected={a.crash}
+            onChange={(v) => set({ crash: v })}
+            description="Exit codes and the last log line."
+          >
             Agent stopped unexpectedly
           </Switch>
           <div className="flex flex-col gap-2 py-1">
-            <Switch isSelected={a.security} onChange={(v) => set({ security: v })} description="Blocked hosts, DLP blocks, unknown senders.">
+            <Switch
+              isSelected={a.security}
+              onChange={(v) => set({ security: v })}
+              description="Blocked hosts, DLP blocks, unknown senders."
+            >
               Security spike
             </Switch>
             {a.security && (
@@ -149,10 +176,18 @@ export const NotificationsSection = () => {
               />
             )}
           </div>
-          <Switch isSelected={a.quiet} onChange={(v) => set({ quiet: v })} description="22:00–07:00 local time. Approvals still come through, silently.">
+          <Switch
+            isSelected={a.quiet}
+            onChange={(v) => set({ quiet: v })}
+            description="22:00–07:00 local time. Approvals still come through, silently."
+          >
             Quiet hours
           </Switch>
-          <Switch isSelected={a.dmFallback} onChange={(v) => set({ dmFallback: v })} description="When push isn't available, the daemon DMs your owner npub over Nostr.">
+          <Switch
+            isSelected={a.dmFallback}
+            onChange={(v) => set({ dmFallback: v })}
+            description="When push isn't available, the daemon DMs your owner npub over Nostr."
+          >
             Nostr DM fallback
           </Switch>
         </div>

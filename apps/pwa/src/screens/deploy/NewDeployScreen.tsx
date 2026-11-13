@@ -55,10 +55,16 @@ const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =
         value={d.mode}
         onChange={(v) => set({ mode: v as Mode, agent: v === 'move' ? (local[0]?.config.name ?? '') : '' })}
       >
-        <Radio value="move" description="Same agent, same identity and memberships. It stops here and runs there.">
+        <Radio
+          value="move"
+          description="Same agent, same identity and memberships. It stops here and runs there."
+        >
           Move an agent to the cloud
         </Radio>
-        <Radio value="new" description="A fresh agent that lives only on the server. Configure it after it's up.">
+        <Radio
+          value="new"
+          description="A fresh agent that lives only on the server. Configure it after it's up."
+        >
           New cloud agent
         </Radio>
       </RadioGroup>
@@ -89,7 +95,9 @@ const AgentStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =
         ) : agents.isPending ? (
           <Skeleton variant="list" count={1} />
         ) : (
-          <p className="type-body-sm text-ink-2">Every agent already runs in the cloud. Start a new one instead.</p>
+          <p className="type-body-sm text-ink-2">
+            Every agent already runs in the cloud. Start a new one instead.
+          </p>
         )
       ) : (
         <TextField
@@ -121,7 +129,8 @@ const TokenInline = ({ provider, name }: { provider: string; name: string }) => 
         description={info?.tokenHelp}
       />
       <p className="flex items-center gap-1.5 type-meta text-ink-2">
-        <LockSimple size={14} aria-hidden="true" /> Saved to this computer's keychain. It never leaves this machine.
+        <LockSimple size={14} aria-hidden="true" /> Saved to this computer's keychain. It never leaves this
+        machine.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -155,7 +164,11 @@ const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }
   if (!q.data) return <Skeleton variant="list" count={5} label="Loading providers" />;
   const groups = [
     { kind: 'vps' as const, title: 'VPS · your own server', note: 'Full sandbox. Fixed monthly price.' },
-    { kind: 'paas' as const, title: 'Platform · managed runtime', note: 'Less to run. The container or VM is the filesystem boundary.' },
+    {
+      kind: 'paas' as const,
+      title: 'Platform · managed runtime',
+      note: 'Less to run. The container or VM is the filesystem boundary.',
+    },
   ];
   return (
     <div className="flex flex-col gap-6">
@@ -180,7 +193,9 @@ const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }
                         value={p.id}
                         description={
                           <span className="flex flex-col gap-1">
-                            <span className="font-mono text-[12px] leading-4 text-ink-2">{info?.fit ?? p.kind}</span>
+                            <span className="font-mono text-[12px] leading-4 text-ink-2">
+                              {info?.fit ?? p.kind}
+                            </span>
                             {d.provider === p.id && info && (
                               <>
                                 <span>{info.sandboxNote}</span>
@@ -200,7 +215,9 @@ const ProviderStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }
                           )}
                         </span>
                       </Radio>
-                      {d.provider === p.id && !p.configured && <TokenInline provider={p.id} name={p.displayName} />}
+                      {d.provider === p.id && !p.configured && (
+                        <TokenInline provider={p.id} name={p.displayName} />
+                      )}
                     </div>
                   );
                 })}
@@ -231,7 +248,10 @@ const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =>
         {q.data.sizes.map((s) => (
           <Radio key={s.id} value={s.id}>
             <span className="flex items-baseline gap-3">
-              <span className="min-w-0 flex-1 font-mono text-[14px]" style={{ fontVariationSettings: '"wdth" 87.5' }}>
+              <span
+                className="min-w-0 flex-1 font-mono text-[14px]"
+                style={{ fontVariationSettings: '"wdth" 87.5' }}
+              >
                 {s.label}
               </span>
               <span className="shrink-0 type-meta text-ink tabular-nums">{usd(s.monthlyUsd)}/mo</span>
@@ -239,7 +259,9 @@ const SizeStep = ({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) =>
           </Radio>
         ))}
       </RadioGroup>
-      <p className="-mt-4 type-meta text-ink-2">Estimates from the provider's catalog prices. Bandwidth billed by the provider.</p>
+      <p className="-mt-4 type-meta text-ink-2">
+        Estimates from the provider's catalog prices. Bandwidth billed by the provider.
+      </p>
       <RadioGroup
         label="Region"
         value={d.region ?? null}
@@ -298,7 +320,12 @@ const PlanBlock = ({
         <div className="flex flex-col gap-2 rounded-md border-l-[3px] border-caution-text bg-caution-wash px-3 py-2.5">
           {plan.data.warnings.map((w) => (
             <p key={w} className="flex items-start gap-2 type-body-sm text-ink">
-              <Warning size={16} weight="bold" className="mt-0.5 shrink-0 text-caution-text" aria-hidden="true" />
+              <Warning
+                size={16}
+                weight="bold"
+                className="mt-0.5 shrink-0 text-caution-text"
+                aria-hidden="true"
+              />
               <span>
                 <span className="font-mono text-caution-text">! sandbox</span> {w}
               </span>
@@ -362,16 +389,21 @@ export const NewDeployScreen = () => {
     !!d.size && !!d.region,
     !!plan.data && (plan.data.warnings.length === 0 || ack),
   ][step];
-  const sizeCost = useApi('deploy.options', { provider: d.provider }, { enabled: !!d.provider }).data?.sizes.find(
-    (s) => s.id === d.size,
-  )?.monthlyUsd;
+  const sizeCost = useApi(
+    'deploy.options',
+    { provider: d.provider },
+    { enabled: !!d.provider },
+  ).data?.sizes.find((s) => s.id === d.size)?.monthlyUsd;
   const cost = sizeCost ?? plan.data?.monthlyCostUsd;
 
   const deploy = async () => {
     try {
       const dep = await apply.mutateAsync({ ...d });
       haptic('confirm');
-      toast.show({ message: `Deploying · ${d.agent} to ${prov?.displayName ?? d.provider}`, tone: 'success' });
+      toast.show({
+        message: `Deploying · ${d.agent} to ${prov?.displayName ?? d.provider}`,
+        tone: 'success',
+      });
       void navigate({ to: '/deploy/$deploymentId', params: { deploymentId: dep.id } });
     } catch (e) {
       haptic('error');
@@ -379,7 +411,8 @@ export const NewDeployScreen = () => {
     }
   };
 
-  const title = d.mode === 'move' ? (d.agent ? `Move ${d.agent} to the cloud` : 'Move to cloud') : 'New cloud agent';
+  const title =
+    d.mode === 'move' ? (d.agent ? `Move ${d.agent} to the cloud` : 'Move to cloud') : 'New cloud agent';
   const body = [
     <AgentStep key="a" d={d} set={set} />,
     <ProviderStep key="p" d={d} set={set} />,
@@ -447,12 +480,7 @@ export const NewDeployScreen = () => {
         )}
       >
         <div className="flex min-w-0 flex-col gap-6">
-          <Stepper
-            steps={STEPS}
-            current={step}
-            onStepPress={(i) => setStep(i)}
-            showLabels={expanded}
-          />
+          <Stepper steps={STEPS} current={step} onStepPress={(i) => setStep(i)} showLabels={expanded} />
           <h2 className="type-title-2 text-ink">
             {['Which agent?', 'Where should it run?', 'How big, and where?', 'Review the plan'][step]}
           </h2>

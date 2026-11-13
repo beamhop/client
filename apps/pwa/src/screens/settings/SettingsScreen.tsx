@@ -7,6 +7,7 @@
  * GitHub "Danger zone" separation for irreversible actions; DESIGN §10 state voices.
  */
 import {
+  ArrowsClockwise,
   Bell,
   CaretRight,
   ClockCounterClockwise,
@@ -17,7 +18,6 @@ import {
   Key,
   Palette,
   Stop,
-  ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -41,13 +41,49 @@ export interface SettingsSectionMeta {
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   { id: 'devices', title: 'Devices', slug: 'paired phones and browsers', group: 'Trust', icon: DeviceMobile },
-  { id: 'identity', title: 'Identity & NIP-05', slug: 'owner key, agent keys, handles', group: 'Trust', icon: IdentificationBadge },
-  { id: 'owners', title: 'Owners & people', slug: 'co-owners, quorum, linked accounts', group: 'Trust', icon: Crown },
+  {
+    id: 'identity',
+    title: 'Identity & NIP-05',
+    slug: 'owner key, agent keys, handles',
+    group: 'Trust',
+    icon: IdentificationBadge,
+  },
+  {
+    id: 'owners',
+    title: 'Owners & people',
+    slug: 'co-owners, quorum, linked accounts',
+    group: 'Trust',
+    icon: Crown,
+  },
   { id: 'secrets', title: 'Secrets', slug: 'API keys and tokens, by name', group: 'Trust', icon: Key },
-  { id: 'retention', title: 'Retention & data', slug: 'transcripts 30 d · audit 1 y', group: 'Data', icon: ClockCounterClockwise },
-  { id: 'notifications', title: 'Notifications', slug: 'push, alerts, Nostr DM fallback', group: 'This app', icon: Bell },
-  { id: 'updates', title: 'Updates', slug: 'beamhop, catalog, cloud daemons', group: 'This app', icon: ArrowsClockwise },
-  { id: 'appearance', title: 'Appearance', slug: 'theme, contrast, motion, haptics', group: 'This app', icon: Palette },
+  {
+    id: 'retention',
+    title: 'Retention & data',
+    slug: 'transcripts 30 d · audit 1 y',
+    group: 'Data',
+    icon: ClockCounterClockwise,
+  },
+  {
+    id: 'notifications',
+    title: 'Notifications',
+    slug: 'push, alerts, Nostr DM fallback',
+    group: 'This app',
+    icon: Bell,
+  },
+  {
+    id: 'updates',
+    title: 'Updates',
+    slug: 'beamhop, catalog, cloud daemons',
+    group: 'This app',
+    icon: ArrowsClockwise,
+  },
+  {
+    id: 'appearance',
+    title: 'Appearance',
+    slug: 'theme, contrast, motion, haptics',
+    group: 'This app',
+    icon: Palette,
+  },
   { id: 'stop', title: 'Stop everything', slug: 'kill switch and history', group: 'Kill switch', icon: Stop },
 ];
 
@@ -78,13 +114,19 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
     };
   }
   if (secrets.data) {
-    out.secrets = { text: `${secrets.data.secrets.length} names · ${secrets.data.backend.replace(/ \(.*\)/, '')}` };
+    out.secrets = {
+      text: `${secrets.data.secrets.length} names · ${secrets.data.backend.replace(/ \(.*\)/, '')}`,
+    };
   }
   if (status.data) out.updates = { text: `beamhopd ${status.data.version} · up to date` };
-  out.appearance = { text: `${THEME_WORD[prefs.theme]} · contrast ${prefs.contrast} · motion ${prefs.motion}` };
+  out.appearance = {
+    text: `${THEME_WORD[prefs.theme]} · contrast ${prefs.contrast} · motion ${prefs.motion}`,
+  };
   if (panic) out.stop = { text: 'everything is stopped', flag: <Badge tone="stop">stopped</Badge> };
   if (typeof Notification !== 'undefined')
-    out.notifications = { text: `push ${Notification.permission === 'granted' ? 'on' : 'off'} on this device` };
+    out.notifications = {
+      text: `push ${Notification.permission === 'granted' ? 'on' : 'off'} on this device`,
+    };
   return out;
 };
 
@@ -125,7 +167,9 @@ export const SettingsScreen = () => {
                           />
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="truncate type-title-3 text-ink">{s.title}</span>
-                            <span className="truncate type-meta text-ink-2">{live[s.id]?.text ?? s.slug}</span>
+                            <span className="truncate type-meta text-ink-2">
+                              {live[s.id]?.text ?? s.slug}
+                            </span>
                           </span>
                           {live[s.id]?.flag}
                           <CaretRight size={16} aria-hidden="true" className="shrink-0 text-ink-3" />

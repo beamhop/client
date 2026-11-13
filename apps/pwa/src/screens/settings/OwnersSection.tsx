@@ -25,7 +25,6 @@ import { ErrorState, Skeleton, useDelayedLoading } from '../../ui/States.tsx';
 import { useToast } from '../../ui/Toast.tsx';
 import { Group, List, Row, RowMenu, useLocalPref } from './kit.tsx';
 
-
 /** `npub1…`, hex, or `nostr:npub1…` → canonical `nostr:npub1…` principal, or null. */
 export const ownerPrincipal = (raw: string): string | null => {
   const s = raw.trim().replace(/^nostr:/, '');
@@ -64,7 +63,13 @@ const AddOwnerSheet = ({
       title="Add an owner"
       footer={
         <div className="flex flex-col gap-2 expanded:flex-row-reverse">
-          <Button variant="primary" size="lg" fullWidth isPending={add.isPending} onPress={() => void submit()}>
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            isPending={add.isPending}
+            onPress={() => void submit()}
+          >
             Add owner
           </Button>
           <Button variant="secondary" size="lg" fullWidth onPress={() => onOpenChange(false)}>
@@ -136,7 +141,11 @@ export const OwnersSection = () => {
   const owners = [...(me ? [me] : []), ...prefs.coOwners.filter((o) => o !== me)];
   const quorum = Math.min(prefs.quorum, Math.max(1, owners.length));
   const grants = Object.entries(roles.data.grants).filter(([, r]) => r !== 'owner');
-  const roleOptions = roles.data.roles.map((r) => ({ id: r.name, label: r.name, description: r.description }));
+  const roleOptions = roles.data.roles.map((r) => ({
+    id: r.name,
+    label: r.name,
+    description: r.description,
+  }));
 
   return (
     <div className="flex flex-col gap-8">
@@ -144,7 +153,12 @@ export const OwnersSection = () => {
         title="Owners"
         id="own-owners"
         action={
-          <Button variant="quiet" size="sm" icon={<Plus size={16} weight="bold" aria-hidden="true" />} onPress={() => setAdding(true)}>
+          <Button
+            variant="quiet"
+            size="sm"
+            icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+            onPress={() => setAdding(true)}
+          >
             Add owner
           </Button>
         }
@@ -162,7 +176,14 @@ export const OwnersSection = () => {
                 owners.length > 1 && o !== me ? (
                   <RowMenu
                     label={`Actions for ${short(o)}`}
-                    items={[{ id: 'remove', label: 'Remove owner…', destructive: true, onAction: () => setRemoving(o) }]}
+                    items={[
+                      {
+                        id: 'remove',
+                        label: 'Remove owner…',
+                        destructive: true,
+                        onAction: () => setRemoving(o),
+                      },
+                    ]}
                   />
                 ) : undefined
               }
@@ -214,7 +235,12 @@ export const OwnersSection = () => {
                             onAction: () =>
                               void grant
                                 .mutateAsync({ principal, role: r.id })
-                                .then(() => toast.show({ message: `${short(principal)} is now ${r.label}`, tone: 'success' }))
+                                .then(() =>
+                                  toast.show({
+                                    message: `${short(principal)} is now ${r.label}`,
+                                    tone: 'success',
+                                  }),
+                                )
                                 .catch((e: Error) => toast.show({ message: e.message, tone: 'error' })),
                           })),
                         {
@@ -224,7 +250,9 @@ export const OwnersSection = () => {
                           onAction: () =>
                             void revoke
                               .mutateAsync({ principal })
-                              .then(() => toast.show({ message: `Revoked · ${short(principal)}`, tone: 'success' })),
+                              .then(() =>
+                                toast.show({ message: `Revoked · ${short(principal)}`, tone: 'success' }),
+                              ),
                         },
                       ]}
                     />
@@ -234,7 +262,9 @@ export const OwnersSection = () => {
             ))}
           </List>
         ) : (
-          <p className="type-body-sm text-ink-2">Nobody else has a role yet. Grant one from an agent's Access tab.</p>
+          <p className="type-body-sm text-ink-2">
+            Nobody else has a role yet. Grant one from an agent's Access tab.
+          </p>
         )}
       </Group>
 
@@ -270,7 +300,13 @@ export const OwnersSection = () => {
             }
           }}
         >
-          <TextField label="Person" value={person} onChange={setPerson} placeholder="alice" className="medium:w-40" />
+          <TextField
+            label="Person"
+            value={person}
+            onChange={setPerson}
+            placeholder="alice"
+            className="medium:w-40"
+          />
           <TextField
             label="Account"
             mono
@@ -279,7 +315,12 @@ export const OwnersSection = () => {
             placeholder="telegram:5551"
             className="min-w-0 flex-1"
           />
-          <Button type="submit" variant="secondary" isPending={link.isPending} isDisabled={!person.trim() || !linkRaw.includes(':')}>
+          <Button
+            type="submit"
+            variant="secondary"
+            isPending={link.isPending}
+            isDisabled={!person.trim() || !linkRaw.includes(':')}
+          >
             Link
           </Button>
         </form>
@@ -309,12 +350,16 @@ export const OwnersSection = () => {
             toast.show({ message: (e as Error).message, tone: 'error' });
             return;
           }
-          setPrefs({ coOwners: prefs.coOwners.filter((o) => o !== removing), quorum: Math.min(quorum, owners.length - 1) });
+          setPrefs({
+            coOwners: prefs.coOwners.filter((o) => o !== removing),
+            quorum: Math.min(quorum, owners.length - 1),
+          });
           toast.show({ message: `Removed owner · ${short(removing)}`, tone: 'success' });
           setRemoving(undefined);
         }}
       >
-        They lose owner rights on every agent right away. Their devices stay paired until you remove them in Devices.
+        They lose owner rights on every agent right away. Their devices stay paired until you remove them in
+        Devices.
       </ConfirmDialog>
     </div>
   );

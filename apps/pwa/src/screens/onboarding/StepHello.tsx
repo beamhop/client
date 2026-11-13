@@ -5,17 +5,17 @@
  * polled). Live waiting timer (Doto). After 2 min: Resend · Open in another Nostr app (npub copy) ·
  * Finish without testing. Success: "It works." with the measured round trip.
  */
-import { ArrowRight, CloudArrowUp, Plugs, IdentificationBadge } from '@phosphor-icons/react';
+import { ArrowRight, CloudArrowUp, IdentificationBadge, Plugs } from '@phosphor-icons/react';
 import { useNavigate } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-aria-components';
 import { useApi, useMutationApi } from '../../api/index.ts';
 import { cx } from '../../lib/cx.ts';
 import { countdown } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { announce } from '../../lib/live.ts';
 import { useNow } from '../../lib/useNow.ts';
-import { Link } from 'react-aria-components';
 import { Button } from '../../ui/Button.tsx';
 import { UntrustedQuote } from '../../ui/Card.tsx';
 import { CopyButton } from '../../ui/CliStrip.tsx';
@@ -63,7 +63,12 @@ const VerticalBeam = ({
       )}
       <ol aria-hidden="true" className="relative flex flex-col gap-3">
         <li className="flex min-h-9 items-center gap-3">
-          <span className={cx('size-[18px] rounded-full border-[1.5px] border-ink', phase === 'done' ? 'bg-flare' : 'bg-surface')} />
+          <span
+            className={cx(
+              'size-[18px] rounded-full border-[1.5px] border-ink',
+              phase === 'done' ? 'bg-flare' : 'bg-surface',
+            )}
+          />
           <span className="type-title-3 text-ink">{agent}</span>
           <span className="type-meta text-ink-2">agent</span>
         </li>
@@ -72,7 +77,9 @@ const VerticalBeam = ({
           return (
             <li key={r} className="flex min-h-8 items-center gap-3 pl-[3px]">
               <span className={cx('size-3 rounded-full', ok ? 'bg-ink' : 'bg-stop')} />
-              <span className="min-w-0 flex-1 truncate type-meta text-ink">{r.replace(/^wss?:\/\//, '')}</span>
+              <span className="min-w-0 flex-1 truncate type-meta text-ink">
+                {r.replace(/^wss?:\/\//, '')}
+              </span>
               <span className={cx('type-meta', ok ? 'text-go-text' : 'text-stop-text')}>
                 {ok ? (phase === 'sending' ? 'connecting' : '✓ relayed') : '■ offline'}
               </span>
@@ -80,9 +87,18 @@ const VerticalBeam = ({
           );
         })}
         <li className="flex min-h-9 items-center gap-3">
-          <span className={cx('size-[18px] border-[1.5px] border-ink', phase === 'done' ? 'bg-ink' : 'bg-surface')} />
+          <span
+            className={cx(
+              'size-[18px] border-[1.5px] border-ink',
+              phase === 'done' ? 'bg-ink' : 'bg-surface',
+            )}
+          />
           <span className="flex-1 type-title-3 text-ink">your phone</span>
-          {phase === 'done' ? <StatusDot state="ready" label="replied" /> : <StatusDot state="needs-you" label={waitingFor ?? 'waiting'} />}
+          {phase === 'done' ? (
+            <StatusDot state="ready" label="replied" />
+          ) : (
+            <StatusDot state="needs-you" label={waitingFor ?? 'waiting'} />
+          )}
         </li>
       </ol>
     </div>
@@ -93,8 +109,18 @@ export const NextSteps = ({ agent }: { agent?: string }) => (
   <nav aria-label="Next steps">
     <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
       {[
-        { href: '/channels/add', icon: Plugs, title: 'Add Telegram, Slack or Discord', slug: 'let people reach your agents where they already are' },
-        { href: '/settings/identity', icon: IdentificationBadge, title: 'Set up a NIP-05 handle on your domain', slug: 'reviewer@example.com instead of an npub' },
+        {
+          href: '/channels/add',
+          icon: Plugs,
+          title: 'Add Telegram, Slack or Discord',
+          slug: 'let people reach your agents where they already are',
+        },
+        {
+          href: '/settings/identity',
+          icon: IdentificationBadge,
+          title: 'Set up a NIP-05 handle on your domain',
+          slug: 'reviewer@example.com instead of an npub',
+        },
         {
           href: agent ? `/deploy/new?agent=${agent}` : '/deploy/new',
           icon: CloudArrowUp,
@@ -150,9 +176,14 @@ export const StepHello = () => {
 
   const st = status.data;
   const replied = !!st?.replied;
-  const sentAt = st?.sentAt ? new Date(st.sentAt).getTime() : hello.data ? new Date(hello.data.sentAt).getTime() : undefined;
+  const sentAt = st?.sentAt
+    ? new Date(st.sentAt).getTime()
+    : hello.data
+      ? new Date(hello.data.sentAt).getTime()
+      : undefined;
   const elapsed = sentAt ? now - sentAt : 0;
-  const rtt = st?.repliedAt && st.sentAt ? new Date(st.repliedAt).getTime() - new Date(st.sentAt).getTime() : undefined;
+  const rtt =
+    st?.repliedAt && st.sentAt ? new Date(st.repliedAt).getTime() - new Date(st.sentAt).getTime() : undefined;
   const nostr = channels.data?.channels.find((c) => c.config.provider === 'nostr');
   const relays = (nostr?.config.settings.relays as string[] | undefined) ?? [];
   const up = (nostr?.config.settings.relaysUp as string[] | undefined) ?? relays;
@@ -191,11 +222,7 @@ export const StepHello = () => {
           : `${agent} just sent you a Nostr DM. Reply to it on your phone with anything.`
       }
       cli={`beamhop hello ${agent ?? ''}`}
-      primary={
-        replied
-          ? { label: 'Go to Home', onPress: () => void navigate({ to: '/' }) }
-          : undefined
-      }
+      primary={replied ? { label: 'Go to Home', onPress: () => void navigate({ to: '/' }) } : undefined}
       skip={
         replied
           ? undefined
@@ -209,7 +236,11 @@ export const StepHello = () => {
       }
     >
       {hello.isError ? (
-        <ErrorState title="Couldn't send the hello." details={hello.error} onRetry={() => agent && hello.mutate({ agent })}>
+        <ErrorState
+          title="Couldn't send the hello."
+          details={hello.error}
+          onRetry={() => agent && hello.mutate({ agent })}
+        >
           {hello.error.message} Check your network, or add a relay in Channels → Nostr.
         </ErrorState>
       ) : !agent || !channels.data ? (
@@ -229,13 +260,19 @@ export const StepHello = () => {
           />
           {replied ? (
             <>
-              {st?.text && <UntrustedQuote label={`${st.from ?? 'your phone'} replied`}>{st.text}</UntrustedQuote>}
+              {st?.text && (
+                <UntrustedQuote label={`${st.from ?? 'your phone'} replied`}>{st.text}</UntrustedQuote>
+              )}
               <h2 className="type-micro text-ink-2">Next</h2>
               <NextSteps agent={agent} />
             </>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="flex items-baseline gap-3" role="timer" aria-label={`Waiting for your reply, ${Math.floor(elapsed / 1000)} seconds`}>
+              <div
+                className="flex items-baseline gap-3"
+                role="timer"
+                aria-label={`Waiting for your reply, ${Math.floor(elapsed / 1000)} seconds`}
+              >
                 <span className="type-body-sm text-ink-2">Waiting for your reply…</span>
                 <Readout size="md" tone={elapsed > STILL_WAITING_MS ? 'caution' : 'ink'}>
                   {countdown(elapsed)}
@@ -247,11 +284,19 @@ export const StepHello = () => {
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <Button variant="secondary" size="sm" isPending={hello.isPending} onPress={() => agent && hello.mutate({ agent })}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  isPending={hello.isPending}
+                  onPress={() => agent && hello.mutate({ agent })}
+                >
                   Resend
                 </Button>
                 {agentView?.config.identity.npub && (
-                  <CopyButton value={agentView.config.identity.npub} label={`Copy ${agent}'s npub for another Nostr app`} />
+                  <CopyButton
+                    value={agentView.config.identity.npub}
+                    label={`Copy ${agent}'s npub for another Nostr app`}
+                  />
                 )}
               </div>
               <p className="type-body-sm text-ink-2">

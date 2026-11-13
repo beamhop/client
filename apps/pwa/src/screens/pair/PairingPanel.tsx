@@ -42,6 +42,7 @@ export const SafetyPhrase = ({
         <p className="sr-only">Safety phrase: {words.join(', ')}.</p>
         <ol aria-hidden="true" className="grid grid-cols-2 gap-x-4 gap-y-2">
           {words.map((w, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: words may repeat; position is identity
             <li key={`${w}-${i}`} className="flex min-w-0 items-baseline gap-2 border-b border-line pb-1.5">
               <span className="type-micro text-ink-3">{i + 1}</span>
               <span
@@ -186,11 +187,7 @@ export const PairingPanel = ({ onPaired, compact, className }: PairingPanelProps
           The code can't be used again, and the attempt is in the audit log. If someone else scanned your
           code, that's where you'll see it.
         </p>
-        <Button
-          variant="secondary"
-          icon={<ArrowClockwise size={16} aria-hidden="true" />}
-          onPress={restart}
-        >
+        <Button variant="secondary" icon={<ArrowClockwise size={16} aria-hidden="true" />} onPress={restart}>
           Start again
         </Button>
       </div>

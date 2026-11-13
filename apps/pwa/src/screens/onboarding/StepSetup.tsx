@@ -19,8 +19,8 @@ import { TextField } from '../../ui/Field.tsx';
 import { Badge, LetterTile, MetaLine } from '../../ui/Meta.tsx';
 import { PathPicker } from '../../ui/PathPicker.tsx';
 import { ErrorState, Skeleton } from '../../ui/States.tsx';
-import { PairingPanel } from '../pair/PairingPanel.tsx';
 import { AGENT_NAME_RE } from '../deploy/model.ts';
+import { PairingPanel } from '../pair/PairingPanel.tsx';
 import { markDone, markSkipped, useSetupProgress } from './progress.ts';
 import { StepFrame, useGoStep } from './StepFrame.tsx';
 
@@ -46,7 +46,9 @@ const WhatsThisKey = () => (
     </Heading>
     <DisclosurePanel>
       <ul className="flex list-disc flex-col gap-1 px-3 pb-3 pl-7 type-body-sm text-ink-2">
-        <li>It signs role changes, device pairings and control messages, so only you can change who can do what.</li>
+        <li>
+          It signs role changes, device pairings and control messages, so only you can change who can do what.
+        </li>
         <li>Each agent gets its own key. A leaked agent key never lets anyone act as you.</li>
         <li>It's a Nostr key: the same identity works in any Nostr app you like.</li>
       </ul>
@@ -74,7 +76,9 @@ export const StepIdentity = () => {
     try {
       if (choice === 'create') await create.mutateAsync({ replace: !!q.data?.npub });
       else if (choice === 'nip07') {
-        const hex = await (window as unknown as { nostr: { getPublicKey(): Promise<string> } }).nostr.getPublicKey();
+        const hex = await (
+          window as unknown as { nostr: { getPublicKey(): Promise<string> } }
+        ).nostr.getPublicKey();
         await imp.mutateAsync({ npub: npubEncode(hex) });
       } else if (bunkerNpub) await imp.mutateAsync({ npub: bunkerNpub });
       haptic('confirm');
@@ -116,7 +120,10 @@ export const StepIdentity = () => {
         <Skeleton variant="detail" count={2} label="Loading identity" />
       ) : have ? (
         <>
-          <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4" data-owner="ready">
+          <div
+            className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+            data-owner="ready"
+          >
             <div className="flex items-center gap-3">
               <span className="grid size-7 shrink-0 place-items-center rounded-sm bg-ink text-bg">
                 <Check size={16} weight="bold" aria-hidden="true" />
@@ -143,12 +150,14 @@ export const StepIdentity = () => {
                   <CopyButton value={exp.data.nsec} label="Copy secret key" compact />
                 </div>
               ) : backup === 'later' ? (
-                <p className="type-body-sm text-ink-2">OK. Settings → Identity reminds you until it's done.</p>
+                <p className="type-body-sm text-ink-2">
+                  OK. Settings → Identity reminds you until it's done.
+                </p>
               ) : (
                 <>
                   <p className="type-body-sm text-ink-2">
-                    If this computer dies, the backup is how you prove you own your agents. Put it in a password
-                    manager.
+                    If this computer dies, the backup is how you prove you own your agents. Put it in a
+                    password manager.
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -173,7 +182,13 @@ export const StepIdentity = () => {
         </>
       ) : (
         <>
-          <RadioGroup label="Owner key" hideLabel variant="cards" value={choice} onChange={(v) => setChoice(v as IdChoice)}>
+          <RadioGroup
+            label="Owner key"
+            hideLabel
+            variant="cards"
+            value={choice}
+            onChange={(v) => setChoice(v as IdChoice)}
+          >
             <Radio value="create" description="Stored in your OS keychain. You can export it later.">
               Create a new owner key
             </Radio>
@@ -283,7 +298,9 @@ export const StepAgent = () => {
   const [harness, setHarness] = useState('');
   const [folder, setFolder] = useState('~/code/app');
   const [mode, setMode] = useState<'ro' | 'rw'>('ro');
-  const existing = progress.agent ? agents.data?.agents.find((a) => a.config.name === progress.agent) : undefined;
+  const existing = progress.agent
+    ? agents.data?.agents.find((a) => a.config.name === progress.agent)
+    : undefined;
 
   useEffect(() => {
     if (!nameTouched && agents.data) setName(freeName(PRESET_NAME[preset] ?? 'agent', taken));
@@ -317,18 +334,28 @@ export const StepAgent = () => {
         lede="It has its own Nostr key and a profile that says who operates it."
         primary={{ label: 'Continue · Hello', onPress: () => go('hello') }}
       >
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4" data-agent="created">
+        <div
+          className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+          data-agent="created"
+        >
           <div className="flex items-center gap-3">
             <LetterTile code={existing.config.harness.slice(0, 2).toUpperCase()} />
             <span className="flex-1 type-title-3 text-ink">{existing.config.name}</span>
             <Badge tone="go">created</Badge>
           </div>
           <MetaLine
-            items={[existing.config.harness, existing.config.sandbox.profile, ...existing.config.mounts.map((m) => `${m.path} ${m.mode}`)]}
+            items={[
+              existing.config.harness,
+              existing.config.sandbox.profile,
+              ...existing.config.mounts.map((m) => `${m.path} ${m.mode}`),
+            ]}
           />
           {existing.config.identity.npub && (
             <div className="flex items-center gap-1">
-              <code className="min-w-0 flex-1 truncate type-meta text-ink" title={existing.config.identity.npub}>
+              <code
+                className="min-w-0 flex-1 truncate type-meta text-ink"
+                title={existing.config.identity.npub}
+              >
                 {middleTruncate(existing.config.identity.npub, 30)}
               </code>
               <CopyButton value={existing.config.identity.npub} label="Copy agent npub" compact />
@@ -337,7 +364,10 @@ export const StepAgent = () => {
           <div className="rounded-md bg-sunken p-3">
             <p className="type-micro text-ink-3">Nostr profile preview</p>
             <p className="mt-1 type-body text-ink">{existing.config.name}</p>
-            <p className="type-body-sm text-ink-2">AI agent operated by {status.data?.owner.npub ? middleTruncate(status.data.owner.npub, 18) : 'you'}</p>
+            <p className="type-body-sm text-ink-2">
+              AI agent operated by{' '}
+              {status.data?.owner.npub ? middleTruncate(status.data.owner.npub, 18) : 'you'}
+            </p>
           </div>
         </div>
       </StepFrame>
@@ -386,18 +416,31 @@ export const StepAgent = () => {
             }}
             description="Also its Nostr profile name. Lowercase letters, digits, dashes."
             isInvalid={!!name && !nameOk}
-            errorMessage={taken.includes(name) ? `${name} already exists.` : 'Use lowercase letters, digits and dashes.'}
+            errorMessage={
+              taken.includes(name) ? `${name} already exists.` : 'Use lowercase letters, digits and dashes.'
+            }
           />
           {ready.length ? (
-            <RadioGroup label="Harness" value={harness} onChange={setHarness} description="Only harnesses that are ready.">
+            <RadioGroup
+              label="Harness"
+              value={harness}
+              onChange={setHarness}
+              description="Only harnesses that are ready."
+            >
               {ready.map((h) => (
-                <Radio key={h.id} value={h.id} description={<span className="font-mono text-[12px]">{h.version}</span>}>
+                <Radio
+                  key={h.id}
+                  value={h.id}
+                  description={<span className="font-mono text-[12px]">{h.version}</span>}
+                >
                   {h.displayName}
                 </Radio>
               ))}
             </RadioGroup>
           ) : (
-            <ErrorState title="No harness is ready.">Go back one step and log in to one, or install one.</ErrorState>
+            <ErrorState title="No harness is ready.">
+              Go back one step and log in to one, or install one.
+            </ErrorState>
           )}
           <div className="flex flex-col gap-2">
             <PathPicker label="Folder it can see" value={folder} onChange={setFolder} />
@@ -412,11 +455,16 @@ export const StepAgent = () => {
             />
             {mode === 'rw' && (
               <p className="type-body-sm text-ink-2">
-                If it's a git repo, each session gets its own branch <span className="font-mono text-ink">beamhop/&lt;thread&gt;</span>.
+                If it's a git repo, each session gets its own branch{' '}
+                <span className="font-mono text-ink">beamhop/&lt;thread&gt;</span>.
               </p>
             )}
           </div>
-          <section aria-labelledby="exposure" className="rounded-lg border border-line bg-sunken p-4" aria-live="polite">
+          <section
+            aria-labelledby="exposure"
+            className="rounded-lg border border-line bg-sunken p-4"
+            aria-live="polite"
+          >
             <h2 id="exposure" className="type-micro text-ink-2">
               What {name || 'it'} can reach
             </h2>
@@ -424,16 +472,23 @@ export const StepAgent = () => {
               <li>
                 {reads.length ? (
                   <>
-                    Can {mode === 'rw' ? 'read and write' : 'read'} <span className="font-mono">{folder}</span>
+                    Can {mode === 'rw' ? 'read and write' : 'read'}{' '}
+                    <span className="font-mono">{folder}</span>
                   </>
                 ) : (
                   'Sees no folders'
                 )}
               </li>
-              <li>Can reach the {ready.find((h) => h.id === harness)?.displayName ?? 'harness'} API, nothing else until you allow it</li>
-              <li>Sandbox profile: <span className="font-mono">{profile}</span></li>
+              <li>
+                Can reach the {ready.find((h) => h.id === harness)?.displayName ?? 'harness'} API, nothing
+                else until you allow it
+              </li>
+              <li>
+                Sandbox profile: <span className="font-mono">{profile}</span>
+              </li>
               <li className="text-ink-2">
-                Never <span className="font-mono">~/.ssh</span>, <span className="font-mono">~/.aws</span>, keychains
+                Never <span className="font-mono">~/.ssh</span>, <span className="font-mono">~/.aws</span>,
+                keychains
               </li>
             </ul>
           </section>

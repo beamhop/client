@@ -16,8 +16,9 @@
  * Payload + safety phrase: shared `@beamhop/channel-nostr/pairing` (words from daemon + device pubkeys).
  * The final "Yes, pair" happens on the computer (device.pairConfirm); the phone only sends the request.
  */
-import type { DeviceView } from '@beamhop/core';
+
 import { completePairing } from '@beamhop/channel-nostr/pairing';
+import type { DeviceView } from '@beamhop/core';
 import {
   ArrowRight,
   Bell,

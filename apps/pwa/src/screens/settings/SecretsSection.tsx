@@ -149,7 +149,12 @@ export const SecretsSection = () => {
           title={`Secrets · ${secrets.length}`}
           id="sec-list"
           action={
-            <Button variant="quiet" size="sm" icon={<Plus size={16} weight="bold" aria-hidden="true" />} onPress={() => setAdding(true)}>
+            <Button
+              variant="quiet"
+              size="sm"
+              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+              onPress={() => setAdding(true)}
+            >
               Add
             </Button>
           }
@@ -158,14 +163,26 @@ export const SecretsSection = () => {
             {secrets.map((s) => (
               <Row
                 key={s.name}
-                title={<span className="font-mono text-[15px] font-medium" style={{ fontVariationSettings: '"wdth" 87.5' }}>{s.name}</span>}
+                title={
+                  <span
+                    className="font-mono text-[15px] font-medium"
+                    style={{ fontVariationSettings: '"wdth" 87.5' }}
+                  >
+                    {s.name}
+                  </span>
+                }
                 slug={<MetaLine items={['•••• hidden', s.updatedAt && `updated ${ago(s.updatedAt)}`]} />}
                 actions={
                   <RowMenu
                     label={`Actions for ${s.name}`}
                     items={[
                       { id: 'replace', label: 'Replace value…', onAction: () => setReplacing(s.name) },
-                      { id: 'delete', label: 'Delete…', destructive: true, onAction: () => setDeleting(s.name) },
+                      {
+                        id: 'delete',
+                        label: 'Delete…',
+                        destructive: true,
+                        onAction: () => setDeleting(s.name),
+                      },
                     ]}
                   />
                 }
@@ -176,7 +193,11 @@ export const SecretsSection = () => {
       )}
       <CliStrip command="beamhop secret set NAME   # reads the value from stdin" />
       <SetSecretSheet open={adding} onOpenChange={setAdding} />
-      <SetSecretSheet name={replacing} open={!!replacing} onOpenChange={(o) => !o && setReplacing(undefined)} />
+      <SetSecretSheet
+        name={replacing}
+        open={!!replacing}
+        onOpenChange={(o) => !o && setReplacing(undefined)}
+      />
       <ConfirmDialog
         isOpen={!!deleting}
         onOpenChange={(o) => !o && setDeleting(undefined)}
@@ -194,8 +215,8 @@ export const SecretsSection = () => {
           }
         }}
       >
-        Agents and channels that use {deleting} stop authenticating until you add it again. This can't be undone;
-        the value is gone from the keychain.
+        Agents and channels that use {deleting} stop authenticating until you add it again. This can't be
+        undone; the value is gone from the keychain.
       </ConfirmDialog>
     </div>
   );

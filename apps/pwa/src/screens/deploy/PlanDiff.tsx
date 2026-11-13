@@ -34,7 +34,10 @@ const PlanRow = ({ a }: { a: PlanAction }) => {
         onPress={() => setOpen((o) => !o)}
         className="grid min-h-11 w-full grid-cols-[1.25rem_4.5rem_minmax(0,1fr)_1rem] items-baseline gap-x-2 rounded-sm py-2 text-left outline-none data-[hovered]:bg-sunken data-[focus-visible]:outline-2 data-[focus-visible]:outline-focus"
       >
-        <span aria-hidden="true" className={cx('font-mono text-[15px] leading-5 font-semibold', TONE_TEXT[tone])}>
+        <span
+          aria-hidden="true"
+          className={cx('font-mono text-[15px] leading-5 font-semibold', TONE_TEXT[tone])}
+        >
           {PLAN_SYMBOL[tone]}
         </span>
         <span className={cx('type-meta', TONE_TEXT[tone])}>{a.op}</span>
@@ -45,7 +48,10 @@ const PlanRow = ({ a }: { a: PlanAction }) => {
         <CaretRight
           size={12}
           aria-hidden="true"
-          className={cx('self-center text-ink-3 transition-transform duration-[var(--dur-fast)]', open && 'rotate-90')}
+          className={cx(
+            'self-center text-ink-3 transition-transform duration-[var(--dur-fast)]',
+            open && 'rotate-90',
+          )}
         />
       </RACButton>
     </li>
@@ -69,6 +75,7 @@ export const PlanDiff = ({ actions, label = 'Plan' }: { actions: PlanAction[]; l
         <section key={g.tone} aria-label={`${GROUP_LABEL[g.tone]}: ${g.rows.length}`}>
           <ul className="flex flex-col">
             {g.rows.map((a, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: rows may repeat; position is identity
               <PlanRow key={`${a.op}-${a.resource}-${i}`} a={a} />
             ))}
           </ul>

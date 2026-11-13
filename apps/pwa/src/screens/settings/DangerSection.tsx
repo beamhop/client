@@ -45,7 +45,12 @@ export const DangerSection = () => {
               : 'One press, one confirm. Use it when something looks wrong and you want it to stop now, before you understand why.'}
           </p>
           {panic ? (
-            <LinkButton href="/panic" variant="primary" icon={<ArrowRight size={16} weight="bold" aria-hidden="true" />} className="self-start">
+            <LinkButton
+              href="/panic"
+              variant="primary"
+              icon={<ArrowRight size={16} weight="bold" aria-hidden="true" />}
+              className="self-start"
+            >
               Review & resume
             </LinkButton>
           ) : (
@@ -60,7 +65,8 @@ export const DangerSection = () => {
             </Button>
           )}
           <p className="type-meta text-ink-2">
-            Also: <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> anywhere · Stop in the top bar · from any paired phone
+            Also: <Kbd>⌘</Kbd> <Kbd>⇧</Kbd> <Kbd>.</Kbd> anywhere · Stop in the top bar · from any paired
+            phone
           </p>
         </div>
       </div>
@@ -90,7 +96,15 @@ export const DangerSection = () => {
               <Row
                 key={e.id}
                 title={e.type === 'panic' ? 'Stopped everything' : 'Resumed after review'}
-                slug={<MetaLine items={[when(e.at), e.actor, e.summary !== `${e.actor} stopped everything` ? e.summary : undefined]} />}
+                slug={
+                  <MetaLine
+                    items={[
+                      when(e.at),
+                      e.actor,
+                      e.summary !== `${e.actor} stopped everything` ? e.summary : undefined,
+                    ]}
+                  />
+                }
               />
             ))}
           </List>

@@ -38,7 +38,9 @@ export const DeploymentScreen = () => {
   const toast = useToast();
   const q = useApi('deploy.list', undefined, {
     refetchInterval: (query) =>
-      query.state.data?.deployments.find((x) => x.id === deploymentId)?.status === 'provisioning' ? 1500 : false,
+      query.state.data?.deployments.find((x) => x.id === deploymentId)?.status === 'provisioning'
+        ? 1500
+        : false,
   });
   const d = q.data?.deployments.find((x) => x.id === deploymentId);
   const agent = useApi('agent.get', { name: d?.agent ?? '' }, { enabled: !!d, retry: false });
@@ -99,7 +101,10 @@ export const DeploymentScreen = () => {
       titleAside={<StatusDot state={lamp} label={d.status} />}
     >
       <div className="flex flex-col gap-8">
-        <section aria-labelledby="dep-route" className="relative flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+        <section
+          aria-labelledby="dep-route"
+          className="relative flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+        >
           {destroyed && <span aria-hidden="true" className="hatch absolute inset-0 rounded-lg text-ink-3" />}
           <div className="relative flex items-center gap-3">
             <LetterTile code={deployMonogram(d.provider)} />
@@ -132,7 +137,15 @@ export const DeploymentScreen = () => {
                 <li key={p.name} className="relative flex min-h-9 items-center gap-3">
                   <span className="absolute -left-[25px] grid size-[11px] place-items-center bg-bg">
                     <StatusDot
-                      state={p.state === 'done' ? 'ready' : p.state === 'live' ? 'live' : p.state === 'error' ? 'error' : 'stopped'}
+                      state={
+                        p.state === 'done'
+                          ? 'ready'
+                          : p.state === 'live'
+                            ? 'live'
+                            : p.state === 'error'
+                              ? 'error'
+                              : 'stopped'
+                      }
                       hideLabel
                       label={p.state === 'todo' ? 'waiting' : p.state}
                     />
@@ -141,7 +154,13 @@ export const DeploymentScreen = () => {
                     {p.name}
                   </span>
                   <span className="type-meta text-ink-2 tabular-nums">
-                    {p.state === 'done' ? `${(p.ms! / 1000).toFixed(1)} s` : p.state === 'live' ? `${Math.floor(p.ms! / 1000)} s…` : p.state === 'error' ? 'failed' : ''}
+                    {p.state === 'done'
+                      ? `${(p.ms! / 1000).toFixed(1)} s`
+                      : p.state === 'live'
+                        ? `${Math.floor(p.ms! / 1000)} s…`
+                        : p.state === 'error'
+                          ? 'failed'
+                          : ''}
                   </span>
                 </li>
               ))}
@@ -159,7 +178,10 @@ export const DeploymentScreen = () => {
             <Fact k="Region" v={d.region ?? '—'} />
             <Fact k="Size" v={d.size ?? '—'} />
             <Fact k="Estimate" v={d.monthlyCostUsd !== undefined ? `${usd(d.monthlyCostUsd)}/mo` : '—'} />
-            <Fact k="Agent" v={agent.data ? `${agent.data.config.harness} · ${agent.data.status}` : d.agent} />
+            <Fact
+              k="Agent"
+              v={agent.data ? `${agent.data.config.harness} · ${agent.data.status}` : d.agent}
+            />
           </dl>
           {!destroyed && (
             <div className="mt-4 flex items-baseline gap-3">
@@ -184,9 +206,20 @@ export const DeploymentScreen = () => {
                 {log.data.events.map((e) => (
                   <li key={e.id} className="flex gap-3 px-3 py-0.5">
                     <time dateTime={e.at} className="shrink-0 text-ink-3">
-                      {new Date(e.at).toDateString() === new Date(now).toDateString() ? clock(e.at) : when(e.at)}
+                      {new Date(e.at).toDateString() === new Date(now).toDateString()
+                        ? clock(e.at)
+                        : when(e.at)}
                     </time>
-                    <span className={cx('min-w-0', e.severity === 'security' ? 'text-stop-text' : e.severity === 'warn' ? 'text-caution-text' : 'text-ink')}>
+                    <span
+                      className={cx(
+                        'min-w-0',
+                        e.severity === 'security'
+                          ? 'text-stop-text'
+                          : e.severity === 'warn'
+                            ? 'text-caution-text'
+                            : 'text-ink',
+                      )}
+                    >
                       {e.summary}
                     </span>
                   </li>
@@ -212,17 +245,25 @@ export const DeploymentScreen = () => {
             <Eyebrow id="dep-actions">Actions</Eyebrow>
             <div className="flex flex-wrap gap-2">
               {running && (
-                <Button variant="secondary" icon={<Stop size={16} weight="fill" aria-hidden="true" />} onPress={() => setStopping(true)}>
+                <Button
+                  variant="secondary"
+                  icon={<Stop size={16} weight="fill" aria-hidden="true" />}
+                  onPress={() => setStopping(true)}
+                >
                   Stop {d.agent}
                 </Button>
               )}
-              <Button variant="destructive-outline" icon={<Trash size={16} aria-hidden="true" />} onPress={() => setDestroying(true)}>
+              <Button
+                variant="destructive-outline"
+                icon={<Trash size={16} aria-hidden="true" />}
+                onPress={() => setDestroying(true)}
+              >
                 Destroy…
               </Button>
             </div>
             <p className="type-body-sm text-ink-2">
-              Any paired phone can see status and stop it. Creating or destroying servers needs the computer that holds
-              the {d.provider} token.
+              Any paired phone can see status and stop it. Creating or destroying servers needs the computer
+              that holds the {d.provider} token.
             </p>
           </section>
         )}
@@ -238,7 +279,10 @@ export const DeploymentScreen = () => {
         onConfirm={async () => {
           await stop.mutateAsync({ name: d.agent });
           setStopping(false);
-          toast.show({ message: `Stopped · ${d.agent}. The server keeps running and billing.`, tone: 'success' });
+          toast.show({
+            message: `Stopped · ${d.agent}. The server keeps running and billing.`,
+            tone: 'success',
+          });
         }}
       >
         Its sessions end now. The server stays up (and billed) so you can start it again; Destroy removes it.
@@ -293,11 +337,23 @@ export const DeploymentScreen = () => {
           <PlanDiff
             label="Destroy plan"
             actions={[
-              { op: 'destroy', resource: 'server', detail: `${d.provider} ${d.size ?? ''} · ${d.region ?? ''}` },
+              {
+                op: 'destroy',
+                resource: 'server',
+                detail: `${d.provider} ${d.size ?? ''} · ${d.region ?? ''}`,
+              },
               { op: 'delete', resource: 'firewall', detail: 'and its rules' },
               { op: 'delete', resource: 'disk', detail: 'worktrees and caches on the server' },
-              { op: 'keep', resource: 'identity', detail: `${d.agent}'s key returns to this computer's vault` },
-              { op: 'keep', resource: 'transcripts', detail: 'already synced here, kept until retention ends' },
+              {
+                op: 'keep',
+                resource: 'identity',
+                detail: `${d.agent}'s key returns to this computer's vault`,
+              },
+              {
+                op: 'keep',
+                resource: 'transcripts',
+                detail: 'already synced here, kept until retention ends',
+              },
             ]}
           />
           <TypeToConfirm expected={d.agent} value={typed} onChange={setTyped} />

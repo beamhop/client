@@ -55,7 +55,9 @@ export const thisDeviceId = (): string | null => {
 };
 
 /** A friendly default name from the user agent: `iPhone · Safari`, `Pixel · Chrome`, `Mac · Firefox`. */
-export const deviceNameFromUA = (ua: string = typeof navigator === 'undefined' ? '' : navigator.userAgent) => {
+export const deviceNameFromUA = (
+  ua: string = typeof navigator === 'undefined' ? '' : navigator.userAgent,
+) => {
   const device = /iPhone/.test(ua)
     ? 'iPhone'
     : /iPad/.test(ua)

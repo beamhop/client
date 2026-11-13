@@ -13,7 +13,7 @@ import { Wordmark } from '../../shell/Wordmark.tsx';
 import { Button } from '../../ui/Button.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { Stepper } from '../../ui/Stepper.tsx';
-import { completedCount, SETUP_STEPS, STEP_LABEL, type SetupStep, useSetupProgress } from './progress.ts';
+import { completedCount, SETUP_STEPS, type SetupStep, STEP_LABEL, useSetupProgress } from './progress.ts';
 
 export const useGoStep = () => {
   const navigate = useNavigate();
@@ -110,7 +110,10 @@ export const StepFrame = ({
   if (expanded) {
     return (
       <div className="grid min-h-svh grid-cols-[280px_1fr]">
-        <aside className="sticky top-0 flex h-svh flex-col border-r border-line px-6 py-6" aria-label="Setup progress">
+        <aside
+          className="sticky top-0 flex h-svh flex-col border-r border-line px-6 py-6"
+          aria-label="Setup progress"
+        >
           <Wordmark />
           <p className="mt-8 type-meta text-ink-2">
             {step === 'next' ? 'Setup complete' : `Step ${i + 1} of ${SETUP_STEPS.length}`}
@@ -146,13 +149,19 @@ export const StepFrame = ({
             {step === 'next' ? 'done' : `${i + 1} of ${SETUP_STEPS.length}`}
           </span>
         </div>
-        <Stepper steps={labels} current={Math.min(i, SETUP_STEPS.length)} onStepPress={(n) => go(SETUP_STEPS[n]!)} />
+        <Stepper
+          steps={labels}
+          current={Math.min(i, SETUP_STEPS.length)}
+          onStepPress={(n) => go(SETUP_STEPS[n]!)}
+        />
       </header>
       <main className="flex-1 px-gutter pt-6 pb-10" id="bh-main-content">
         {body}
       </main>
       {actions && (
-        <div className="sticky bottom-0 z-20 border-t border-line bg-bg pb-[var(--bh-safe-bottom)]">{actions}</div>
+        <div className="sticky bottom-0 z-20 border-t border-line bg-bg pb-[var(--bh-safe-bottom)]">
+          {actions}
+        </div>
       )}
     </div>
   );

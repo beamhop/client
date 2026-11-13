@@ -108,7 +108,11 @@ export const DevicesSection = () => {
           title="No paired devices yet."
           cli="beamhop pair-device"
           action={
-            <Button variant="primary" icon={<Plus size={16} weight="bold" aria-hidden="true" />} onPress={() => setPairing(true)}>
+            <Button
+              variant="primary"
+              icon={<Plus size={16} weight="bold" aria-hidden="true" />}
+              onPress={() => setPairing(true)}
+            >
               Pair a device
             </Button>
           }
@@ -186,9 +190,7 @@ export const DevicesSection = () => {
           }
         }}
       >
-        <p>
-          {target?.name} won't be able to control your agents. This doesn't sign it out of other apps.
-        </p>
+        <p>{target?.name} won't be able to control your agents. This doesn't sign it out of other apps.</p>
         {target?.id === me?.id && (
           <p className="mt-2 text-caution-text">
             That's the device you're using. This browser stops working as a control device right away.

@@ -35,7 +35,8 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
   fly: {
     fit: 'Micro-VM · srt network sandbox · per-second billing',
     sandbox: 'microvm',
-    sandboxNote: 'The Firecracker VM is the filesystem boundary; the network allowlist and broker still apply.',
+    sandboxNote:
+      'The Firecracker VM is the filesystem boundary; the network allowlist and broker still apply.',
     billing: 'Per second while running. Stopped machines still pay for their volume.',
     tokenHelp: 'flyctl tokens create deploy, or Fly dashboard → Tokens.',
     tokenUrl: 'https://fly.io/dashboard',
@@ -43,7 +44,8 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
   render: {
     fit: 'Container · filesystem isolation = container only',
     sandbox: 'container',
-    sandboxNote: "srt can't use namespaces here: the container is the filesystem boundary. Network allowlist and broker still apply.",
+    sandboxNote:
+      "srt can't use namespaces here: the container is the filesystem boundary. Network allowlist and broker still apply.",
     billing: 'Fixed instance price per month.',
     tokenHelp: 'Render → Account settings → API keys.',
     tokenUrl: 'https://dashboard.render.com/u/settings',
@@ -51,7 +53,8 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
   railway: {
     fit: 'Container · usage-based on top of the plan fee',
     sandbox: 'container',
-    sandboxNote: "srt can't use namespaces here: the container is the filesystem boundary. Network allowlist and broker still apply.",
+    sandboxNote:
+      "srt can't use namespaces here: the container is the filesystem boundary. Network allowlist and broker still apply.",
     billing: 'Plan fee plus CPU/RAM by the minute.',
     tokenHelp: 'Railway → Account → Tokens.',
     tokenUrl: 'https://railway.com/account/tokens',
@@ -61,7 +64,13 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 export const providerTokenSecret = (provider: string) => `deploy/${provider}/token`;
 
 export type PlanTone = 'add' | 'change' | 'remove' | 'move' | 'warn';
-export const PLAN_SYMBOL: Record<PlanTone, string> = { add: '+', change: '~', remove: '-', move: '→', warn: '!' };
+export const PLAN_SYMBOL: Record<PlanTone, string> = {
+  add: '+',
+  change: '~',
+  remove: '-',
+  move: '→',
+  warn: '!',
+};
 
 /** Terraform-style vocabulary: the word always appears next to the symbol. */
 export const planTone = (op: string): PlanTone => {
@@ -107,7 +116,10 @@ export const usd = (n: number) => `$${n.toFixed(2)}`;
 export const monthToDate = (d: DeploymentView, now = Date.now()): number => {
   if (!d.monthlyCostUsd || d.status === 'destroyed') return 0;
   const n = new Date(now);
-  const start = Math.max(new Date(d.createdAt).getTime(), new Date(n.getFullYear(), n.getMonth(), 1).getTime());
+  const start = Math.max(
+    new Date(d.createdAt).getTime(),
+    new Date(n.getFullYear(), n.getMonth(), 1).getTime(),
+  );
   const daysInMonth = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate();
   return Math.max(0, ((now - start) / 86_400_000 / daysInMonth) * d.monthlyCostUsd);
 };
@@ -136,7 +148,8 @@ export const phaseState = (
   return PHASES.map((name, i) => {
     if (d.status === 'running' || d.status === 'stopped' || d.status === 'destroyed')
       return { name, state: 'done' as const, ms: Math.round(per) };
-    if (d.status === 'error') return { name, state: i < 3 ? ('done' as const) : i === 3 ? ('error' as const) : ('todo' as const) };
+    if (d.status === 'error')
+      return { name, state: i < 3 ? ('done' as const) : i === 3 ? ('error' as const) : ('todo' as const) };
     const cur = Math.min(PHASES.length - 1, Math.floor(elapsed / per));
     return i < cur
       ? { name, state: 'done' as const, ms: Math.round(per) }

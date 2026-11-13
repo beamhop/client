@@ -30,7 +30,11 @@ const KEY = 'bh.setup';
 
 export const isStep = (s: string): s is SetupStep => (SETUP_STEPS as readonly string[]).includes(s);
 
-export const markDone = (p: SetupProgress, s: SetupStep, extra: Partial<SetupProgress> = {}): SetupProgress => ({
+export const markDone = (
+  p: SetupProgress,
+  s: SetupStep,
+  extra: Partial<SetupProgress> = {},
+): SetupProgress => ({
   ...p,
   ...extra,
   done: p.done.includes(s) ? p.done : [...p.done, s],

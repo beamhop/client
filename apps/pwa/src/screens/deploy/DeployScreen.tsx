@@ -51,7 +51,10 @@ export const DeployScreen = () => {
           <LetterTile code={deployMonogram(d.provider)} />
           <span className="relative flex min-w-0 flex-1 flex-col gap-0.5">
             <span className={cx('truncate type-title-3', destroyed ? 'text-ink-2' : 'text-ink')}>
-              {d.agent} <span className="font-normal text-ink-2">@ {d.provider} {d.region}</span>
+              {d.agent}{' '}
+              <span className="font-normal text-ink-2">
+                @ {d.provider} {d.region}
+              </span>
             </span>
             <MetaLine
               items={[
@@ -77,7 +80,10 @@ export const DeployScreen = () => {
           slug={
             live.length > 0 ? (
               <MetaLine
-                items={[`${live.length} cloud ${live.length === 1 ? 'agent' : 'agents'}`, `${usd(monthly)}/mo est.`]}
+                items={[
+                  `${live.length} cloud ${live.length === 1 ? 'agent' : 'agents'}`,
+                  `${usd(monthly)}/mo est.`,
+                ]}
               />
             ) : undefined
           }
@@ -111,9 +117,9 @@ export const DeployScreen = () => {
                 </LinkButton>
               }
             >
-              Run an agent on Hetzner, DigitalOcean, Fly.io, Render or Railway so it answers while this computer
-              sleeps. Move an existing one from its page (Move to cloud), or start a new one here. You see the
-              monthly cost and every change before anything is created.
+              Run an agent on Hetzner, DigitalOcean, Fly.io, Render or Railway so it answers while this
+              computer sleeps. Move an existing one from its page (Move to cloud), or start a new one here.
+              You see the monthly cost and every change before anything is created.
             </EmptyState>
           ) : (
             <div className="flex flex-col gap-4">

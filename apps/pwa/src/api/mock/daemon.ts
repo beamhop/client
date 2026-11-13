@@ -719,7 +719,12 @@ export class MockDaemon {
       return {
         providers: [
           { id: 'hetzner', displayName: 'Hetzner Cloud', kind: 'vps' as const, configured: true },
-          { id: 'digitalocean', displayName: 'DigitalOcean', kind: 'vps' as const, configured: has('digitalocean') },
+          {
+            id: 'digitalocean',
+            displayName: 'DigitalOcean',
+            kind: 'vps' as const,
+            configured: has('digitalocean'),
+          },
           { id: 'fly', displayName: 'Fly.io', kind: 'paas' as const, configured: true },
           { id: 'render', displayName: 'Render', kind: 'paas' as const, configured: has('render') },
           { id: 'railway', displayName: 'Railway', kind: 'paas' as const, configured: has('railway') },

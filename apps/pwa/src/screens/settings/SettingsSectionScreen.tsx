@@ -109,8 +109,8 @@ export const SettingsSectionScreen = () => {
             </LinkButton>
           }
         >
-          It may have moved. Settings has Devices, Identity, Owners, Secrets, Retention, Notifications, Updates,
-          Appearance and Stop everything.
+          It may have moved. Settings has Devices, Identity, Owners, Secrets, Retention, Notifications,
+          Updates, Appearance and Stop everything.
         </EmptyState>
       )}
     </Screen>
