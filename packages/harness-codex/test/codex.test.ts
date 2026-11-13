@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,7 +14,8 @@ let codexBin: string;
 const sessions: HarnessSession[] = [];
 
 beforeAll(() => {
-  root = mkdtempSync(path.join(tmpdir(), 'beamhop-codex-'));
+  // Real path: attachments are resolved (macOS tmpdir is /var -> /private/var).
+  root = realpathSync(mkdtempSync(path.join(tmpdir(), 'beamhop-codex-')));
   work = path.join(root, 'work');
   bin = path.join(root, 'bin');
   mkdirSync(work);
