@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, Skeleton, useDelayedLoading } from '../../ui/St
 import { useToast } from '../../ui/Toast.tsx';
 import {
   actionsFor,
+  blockedHost,
   buckets,
   categoryOf,
   levelOf,
@@ -105,10 +106,13 @@ export const SecurityTab = ({ alertButton }: { alertButton: ReactNode }) => {
                 void navigate({
                   to: '/policy/$profile',
                   params: { profile: e.agent ?? '' },
-                  search: { allowHost: String(e.data.host) } as never,
+                  search: { allowHost: String(blockedHost(e)) } as never,
                 })
               }
-              aria-label={t('audit.sec.allowHostAria', { host: String(e.data.host), agent: e.agent ?? '' })}
+              aria-label={t('audit.sec.allowHostAria', {
+                host: String(blockedHost(e)),
+                agent: e.agent ?? '',
+              })}
             >
               {t('audit.sec.allow')}
             </Button>

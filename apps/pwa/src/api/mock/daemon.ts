@@ -446,9 +446,9 @@ export class MockDaemon {
         identity: { name: 'reviewer (beamhop)', handle: '@reviewer_alice_bot' },
       };
     }
-    if (p.provider === 'slack' && ('app-token' in p.secrets || 'bot-token' in p.secrets)) {
-      const app = p.secrets['app-token'] ?? '';
-      const bot = p.secrets['bot-token'] ?? '';
+    if (p.provider === 'slack' && ('appToken' in p.secrets || 'botToken' in p.secrets)) {
+      const app = p.secrets.appToken ?? '';
+      const bot = p.secrets.botToken ?? '';
       if (!bot.startsWith('xoxb-'))
         return {
           ok: false,
@@ -466,7 +466,7 @@ export class MockDaemon {
         identity: { name: 'beamhop', handle: '@beamhop' },
       };
     }
-    if (p.provider === 'discord' && 'bot-token' in p.secrets) {
+    if (p.provider === 'discord' && 'botToken' in p.secrets) {
       if (token.split('.').length !== 3)
         return {
           ok: false,
@@ -954,7 +954,8 @@ export class MockDaemon {
           name: p.name,
           provider: p.provider,
           settings: p.values,
-          secretRefs: Object.keys(p.secrets).map((k) => `channel/${p.name}/${k}`),
+          // Same vault naming as the daemon (`channel.<name>.<field>`, apps/daemon channels.ts).
+          secretRefs: Object.keys(p.secrets).map((k) => `channel.${p.name}.${k}`),
           createdAt: new Date().toISOString(),
         }),
         status: 'connecting',
@@ -1376,7 +1377,7 @@ export class MockDaemon {
         { name: p.name, updatedAt: now },
       ];
       // Replacing a channel's token reconnects it (JOURNEYS §4 "Replace token").
-      const ch = /^channel\/([^/]+)\//.exec(p.name)?.[1];
+      const ch = /^channel\.([^.]+)\./.exec(p.name)?.[1];
       const c = ch ? this.state.channels.get(ch) : undefined;
       if (c && c.status === 'error') {
         const next = { ...c, status: 'connecting' as const, error: undefined };

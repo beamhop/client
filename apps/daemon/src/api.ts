@@ -854,6 +854,7 @@ export class ApiHandlers {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
         await d.secrets.set(name, value);
         d.invalidateSecretCache();
+        await d.channels.onSecretSet(name);
         d.audit({
           type: 'secret.set',
           severity: 'security',

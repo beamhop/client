@@ -240,6 +240,16 @@ describe('session events', () => {
     for (const needle of ['SECRET-PROMPT', 'TOOL-SECRET', 'OUT-SECRET'])
       expect(Buffer.concat([raw, wal]).includes(needle)).toBe(false);
   });
+  it('updates the text of an event in place (streaming keeps the seq)', () => {
+    const a = newSession();
+    const e1 = store.sessions.appendEvent(a.id, { kind: 'assistant', text: 'chunk-1 ' });
+    const e2 = store.sessions.appendEvent(a.id, { kind: 'usage', text: '1 in' });
+    const up = store.sessions.updateEventText(a.id, e1.seq, 'chunk-1 chunk-2 ');
+    expect(up).toMatchObject({ seq: e1.seq, kind: 'assistant', text: 'chunk-1 chunk-2 ' });
+    expect(store.sessions.events(a.id).map((e) => e.text)).toEqual(['chunk-1 chunk-2 ', e2.text]);
+    expect(store.sessions.updateEventText(a.id, 99, 'x')).toBeUndefined();
+    expect(store.sessions.updateEventText('nope', e1.seq, 'x')).toBeUndefined();
+  });
   it('rejects events for unknown sessions', () => {
     expect(() => store.sessions.appendEvent('nope', { kind: 'user', text: 'x' })).toThrow(/not found/);
   });

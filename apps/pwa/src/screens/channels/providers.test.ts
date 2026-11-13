@@ -2,19 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { clearDraft, listDrafts, readDraft, writeDraft } from './draft.ts';
 import {
   channelChats,
+  channelSecretRef,
   discordClientId,
   discordInviteUrl,
   isBotUsername,
   misplacedSecret,
   normalizeSteps,
+  PLUGIN_STEPS,
   PROVIDERS,
   parseRelay,
+  pluginSecretFields,
+  providerMeta,
+  secretKeyOf,
   slackCreateUrl,
   suggestBotUsername,
   telegramGroupLink,
   telegramStartLink,
   toSlug,
   uniqueName,
+  validationCaution,
 } from './providers.ts';
 
 // Token-shaped values are assembled at runtime (never committed as literals).
@@ -23,8 +29,8 @@ const xoxb = () => ['xoxb', '12', '34', 'q'.repeat(20)].join('-');
 const xapp = () => ['xapp', '1', 'A0B', '99', 'f'.repeat(20)].join('-');
 
 describe('channel providers', () => {
-  it('normalizes daemon step lists (strings or {id}) with a per-provider fallback', () => {
-    expect(normalizeSteps('discord', ['create', { id: 'credentials' }, 'join'])).toEqual([
+  it('uses string step lists as the order, with a per-provider fallback', () => {
+    expect(normalizeSteps('discord', ['create', 'credentials', 'join'])).toEqual([
       'create',
       'credentials',
       'join',
@@ -32,6 +38,54 @@ describe('channel providers', () => {
     expect(normalizeSteps('telegram')).toHaveLength(6);
     expect(normalizeSteps('discord').indexOf('join')).toBeLessThan(normalizeSteps('discord').indexOf('pair'));
     expect(normalizeSteps('matrix', [])).toContain('credentials');
+  });
+
+  // Regression (real daemon): `channel.providers` returns each plugin's WizardStep objects.
+  const tgSteps = [
+    { id: 'create', title: 'Create a bot', body: '', fields: [] },
+    { id: 'token', title: 'Paste', body: '', fields: [{ kind: 'secret', id: 'token', label: 'Bot token' }] },
+    { id: 'groups', title: 'Groups', body: '', fields: [] },
+  ];
+  const fakeSteps = [
+    {
+      id: 'token',
+      title: 'Token',
+      body: 'paste',
+      fields: [
+        { kind: 'secret', id: 'token', label: 'Token', help: 'from the bot' },
+        { kind: 'text', id: 'room', label: 'Room' },
+      ],
+    },
+    { id: 'again', title: 'Again', body: '', fields: [{ kind: 'secret', id: 'token', label: 'Dup' }] },
+  ];
+  it('keeps the bespoke flow for built-ins when the daemon sends plugin WizardSteps', () => {
+    expect(normalizeSteps('telegram', tgSteps)).toEqual(normalizeSteps('telegram'));
+    expect(normalizeSteps('fake', fakeSteps)).toEqual(PLUGIN_STEPS);
+  });
+  it('collects a plugin channel’s secret fields from its wizard steps', () => {
+    expect(pluginSecretFields(fakeSteps)).toEqual([{ id: 'token', label: 'Token', help: 'from the bot' }]);
+    const meta = providerMeta('fake', fakeSteps);
+    expect(meta.secrets.map((s) => s.key)).toEqual(['token']);
+    expect(meta.secrets[0]!.format.test('x')).toBe(true);
+    expect(meta.secrets[0]!.format.test('  ')).toBe(false);
+    expect(providerMeta('fake').secrets).toEqual([]);
+  });
+  it('uses the plugins’ secret field ids and the daemon’s vault naming', () => {
+    expect(PROVIDERS.telegram!.secrets.map((s) => s.key)).toEqual(['token']);
+    expect(PROVIDERS.slack!.secrets.map((s) => s.key)).toEqual(['appToken', 'botToken']);
+    expect(PROVIDERS.discord!.secrets.map((s) => s.key)).toEqual(['botToken']);
+    expect(PROVIDERS.nostr!.secrets.map((s) => s.key)).toEqual(['nsec']);
+    expect(channelSecretRef('tg', 'token')).toBe('channel.tg.token');
+    expect(secretKeyOf('tg', 'channel.tg.token')).toBe('token');
+    expect(secretKeyOf('my.chan', 'channel.my.chan.botToken')).toBe('botToken');
+  });
+  it('treats only warning words in a successful validation as a caution', () => {
+    expect(validationCaution('Connected to @bot.')).toBe(false);
+    expect(validationCaution('Valid')).toBe(false);
+    expect(validationCaution('Connected as x. Warning: the Message Content intent looks disabled')).toBe(
+      true,
+    );
+    expect(validationCaution('Message Content intent is off.')).toBe(true);
   });
 
   it('checks credential shapes before any network call', () => {
@@ -45,9 +99,9 @@ describe('channel providers', () => {
   });
 
   it('spots a Slack token pasted into the wrong field', () => {
-    expect(misplacedSecret(PROVIDERS.slack!, 'app-token', xoxb())?.key).toBe('bot-token');
-    expect(misplacedSecret(PROVIDERS.slack!, 'bot-token', xoxb())).toBeUndefined();
-    expect(misplacedSecret(PROVIDERS.slack!, 'bot-token', '')).toBeUndefined();
+    expect(misplacedSecret(PROVIDERS.slack!, 'appToken', xoxb())?.key).toBe('botToken');
+    expect(misplacedSecret(PROVIDERS.slack!, 'botToken', xoxb())).toBeUndefined();
+    expect(misplacedSecret(PROVIDERS.slack!, 'botToken', '')).toBeUndefined();
   });
 
   it('builds Telegram deep links with a sanitized ≤64-char start parameter', () => {

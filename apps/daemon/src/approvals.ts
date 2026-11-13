@@ -67,6 +67,9 @@ export interface ActionRequest {
   run: () => Promise<void>;
 }
 
+/** Default commit/undo window before a decision reaches the agent (JOURNEYS §2.6: the PWA's 5 s toast). */
+export const APPROVAL_UNDO_MS = 5_000;
+
 export class ApprovalManager {
   private readonly waiters = new Map<string, Waiter>();
   private readonly settleTimers = new Map<string, NodeJS.Timeout>();
@@ -80,7 +83,7 @@ export class ApprovalManager {
   constructor(private readonly d: Daemon) {}
 
   get undoMs(): number {
-    return this.d.opts.approvalUndoMs ?? 30_000;
+    return this.d.opts.approvalUndoMs ?? APPROVAL_UNDO_MS;
   }
 
   /** Who may decide approvals for an agent: owners (incl. linked identities), the local owner, and roles with canApprove. */
@@ -437,11 +440,15 @@ export class ApprovalManager {
    * check: the sender's role for the approval's agent must be allowed the command and have
    * `canApprove`, and the policy must count the sender as an approver.
    */
-  async decideFromChannel(id: string, by: string, allow: boolean): Promise<ApprovalView> {
+  async decideFromChannel(rawId: string, by: string, allow: boolean): Promise<ApprovalView> {
     const d = this.d;
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) throw new BeamhopError('invalid_input', 'invalid approval id');
-    const state = d.store.approvals.get(id);
-    if (!state) throw new BeamhopError('not_found', `approval ${id} not found`);
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(rawId)) throw new BeamhopError('invalid_input', 'invalid approval id');
+    // The PWA shows ids without the `apr_` prefix (`/approve 0mwed…`); accept both spellings.
+    const state =
+      d.store.approvals.get(rawId) ??
+      (rawId.startsWith('apr_') ? undefined : d.store.approvals.get(`apr_${rawId}`));
+    if (!state) throw new BeamhopError('not_found', `approval ${rawId} not found`);
+    const id = state.id;
     const agent = this.agentOf(state.agent);
     const roleName = agent
       ? resolveRole({ principal: by, agent, global: d.authzGlobal() })
@@ -601,6 +608,9 @@ export class ApprovalManager {
     this.settleTimers.delete(id);
     this.rules.delete(id);
     d.store.kv.delete('approval-reason', id);
+    // An undone "allow for session" must not stick to the re-decided vote.
+    const w = this.waiters.get(id);
+    if (w) w.always = false;
     d.store.approvals.put(res.state);
     d.emit({ type: 'approval.updated', approval: this.view(res.state) });
     d.audit({

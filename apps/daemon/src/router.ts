@@ -516,7 +516,7 @@ export class Router {
       try {
         const a = await this.d.approvals.decideFromChannel(id, press.principal, action === 'approve');
         await reply(
-          `${action === 'approve' ? '✅ Approved' : '🚫 Denied'}: ${a.title} — /undo within 30 s via the PWA`,
+          `${action === 'approve' ? '✅ Approved' : '🚫 Denied'}: ${a.title} — undo within ${Math.round(this.d.approvals.undoMs / 1000)} s in the PWA`,
         );
       } catch (e) {
         await reply(`⚠️ ${errMsg(e)}`);

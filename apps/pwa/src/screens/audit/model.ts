@@ -104,15 +104,43 @@ export const monthForecast = (rows: UsageRow[], now = Date.now()): number => {
 export type SecCategory = 'host' | 'path' | 'peer' | 'pairing' | 'sender' | 'hop' | 'dlp';
 export const SEC_CATEGORIES: SecCategory[] = ['host', 'path', 'peer', 'pairing', 'sender', 'hop', 'dlp'];
 
+/**
+ * beamhopd records every sandbox block as `sandbox.violation` with `data.kind` (`net.allow` |
+ * `fs.read` | `fs.write`) and `data.value` (host or path); older/mock events use
+ * `sandbox.blocked_host` / `sandbox.blocked_path` with `data.host` / `data.path`.
+ */
+const violationKind = (e: AuditEvent): string | undefined =>
+  e.type === 'sandbox.violation' && typeof e.data.kind === 'string' ? e.data.kind : undefined;
+
+/** The host a network block was about, whichever shape the event has. */
+export const blockedHost = (e: AuditEvent): string | undefined =>
+  typeof e.data.host === 'string'
+    ? e.data.host
+    : violationKind(e) === 'net.allow' && typeof e.data.value === 'string'
+      ? e.data.value
+      : undefined;
+
+/** The path a filesystem block was about, whichever shape the event has. */
+export const blockedPath = (e: AuditEvent): string | undefined =>
+  typeof e.data.path === 'string'
+    ? e.data.path
+    : violationKind(e)?.startsWith('fs.') && typeof e.data.value === 'string'
+      ? e.data.value
+      : undefined;
+
 export const categoryOf = (e: AuditEvent): SecCategory | undefined => {
   const t = e.type;
   if (t === 'sandbox.blocked_host') return 'host';
   if (t === 'sandbox.blocked_path') return 'path';
-  if (t.startsWith('mesh.') && t !== 'mesh.hop_limit') return 'peer';
+  const vk = violationKind(e);
+  if (vk === 'net.allow') return 'host';
+  if (vk?.startsWith('fs.')) return 'path';
+  // beamhopd: `mesh.limit` with data.reason `hop_cap` | `turn_cap` | `human_required`.
+  if (t === 'mesh.hop_limit' || (t === 'mesh.limit' && e.data.reason === 'hop_cap')) return 'hop';
+  if (t.startsWith('mesh.')) return 'peer';
   if (t.startsWith('peer.')) return 'peer';
-  if (t === 'pairing.failed') return 'pairing';
-  if (t === 'sender.unknown') return 'sender';
-  if (t === 'mesh.hop_limit') return 'hop';
+  if (t === 'pairing.failed' || t === 'pairing.locked') return 'pairing';
+  if (t === 'sender.unknown' || t === 'sender.blocked') return 'sender';
   if (t.startsWith('dlp.')) return 'dlp';
   return undefined;
 };
@@ -156,8 +184,8 @@ const LOCKED_RE =
 export const actionsFor = (e: AuditEvent): SecAction[] => {
   const out: SecAction[] = [];
   const c = categoryOf(e);
-  const host = typeof e.data.host === 'string' ? e.data.host : undefined;
-  const path = typeof e.data.path === 'string' ? e.data.path : undefined;
+  const host = blockedHost(e);
+  const path = blockedPath(e);
   if (c === 'host' && host) out.push(privateKind(host) ? 'by-design' : e.agent ? 'allow-host' : 'by-design');
   if (c === 'path' && path) out.push(LOCKED_RE.test(path) ? 'by-design' : 'allow-path');
   if (c === 'sender' && e.agent) out.push('allow-sender');

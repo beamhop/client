@@ -498,7 +498,9 @@ const Recent = ({ lastVisit }: { lastVisit: number | null }) => {
                         className="mt-[5px]"
                       />
                     )}
-                    <span className="min-w-0 type-body-sm text-ink">{e.summary}</span>
+                    <span className="min-w-0 type-body-sm text-ink [overflow-wrap:anywhere]">
+                      {e.summary}
+                    </span>
                   </span>
                   {isNew && <span className="sr-only">{t('home.recent.newMark')}</span>}
                 </span>

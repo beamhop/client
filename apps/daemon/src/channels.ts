@@ -318,6 +318,18 @@ export class ChannelManager {
     }
   }
 
+  /** A channel secret (`channel.<name>.<field>`) was replaced: track the ref and reconnect. */
+  async onSecretSet(secretName: string): Promise<void> {
+    const cfg = this.d.config.channels
+      .list()
+      .find((c) => secretName.startsWith(`channel.${c.name}.`) && secretName.length > c.name.length + 9);
+    if (!cfg) return;
+    const next = cfg.secretRefs.includes(secretName)
+      ? cfg
+      : this.d.config.channels.save({ ...cfg, secretRefs: [...cfg.secretRefs, secretName] });
+    if (next.enabled && !this.d.isPanic()) await this.connect(next).catch(() => {});
+  }
+
   async disconnect(name: string): Promise<void> {
     const e = this.entries.get(name);
     if (!e) return;

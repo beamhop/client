@@ -46,6 +46,15 @@ const ResumeReview = ({ since }: { since?: string }) => {
   const resume = async () => {
     setBusy(true);
     try {
+      // `system.resume` on beamhopd reconnects channels and re-arms every unpaused schedule, and an
+      // agent that is not stopped answers again at once. Partial resume (JOURNEYS §8) therefore
+      // parks what was NOT selected first, while everything is still stopped.
+      for (const a of agents.data?.agents ?? [])
+        if (!picked.has(`agent:${a.config.name}`) && a.status !== 'stopped')
+          await call('agent.stop', { name: a.config.name });
+      for (const s of schedules.data?.schedules ?? [])
+        if (!picked.has(`schedule:${s.id}`) && s.enabled && !s.paused)
+          await call('schedule.update', { id: s.id, patch: { paused: true } });
       await call('system.resume');
       for (const k of picked) {
         const [kind, id] = k.split(':') as [string, string];
