@@ -124,6 +124,13 @@ export interface ApiServerOptions {
   maxBodyBytes?: number;
   /** Extra HTTP routes (e.g. `POST /hooks/<id>` webhooks); return true when handled. Auth is theirs. */
   routes?: (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<boolean>;
+  /**
+   * Extra `Host` header values (`name:port`, or `name` for the default port) the server answers
+   * to, e.g. a LAN or tailnet name the PWA is opened under. Loopback names on the bound port are
+   * always allowed. Requests with any other Host are refused (DNS rebinding), and browser
+   * requests (`Origin`) must come from one of these hosts (same-origin only).
+   */
+  allowedHosts?: string[];
 }
 
 export interface ApiServer {
@@ -158,8 +165,52 @@ const SECURITY_HEADERS: Record<string, string> = {
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: https:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
 };
 
+const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
+
+/**
+ * Host/Origin policy (DNS rebinding + cross-site requests). Non-browser clients send no Origin and
+ * are judged on Host + token alone; browser requests must be same-origin with an allowed host.
+ */
+export const createOriginPolicy = (getPort: () => number, extraHosts: readonly string[] = []) => {
+  const allowedHost = (host: string | undefined): boolean => {
+    if (!host) return false;
+    const h = host.toLowerCase();
+    const port = getPort();
+    if (LOOPBACK_HOSTS.some((l) => h === `${l}:${port}`)) return true;
+    return extraHosts.some((x) => x.toLowerCase() === h);
+  };
+  return {
+    allowedHost,
+    /**
+     * undefined = allowed, else the reason for refusing. `api` = RPC/WS endpoints, which also
+     * refuse `Sec-Fetch-Site: cross-site|same-site` (static PWA pages may be navigated to from links).
+     */
+    check(req: IncomingMessage, api: boolean): string | undefined {
+      if (!allowedHost(req.headers.host)) return 'unexpected Host header';
+      const origin = req.headers.origin;
+      if (origin !== undefined) {
+        let o: URL;
+        try {
+          o = new URL(origin);
+        } catch {
+          return 'cross-origin request';
+        }
+        if (o.protocol !== 'http:' && o.protocol !== 'https:') return 'cross-origin request';
+        if (!allowedHost(o.host) || o.host.toLowerCase() !== String(req.headers.host).toLowerCase())
+          return 'cross-origin request';
+      }
+      const site = req.headers['sec-fetch-site'];
+      if (api && site !== undefined && site !== 'same-origin' && site !== 'none')
+        return 'cross-origin request';
+      return undefined;
+    },
+  };
+};
+
 export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer> => {
   const { token, log } = opts;
+  let boundPort = 0;
+  const originPolicy = createOriginPolicy(() => boundPort, opts.allowedHosts);
   const dispatch = createDispatcher(opts.handlers, log);
   const maxBody = opts.maxBodyBytes ?? 2 * 1024 * 1024;
   const authed = (req: IncomingMessage, url: URL): boolean => {
@@ -203,6 +254,12 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
         res.writeHead(200, { 'content-type': 'application/json' }).end('{"ok":true}');
         return;
       }
+      const refused = originPolicy.check(req, url.pathname === '/rpc');
+      if (refused) {
+        log.warn('refused http request', { reason: refused, path: url.pathname });
+        res.writeHead(403, { 'content-type': 'application/json' }).end('{"error":"forbidden"}');
+        return;
+      }
       if (url.pathname === '/rpc') {
         if (req.method !== 'POST') {
           res.writeHead(405).end();
@@ -210,6 +267,11 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
         }
         if (!authed(req, url)) {
           res.writeHead(401, { 'content-type': 'application/json' }).end('{"error":"unauthorized"}');
+          return;
+        }
+        // Forces a CORS preflight for any browser POST (text/plain & co. are "simple" requests).
+        if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) {
+          res.writeHead(415, { 'content-type': 'application/json' }).end('{"error":"use application/json"}');
           return;
         }
         let body: unknown;
@@ -239,6 +301,13 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
   const wss = new WebSocketServer({ noServer: true, maxPayload: maxBody });
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+    const refused = originPolicy.check(req, true);
+    if (refused) {
+      log.warn('refused websocket upgrade', { reason: refused });
+      socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     if (url.pathname !== '/ws' || !authed(req, url)) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
@@ -265,6 +334,7 @@ export const startApiServer = async (opts: ApiServerOptions): Promise<ApiServer>
     server.listen(opts.port ?? 0, opts.host ?? '127.0.0.1', () => res());
   });
   const addr = server.address() as AddressInfo;
+  boundPort = addr.port;
   const url = `http://${addr.address === '::1' ? '[::1]' : addr.address}:${addr.port}`;
   log.info('api listening', { url });
 

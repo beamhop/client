@@ -75,6 +75,13 @@ export interface LlmProxyOptions {
   /** HTTP(S) agent for upstream requests (e.g. a corporate proxy agent). */
   upstreamAgent?: Agent;
   maxRequestBytes?: number;
+  /**
+   * Allow provider-side tools that make the *provider* fetch URLs or connect to remote servers
+   * (Anthropic `mcp_servers` / `web_fetch` / `web_search`, OpenAI `web_search*` / `mcp`, OpenRouter
+   * `:online` / web plugin). Default false: with the owner's key they are an exfiltration channel
+   * around the sandbox egress allowlist (§7A).
+   */
+  allowServerSideTools?: boolean;
 }
 
 export interface LlmProxy {
@@ -125,6 +132,27 @@ const json = (res: ServerResponse, status: number, body: unknown) => {
 };
 
 const errorBody = (type: string, message: string) => ({ type: 'error', error: { type, message } });
+
+/** Tool `type`s that run on the provider and reach the network (URL fetch, search, remote MCP). */
+const SERVER_TOOL_TYPE = /^(web_fetch|web_search|mcp|url_context)/i;
+
+/** Reason a request body asks the provider to reach the network on our key, or undefined. */
+export const serverSideToolUse = (body: unknown): string | undefined => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined;
+  const o = body as Record<string, unknown>;
+  if (o.mcp_servers !== undefined) return 'mcp_servers';
+  if (o.web_search_options !== undefined) return 'web_search_options';
+  if (o.plugins !== undefined) return 'plugins';
+  const models = [o.model, ...(Array.isArray(o.models) ? o.models : [])];
+  if (models.some((m) => typeof m === 'string' && /:online$/i.test(m))) return ':online model';
+  const tools = Array.isArray(o.tools) ? o.tools : [];
+  for (const t of tools) {
+    if (!t || typeof t !== 'object') continue;
+    const type = (t as Record<string, unknown>).type;
+    if (typeof type === 'string' && SERVER_TOOL_TYPE.test(type)) return `tool ${type}`;
+  }
+  return undefined;
+};
 
 const presentedToken = (h: IncomingHttpHeaders): string | undefined => {
   const s = h[SESSION_HEADER];
@@ -282,9 +310,27 @@ export const createLlmProxy = async (opts: LlmProxyOptions): Promise<LlmProxy> =
     let body = await readBody(req, maxBytes);
     let model: string | undefined;
     const ctype = String(req.headers['content-type'] ?? '');
-    if (body.length && ctype.includes('json')) {
+    if (body.length) {
+      // Parse regardless of content-type: providers may accept JSON sent as text/plain.
+      let parsed: Record<string, unknown> | undefined;
       try {
-        const parsed = JSON.parse(body.toString('utf8')) as Record<string, unknown>;
+        const v = JSON.parse(body.toString('utf8')) as unknown;
+        if (v && typeof v === 'object' && !Array.isArray(v)) parsed = v as Record<string, unknown>;
+      } catch {
+        if (ctype.includes('json')) {
+          return json(res, 400, errorBody('invalid_request_error', 'request body is not valid JSON'));
+        }
+      }
+      if (parsed) {
+        const why = opts.allowServerSideTools ? undefined : serverSideToolUse(parsed);
+        if (why) {
+          log.warn('blocked provider-side network tool', { route: route.id, feature: why });
+          return json(
+            res,
+            403,
+            errorBody('permission_error', `beamhop blocks provider-side network tools (${why})`),
+          );
+        }
         if (typeof parsed.model === 'string') model = parsed.model;
         if (
           route.injectStreamUsage &&
@@ -295,8 +341,6 @@ export const createLlmProxy = async (opts: LlmProxyOptions): Promise<LlmProxy> =
           parsed.stream_options = { include_usage: true };
           body = Buffer.from(JSON.stringify(parsed), 'utf8');
         }
-      } catch {
-        /* forward as-is */
       }
     }
 

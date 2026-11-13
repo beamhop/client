@@ -29,7 +29,8 @@ export interface HandlerMeta {
  * Functions the daemon provides. `ctx` is whatever the daemon registered for the session token
  * (agent, conversation, role, hops, …). Throw a `BeamhopError` to return a clean tool error, e.g.
  *  - `forbidden` for a channel_send target without a route, or a hop limit (`nextHop`),
- *  - `sandbox_violation` for a channel_send_file path outside the session dir/mounts,
+ *  - `sandbox_violation` for a channel_send_file path outside the session dir/mounts (open the file
+ *    with `openConfinedFile(path, [sessionDir, ...mounts], policy.fs.deny)`: never `readFile(path)`),
  *  - `budget_exceeded`, `timeout`, `not_found`, ...
  * Other errors are reported to the model as a generic internal error (details only in the log).
  */
