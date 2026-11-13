@@ -1,14 +1,16 @@
 # Release pipeline. Push a tag `vX.Y.Z` (matching apps/cli/package.json "version") to run it.
 #
 #   verify  ─┬─ npm (bundle, smoke, publish with provenance) ── image (ghcr, multi-arch, cosign)
-#            └─ binaries (Node SEA per OS/arch, signed/notarized when secrets exist)
+#            ├─ binaries (Node SEA per OS/arch, signed/notarized when secrets exist)
+#            └─ desktop (Electron app per OS/arch: .dmg/.zip, .exe, .AppImage/.deb)
 #                                         └── release (SHA256SUMS + cosign, GitHub release, manifests)
 #
 # Secrets:
 #   NPM_TOKEN                                    npm automation token (publish)
-#   APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,  optional: Developer ID signing + notarization;
-#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD  unsigned (ad-hoc) macOS binaries otherwise
-#   WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD  optional: Authenticode signing
+#   APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD,  Developer ID signing + notarization. Optional for the
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD  CLI binaries (ad-hoc otherwise); REQUIRED for the
+#                                                desktop app on a tag push (dry runs build unsigned)
+#   WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD  optional: Authenticode signing (CLI + desktop)
 # Image signing and checksum signing use keyless cosign (GitHub OIDC); no key material is stored.
 name: release
 on:
@@ -197,6 +199,76 @@ jobs:
             dist/standalone/*.zip
           if-no-files-found: error
 
+  desktop:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native deps (keychain addon, srt helpers, Claude Code binary) are per platform: build each
+          # target on its own OS and arch.
+          - { os: macos-latest, arch: arm64 }
+          - { os: macos-15-intel, arch: x64 }
+          - { os: windows-latest, arch: x64 }
+          - { os: ubuntu-latest, arch: x64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_P12_BASE64 != '' }}
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Signed macOS builds are required for a release
+        if: runner.os == 'macOS' && github.event_name == 'push' && env.HAS_APPLE_CERT != 'true'
+        run: |
+          echo "::error::APPLE_CERT_P12_BASE64 (+ APPLE_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD) must be set to release the desktop app"
+          exit 1
+      - run: pnpm install --frozen-lockfile
+      - name: Stage the app (daemon bundle + this platform's native deps)
+        run: pnpm --filter @beamhop/desktop run build
+      - name: Package (electron-builder)
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          # macOS: Developer ID signing + notarization (electron-builder reads these).
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.APPLE_CERT_P12_BASE64 || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERT_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          # Windows: Authenticode.
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Without a certificate, build unsigned instead of picking up a random keychain identity.
+          if [[ "$RUNNER_OS" == "macOS" && "$HAS_APPLE_CERT" != "true" ]]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; fi
+          if [[ "$RUNNER_OS" == "Windows" && "$HAS_WINDOWS_CERT" != "true" ]]; then unset WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; fi
+          pnpm exec electron-builder --config electron-builder.config.cjs --${{ matrix.arch }} --publish never
+      - name: Verify the macOS signature and notarization ticket
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        run: |
+          app=$(ls -d dist/desktop/mac*/beamhop.app | head -1)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          xcrun stapler validate "$app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            dist/desktop/*.dmg
+            dist/desktop/*-mac-*.zip
+            dist/desktop/*.exe
+            dist/desktop/*.AppImage
+            dist/desktop/*.deb
+          if-no-files-found: error
+
   image:
     needs: [verify, npm]
     if: github.event_name == 'push' # the image installs the just-published npm package
@@ -251,7 +323,7 @@ jobs:
           push-to-registry: true
 
   release:
-    needs: [verify, npm, binaries]
+    needs: [verify, npm, binaries, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -275,7 +347,7 @@ jobs:
         run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
       - uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "assets/*.tar.gz, assets/*.zip, assets/*.tgz"
+          subject-path: "assets/*.tar.gz, assets/*.zip, assets/*.tgz, assets/*.dmg, assets/*.exe, assets/*.AppImage, assets/*.deb"
       - name: Render Homebrew / Scoop / winget manifests
         run: node packaging/render.mjs --version "${{ needs.verify.outputs.version }}" --checksums assets/SHA256SUMS --repo "${{ github.repository }}" --out assets/manifests
       - name: Create GitHub release
@@ -288,4 +360,6 @@ jobs:
           prerelease=""; [[ "$tag" == *-* ]] && prerelease="--prerelease"
           (cd assets/manifests && tar -czf ../packaging-manifests.tar.gz .)
           gh release create "$tag" --title "beamhop $tag" --notes "$notes" $prerelease \
-            assets/*.tar.gz assets/*.zip assets/*.tgz assets/SHA256SUMS assets/SHA256SUMS.sigstore.json
+            assets/*.tar.gz assets/*.zip assets/*.tgz \
+            assets/*.dmg assets/*.exe assets/*.AppImage assets/*.deb \
+            assets/SHA256SUMS assets/SHA256SUMS.sigstore.json

@@ -95,6 +95,7 @@ export interface MockState {
   deployments: DeploymentView[];
   suggestions: PolicySuggestion[];
   secrets: { name: string; updatedAt?: string }[];
+  vaultKeySource: 'file' | 'keychain';
   roles: RoleDef[];
   grants: Record<string, string>;
   owners: string[];
@@ -1355,6 +1356,7 @@ export const seed = (now = Date.now()): MockState => {
     schedules,
     deployments,
     suggestions,
+    vaultKeySource: 'file',
     secrets: [
       { name: 'ANTHROPIC_API_KEY', updatedAt: ago(now, 60 * 24 * 12) },
       { name: 'OPENAI_API_KEY', updatedAt: ago(now, 60 * 24 * 9) },

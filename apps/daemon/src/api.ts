@@ -8,6 +8,7 @@ import {
   normalizePrincipal,
   type RoleOverride,
 } from '@beamhop/authz';
+import { keychainAvailable, readKeySource, setKeySource } from '@beamhop/broker';
 import {
   AgentConfig,
   type AgentView,
@@ -277,6 +278,28 @@ export class ApiHandlers {
           .filter((n) => llmKeys.includes(n));
         const keyAgents = d.config.agents.list().filter((a) => a.harnessAuth === 'api-key');
         checks.push(harnessCheck(hs, haveKeys.length > 0));
+        // Harnesses with their own service (GitHub Copilot) cannot use your login inside the sandbox
+        // (it lives in the OS keychain) and the broker cannot front them: they need a token secret.
+        const secretNames = new Set((await d.secrets.list().catch(() => [])).map((s) => s.name));
+        for (const a of d.config.agents.list()) {
+          const plugin = d.registry.harness(a.harness);
+          if (!plugin?.network?.length) continue;
+          const missing = a.secretEnv.filter((n) => !secretNames.has(n));
+          if (a.secretEnv.length && !missing.length) continue;
+          const tokenVar = a.harness === 'copilot' ? 'COPILOT_GITHUB_TOKEN' : (missing[0] ?? 'TOKEN');
+          checks.push({
+            id: `agent.${a.name}.token`,
+            title: `Agent ${a.name} (${plugin.displayName})`,
+            status: 'warn',
+            message: a.secretEnv.length
+              ? `secret ${missing.join(', ')} is not set`
+              : `no token: ${plugin.displayName} cannot use your login inside the sandbox`,
+            fix: [
+              ...(missing.length || !a.secretEnv.length ? [`beamhop secret set ${tokenVar}`] : []),
+              ...(a.secretEnv.length ? [] : [`beamhop agent set ${a.name} 'secretEnv=["${tokenVar}"]'`]),
+            ].join(' && '),
+          });
+        }
         for (const c of d.config.channels.list()) {
           const v = d.channels.view(c);
           checks.push({
@@ -294,14 +317,19 @@ export class ApiHandlers {
           });
         }
         const secretsBackend = d.secrets.backend;
+        const keyWhere = {
+          file: `key in ${join(d.home, 'vault.key')}`,
+          keychain: 'key in the system keychain',
+          passphrase: 'locked with BEAMHOP_VAULT_PASSPHRASE',
+        } as const;
         checks.push({
           id: 'secrets.backend',
           title: 'Secret storage',
           status: secretsBackend === 'memory' ? 'warn' : 'ok',
-          message: `backend: ${secretsBackend}`,
-          ...(secretsBackend === 'memory'
-            ? { fix: 'Install a keychain (libsecret) or set BEAMHOP_VAULT_PASSPHRASE.' }
-            : {}),
+          message:
+            secretsBackend === 'file'
+              ? `encrypted vault, ${keyWhere[readKeySource({ home: d.home })]}`
+              : 'in memory only: secrets are lost on restart',
         });
         checks.push({
           id: 'llm.keys',
@@ -907,7 +935,26 @@ export class ApiHandlers {
       'secret.list': async () => ({
         secrets: (await d.secrets.list()).filter((s) => !isInternalSecret(s.name)),
         backend: d.secrets.backend,
+        ...(d.secrets.backend === 'file'
+          ? { keySource: readKeySource({ home: d.home }), keychainAvailable: await keychainAvailable() }
+          : {}),
       }),
+      'secret.setKeySource': async ({ keySource }, ctx) => {
+        if (d.secrets.backend !== 'file')
+          throw new BeamhopError('unavailable', 'this daemon does not keep secrets in the encrypted vault');
+        const from = readKeySource({ home: d.home });
+        // The open vault keeps working: only where its key is stored changes.
+        await setKeySource({ home: d.home }, keySource);
+        if (from !== keySource)
+          d.audit({
+            type: 'secret.keySource',
+            severity: 'security',
+            summary: `Vault key moved from ${from} to ${keySource}`,
+            actor: this.principal(ctx),
+            data: { from, to: keySource },
+          });
+        return { keySource: readKeySource({ home: d.home }) };
+      },
       'secret.set': async ({ name, value }, ctx) => {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
         await d.secrets.set(name, value);

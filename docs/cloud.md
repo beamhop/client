@@ -21,7 +21,7 @@ Either way you see the plan and the estimated monthly cost before anything is cr
 
 ## Setup
 
-Store the provider's API token in the keychain (it never leaves your machine; the server never gets it):
+Store the provider's API token in the vault (it never leaves your machine; the server never gets it):
 
 ```bash
 beamhop secret set deploy.hetzner.token          # reads the value from stdin
@@ -73,7 +73,7 @@ cap unless an owner approves.
 
 Per agent (`harnessAuth` in the agent YAML):
 
-- `api-key` (default): the key stays in your keychain or the remote vault and the broker injects it; the
+- `api-key` (default): the key stays in your local vault or the remote one and the broker injects it; the
   sandbox only ever sees a placeholder.
 - `subscription`: device-code/OAuth login for the harness, run on the server through the PWA. Some
   subscription plans don't allow use on servers or by other people; beamhop shows a warning with a link to

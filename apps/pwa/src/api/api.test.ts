@@ -45,6 +45,7 @@ const SAMPLE: Partial<Record<MethodName, unknown>> = {
   'policy.set': { name: 'helpdesk', profile: 'strict' },
   'policy.applySuggestion': { id: 'sug_pypi', accept: true },
   'secret.set': { name: 'X', value: 'v' },
+  'secret.setKeySource': { keySource: 'keychain' },
   'secret.delete': { name: 'X' },
   'schedule.add': { agent: 'reviewer', kind: 'cron', spec: '0 9 * * *', prompt: 'p', owner: 'nostr:npub1a' },
   'schedule.update': { id: 'sch_standup', patch: { paused: true } },

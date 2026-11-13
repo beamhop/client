@@ -3,7 +3,7 @@
 The beamhop control panel is an installable Progressive Web App: React 19 + React Aria Components,
 mobile-first with a bottom tab bar, swipe gestures with button alternatives, light/dark/high-contrast
 themes, and WCAG 2.2 AA as the bar (tested with axe and Playwright on mobile and desktop viewports).
-Installing it from the browser *is* the desktop app.
+The same UI ships as the [desktop app](desktop.md), with the daemon bundled, for people who do not use the CLI.
 
 ## Open it
 

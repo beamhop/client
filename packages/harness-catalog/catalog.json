@@ -103,6 +103,8 @@
         "url": "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli"
       },
       "configDirs": ["~/.copilot"],
+      "homeEnv": "COPILOT_HOME",
+      "network": ["api.githubcopilot.com", "*.githubcopilot.com"],
       "auth": {
         "env": ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"],
         "files": ["~/.copilot/config.json"],
@@ -112,7 +114,10 @@
       },
       "versionRange": ">=1.0.0",
       "modes": {
-        "acp": { "args": ["--acp"], "note": "Public preview; stdio by default, TCP with --port." },
+        "acp": {
+          "args": ["--acp", "--secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN"],
+          "note": "Public preview; stdio by default, TCP with --port. --secret-env-vars keeps the token out of the shells and MCP servers it starts, and redacts it from output."
+        },
         "headless": { "args": ["-p"] }
       },
       "sources": [

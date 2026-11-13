@@ -967,7 +967,13 @@ export const buildProgram = (deps: CliDeps): Command => {
   // ── secrets ─────────────────────────────────────────────
   const secret = program
     .command('secret')
-    .description('secrets (stored in the OS keychain; values are never shown)');
+    .description('secrets (in an encrypted vault file; values are never shown)');
+  const keyWhere = (k?: string) =>
+    k === 'keychain'
+      ? 'vault key in the system keychain'
+      : k === 'passphrase'
+        ? 'vault locked with BEAMHOP_VAULT_PASSPHRASE'
+        : 'vault key in ~/.beamhop/vault.key';
   secret
     .command('ls')
     .description('list secret names (never values)')
@@ -977,7 +983,34 @@ export const buildProgram = (deps: CliDeps): Command => {
         return {
           data: r,
           human: () =>
-            `${pc.dim(`backend: ${r.backend}`)}\n${table(r.secrets as Row[], ['name', 'updatedAt'])}`,
+            `${pc.dim(r.backend === 'file' ? `encrypted vault · ${keyWhere(r.keySource)}` : `backend: ${r.backend}`)}\n${table(r.secrets as Row[], ['name', 'updatedAt'])}`,
+        };
+      }),
+    );
+  secret
+    .command('keychain [on|off]')
+    .description(
+      'keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key (off, the default); without an argument, show where it is',
+    )
+    .action(
+      act(async (c, state?: string) => {
+        if (state !== undefined && state !== 'on' && state !== 'off')
+          throw new Error('use `beamhop secret keychain on` or `beamhop secret keychain off`');
+        if (state === undefined) {
+          const r = await c.call('secret.list');
+          return {
+            data: { keySource: r.keySource, keychainAvailable: r.keychainAvailable },
+            human: () =>
+              `${keyWhere(r.keySource)}${r.keychainAvailable === false ? pc.dim(' (no system keychain on this computer)') : ''}`,
+          };
+        }
+        const r = await c.call('secret.setKeySource', { keySource: state === 'on' ? 'keychain' : 'file' });
+        return {
+          data: r,
+          human: () =>
+            state === 'on'
+              ? `${keyWhere(r.keySource)}. ${pc.dim('macOS may ask once whether beamhop can use it: choose Always Allow.')}`
+              : keyWhere(r.keySource),
         };
       }),
     );

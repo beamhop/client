@@ -6,6 +6,45 @@ All notable changes to beamhop are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop app** (`apps/desktop`): the control panel in its own window with the daemon bundled, for macOS,
+  Windows and Linux. Nothing else to install. Attaches to a daemon the CLI already runs, or starts its own;
+  keeps running in the menu bar / tray when the window closes; open at login (starts hidden); Stop
+  everything from the tray. Signed and notarized on macOS, Authenticode-signed on Windows when the
+  certificate is configured. See [docs/desktop.md](docs/desktop.md).
+
+- **Copilot agents can authenticate:** per-agent `secretEnv` passes named beamhop secrets to the harness
+  as env vars (opt-in; the agent can read them). Copilot gets `COPILOT_GITHUB_TOKEN`, its own API hosts in
+  the sandbox (catalog `network`), its state in the session dir (catalog `homeEnv` → `COPILOT_HOME`), and
+  `--secret-env-vars`. `beamhop doctor` flags Copilot agents without a token.
+
+- **Secrets in one encrypted file; the system keychain is opt-in.** Every secret (LLM keys, channel tokens,
+  agent Nostr keys, the database key) lives in `~/.beamhop/vault.enc.json` (AES-256-GCM). Its key is a random
+  256-bit key in `~/.beamhop/vault.key` (0600) by default, so macOS no longer prompts once per secret.
+  `beamhop secret keychain on|off` or *Settings → Secrets → Vault key* moves just that key into the system
+  keychain (one item per beamhop home) and back; the vault is not re-encrypted. `BEAMHOP_VAULT_PASSPHRASE`
+  still locks it with a passphrase on servers. `BEAMHOP_NO_KEYCHAIN` is gone, and secrets stored in the
+  keychain by earlier builds are not migrated.
+
+### Fixed
+
+- Agents without a mounted folder (and git worktree mounts) failed to start: their session dir and
+  worktrees live in the beamhop home, which the sandbox denies as a whole, so the harness could not read
+  its own working directory ("ACP connection closed"). The sandbox now carves out exactly that session's
+  own dirs (`fs.own`, set only by the daemon); the rest of the home, other sessions included, stays denied.
+  `channel_send_file` accepts files from the session dir for the same reason.
+- The daemon also denies its actual home when `BEAMHOP_HOME` is not `~/.beamhop`.
+- A harness that fails to start now reports its own stderr instead of only "connection closed".
+- Desktop app opened from Finder / the Dock did not find harnesses installed via nvm, Homebrew, npm & co.
+  (it only had `/usr/bin:/bin:/usr/sbin:/sbin`). It now reads the login shell's PATH and tool-manager
+  variables once at startup (10 s timeout) and gives them to the daemon; nothing else from the shell env.
+
+### Changed
+
+- Helpers the daemon starts with `process.execPath` (sandbox runner, MCP server) also run when the daemon
+  runs on Electron's Node (`nodeExecEnv()` in `@beamhop/core`); the variable never reaches harnesses.
+
 ## [0.1.0] - unreleased
 
 First public build.

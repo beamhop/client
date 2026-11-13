@@ -1,7 +1,7 @@
 /**
  * Resumable wizard drafts (JOURNEYS §4: "leaving to the provider's site is safe").
  * One draft per provider in localStorage `bh.channelDraft.<provider>`. **Secrets are never stored**:
- * before `channel.add` the token lives only in memory; after it, it lives in the daemon's keychain.
+ * before `channel.add` the token lives only in memory; after it, it lives in the daemon's encrypted vault.
  * A reload before Connect means pasting the token again; everything else comes back.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';

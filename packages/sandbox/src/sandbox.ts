@@ -10,6 +10,7 @@ import { SandboxManager, SandboxRuntimeConfigSchema } from '@anthropic-ai/sandbo
 import {
   BeamhopError,
   type Logger,
+  nodeExecEnv,
   type SandboxHandle,
   type SandboxPolicy,
   silentLogger,
@@ -260,7 +261,9 @@ export const createSandbox = async (
       };
     }
     const file = writeConfig();
-    return { cmd: nodePath, args: [RUNNER_PATH, file, '--', cmd, ...args], env: { ...env } };
+    // The runner needs ELECTRON_RUN_AS_NODE under the desktop app; it removes it before the harness starts.
+    const runnerEnv = opts.nodePath ? {} : nodeExecEnv();
+    return { cmd: nodePath, args: [RUNNER_PATH, file, '--', cmd, ...args], env: { ...env, ...runnerEnv } };
   };
 
   if (backend === 'srt-windows') warnings.push('Windows sandbox backend is alpha.');

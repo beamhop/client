@@ -575,7 +575,16 @@ export const methods = {
     result: z.object({
       secrets: z.array(z.object({ name: z.string(), updatedAt: z.string().optional() })),
       backend: z.string(),
+      /** Where the vault key is kept: `file` (default), `keychain` (opt-in) or `passphrase` (env). */
+      keySource: z.enum(['file', 'keychain', 'passphrase']).optional(),
+      /** Whether the OS keychain can be used on this computer. */
+      keychainAvailable: z.boolean().optional(),
     }),
+  },
+  /** Move the vault key between its 0600 key file and the OS keychain. The vault is not re-encrypted. */
+  'secret.setKeySource': {
+    params: z.object({ keySource: z.enum(['file', 'keychain']) }),
+    result: z.object({ keySource: z.enum(['file', 'keychain', 'passphrase']) }),
   },
   'secret.set': { params: z.object({ name: z.string(), value: z.string() }), result: ok },
   'secret.delete': { params: byName, result: ok },

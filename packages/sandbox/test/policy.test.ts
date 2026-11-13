@@ -162,6 +162,82 @@ describe('toSrtConfig', () => {
   });
 });
 
+describe('own dirs (session dir + worktrees inside the denied beamhop home)', () => {
+  const bh = join(home, '.beamhop');
+  const sessions = join(bh, 'sessions');
+  const worktrees = join(bh, 'worktrees');
+  const sessionDir = join(sessions, 'ses_1');
+  const own = { dirs: [sessionDir], beamhopHome: bh };
+  const session = { fs: { read: [sessionDir], write: [sessionDir] } };
+
+  it('without a carve-out, deny wins and the session dir is dropped (the bug: the harness cannot read its cwd)', () => {
+    const p = compilePolicy('workspace', [], session, opts);
+    expect(p.fs.write).not.toContain(sessionDir);
+    expect(p.fs.own).toEqual([]);
+  });
+
+  it('keeps exactly the session dir; the rest of the beamhop home stays denied', () => {
+    const p = compilePolicy('workspace', [], session, { ...opts, own });
+    expect(p.fs.write).toEqual([sessionDir]);
+    expect(p.fs.own).toEqual([sessionDir]);
+    expect(p.fs.deny).toContain(bh);
+
+    const c = toSrtConfig(p, { home });
+    expect(c.filesystem.denyRead).toContain(bh);
+    expect(c.filesystem.allowRead).toEqual([sessionDir]);
+    expect(c.filesystem.allowWrite).toEqual([sessionDir]);
+    // denyWrite has no carve-outs in srt, so the region holding the own dir is left to default-deny writes.
+    expect(c.filesystem.denyWrite).not.toContain(bh);
+    expect(c.filesystem.denyWrite).toContain(join(home, '.ssh'));
+  });
+
+  it('a worktree mount inside the beamhop home survives as a writable mount', () => {
+    const wt = join(worktrees, 'ses_1');
+    const p = compilePolicy(
+      'workspace',
+      [{ path: join(wt, 'app'), mode: 'rw' }],
+      {},
+      {
+        ...opts,
+        own: { dirs: [wt], beamhopHome: bh },
+      },
+    );
+    expect(p.fs.write).toEqual([join(wt, 'app')]);
+  });
+
+  it('keeps the beamhop home write-denied when a broad writable mount covers it', () => {
+    const p = compilePolicy('workspace', [{ path: '~', mode: 'rw' }], session, { ...opts, own });
+    const c = toSrtConfig(p, { home });
+    expect(c.filesystem.denyWrite).toContain(bh);
+    expect(c.filesystem.denyRead).toContain(bh);
+  });
+
+  it('refuses carve-outs outside sessions/worktrees, of a root itself, or into another denied path', () => {
+    const bad =
+      (dirs: string[], beamhopHome = bh, fs: { deny?: string[] } = {}) =>
+      () =>
+        compilePolicy('workspace', [], { fs }, { ...opts, own: { dirs, beamhopHome } });
+    expect(bad([bh])).toThrow(/is not inside/);
+    expect(bad([join(bh, 'api-token')])).toThrow(/is not inside/);
+    expect(bad([sessions])).toThrow(/is not inside/);
+    expect(bad([worktrees])).toThrow(/is not inside/);
+    expect(bad([join(sessions, '..', 'vault.age')])).toThrow(/is not inside/);
+    // A "beamhop home" inside ~/.ssh cannot be used to reopen it.
+    expect(bad([join(home, '.ssh', 'sessions', 'x')], join(home, '.ssh'))).toThrow(/inside protected path/);
+    expect(bad([join(home, '.aws', 'bh', 'sessions', 'x')], join(home, '.aws', 'bh'))).toThrow(
+      /inside protected path/,
+    );
+    // A deny the user put inside the home also wins.
+    expect(bad([sessionDir], bh, { deny: [sessionDir] })).toThrow(/would reopen denied path/);
+  });
+
+  it('agent config cannot set own dirs (custom profile, overrides)', () => {
+    const p = compilePolicy('custom', [], { fs: { own: [bh] } } as never, opts);
+    expect(p.fs.own).toEqual([]);
+    expect(toSrtConfig(p, { home }).filesystem.allowRead).toEqual([]);
+  });
+});
+
 describe('parseViolationLine', () => {
   it.each([
     ['deny network-outbound example.com:443 (not in allowlist)', { kind: 'net.allow', value: 'example.com' }],

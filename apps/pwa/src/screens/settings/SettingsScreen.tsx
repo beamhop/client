@@ -1,6 +1,6 @@
 /**
  * Settings — SCREENS §10, JOURNEYS §9 (devices). Section list on compact, sub-nav list pane + detail on
- * expanded. Each row carries a live slug (`3 devices · 1 inactive`, `8 names · OS keychain`), so the
+ * expanded. Each row carries a live slug (`3 devices · 1 inactive`, `8 names · encrypted vault`), so the
  * list itself answers "is anything off?" before you open a section.
  *
  * Research used: Apple HIG Settings grouping (few groups, plain nouns, status on the row);
@@ -152,7 +152,8 @@ const useLiveSlugs = (): Record<string, { text: string; flag?: ReactNode }> => {
     out.secrets = {
       text: t('settings.live.secrets', {
         count: secrets.data.secrets.length,
-        backend: secrets.data.backend.replace(/ \(.*\)/, ''),
+        backend:
+          secrets.data.backend === 'file' ? 'encrypted vault' : secrets.data.backend.replace(/ \(.*\)/, ''),
       }),
     };
   }

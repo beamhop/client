@@ -280,9 +280,8 @@ export class Daemon {
       this.config.ensureDirs();
       if (!existsSync(this.config.configFile)) this.config.saveGlobal({});
       if (this.deployEnv.ownerNpub) this.ensureOwner(`nostr:${this.deployEnv.ownerNpub}`);
-      this.secrets =
-        this.opts.secrets ??
-        (await createSecretStore({ log: this.log, vaultPath: join(this.home, 'vault.enc.json') }));
+      // One encrypted vault in the home; its key in vault.key, or the OS keychain if the user opted in.
+      this.secrets = this.opts.secrets ?? (await createSecretStore({ home: this.home, log: this.log }));
       const key = this.opts.dataKey ?? (await ensureDataKey(this.home, this.secrets, this.log));
       this.store = openStore({ key, home: this.home, logger: this.log, now: () => new Date(this.now()) });
       this.apiToken = ensureApiToken(this.home);

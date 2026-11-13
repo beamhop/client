@@ -1,0 +1,22 @@
+{
+  "name": "@beamhop/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "beamhop desktop app: the web UI in a window, with the daemon bundled. Nothing else to install.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs --skip-daemon-install && electron build/app",
+    "dist": "node scripts/build.mjs && electron-builder --config electron-builder.config.cjs --publish never",
+    "dist:dir": "node scripts/build.mjs && electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "icons": "node scripts/gen-icons.mjs"
+  },
+  "devDependencies": {
+    "@beamhop/client": "workspace:*",
+    "@beamhop/core": "workspace:*",
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "esbuild": "^0.28.2"
+  }
+}

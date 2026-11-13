@@ -29,7 +29,7 @@ export const acpHarnessFromCatalog = (entry: CatalogEntry, opts: CatalogAcpOptio
   const launch = launchFor(entry, 'acp');
   if (!launch) throw new BeamhopError('invalid_input', `${entry.id} has no ACP launch mode`);
   let lastPath: string | undefined;
-  return createAcpHarness({
+  const plugin = createAcpHarness({
     id: entry.id,
     displayName: entry.displayName,
     command: () => (launch.npm ? launch.command : (lastPath ?? launch.command)),
@@ -42,6 +42,11 @@ export const acpHarnessFromCatalog = (entry: CatalogEntry, opts: CatalogAcpOptio
       return d.status === 'not-installed' ? null : { ...d, protocol: 'acp' };
     },
   });
+  return {
+    ...plugin,
+    ...(entry.network.length ? { network: [...entry.network] } : {}),
+    ...(entry.homeEnv ? { homeEnv: entry.homeEnv } : {}),
+  };
 };
 
 const fromBundled = (id: string, opts: CatalogAcpOptions, catalog?: Catalog): HarnessPlugin => {

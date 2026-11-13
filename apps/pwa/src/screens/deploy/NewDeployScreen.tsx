@@ -1,7 +1,7 @@
 /**
  * New cloud agent / Move to cloud — SCREENS §8, JOURNEYS §7.
  * Steps: 01 Agent (move an existing local agent, or a new one) · 02 Provider (5 rows: VPS/PaaS
- * trade-off, sandbox note, inline API token → keychain) · 03 Size & region (monthly cost right-aligned)
+ * trade-off, sandbox note, inline API token → vault) · 03 Size & region (monthly cost right-aligned)
  * · 04 Files & login (per-mount sync: git clone / rsync / Mutagen / leave here; harness auth: API key
  * brokered from this computer or a subscription login on the server) · 05 Plan (terraform-style + ~ → - diff with words, warnings needing an explicit "I understand",
  * estimated cost) → `Deploy · $4.90/mo` → deployment detail (apply timeline; leaving is safe).
@@ -419,7 +419,7 @@ const FilesStep = ({
       >
         <Radio
           value="api-key"
-          description="The key stays in this computer's keychain; the server asks for each request through the broker."
+          description="The key stays in this computer's encrypted vault; the server asks for each request through the broker."
         >
           API key from this computer
         </Radio>

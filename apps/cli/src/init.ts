@@ -268,7 +268,7 @@ export const runInit = async (deps: InitDeps, o: InitOptions): Promise<InitResul
             {
               value: 'create' as const,
               label: 'Create a new owner key',
-              hint: 'stored in your OS keychain; you can export it once',
+              hint: "stored in beamhop's encrypted vault; you can export it once",
             },
             {
               value: 'import' as const,

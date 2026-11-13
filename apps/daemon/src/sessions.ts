@@ -79,6 +79,8 @@ interface Runtime {
   /** Effective mounts (worktree-mapped). */
   mounts: { path: string; mode: 'ro' | 'rw'; lockKey?: string }[];
   deny: string[];
+  /** The session's own dirs carved out of `deny` (session dir, worktrees). */
+  own: string[];
   offViolation?: () => void;
 }
 
@@ -400,6 +402,7 @@ export class SessionManager {
     // hooks, which unsandboxed git (the owner's, or the daemon's merge/PR) would run (wave C GIT-1).
     const gitWrite = (await Promise.all(worktrees.map((w) => sandboxGitWritePaths(w.path, w.repo)))).flat();
     const extraWrite = profile === 'strict' ? [] : [live.dir, ...gitWrite];
+    const home = paths(d.home);
     const policy = compilePolicy(
       profile,
       mounts.map((m) => ({ path: m.path, mode: m.mode })),
@@ -410,15 +413,40 @@ export class SessionManager {
           // The injected beamhop-mcp stdio server (package, deps, node) must be readable inside.
           read: [...(o.fs?.read ?? []), live.dir, ...MCP_READ_PATHS()],
           write: [...(o.fs?.write ?? []), ...extraWrite],
+          // The actual beamhop home (token, data key, other sessions), also when BEAMHOP_HOME is not
+          // ~/.beamhop, which ALWAYS_DENY_READ covers.
+          deny: [...(o.fs?.deny ?? []), d.home],
         },
       },
+      // The session dir and its worktrees live in the beamhop home: carve exactly those back out,
+      // or a harness started in them cannot read its own cwd (and dies before answering).
+      { own: { dirs: [live.dir, ...worktrees.map((w) => w.path)], beamhopHome: home.home } },
     );
     // With the broker in place the sandbox never talks to LLM providers directly (no own-key exfiltration).
     if (d.llmProxy) {
       const llm = new Set<string>(LLM_PROVIDER_HOSTS);
       policy.net.allow = policy.net.allow.filter((h) => !llm.has(h));
     }
+    // The harness's own service (catalog `network`, e.g. GitHub Copilot's API), unless the agent denies it.
+    for (const h of plugin.network ?? [])
+      if (!policy.net.deny.includes(h) && !policy.net.allow.includes(h)) policy.net.allow.push(h);
     const env: Record<string, string> = { [SESSION_ENV_MARKER]: live.id, BEAMHOP_SESSION_DIR: live.dir };
+    // The harness keeps its config/state in the session dir (writable), not in the user's own ~/.copilot & co.
+    if (plugin.homeEnv) {
+      const harnessHome = join(live.dir, 'harness-home');
+      mkdirSync(harnessHome, { recursive: true, mode: 0o700 });
+      env[plugin.homeEnv] = harnessHome;
+    }
+    // Opt-in secrets the harness reads from its env (it can see these values; DLP still redacts them).
+    for (const name of agent.secretEnv ?? []) {
+      const value = await d.secrets.get(name);
+      if (!value)
+        throw new BeamhopError(
+          'unavailable',
+          `secret ${name} is not set (agent ${agent.name} passes it to ${plugin.displayName}). Set it with: beamhop secret set ${name}`,
+        );
+      env[name] = value;
+    }
     let proxyToken: string | undefined;
     if (d.llmProxy) {
       proxyToken = d.llmProxy.createSession(live.id);
@@ -478,6 +506,7 @@ export class SessionManager {
         worktrees,
         mounts,
         deny: policy.fs.deny,
+        own: policy.fs.own,
         ...(proxyToken ? { proxyToken } : {}),
         ...(offViolation ? { offViolation } : {}),
       };
@@ -1083,9 +1112,13 @@ export class SessionManager {
   }
 
   /** Effective roots for channel_send_file and deny list. */
-  fileRoots(live: LiveSession): { roots: string[]; deny: string[] } {
+  fileRoots(live: LiveSession): { roots: string[]; deny: string[]; own: string[] } {
     const rt = live.runtime;
-    return { roots: [live.dir, ...(rt?.mounts.map((m) => m.path) ?? [])], deny: rt?.deny ?? [] };
+    return {
+      roots: [live.dir, ...(rt?.mounts.map((m) => m.path) ?? [])],
+      deny: rt?.deny ?? [],
+      own: rt?.own ?? [],
+    };
   }
 }
 

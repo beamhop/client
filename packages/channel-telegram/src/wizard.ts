@@ -27,7 +27,7 @@ export const createSetupWizard = (opts: WizardOptions = {}): SetupWizard => ({
     {
       id: 'token',
       title: 'Paste the bot token',
-      body: 'The token looks like `123456789:AA...`. It is stored in your OS keychain, never in config files.',
+      body: 'The token looks like `123456789:AA...`. It is stored in the encrypted beamhop vault, never in config files.',
       fields: [
         {
           kind: 'secret',

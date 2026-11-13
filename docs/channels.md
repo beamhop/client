@@ -5,7 +5,7 @@ key). An agent **joins** targets on a channel — a DM, a group, a Slack channel
 the people it meets there.
 
 Every provider uses a connection that needs **no public URL** (relays, long polling, Socket Mode, the
-Gateway), so it all works behind NAT and on a laptop. Credentials go straight into the OS keychain
+Gateway), so it all works behind NAT and on a laptop. Credentials go straight into beamhop's encrypted vault
 (`channel.<name>.<field>`); they are never written to config files.
 
 The shared flow, whichever provider:
@@ -48,7 +48,7 @@ membership being gone and never rejoins on its own.
 
 ## Nostr
 
-Nothing to sign up for. Each agent automatically gets **its own Nostr key** (stored in the keychain) when
+Nothing to sign up for. Each agent automatically gets **its own Nostr key** (stored in the encrypted vault) when
 it is created, on the built-in `nostr` channel. The agent publishes a kind 0 profile labelled
 "AI agent operated by <your npub>" and an owner attestation.
 

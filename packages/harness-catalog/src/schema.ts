@@ -39,6 +39,19 @@ export const CatalogEntry = z.object({
   installDirs: z.array(z.string()).default([]),
   /** Config directories (same tokens as installDirs). */
   configDirs: z.array(z.string()).default([]),
+  /**
+   * Hosts the harness talks to itself, for a service beamhop's LLM broker cannot stand in for (e.g.
+   * GitHub Copilot's API). Allowed in the sandbox for sessions on this harness. Leading "*." wildcards.
+   */
+  network: z.array(z.string()).default([]),
+  /**
+   * Env var that relocates the harness's config/state directory (e.g. COPILOT_HOME). beamhop points it
+   * into the session dir: the sandbox can write there, and the user's own config is never touched.
+   */
+  homeEnv: z
+    .string()
+    .regex(/^[A-Z_][A-Z0-9_]*$/)
+    .optional(),
   auth: z
     .object({
       /** Any of these env vars set (non-empty) ⇒ an API key is configured. */

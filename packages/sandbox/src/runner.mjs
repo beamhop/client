@@ -12,6 +12,9 @@ import { connect } from 'node:net';
 import { delimiter, isAbsolute, join } from 'node:path';
 import { SandboxManager } from '@anthropic-ai/sandbox-runtime';
 
+// Set only so the desktop app's Electron binary runs this file as Node; the harness must not inherit it.
+delete process.env.ELECTRON_RUN_AS_NODE;
+
 const fail = (msg) => {
   process.stderr.write(`beamhop-sandbox: ${msg}\n`);
   process.exit(125);

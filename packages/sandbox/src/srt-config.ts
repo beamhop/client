@@ -29,20 +29,31 @@ const LOOPBACK_NO_PROXY = 'localhost,127.0.0.1,::1';
 /** Compile an effective SandboxPolicy to srt settings. Deny always wins over allow. */
 export const toSrtConfig = (policy: SandboxPolicy, opts: SrtConfigOptions = {}): SrtSettings => {
   const deny = policy.fs.deny;
-  const notDenied = (p: string) => !deny.some((d) => isWithin(p, d));
+  const own = policy.fs.own ?? [];
+  const isOwn = (p: string) => own.some((o) => isWithin(p, o));
+  const notDenied = (p: string) => isOwn(p) || !deny.some((d) => isWithin(p, d));
   const home = opts.home ?? homedir();
 
   const allowWrite = policy.fs.write.filter(notDenied);
   const denyRead = [...deny];
-  let allowRead: string[] = [];
+  // srt's allowRead re-allows reads inside denyRead regions: the session's own dirs.
+  let allowRead: string[] = [...own];
   if (opts.isolateHome) {
     const readable = [...policy.fs.read, ...allowWrite, ...(opts.extraRead ?? [])].filter(notDenied);
     // If a mount *is* the home (or contains it) there is nothing to isolate.
     if (!readable.some((p) => isWithin(home, p))) {
       denyRead.push(home);
-      allowRead = readable.filter((p) => isWithin(p, home));
+      allowRead = [...new Set([...allowRead, ...readable.filter((p) => isWithin(p, home))])];
     }
   }
+  // Every denied path is also write-denied (belt and braces: srt's tmpfs masks are writable), except a
+  // region holding an own dir: denyWrite has no carve-outs and would win over its allowWrite. Writes
+  // there are still default-deny. If a broader writable path (a mount of ~) covers that region, keep
+  // the denyWrite: the beamhop home must never become writable, even if the own dir then is not.
+  const broadWrite = allowWrite.filter((w) => !isOwn(w));
+  const denyWrite = deny.filter(
+    (d) => !own.some((o) => isWithin(o, d)) || broadWrite.some((w) => isWithin(d, w)),
+  );
 
   const allowedDomains = [...new Set([...policy.net.allow, ...(opts.localAllow ?? [])])];
   const deniedDomains = [...new Set([...policy.net.deny, ...METADATA_HOSTS])].filter(
@@ -67,8 +78,7 @@ export const toSrtConfig = (policy: SandboxPolicy, opts: SrtConfigOptions = {}):
       denyRead,
       allowRead,
       allowWrite,
-      // Belt and braces: a denied path is never writable either (srt's tmpfs masks are writable).
-      denyWrite: [...deny],
+      denyWrite,
     },
   };
 };

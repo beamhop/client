@@ -85,6 +85,14 @@ export interface PathOptions {
   cwd?: string;
 }
 
+/** Daemon-owned per-session directories carved out of the deny list (compilePolicy only). */
+export interface OwnDirs {
+  /** The session's own directories: each strictly inside `<beamhopHome>/sessions` or `/worktrees`. */
+  dirs: string[];
+  /** The beamhop home (denied as a whole; only these per-session dirs are reopened). */
+  beamhopHome: string;
+}
+
 /** Expand `~` against `home` and make the path absolute + normalized. */
 export const expandPath = (p: string, opts: PathOptions = {}): string => {
   const home = opts.home ?? homedir();
@@ -136,7 +144,7 @@ export const compilePolicy = (
   profile: SandboxProfileName,
   agentMounts: Pick<Mount, 'path' | 'mode'>[] = [],
   policyOverrides: PolicyOverrides = {},
-  opts: PathOptions = {},
+  opts: PathOptions & { own?: OwnDirs } = {},
 ): SandboxPolicyT => {
   const o = policyOverrides;
   const base = SandboxPolicy.parse(profile === 'custom' ? o : {});
@@ -164,7 +172,10 @@ export const compilePolicy = (
   }
 
   const deny = uniq([...ALWAYS_DENY_READ, ...(o.fs?.deny ?? [])].map((p) => expandPath(p, opts)));
-  const denied = (p: string) => deny.some((d) => isWithin(p, d));
+  const own = ownCarveOuts(opts.own, deny, opts);
+  const isOwn = (p: string) => own.some((d) => isWithin(p, d));
+  // Deny wins, except inside this session's own directories.
+  const denied = (p: string) => !isOwn(p) && deny.some((d) => isWithin(p, d));
   const writeSet = uniq(write.map((p) => expandPath(p, opts))).filter((p) => !denied(p));
   const readSet = uniq(read.map((p) => expandPath(p, opts)))
     .filter((p) => !denied(p))
@@ -176,12 +187,39 @@ export const compilePolicy = (
   );
 
   return SandboxPolicy.parse({
-    fs: { read: readSet, write: writeSet, deny },
+    // `own` comes only from the daemon's option: an override (or a custom profile) cannot set it.
+    fs: { read: readSet, write: writeSet, deny, own },
     net: { allow: netAllow, deny: netDeny, denyPrivateIps: true },
     secrets: o.secrets ?? base.secrets,
     env: { passthrough: uniq(o.env?.passthrough ?? base.env.passthrough) },
     proc: { maxSessionMinutes: o.proc?.maxSessionMinutes ?? base.proc.maxSessionMinutes },
     learning: o.learning ?? base.learning,
+  });
+};
+
+/**
+ * Validate the daemon's own-dir carve-outs. Each must lie strictly inside `<beamhopHome>/sessions` or
+ * `<beamhopHome>/worktrees` (never a root itself, so sibling sessions stay denied), and the only deny
+ * entries covering it may be the beamhop home or its ancestors: a carve-out reopens one session's
+ * own dir, never ~/.ssh or a deny the user put inside the home.
+ * Throws on violation: a bad carve-out is a daemon bug, and failing closed beats a silent hole.
+ */
+const ownCarveOuts = (own: OwnDirs | undefined, deny: string[], opts: PathOptions): string[] => {
+  if (!own) return [];
+  const bh = expandPath(own.beamhopHome, opts);
+  // The beamhop home itself may not sit in a credential store (~/.ssh, keychains…): "the home's own
+  // deny" must not be a stand-in for one of those.
+  const credential = ALWAYS_DENY_READ.filter((p) => !/beamhop/.test(p))
+    .map((p) => expandPath(p, opts))
+    .find((c) => isWithin(bh, c));
+  if (credential) throw new Error(`sandbox: beamhop home ${bh} is inside protected path ${credential}`);
+  const roots = [join(bh, 'sessions'), join(bh, 'worktrees')];
+  return uniq(own.dirs.map((p) => expandPath(p, opts))).map((p) => {
+    if (!roots.some((r) => p !== r && isWithin(p, r)))
+      throw new Error(`sandbox: own dir ${p} is not inside ${roots.join(' or ')}`);
+    const blocker = deny.find((d) => isWithin(p, d) && !isWithin(bh, d));
+    if (blocker) throw new Error(`sandbox: own dir ${p} would reopen denied path ${blocker}`);
+    return p;
   });
 };
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened-runtime entitlements for the app and everything signed inside it (the daemon runs on the
+  app binary in Node mode; the bundled Claude Code binary is a JIT runtime too).
+    allow-jit / allow-unsigned-executable-memory   V8 and Bun JITs
+    disable-library-validation                     native addons a harness plugin may load at runtime
+    device.camera                                  scanning a pairing QR code in the web UI
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.cs.disable-library-validation</key><true/>
+  <key>com.apple.security.device.camera</key><true/>
+</dict>
+</plist>

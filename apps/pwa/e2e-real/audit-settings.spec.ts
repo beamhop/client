@@ -110,7 +110,7 @@ test('settings → secrets: set a secret; only the name ever comes back', async 
   const sheet = page.getByRole('dialog', { name: 'Add a secret' });
   await sheet.getByLabel('Name').fill('SENTRY_DSN');
   await sheet.getByLabel('Value', { exact: true }).fill(value);
-  await sheet.getByRole('button', { name: 'Save to keychain' }).click();
+  await sheet.getByRole('button', { name: 'Save to the vault' }).click();
   await expect(sheet).toBeHidden();
   await expect(main(page).getByText('SENTRY_DSN', { exact: true })).toBeVisible();
   const list = await bh.rpc<{ secrets: { name: string }[] }>('secret.list');

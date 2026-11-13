@@ -8,8 +8,12 @@ agent from your phone, let a team ping a code-review bot in a channel, or let ag
 talk to each other in a mesh. Every harness runs in a sandbox you configure, holds no real secrets, and
 asks you before it does anything risky.
 
-It runs on your laptop or on one of five clouds, and you drive it from an installable PWA or entirely
-from the CLI.
+It runs on your laptop or on one of five clouds, and you drive it from the desktop app, an installable PWA
+or entirely from the CLI.
+
+**Not a terminal person?** Get the [desktop app](docs/desktop.md) for macOS, Windows or Linux from the
+[releases page](https://github.com/beamhop/client/releases). It bundles everything, so there is no Node.js
+or CLI to install; its first-run setup is the same wizard as `beamhop init`.
 
 > Status: pre-1.0. The core loop (channel → sandboxed harness → reply) works end to end on public Nostr
 > relays; see [CHANGELOG.md](CHANGELOG.md) for what is in this build and what is still landing.
@@ -27,7 +31,7 @@ npx beamhop init            # terminal 2: first-run wizard, about 3 minutes
 `init` walks seven skippable steps: **doctor** → **harness discovery** → **owner identity** (a Nostr key,
 or bring your own npub) → **pair your phone** (QR) → **first agent** (pick a harness, mount a folder
 read-only) → **hello** (the agent DMs you over Nostr; reply from your phone to prove the whole chain) →
-**next steps**. Give beamhop the model key your harness uses (it stays in the keychain; the agent only
+**next steps**. Give beamhop the model key your harness uses (it stays in beamhop's encrypted vault; the agent only
 sees a placeholder), then go on. With `npx`, put `npx` in front of each `beamhop` below.
 
 ```bash
@@ -78,7 +82,7 @@ boring:
   Seatbelt on macOS. Filesystem allow/deny rules, deny-by-default network with a domain allowlist, and
   `~/.ssh`, `~/.aws`, `~/.config/gh`, keychains and browser profiles are never readable. No role can turn
   the sandbox off.
-- **No real secrets inside.** LLM keys stay in the OS keychain; the harness gets a placeholder and a local
+- **No real secrets inside.** LLM keys stay in beamhop's encrypted vault; the harness gets a placeholder and a local
   base URL, and the broker injects the key upstream. Requests that ask the provider to fetch URLs for the
   agent (server-side web/MCP tools) are refused by default.
 - **beamhop is the only approval gate.** Every harness runs in a mode that forwards permission requests;
@@ -130,6 +134,7 @@ fallback.
 - [Harnesses](docs/harnesses.md) — discovery, adapters, approvals, adding any ACP agent
 - [Sandbox](docs/sandbox.md) — profiles, learning mode, what is and isn't protected
 - [Cloud](docs/cloud.md) — moving agents to Hetzner, DigitalOcean, Fly.io, Render, Railway
+- [Desktop app](docs/desktop.md) — the control panel with the daemon bundled, no install needed
 - [PWA](docs/pwa.md) — the control panel, pairing a phone
 - [CLI reference](docs/cli.md) — every command, generated from the CLI itself
 - [FAQ](docs/faq.md)

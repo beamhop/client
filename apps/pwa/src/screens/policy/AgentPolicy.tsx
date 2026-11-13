@@ -1006,7 +1006,9 @@ const SecretsSection = ({
       )}
       <p className="mt-2 flex items-start gap-1.5 type-meta text-ink-2">
         <Info size={14} aria-hidden="true" className="mt-px shrink-0" />
-        {t('policy.secrets.foot', { backend: backend ?? 'keychain' })}
+        {t('policy.secrets.foot', {
+          backend: !backend || backend === 'file' ? 'the encrypted vault' : backend,
+        })}
       </p>
     </Section>
   );

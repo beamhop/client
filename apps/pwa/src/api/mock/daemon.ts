@@ -1369,7 +1369,16 @@ export class MockDaemon {
     },
 
     // ── secrets (names only, never values)
-    'secret.list': () => ({ secrets: this.state.secrets, backend: 'OS keychain (libsecret)' }),
+    'secret.list': () => ({
+      secrets: this.state.secrets,
+      backend: 'file',
+      keySource: this.state.vaultKeySource,
+      keychainAvailable: true,
+    }),
+    'secret.setKeySource': (p: { keySource: 'file' | 'keychain' }) => {
+      this.state.vaultKeySource = p.keySource;
+      return { keySource: p.keySource };
+    },
     'secret.set': (p) => {
       const now = new Date().toISOString();
       this.state.secrets = [

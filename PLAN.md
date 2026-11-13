@@ -439,7 +439,7 @@ The PWA is static. It is served by the local daemon and also hosted publicly, at
 
 ### Desktop
 
-Installing the PWA from the browser is the desktop app. A small tray helper (Node `systray`) is optional and does two things: it starts the daemon at login and opens the PWA.
+The desktop app (`apps/desktop`, Electron) shows the same PWA in a window and bundles the daemon, so it needs nothing else installed and can do everything the CLI can. It attaches to a daemon that is already running (the CLI's) or starts its own, keeps running in the menu bar / tray when the window closes, can start hidden at login, and offers Stop everything from the tray. CLI-only users keep using `beamhop daemon` and the same UI in a browser. See [docs/desktop.md](docs/desktop.md).
 
 ## 9A. Onboarding (first run)
 

@@ -258,7 +258,12 @@ export const startAcpSession = async (
     conn.close();
     await terminate(child, 500);
     if (e instanceof BeamhopError) throw e;
-    throw new BeamhopError('unavailable', `${opts.displayName} failed to start: ${(e as Error).message}`);
+    // The harness's own stderr says why (auth, sandbox, missing runtime); "connection closed" alone does not.
+    const tail = stderr().trim();
+    throw new BeamhopError(
+      'unavailable',
+      `${opts.displayName} failed to start: ${(e as Error).message}${tail ? `: ${truncate(tail, 500)}` : ''}`,
+    );
   }
 
   const buildPrompt = async (text: string, attachments: { path: string; mime: string }[] = []) => {

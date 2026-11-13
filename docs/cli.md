@@ -44,7 +44,7 @@ Commands:
                                    telegram:5551`
   owner                            manage owners (multiple owners supported)
   policy                           sandbox policy
-  secret                           secrets (stored in the OS keychain; values are never shown)
+  secret                           secrets (in an encrypted vault file; values are never shown)
   schedule                         scheduled and event-driven prompts
   deploy                           run agents in the cloud (Hetzner, DigitalOcean, Fly.io, Render,
                                    Railway)
@@ -113,6 +113,7 @@ Commands:
   - [`beamhop policy reject`](#beamhop-policy-reject)
 - [`beamhop secret`](#beamhop-secret)
   - [`beamhop secret ls`](#beamhop-secret-ls)
+  - [`beamhop secret keychain`](#beamhop-secret-keychain)
   - [`beamhop secret set`](#beamhop-secret-set)
   - [`beamhop secret rm`](#beamhop-secret-rm)
 - [`beamhop schedule`](#beamhop-schedule)
@@ -825,13 +826,15 @@ Options:
 ```text
 Usage: beamhop secret [options] [command]
 
-secrets (stored in the OS keychain; values are never shown)
+secrets (in an encrypted vault file; values are never shown)
 
 Options:
   -h, --help            display help for command
 
 Commands:
   ls                    list secret names (never values)
+  keychain [on|off]     keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key
+                        (off, the default); without an argument, show where it is
   set [options] <name>  store a secret; reads the value from stdin, or --from-env
   rm <name>             delete a secret
   help [command]        display help for command
@@ -843,6 +846,18 @@ Commands:
 Usage: beamhop secret ls [options]
 
 list secret names (never values)
+
+Options:
+  -h, --help  display help for command
+```
+
+### beamhop secret keychain
+
+```text
+Usage: beamhop secret keychain [options] [on|off]
+
+keep the vault key in the system keychain (on) or in ~/.beamhop/vault.key (off, the default);
+without an argument, show where it is
 
 Options:
   -h, --help  display help for command

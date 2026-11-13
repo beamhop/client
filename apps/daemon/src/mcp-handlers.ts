@@ -116,8 +116,8 @@ export const createMcpHandlers = (d: Daemon): McpHandlers<McpCtx> => {
       if (!conn) throw new BeamhopError('unavailable', 'this session has no channel');
       if (!conn.capabilities.files)
         throw new BeamhopError('unavailable', `${conn.provider} cannot send files`);
-      const { roots, deny } = d.sessions.fileRoots(s);
-      const f = await openConfinedFile(input.path, roots, deny, { maxBytes: MAX_FILE });
+      const { roots, deny, own } = d.sessions.fileRoots(s);
+      const f = await openConfinedFile(input.path, roots, deny, { maxBytes: MAX_FILE, own });
       let data: Buffer;
       try {
         data = await f.handle.readFile();

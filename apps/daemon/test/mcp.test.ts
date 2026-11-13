@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBridgeClient } from '@beamhop/mcp';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -25,8 +26,8 @@ const holdingHarness = () => {
 const setup = async (agent: Record<string, unknown> = {}) => {
   const { h, release } = holdingHarness();
   env = await makeEnv({ harness: h });
-  const mount = join(env.home, 'mount');
-  mkdirSync(mount);
+  // Outside the beamhop home, like a real mount (the home is always denied to the sandbox).
+  const mount = mkdtempSync(join(tmpdir(), 'bh-mount-'));
   const conn = await setupBot(env, { mounts: [{ path: mount, mode: 'ro' }], ...agent });
   conn.inject({
     conversation: { kind: 'group', id: 'g1' },
@@ -83,6 +84,31 @@ describe('MCP handlers (daemon side, through the real bridge)', () => {
       error: { code: 'sandbox_violation' },
     });
     expect(await call('channel_send_file', { path: '../../config.yaml' })).toMatchObject({ ok: false });
+  });
+
+  it('channel_send_file works from the session dir inside the denied beamhop home; the rest of it stays refused', async () => {
+    const { call, spec } = await setup();
+    const sessionDir = spec.env.BEAMHOP_SESSION_DIR!;
+    expect(sessionDir.startsWith(env!.home)).toBe(true);
+    writeFileSync(join(sessionDir, 'notes.txt'), 'from the session dir');
+    expect((await call('channel_send_file', { path: join(sessionDir, 'notes.txt') })).ok).toBe(true);
+    writeFileSync(join(env!.home, 'sessions', 'other.txt'), 'another session');
+    expect(await call('channel_send_file', { path: join(env!.home, 'sessions', 'other.txt') })).toMatchObject(
+      {
+        ok: false,
+        error: { code: 'sandbox_violation' },
+      },
+    );
+  });
+
+  it('the sandbox policy carves out exactly this session dir and denies the actual beamhop home', async () => {
+    const { spec } = await setup();
+    const lives = (
+      env!.d.sessions as unknown as { lives: Map<string, { runtime?: { own: string[]; deny: string[] } }> }
+    ).lives;
+    const rt = [...lives.values()][0]!.runtime!;
+    expect(rt.own).toEqual([spec.env.BEAMHOP_SESSION_DIR]);
+    expect(rt.deny).toContain(env!.home);
   });
 
   it('channel_history, channel_members, session_status; mesh tools unavailable without nostr', async () => {

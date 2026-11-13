@@ -12,7 +12,7 @@ ports.
 
 **Does the agent see my API keys?**
 No. The harness gets a placeholder key and a base URL pointing at beamhop's local broker, which adds the
-real key on the way out. Keys live in the OS keychain (or an encrypted vault on headless Linux).
+real key on the way out. Keys live in an encrypted vault file in `~/.beamhop`; its key is in a file next to it, or in the OS keychain if you opt in (`beamhop secret keychain on`).
 
 **Can a stranger who messages my bot make it do things?**
 Unknown senders are ignored unless you mark the agent `public: true`, in which case they get the `viewer`
@@ -38,7 +38,7 @@ Yes, with caveats: srt's Windows sandbox is alpha. `beamhop doctor` tells you wh
 the Linux setup is the fallback and the safer choice today.
 
 **Why is the standalone binary a folder, not one file?**
-Node SEA can embed one script, but not native addons (the keychain binding), the sandbox runtime's helpers,
+Node SEA can embed one script, but not native addons (the optional keychain binding), the sandbox runtime's helpers,
 the Claude Agent SDK's platform binary, or the scripts that run as separate processes inside the sandbox.
 Those ship in `lib/` next to the binary. Details in [quickstart.md](quickstart.md#standalone-binaries).
 
@@ -52,7 +52,7 @@ channels, including on cloud daemons. Nothing resumes until `beamhop resume`.
 
 **Where is my data?**
 In `~/.beamhop` (or `BEAMHOP_HOME`): YAML configs, an SQLite database encrypted with a key from the
-keychain, logs. Transcripts are kept 30 days and the audit log 1 year by default (`retention` per agent).
+encrypted vault, logs. Transcripts are kept 30 days and the audit log 1 year by default (`retention` per agent).
 `beamhop data export` and `beamhop data purge --agent <a> [--before <date>]` do what they say. Telemetry
 is off.
 

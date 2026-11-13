@@ -55,7 +55,7 @@ test('move reviewer to Hetzner: provider → size → files → plan diff → de
   await expect(page.getByText('running').first()).toBeVisible({ timeout: 15_000 });
 });
 
-test('PaaS: token goes to the keychain, sandbox warning must be acknowledged', async ({ page }) => {
+test('PaaS: token goes to the vault, sandbox warning must be acknowledged', async ({ page }) => {
   await open(page, '/deploy/new?mode=new');
   await page.getByLabel('Agent name').fill('night-shift');
   await page.getByRole('button', { name: 'Continue · Provider' }).click();

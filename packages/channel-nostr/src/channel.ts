@@ -872,7 +872,7 @@ export const createNostrChannel = (deps: NostrChannelDeps = {}): NostrChannelPlu
       {
         id: 'key',
         title: 'Agent key',
-        body: 'Each agent already has its **own** Nostr key: beamhop generates one when the agent is created (`beamhop init` or `beamhop agent add`) and keeps it in the OS keychain, and the default `nostr` channel uses those keys, so there is nothing to paste. Only add an `nsec` here for a separate, dedicated bot identity, and never use your personal key.',
+        body: 'Each agent already has its **own** Nostr key: beamhop generates one when the agent is created (`beamhop init` or `beamhop agent add`) and keeps it in the encrypted beamhop vault, and the default `nostr` channel uses those keys, so there is nothing to paste. Only add an `nsec` here for a separate, dedicated bot identity, and never use your personal key.',
         fields: [
           { kind: 'secret', id: 'nsec', label: 'Agent nsec', envFlag: 'BEAMHOP_NOSTR_NSEC' },
           { kind: 'text', id: 'name', label: 'Display name', optional: true },

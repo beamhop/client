@@ -23,8 +23,15 @@ export const SandboxPolicy = z.object({
       write: z.array(z.string()).default([]),
       /** Always denied, even if inside a mount. */
       deny: z.array(z.string()).default([]),
+      /**
+       * This session's own daemon-made directories (its session dir, its git worktrees), which live
+       * inside the denied beamhop home. They are carved out of the deny so the harness can use them;
+       * every other path in the beamhop home stays denied. Set only by the daemon (compilePolicy's
+       * `own` option), never from agent config.
+       */
+      own: z.array(z.string()).default([]),
     })
-    .default({ read: [], write: [], deny: [] }),
+    .default({ read: [], write: [], deny: [], own: [] }),
   net: z
     .object({
       /** Domain allowlist; supports leading "*." wildcards. */
@@ -222,6 +229,14 @@ export const AgentConfig = z.object({
   preset: z.string().optional(),
   /** Cloud harness auth choice (§7). */
   harnessAuth: z.enum(['api-key', 'subscription']).default('api-key'),
+  /**
+   * beamhop secrets handed to the harness as environment variables of the same name, for harnesses
+   * the LLM broker cannot front (GitHub Copilot: `COPILOT_GITHUB_TOKEN`). Unlike broker keys, the
+   * agent CAN read these values; outbound DLP still redacts them from messages. Opt-in per agent.
+   */
+  secretEnv: z
+    .array(z.string().regex(/^[A-Z_][A-Z0-9_]*$/, 'an environment variable name, e.g. COPILOT_GITHUB_TOKEN'))
+    .default([]),
   /** Persisted "always allow" approval rules (approval.decide `always`). */
   approvalRules: z.array(ApprovalRule).default([]),
 });

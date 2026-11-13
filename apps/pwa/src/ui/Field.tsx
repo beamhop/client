@@ -109,7 +109,7 @@ export interface SecretFieldProps extends Omit<TextFieldProps, 'mono' | 'multili
   /** Shape check before any network call, e.g. Telegram token regex. */
   format?: RegExp;
   formatLabel?: string;
-  /** After save: show `Saved to keychain · …a91f` instead of the input. */
+  /** After save: show `Saved to the vault · …a91f` instead of the input. */
   savedHint?: string;
   /** Show a "Paste" button that reads the clipboard on press (never silently). */
   allowPaste?: boolean;
@@ -142,7 +142,7 @@ export const SecretField = ({
         <span className={labelClass}>{label}</span>
         <p className="flex h-12 items-center gap-2 rounded-md bg-go-wash px-3 type-meta text-go-text">
           <LockSimple size={16} weight="bold" aria-hidden="true" />
-          Saved to keychain · {savedHint}
+          Saved to the vault · {savedHint}
         </p>
       </div>
     );

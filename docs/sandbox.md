@@ -69,7 +69,7 @@ boundary. Use it with mounts and a role you would trust with open network access
 
 ## Secrets
 
-- **LLM keys** stay in the OS keychain (or the encrypted vault). The harness gets a placeholder and
+- **LLM keys** stay in beamhop's encrypted vault. The harness gets a placeholder and
   `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL` pointing at the local broker, which adds the real key and
   forwards over TLS. The broker strips client credentials, fixes the upstream host per route, and refuses
   requests that ask the provider to fetch URLs or call MCP servers on the agent's behalf (`web_fetch`,

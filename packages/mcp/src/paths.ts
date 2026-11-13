@@ -45,17 +45,22 @@ const realOr = async (p: string): Promise<string> => {
 
 const violation = (msg: string) => new BeamhopError('sandbox_violation', msg);
 
-/** Open `path` read-only if it is a regular file inside `roots` and outside `deny`. */
+/**
+ * Open `path` read-only if it is a regular file inside `roots` and outside `deny`. `opts.own` are the
+ * session's own dirs, which the sandbox carves out of `deny` (they live in the denied beamhop home):
+ * a file inside one is allowed even though a deny entry covers it.
+ */
 export const openConfinedFile = async (
   path: string,
   roots: readonly string[],
   deny: readonly string[] = [],
-  opts: { maxBytes?: number } = {},
+  opts: { maxBytes?: number; own?: readonly string[] } = {},
 ): Promise<ConfinedFile> => {
   if (!path || path.includes('\0')) throw new BeamhopError('invalid_input', 'invalid path');
   if (roots.length === 0) throw violation('no directory is shared for file sending');
   const realRoots = await Promise.all(roots.map(realOr));
   const realDeny = await Promise.all(deny.map(realOr));
+  const realOwn = await Promise.all((opts.own ?? []).map(realOr));
   const target = isAbsolute(path) ? path : resolve(realRoots[0] as string, path);
 
   let real: string;
@@ -66,7 +71,8 @@ export const openConfinedFile = async (
   }
   const allowed = (p: string) =>
     realRoots.some((r) => within(caseFold(p), caseFold(r))) &&
-    !realDeny.some((d) => within(caseFold(p), caseFold(d)));
+    (realOwn.some((o) => within(caseFold(p), caseFold(o))) ||
+      !realDeny.some((d) => within(caseFold(p), caseFold(d))));
   if (!allowed(real)) throw violation('path is outside the session directory and agent mounts');
 
   const before: Stats = await stat(real);

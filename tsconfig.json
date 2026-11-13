@@ -6,7 +6,9 @@
     "apps/daemon/src/**/*",
     "apps/daemon/test/**/*",
     "apps/cli/src/**/*",
-    "apps/cli/test/**/*"
+    "apps/cli/test/**/*",
+    "apps/desktop/src/**/*",
+    "apps/desktop/test/**/*"
   ],
   "exclude": ["**/node_modules", "**/dist"]
 }

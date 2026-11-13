@@ -9,6 +9,7 @@ import { t } from '../../i18n/index.ts';
 import { ago } from '../../lib/format.ts';
 import { haptic } from '../../lib/haptics.ts';
 import { Button } from '../../ui/Button.tsx';
+import { Switch } from '../../ui/Choice.tsx';
 import { CliStrip } from '../../ui/CliStrip.tsx';
 import { SecretField, TextField } from '../../ui/Field.tsx';
 import { MetaLine } from '../../ui/Meta.tsx';
@@ -50,7 +51,7 @@ const SetSecretSheet = ({
     }
     try {
       await set.mutateAsync({ name: n, value });
-      toast.show({ message: `Saved to keychain · ${n}`, tone: 'success' });
+      toast.show({ message: `Saved to the vault · ${n}`, tone: 'success' });
       close();
     } catch {
       /* shown inline */
@@ -105,6 +106,60 @@ const SetSecretSheet = ({
   );
 };
 
+/**
+ * Where the vault key lives: a 0600 file in the beamhop home (default, never prompts) or one item in the
+ * OS keychain (opt-in). Switching moves the key; secrets are not re-encrypted. With
+ * BEAMHOP_VAULT_PASSPHRASE the vault is passphrase-locked and the switch is off.
+ */
+const VaultKeyGroup = ({
+  keySource,
+  keychainAvailable,
+}: {
+  keySource?: 'file' | 'keychain' | 'passphrase';
+  keychainAvailable?: boolean;
+}) => {
+  const set = useMutationApi('secret.setKeySource');
+  const toast = useToast();
+  const passphrase = keySource === 'passphrase';
+  const on = keySource === 'keychain';
+  const toggle = async (v: boolean) => {
+    try {
+      await set.mutateAsync({ keySource: v ? 'keychain' : 'file' });
+      toast.show({
+        message: v ? t('settings.secrets.keyMovedToKeychain') : t('settings.secrets.keyMovedToFile'),
+        tone: 'success',
+      });
+    } catch {
+      haptic('error');
+    }
+  };
+  return (
+    <Group
+      title={t('settings.secrets.vaultKey')}
+      id="sec-vault-key"
+      note={set.isError ? <span className="text-stop-text">{set.error.message}</span> : undefined}
+    >
+      <Switch
+        isSelected={on}
+        isDisabled={passphrase || keychainAvailable === false || set.isPending}
+        onChange={(v) => void toggle(v)}
+        description={
+          passphrase
+            ? t('settings.secrets.keyPassphrase')
+            : keychainAvailable === false
+              ? t('settings.secrets.noKeychain')
+              : on
+                ? t('settings.secrets.keyInKeychain')
+                : t('settings.secrets.keyInFile')
+        }
+      >
+        {t('settings.secrets.useKeychain')}
+      </Switch>
+      <CliStrip command={`beamhop secret keychain ${on ? 'off' : 'on'}`} />
+    </Group>
+  );
+};
+
 export const SecretsSection = () => {
   const q = useApi('secret.list');
   const del = useMutationApi('secret.delete');
@@ -129,16 +184,24 @@ export const SecretsSection = () => {
       <Skeleton variant="list" count={5} label={t('settings.secrets.loadingSecrets')} />
     ) : null;
   const secrets = [...q.data.secrets].sort((a, b) => a.name.localeCompare(b.name));
+  const vault = q.data.backend === 'file';
 
   return (
     <div className="flex flex-col gap-8">
       <p className="flex items-start gap-2 type-body-sm text-ink-2">
         <Key size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-ink" />
         <span>
-          {t('settings.secrets.storedIn')} <span className="text-ink">{q.data.backend}</span>.{' '}
+          {vault ? (
+            t('settings.secrets.vaultLead')
+          ) : (
+            <>
+              {t('settings.secrets.storedIn')} <span className="text-ink">{q.data.backend}</span>.
+            </>
+          )}{' '}
           {t('settings.secrets.broker')}
         </span>
       </p>
+      {vault && <VaultKeyGroup keySource={q.data.keySource} keychainAvailable={q.data.keychainAvailable} />}
       {secrets.length === 0 ? (
         <EmptyState
           glyph={<Key size={32} aria-hidden="true" />}

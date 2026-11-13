@@ -33,8 +33,8 @@ export const ensureApiToken = (home: string): string => {
 };
 
 /**
- * The SQLite data key lives in the secret store (keychain / vault). If the secret store is
- * memory-only (no keychain, no vault passphrase) we fall back to `<home>/data.key` (0600) so the
+ * The SQLite data key lives in the secret store (the encrypted vault). If the secret store is
+ * memory-only (tests) we fall back to `<home>/data.key` (0600) so the
  * database stays readable across restarts, and warn loudly.
  */
 export const ensureDataKey = async (home: string, secrets: SecretStore, log: Logger): Promise<Buffer> => {
@@ -52,7 +52,7 @@ export const ensureDataKey = async (home: string, secrets: SecretStore, log: Log
   }
   const key = generateDataKey();
   if (secrets.backend === 'memory') {
-    log.warn('no keychain or vault: storing the data key in <home>/data.key (0600)');
+    log.warn('memory-only secret store: storing the data key in <home>/data.key (0600)');
     writeFileSync(file, `${encodeDataKey(key)}\n`, { mode: 0o600 });
   } else await secrets.set(DATA_KEY_SECRET, encodeDataKey(key));
   return key;

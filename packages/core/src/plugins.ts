@@ -147,6 +147,10 @@ export interface SandboxHandle {
 export interface HarnessPlugin {
   id: string;
   displayName: string;
+  /** Hosts the harness itself needs (its own service), added to the sandbox's network allowlist. */
+  network?: string[];
+  /** Env var that relocates the harness's config/state dir; the daemon points it into the session dir. */
+  homeEnv?: string;
   detect(): Promise<HarnessDetection | null>;
   start(spec: SessionSpec, sandbox: SandboxHandle): Promise<HarnessSession>;
 }
@@ -220,7 +224,13 @@ export interface SecretStore {
   set(name: string, value: string): Promise<void>;
   delete(name: string): Promise<void>;
   list(): Promise<{ name: string; updatedAt?: string }[]>;
-  readonly backend: 'keychain' | 'file' | 'memory';
+  /** `file`: the encrypted vault (always, outside tests). */
+  readonly backend: 'file' | 'memory';
+  /** Where the vault key is kept. */
+  readonly keySource?: VaultKeySource;
 }
+
+/** Where the vault key lives: a 0600 key file (default), the OS keychain (opt-in), or a passphrase (env). */
+export type VaultKeySource = 'file' | 'keychain' | 'passphrase';
 
 export type ZodSchema<T> = z.ZodType<T>;

@@ -40,9 +40,13 @@ describe('bundled catalog', () => {
       command: 'gemini',
       args: ['--acp'],
     });
-    expect(launchFor(findHarness(cat, 'copilot')!, 'acp')).toMatchObject({
+    const copilot = findHarness(cat, 'copilot')!;
+    // Its own API is allowed in the sandbox, its state lives in the session dir, its token stays out of child envs.
+    expect(copilot.network).toEqual(['api.githubcopilot.com', '*.githubcopilot.com']);
+    expect(copilot.homeEnv).toBe('COPILOT_HOME');
+    expect(launchFor(copilot, 'acp')).toMatchObject({
       command: 'copilot',
-      args: ['--acp'],
+      args: ['--acp', '--secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN'],
     });
     expect(launchFor(findHarness(cat, 'opencode')!, 'acp')).toMatchObject({
       command: 'opencode',

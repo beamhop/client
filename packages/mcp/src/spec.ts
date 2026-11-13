@@ -19,6 +19,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { nodeExecEnv } from '@beamhop/core';
 import { MCP_SERVER_NAME } from './server.ts';
 import { ENV_TOKEN, ENV_URL } from './wire.ts';
 
@@ -46,7 +47,7 @@ export const mcpServerSpec = (sessionToken: string, bridgeUrl: string): McpServe
   name: MCP_SERVER_NAME,
   command: process.execPath,
   args: mcpEntryArgs(),
-  env: { [ENV_URL]: bridgeUrl, [ENV_TOKEN]: sessionToken },
+  env: { ...nodeExecEnv(), [ENV_URL]: bridgeUrl, [ENV_TOKEN]: sessionToken },
 });
 
 /**
@@ -77,6 +78,9 @@ export const mcpReadPaths = (): string[] => {
     }
   }
   // node itself: <prefix>/bin/node -> <prefix> (some installs ship shared libs next to bin/).
-  out.add(dirname(dirname(real(process.execPath))));
+  // Desktop app: beamhop.app/Contents/MacOS/beamhop -> Contents (Frameworks/ holds the runtime);
+  // on Windows and Linux the app's own install directory.
+  const exe = real(process.execPath);
+  out.add(process.versions.electron && process.platform !== 'darwin' ? dirname(exe) : dirname(dirname(exe)));
   return [...out];
 };

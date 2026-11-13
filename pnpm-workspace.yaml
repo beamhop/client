@@ -5,3 +5,4 @@ onlyBuiltDependencies:
   - esbuild
   - better-sqlite3
   - "@napi-rs/keyring"
+  - electron

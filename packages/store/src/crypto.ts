@@ -6,7 +6,7 @@ const IV_BYTES = 12;
 const TAG_BYTES = 16;
 const PREFIX = 'e1:';
 
-/** A fresh random 256-bit data key (the daemon stores it in the keychain). */
+/** A fresh random 256-bit data key (the daemon keeps it in the encrypted vault). */
 export const generateDataKey = (): Buffer => randomBytes(DATA_KEY_BYTES);
 
 /** Parse a data key from base64 / base64url / hex. */

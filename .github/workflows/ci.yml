@@ -47,6 +47,24 @@ jobs:
       - run: pnpm --filter @beamhop/pwa run build
       - run: pnpm --filter @beamhop/pwa exec playwright install --with-deps chromium
       - run: pnpm --filter @beamhop/pwa run test:e2e
+  desktop:
+    # The desktop app stages and packages (unsigned, unpacked) on each OS.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @beamhop/desktop run dist:dir
   package:
     # The npm bundle and the standalone binary build, smoke-tested the way users install them.
     runs-on: ubuntu-latest

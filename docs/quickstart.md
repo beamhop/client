@@ -43,7 +43,7 @@ Run `beamhop doctor` at any point: it checks each prerequisite and prints the ex
 The archives contain a `beamhop` executable (a [Node SEA](https://nodejs.org/api/single-executable-applications.html):
 the Node runtime with a small embedded launcher) and a `lib/` directory next to it with the JavaScript
 bundle, the web UI and the native pieces. **Keep `lib/` next to the binary**; package managers do this
-for you. Why it is not a single file: Node SEA cannot embed native addons (the OS keychain binding), the
+for you. Why it is not a single file: Node SEA cannot embed native addons (the optional OS keychain binding), the
 sandbox runtime's helpers, the Claude Agent SDK's per-platform Claude Code binary, or the scripts that must
 exist on disk because they run as separate processes inside the sandbox (the MCP server, the sandbox
 runner). The binary runs those scripts itself, and only scripts from its own `lib/`.
@@ -60,9 +60,11 @@ use your OS's service manager (systemd user unit, launchd agent) if you want it 
 If the port is taken, start it with `BEAMHOP_PORT=<port> beamhop daemon` and use the same `BEAMHOP_PORT` (and
 `BEAMHOP_HOME`, if you changed it) for every other `beamhop` command.
 
-Secret storage: the OS keychain (macOS Keychain, Windows Credential Manager, libsecret on Linux). On a
-headless Linux box without a keychain, set `BEAMHOP_VAULT_PASSPHRASE` to use the encrypted file vault;
-without either, secrets live in memory only and `doctor` warns you.
+Secret storage: one encrypted file, `~/.beamhop/vault.enc.json` (AES-256-GCM). Its key is a random 256-bit
+key in `~/.beamhop/vault.key` (readable only by you; the sandbox never lets an agent read `~/.beamhop`), so
+nothing ever prompts you. To keep that key in the system keychain instead (macOS Keychain, Windows
+Credential Manager, libsecret), run `beamhop secret keychain on` or flip *Settings → Secrets → Vault key*;
+`off` moves it back. On a server you can lock the vault with `BEAMHOP_VAULT_PASSPHRASE` instead.
 
 ## 3. Run the wizard
 
@@ -72,7 +74,7 @@ beamhop init
 
 | Step        | What happens                                                                                   |
 | ----------- | ---------------------------------------------------------------------------------------------- |
-| 01 Doctor   | sandbox prerequisites, keychain                                                                 |
+| 01 Doctor   | sandbox prerequisites, secret vault                                                            |
 | 02 Harnesses| lists what was found: ready, needs login, not installed                                        |
 | 03 Identity | creates your owner Nostr key, or `--owner-npub npub1…` to keep your own key on your devices    |
 | 04 Phone    | QR code; scan it to pair the PWA as a device and compare the safety phrase                     |

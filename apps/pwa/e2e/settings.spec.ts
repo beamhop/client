@@ -104,10 +104,10 @@ test('secrets: names only; add, then delete', async ({ page }) => {
   const sheet = page.getByRole('dialog', { name: 'Add a secret' });
   await sheet.getByLabel('Name').fill('bad name');
   await sheet.getByLabel('Value', { exact: true }).fill(['val', 'x'.repeat(20)].join('-'));
-  await sheet.getByRole('button', { name: 'Save to keychain' }).click();
+  await sheet.getByRole('button', { name: 'Save to the vault' }).click();
   await expect(sheet.getByText(/Use letters, digits/)).toBeVisible();
   await sheet.getByLabel('Name').fill('SENTRY_DSN');
-  await sheet.getByRole('button', { name: 'Save to keychain' }).click();
+  await sheet.getByRole('button', { name: 'Save to the vault' }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByText('SENTRY_DSN', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions for SENTRY_DSN' }).click();
@@ -117,6 +117,22 @@ test('secrets: names only; add, then delete', async ({ page }) => {
     .getByRole('button', { name: 'Delete SENTRY_DSN' })
     .click();
   await expect(page.getByText('SENTRY_DSN', { exact: true })).toHaveCount(0);
+});
+
+test('secrets: the vault key moves into the system keychain and back (opt-in)', async ({ page }) => {
+  await open(page, '/settings/secrets');
+  await expect(page.getByText(/Secrets live in one encrypted file/)).toBeVisible();
+  const sw = page.getByRole('switch', { name: /Keep the vault key in the system keychain/ });
+  await expect(sw).not.toBeChecked();
+  await expect(page.getByText(/Now in ~\/\.beamhop\/vault\.key/)).toBeVisible();
+  await expectAccessible(page);
+  await sw.click({ force: true });
+  await expect(page.getByText('Vault key moved to the system keychain').first()).toBeVisible();
+  await expect(sw).toBeChecked();
+  await expect(page.getByText('beamhop secret keychain off').first()).toBeVisible();
+  await sw.click({ force: true });
+  await expect(sw).not.toBeChecked();
+  await expect(page.getByText('beamhop secret keychain on').first()).toBeVisible();
 });
 
 test('identity: NIP-05 generator produces nostr.json and hosting snippets', async ({ page }) => {

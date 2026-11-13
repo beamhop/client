@@ -1,8 +1,18 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { createSecretStore, FileSecretStore, KeychainSecretStore, MemorySecretStore } from '../src/index.ts';
+import {
+  createSecretStore,
+  FileSecretStore,
+  type KeychainItem,
+  keychainAvailable,
+  MemorySecretStore,
+  openVault,
+  readKeySource,
+  setKeySource,
+  vaultPaths,
+} from '../src/index.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'bh-vault-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -47,8 +57,8 @@ describe('FileSecretStore', () => {
     const path = join(dir, 'v2.json');
     await new FileSecretStore({ path, passphrase: 'right', scryptN: N }).set('k', 'v');
     const wrong = new FileSecretStore({ path, passphrase: 'wrong' });
-    await expect(wrong.get('k')).rejects.toThrow(/Wrong vault passphrase/);
-    await expect(wrong.unlock()).rejects.toThrow(/Wrong vault passphrase/);
+    await expect(wrong.get('k')).rejects.toThrow(/Wrong vault/);
+    await expect(wrong.unlock()).rejects.toThrow(/Wrong vault/);
   });
 
   it('detects tampering', async () => {
@@ -78,51 +88,120 @@ describe('FileSecretStore', () => {
   });
 });
 
-describe('createSecretStore', () => {
-  it('falls back to file when a passphrase is given and the keychain is skipped', async () => {
-    const s = await createSecretStore({
-      noKeychain: true,
-      passphrase: 'pw',
-      vaultPath: join(dir, 'v5.json'),
-    });
-    expect(s.backend).toBe('file');
+/** An in-memory stand-in for the one OS keychain item (tests never touch the real keychain). */
+const fakeKeychain = () => {
+  let value: string | undefined;
+  const item: KeychainItem & { reads: number } = {
+    reads: 0,
+    get: () => {
+      item.reads++;
+      return value;
+    },
+    set: (v) => {
+      value = v;
+    },
+    delete: () => {
+      value = undefined;
+    },
+  };
+  return item;
+};
+
+describe('the vault and its key', () => {
+  const freshHome = () => mkdtempSync(join(dir, 'home-'));
+  const noPass = { passphrase: '' };
+
+  it('default: a random key in vault.key (0600) unlocks vault.enc.json; no keychain involved', async () => {
+    const home = freshHome();
+    const kc = fakeKeychain();
+    const a = await openVault({ home, ...noPass, keychain: async () => kc });
+    expect(a.keySource).toBe('file');
+    await a.set('TELEGRAM_TOKEN', '123:AAsupersecret');
+    const p = vaultPaths(home);
+    expect(readFileSync(p.vault, 'utf8')).not.toContain('supersecret');
+    expect(JSON.parse(readFileSync(p.vault, 'utf8'))).toMatchObject({ v: 1, kdf: 'raw' });
+    expect(Buffer.from(readFileSync(p.key, 'utf8').trim(), 'base64')).toHaveLength(32);
+    if (process.platform !== 'win32') expect(statSync(p.key).mode & 0o777).toBe(0o600);
+    expect(kc.reads).toBe(0);
+    const b = await openVault({ home, ...noPass, keychain: async () => kc });
+    expect(await b.get('TELEGRAM_TOKEN')).toBe('123:AAsupersecret');
   });
-  it('falls back to memory with a warning', async () => {
-    const warnings: string[] = [];
-    const log = {
-      debug() {},
-      info() {},
-      warn: (m: string) => warnings.push(m),
-      error() {},
-      child() {
-        return log;
-      },
-    };
-    const prev = process.env.BEAMHOP_VAULT_PASSPHRASE;
-    delete process.env.BEAMHOP_VAULT_PASSPHRASE;
-    try {
-      const s = await createSecretStore({ noKeychain: true, log });
-      expect(s.backend).toBe('memory');
-      expect(warnings[0]).toMatch(/memory/);
-    } finally {
-      if (prev !== undefined) process.env.BEAMHOP_VAULT_PASSPHRASE = prev;
-    }
+
+  it('opt into the keychain: the key moves to one keychain item, vault.key is removed, secrets stay readable', async () => {
+    const home = freshHome();
+    const kc = fakeKeychain();
+    const o = { home, ...noPass, keychain: async () => kc };
+    await (await openVault(o)).set('A', '1');
+    await setKeySource(o, 'keychain');
+    expect(readKeySource(o)).toBe('keychain');
+    expect(existsSync(vaultPaths(home).key)).toBe(false);
+    expect(kc.get()).toBeTruthy();
+    const v = await openVault(o);
+    expect(v.keySource).toBe('keychain');
+    expect(await v.get('A')).toBe('1');
+    // ...and back to the file.
+    await setKeySource(o, 'file');
+    expect(kc.get()).toBeUndefined();
+    expect(existsSync(vaultPaths(home).key)).toBe(true);
+    expect(await (await openVault(o)).get('A')).toBe('1');
+  });
+
+  it('opening a keychain-locked vault reads the keychain once, however many secrets it holds', async () => {
+    const home = freshHome();
+    const kc = fakeKeychain();
+    const o = { home, ...noPass, keychain: async () => kc };
+    await setKeySource(o, 'keychain');
+    const v = await openVault(o);
+    for (let i = 0; i < 10; i++) await v.set(`S${i}`, `v${i}`);
+    kc.reads = 0;
+    const again = await openVault(o);
+    for (let i = 0; i < 10; i++) expect(await again.get(`S${i}`)).toBe(`v${i}`);
+    expect(kc.reads).toBe(1);
+  });
+
+  it('refuses to open (and never re-keys) a vault whose key is gone', async () => {
+    const home = freshHome();
+    const o = { home, ...noPass, keychain: async () => fakeKeychain() };
+    await (await openVault(o)).set('A', '1');
+    rmSync(vaultPaths(home).key);
+    await expect(openVault(o)).rejects.toThrow(/vault key file .* is missing/);
+  });
+
+  it('keychain unavailable: switching fails and nothing changes', async () => {
+    const home = freshHome();
+    const o = { home, ...noPass, keychain: async () => undefined };
+    await (await openVault(o)).set('A', '1');
+    await expect(setKeySource(o, 'keychain')).rejects.toThrow(/not available/);
+    expect(readKeySource(o)).toBe('file');
+    expect(await (await openVault(o)).get('A')).toBe('1');
+    expect(await keychainAvailable(o)).toBe(false);
+  });
+
+  it('a keychain that does not keep the key: switching fails and the key file stays', async () => {
+    const home = freshHome();
+    const broken: KeychainItem = { get: () => undefined, set: () => {}, delete: () => {} };
+    const o = { home, ...noPass, keychain: async () => broken };
+    await (await openVault(o)).set('A', '1');
+    await expect(setKeySource(o, 'keychain')).rejects.toThrow(/did not keep the vault key/);
+    expect(existsSync(vaultPaths(home).key)).toBe(true);
+    expect(readKeySource(o)).toBe('file');
+  });
+
+  it('BEAMHOP_VAULT_PASSPHRASE locks the vault with scrypt and blocks switching', async () => {
+    const home = freshHome();
+    const o = { home, passphrase: 'correct horse', scryptN: N };
+    const v = await openVault(o);
+    expect(v.keySource).toBe('passphrase');
+    await v.set('A', '1');
+    expect(JSON.parse(readFileSync(vaultPaths(home).vault, 'utf8')).kdf).toBe('scrypt');
+    expect(existsSync(vaultPaths(home).key)).toBe(false);
+    await expect(setKeySource(o, 'keychain')).rejects.toThrow(/BEAMHOP_VAULT_PASSPHRASE/);
+  });
+
+  it('createSecretStore opens the vault in the given home', async () => {
+    const home = freshHome();
+    const s = await createSecretStore({ home, ...noPass, keychain: async () => undefined });
+    expect(s.backend).toBe('file');
+    expect(s.keySource).toBe('file');
   });
 });
-
-const keychain = await KeychainSecretStore.tryCreate('beamhop-test');
-describe.skipIf(!keychain)(
-  `KeychainSecretStore ${keychain ? '' : '— skipped: no usable OS keychain backend (e.g. no libsecret/D-Bus session)'}`,
-  () => {
-    it('round-trips and maintains the index', async () => {
-      const s = keychain!;
-      const name = `test-${Date.now()}`;
-      await s.set(name, 'kc-value');
-      expect(await s.get(name)).toBe('kc-value');
-      expect((await s.list()).some((e) => e.name === name)).toBe(true);
-      await s.delete(name);
-      expect(await s.get(name)).toBeUndefined();
-      expect((await s.list()).some((e) => e.name === name)).toBe(false);
-    });
-  },
-);

@@ -1,6 +1,6 @@
 /**
  * Onboarding 03 Identity, 04 Phone, 05 Agent (JOURNEYS §1.03–05).
- * Identity: create a new owner key (default; OS keychain) or use an existing one via a NIP-07 extension
+ * Identity: create a new owner key (default; encrypted vault) or use an existing one via a NIP-07 extension
  * or a NIP-46 bunker; backup offered, not forced. Phone: the computer-side pairing panel (QR + 4 words,
  * confirmation here), `Skip for now`. Agent: preset cards prefill the rest, ready harnesses only, folder
  * read-only by default, live exposure summary, `Create <name>`.

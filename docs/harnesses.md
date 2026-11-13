@@ -51,6 +51,25 @@ ACP harnesses use `session/request_permission`, which beamhop answers. The npm p
 Agent SDK (it includes its own Claude Code binary for your platform), so the `claude` adapter works even
 without a separate install as long as you are logged in or have an API key.
 
+### GitHub Copilot CLI: give it a token
+
+Copilot talks to GitHub's own service, which beamhop's key broker cannot stand in for, and your `copilot
+login` lives in the OS keychain, which the sandbox never lets an agent read. So a Copilot agent needs a
+token of its own, passed in its environment:
+
+```bash
+gh auth token | beamhop secret set COPILOT_GITHUB_TOKEN          # or a fine-grained token with "Copilot Requests"
+beamhop agent set myagent 'secretEnv=["COPILOT_GITHUB_TOKEN"]'
+```
+
+`secretEnv` is per agent and off by default. Unlike broker keys, **the agent can read this value**, so
+prefer a fine-grained personal access token that only has the *Copilot Requests* permission over `gh`'s
+token (which carries your repo scopes). beamhop starts Copilot with `--secret-env-vars`, so the token is
+kept out of the shells and MCP servers Copilot runs and redacted from its output, and outbound DLP redacts
+it from messages. Copilot keeps its config and state in the session directory (`COPILOT_HOME`), never in
+your own `~/.copilot`, and the sandbox allows `api.githubcopilot.com` / `*.githubcopilot.com` for it.
+`beamhop doctor` flags Copilot agents without a token.
+
 ### Any other ACP agent
 
 ```bash

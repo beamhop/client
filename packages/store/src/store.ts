@@ -18,7 +18,7 @@ import {
 import { SessionRepo } from './sessions.ts';
 
 export interface StoreOptions {
-  /** 32-byte data key (from the keychain). */
+  /** 32-byte data key (from the encrypted vault). */
   key: Uint8Array;
   /** beamhop home; defaults to $BEAMHOP_HOME or ~/.beamhop. */
   home?: string;

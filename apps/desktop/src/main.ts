@@ -1,0 +1,325 @@
+/**
+ * beamhop desktop: the same web UI the daemon serves, in an app window, with the daemon bundled.
+ *
+ * Needs nothing installed: the daemon runs on this app's own Electron binary in Node mode
+ * (ELECTRON_RUN_AS_NODE). If a daemon for the same home already runs (`beamhop daemon` from the CLI),
+ * the app attaches to it instead and leaves it running on quit.
+ *
+ * Closing the window keeps beamhop in the menu bar (tray) so agents keep answering; "Quit beamhop"
+ * (or Cmd+Q) stops the daemon the app started.
+ */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createClient, httpTransport } from '@beamhop/client';
+import { paths } from '@beamhop/core';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  type MenuItemConstructorOptions,
+  Notification,
+  nativeImage,
+  session,
+  shell,
+  Tray,
+} from 'electron';
+import { fileAutostart, HIDDEN_FLAG, isFileAutostartEnabled, setFileAutostart } from './autostart.ts';
+import { isAllowedPermission, isAppUrl, isSafeExternalUrl } from './links.ts';
+import { mergeShellEnv, resolveShellEnv } from './shell-env.ts';
+import { type DaemonState, DaemonSupervisor } from './supervisor.ts';
+
+const isMac = process.platform === 'darwin';
+const startHidden = process.argv.includes(HIDDEN_FLAG);
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  void run();
+}
+
+async function run(): Promise<void> {
+  const home = paths();
+  const daemonUrl = process.env.BEAMHOP_URL ?? `http://127.0.0.1:${process.env.BEAMHOP_PORT ?? '7878'}`;
+  // Packaged: <resources>/daemon. Development (`electron build/app`): build/daemon next to the app dir.
+  const daemonDir = app.isPackaged
+    ? join(process.resourcesPath, 'daemon')
+    : (process.env.BEAMHOP_DESKTOP_DAEMON_DIR ?? join(app.getAppPath(), '..', 'daemon'));
+  const assets = join(app.getAppPath(), 'assets');
+
+  // Opened from Finder/the Dock, the app has none of the shell's PATH: harnesses installed via nvm,
+  // Homebrew, npm… would be invisible (and Node-script ones could not find `node`).
+  const shellEnv = await resolveShellEnv();
+  if (!shellEnv && process.platform !== 'win32')
+    console.warn('beamhop desktop: could not read the login shell environment; using the app PATH');
+  const supervisor = new DaemonSupervisor({
+    url: daemonUrl,
+    command: process.execPath,
+    args: [join(daemonDir, 'bin', 'beamhopd.js')],
+    env: { ...mergeShellEnv(process.env, shellEnv), ELECTRON_RUN_AS_NODE: '1' },
+    tokenFile: home.token,
+    logFile: join(home.logs, 'desktop-daemon.log'),
+  });
+
+  let win: BrowserWindow | undefined;
+  let tray: Tray | undefined;
+  let quitting = false;
+
+  // ── small persisted UI state (userData/state.json) ──
+  const stateFile = join(app.getPath('userData'), 'state.json');
+  const uiState = (): { closeNoticeShown?: boolean } => {
+    try {
+      return JSON.parse(readFileSync(stateFile, 'utf8'));
+    } catch {
+      return {};
+    }
+  };
+  const saveUiState = (s: { closeNoticeShown?: boolean }) => {
+    mkdirSync(app.getPath('userData'), { recursive: true });
+    writeFileSync(stateFile, JSON.stringify(s));
+  };
+
+  // ── open at login ──
+  const exe = app.getPath('exe');
+  const fileAuto = fileAutostart(process.platform);
+  const autostartEnabled = (): boolean =>
+    fileAuto
+      ? isFileAutostartEnabled(fileAuto, exe)
+      : app.getLoginItemSettings({ args: [HIDDEN_FLAG] }).openAtLogin;
+  const setAutostart = (on: boolean) => {
+    if (fileAuto) setFileAutostart(fileAuto, exe, on);
+    else app.setLoginItemSettings({ openAtLogin: on, args: [HIDDEN_FLAG] });
+  };
+
+  // ── window ──
+  const showDock = (on: boolean) => {
+    if (!isMac || !app.dock) return;
+    if (on) void app.dock.show();
+    else app.dock.hide();
+  };
+
+  const showWindow = async () => {
+    if (supervisor.state !== 'running' && supervisor.state !== 'external') {
+      if (!(await startDaemon())) return;
+    }
+    if (win && !win.isDestroyed()) {
+      showDock(true);
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      return;
+    }
+    win = createWindow();
+    showDock(true);
+  };
+
+  const createWindow = (): BrowserWindow => {
+    const w = new BrowserWindow({
+      width: 1280,
+      height: 840,
+      minWidth: 380,
+      minHeight: 520,
+      show: false,
+      title: 'beamhop',
+      backgroundColor: '#f8f5f1',
+      ...(isMac ? {} : { icon: join(assets, 'icon.png') }),
+      webPreferences: {
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+        webviewTag: false,
+        spellcheck: true,
+      },
+    });
+    w.once('ready-to-show', () => w.show());
+
+    // Daemon pages stay in the window; anything else opens in the system browser.
+    w.webContents.setWindowOpenHandler(({ url }) => {
+      if (isSafeExternalUrl(url) && !isAppUrl(url, daemonUrl)) void shell.openExternal(url);
+      else if (isAppUrl(url, daemonUrl)) void w.loadURL(url);
+      return { action: 'deny' };
+    });
+    w.webContents.on('will-navigate', (e, url) => {
+      if (isAppUrl(url, daemonUrl)) return;
+      e.preventDefault();
+      if (isSafeExternalUrl(url)) void shell.openExternal(url);
+    });
+
+    w.on('close', (e) => {
+      if (quitting) return;
+      // Keep running in the menu bar / tray: agents keep answering while the window is closed.
+      e.preventDefault();
+      w.hide();
+      showDock(false);
+      const s = uiState();
+      if (!s.closeNoticeShown && Notification.isSupported()) {
+        new Notification({
+          title: 'beamhop is still running',
+          body: `Your agents keep working. Open beamhop from the ${isMac ? 'menu bar' : 'tray'}, or quit it there.`,
+        }).show();
+        saveUiState({ ...s, closeNoticeShown: true });
+      }
+    });
+
+    try {
+      void w.loadURL(supervisor.uiUrl());
+    } catch (e) {
+      void dialog.showMessageBox({ type: 'error', message: 'Could not open beamhop', detail: String(e) });
+    }
+    return w;
+  };
+
+  // ── daemon ──
+  const startDaemon = async (): Promise<boolean> => {
+    for (;;) {
+      try {
+        await supervisor.ensure();
+        return true;
+      } catch {
+        const { response } = await dialog.showMessageBox({
+          type: 'error',
+          message: 'beamhop could not start',
+          detail: supervisor.lastError ?? 'Unknown error',
+          buttons: ['Try again', 'Open log', 'Quit'],
+          defaultId: 0,
+          cancelId: 2,
+        });
+        if (response === 1) void shell.openPath(join(home.logs, 'desktop-daemon.log'));
+        if (response === 2) {
+          quitting = true;
+          app.quit();
+          return false;
+        }
+        if (response === 1) return false;
+      }
+    }
+  };
+
+  const stopEverything = async () => {
+    const { response } = await dialog.showMessageBox({
+      type: 'warning',
+      message: 'Stop everything?',
+      detail:
+        'Kills every agent session, pauses schedules and disconnects channels. Resume later from the app or with `beamhop resume`.',
+      buttons: ['Stop everything', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response !== 0) return;
+    try {
+      await createClient(httpTransport(daemonUrl, supervisor.token())).call('system.panic', {
+        reason: 'desktop app: Stop everything',
+      });
+    } catch (e) {
+      void dialog.showMessageBox({ type: 'error', message: 'Stop everything failed', detail: String(e) });
+    }
+  };
+
+  // ── tray / menu bar ──
+  const statusLabel = (s: DaemonState): string =>
+    ({
+      idle: 'Starting…',
+      starting: 'Starting…',
+      running: `Running · ${new URL(daemonUrl).host}`,
+      external: `Running (started outside the app) · ${new URL(daemonUrl).host}`,
+      stopping: 'Stopping…',
+      stopped: 'Stopped',
+      failed: 'Not running — see the log',
+    })[s];
+
+  const refreshTray = () => {
+    if (!tray) return;
+    const s = supervisor.state;
+    const up = s === 'running' || s === 'external';
+    const template: MenuItemConstructorOptions[] = [
+      { label: `beamhop — ${statusLabel(s)}`, enabled: false },
+      { type: 'separator' },
+      { label: 'Open beamhop', click: () => void showWindow() },
+      { label: 'Stop everything…', enabled: up, click: () => void stopEverything() },
+      { type: 'separator' },
+      up
+        ? {
+            label: supervisor.owned ? 'Restart daemon' : 'Daemon is managed outside the app',
+            enabled: supervisor.owned,
+            click: () => void supervisor.restart().catch(() => void startDaemon()),
+          }
+        : { label: 'Start daemon', click: () => void startDaemon() },
+      {
+        label: 'Open at login',
+        type: 'checkbox',
+        checked: autostartEnabled(),
+        click: (i) => setAutostart(i.checked),
+      },
+      { label: 'Show logs', click: () => void shell.openPath(home.logs) },
+      { type: 'separator' },
+      { label: 'Quit beamhop', click: () => app.quit() },
+    ];
+    tray.setContextMenu(Menu.buildFromTemplate(template));
+    tray.setToolTip(`beamhop — ${statusLabel(s)}`);
+  };
+
+  const createTray = () => {
+    const icon = nativeImage.createFromPath(join(assets, isMac ? 'trayTemplate.png' : 'tray.png'));
+    if (isMac) icon.setTemplateImage(true);
+    tray = new Tray(icon);
+    // Windows/Linux: a left click opens the window (macOS shows the menu).
+    if (!isMac) tray.on('click', () => void showWindow());
+    refreshTray();
+  };
+
+  // ── app menu (standard roles; DevTools only in development) ──
+  const appMenu = (): Menu =>
+    Menu.buildFromTemplate([
+      ...(isMac ? [{ role: 'appMenu' as const }] : [{ role: 'fileMenu' as const }]),
+      { role: 'editMenu' },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' },
+          ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]),
+          { type: 'separator' },
+          { role: 'resetZoom' },
+          { role: 'zoomIn' },
+          { role: 'zoomOut' },
+          { type: 'separator' },
+          { role: 'togglefullscreen' },
+        ],
+      },
+      { role: 'windowMenu' },
+    ]);
+
+  // ── lifecycle ──
+  app.on('second-instance', () => void showWindow());
+  app.on('activate', () => void showWindow()); // macOS dock click
+  app.on('window-all-closed', () => {
+    /* stay in the tray */
+  });
+  app.on('before-quit', (e) => {
+    if (quitting) return;
+    quitting = true;
+    if (!supervisor.owned) return;
+    e.preventDefault();
+    void supervisor.stop().finally(() => app.quit());
+  });
+
+  supervisor.on('state', () => refreshTray());
+
+  await app.whenReady();
+  if (isMac && startHidden) showDock(false);
+  Menu.setApplicationMenu(appMenu());
+
+  // Web UI permissions: only the daemon origin, only what the UI uses.
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb) =>
+    cb(isAllowedPermission(permission, wc.getURL(), daemonUrl)),
+  );
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) =>
+    isAllowedPermission(permission, origin, daemonUrl),
+  );
+
+  if (!existsSync(join(daemonDir, 'bin', 'beamhopd.js')))
+    console.warn(`beamhop desktop: no bundled daemon at ${daemonDir}; can only attach to a running one`);
+
+  createTray();
+  if (!(await startDaemon())) return;
+  if (!startHidden) await showWindow();
+}
