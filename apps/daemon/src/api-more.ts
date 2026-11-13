@@ -425,6 +425,19 @@ export const moreHandlers = (d: Daemon, deps: MoreDeps) => {
     'approval.quorumGet': async () => quorumView(),
     'approval.quorumSet': async ({ quorum }, ctx) => {
       assertOwner(ctx);
+      // A quorum above the number of people who can approve could never be reached. Agent grants can
+      // add approvers, so the largest pool (any agent's, or the global one) is the limit.
+      const pools = [undefined, ...d.config.agents.list()].map(
+        (a) =>
+          d.approvals.policy(a).quorumFor({ requestedBy: { principal: 'system:quorum', role: 'system' } })
+            .pool,
+      );
+      const max = Math.max(...pools);
+      if (quorum > max)
+        throw new BeamhopError(
+          'invalid_input',
+          `quorum ${quorum} can never be reached: only ${max} ${max === 1 ? 'person can' : 'people can'} approve. Add approvers (a role with canApprove) first`,
+        );
       d.updateGlobal((c) => ({ ...c, approvals: { ...c.approvals, quorum } }));
       d.audit({
         type: 'approval.quorum',

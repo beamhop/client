@@ -3,7 +3,7 @@
  * session runner, approvals, schedules, panic and the API.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, rmSync } from 'node:fs';
 import { createConnection, createServer as createNetServer, type Server as NetServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +34,9 @@ import {
   type Button,
   type ChannelConn,
   createLogger,
+  expandHome,
   type Logger,
+  MAX_SOCKET_PATH,
   type OutboundMsgInput,
   paths,
   type RoleDef,
@@ -229,7 +231,8 @@ export class Daemon {
 
   constructor(opts: DaemonOptions) {
     this.opts = opts;
-    this.home = opts.home;
+    // Resolved once: a relative home (`--home .`) would otherwise follow the working directory.
+    this.home = expandHome(opts.home);
     this.log = opts.log ?? createLogger();
     this.now = opts.now ?? Date.now;
     this.startedAt = this.now();
@@ -338,6 +341,7 @@ export class Daemon {
         const a = this.opts.api ?? {};
         const g = this.global();
         const staticDir = a.staticDir ?? defaultStaticDir();
+        if (this.opts.socket !== false) this.socketPath();
         this.api = await startApiServer({
           handlers: this.apiHandlers.handlers(),
           token: this.apiToken,
@@ -445,9 +449,22 @@ export class Daemon {
     return r;
   }
 
+  /** The API socket path, refused up front when the system cannot bind it (before the API listens). */
+  private socketPath(): string {
+    const sock = paths(this.home).socket;
+    const n = Buffer.byteLength(sock);
+    if (process.platform !== 'win32' && n > MAX_SOCKET_PATH)
+      throw new BeamhopError(
+        'invalid_input',
+        `the API socket path is too long for this system (${n} bytes, max ${MAX_SOCKET_PATH}): ${sock}. Use a shorter BEAMHOP_HOME.`,
+      );
+    return sock;
+  }
+
   private async startSocket(): Promise<void> {
     if (process.platform === 'win32' || !this.api) return;
-    const sock = paths(this.home).socket;
+    const sock = this.socketPath();
+    if (dirname(sock) !== this.home) ensurePrivateDir(dirname(sock));
     rmSync(sock, { force: true });
     const port = Number(new URL(this.api.url).port);
     const host = new URL(this.api.url).hostname;
@@ -872,6 +889,21 @@ export class Daemon {
 }
 
 /** Short stable hash (for throttling keys etc.). */
+/**
+ * A directory only this user can use (the API socket's home outside the beamhop home). A directory
+ * someone else created or opened up is refused: it would let them swap the socket.
+ */
+export const ensurePrivateDir = (dir: string): void => {
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const st = lstatSync(dir);
+  const uid = process.getuid?.();
+  if (!st.isDirectory() || (uid !== undefined && st.uid !== uid) || (st.mode & 0o077) !== 0)
+    throw new BeamhopError(
+      'forbidden',
+      `${dir} must be a directory owned by you with mode 0700; remove it and start beamhop again`,
+    );
+};
+
 export const shortHash = (s: string): string => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 /** Create (and start) a daemon. Tests inject plugins/clock/secrets and disable the network API. */

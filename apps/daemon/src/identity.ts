@@ -101,7 +101,7 @@ export class IdentityManager {
     return k.npub;
   }
 
-  async importOwner(npub: string): Promise<string> {
+  async importOwner(npub: string, replace = false): Promise<string> {
     const m = await requireNostr();
     let hex: string;
     try {
@@ -110,6 +110,18 @@ export class IdentityManager {
       throw new BeamhopError('invalid_input', 'expected an npub1… or 64-char hex public key');
     }
     const n = m.npubEncode(hex);
+    // An agent's (or this daemon's) own key as owner would let that agent act as its owner.
+    const agent = this.d.config.agents.list().find((a) => a.identity.npub === n);
+    if (agent)
+      throw new BeamhopError('invalid_input', `${n} is agent ${agent.name}'s own key, not an owner key`);
+    if (this.d.control?.npub === n)
+      throw new BeamhopError('invalid_input', `${n} is this beamhop's own control key, not an owner key`);
+    // Same rule as createOwner: dropping a key only the daemon holds is not undoable.
+    if (!replace && (await this.ownerKeyHeld()))
+      throw new BeamhopError(
+        'conflict',
+        `this beamhop holds the current owner key (${this.ownerNpub()}); importing ${n} deletes it. Export it first if you need it, then pass replace to change it`,
+      );
     // A key the daemon held for a previous owner is useless now; drop it.
     if (await this.d.secrets.get(OWNER_KEY_REF)) await this.d.secrets.delete(OWNER_KEY_REF);
     this.d.invalidateSecretCache();

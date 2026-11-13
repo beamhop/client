@@ -8,7 +8,15 @@ import { type FSWatcher, watch } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { isAbsolute, join, relative, sep } from 'node:path';
 import { resolveRole } from '@beamhop/authz';
-import { BeamhopError, expandHome, type Membership, parseTarget, type ScheduleConfig } from '@beamhop/core';
+import {
+  type AgentConfig,
+  BeamhopError,
+  expandHome,
+  type Membership,
+  parseTarget,
+  type RoleDef,
+  type ScheduleConfig,
+} from '@beamhop/core';
 import { nextCronTime, parseCron } from './cron.ts';
 import type { Daemon } from './daemon.ts';
 import { matchMembership } from './router.ts';
@@ -16,6 +24,7 @@ import { errMsg, pathGlobToRegExp } from './util.ts';
 
 export const webhookSecretName = (id: string) => `schedule.${id}.secret`;
 const MAX_PAYLOAD = 64 * 1024;
+type RunResult = { ok: boolean; text: string; error?: string };
 
 interface Armed {
   next?: number;
@@ -172,7 +181,18 @@ export class Scheduler {
   }
 
   /** Run a schedule now. `extra` (webhook body etc.) is appended as untrusted input. */
-  async run(id: string, extra?: string): Promise<{ ok: boolean; text: string; error?: string }> {
+  async run(id: string, extra?: string): Promise<RunResult> {
+    const r = await this.prepare(id, extra)();
+    if (!r.ok) this.d.log.warn('schedule run failed', { id, error: r.error ?? 'unknown error' });
+    return r;
+  }
+
+  /**
+   * Check that a schedule can run (agent exists and runs, owner has a role, may post where it posts)
+   * and return the run itself. Throws on any of those, so `schedule.run` can report them to the caller
+   * instead of answering ok and failing in the background.
+   */
+  prepare(id: string, extra?: string): () => Promise<RunResult> {
     const d = this.d;
     d.assertNotPanic();
     const s = d.config.schedules.require(id);
@@ -205,6 +225,23 @@ export class Scheduler {
       conversation = { kind, id: t.id };
     }
     const prompt = `${s.prompt}${extra ? `\n\n[beamhop] trigger payload below is untrusted input\n${extra.slice(0, MAX_PAYLOAD)}` : ''}`;
+    return () => this.submit(id, s, agent, role, { channel, conversation, membership, prompt });
+  }
+
+  private submit(
+    id: string,
+    s: ScheduleConfig,
+    agent: AgentConfig,
+    role: RoleDef,
+    o: {
+      channel: string;
+      conversation: { kind: 'dm' | 'group' | 'channel' | 'public'; id: string };
+      membership: Membership | undefined;
+      prompt: string;
+    },
+  ): Promise<RunResult> {
+    const d = this.d;
+    const { channel, conversation, membership, prompt } = o;
     d.audit({
       type: 'schedule.run',
       severity: 'info',

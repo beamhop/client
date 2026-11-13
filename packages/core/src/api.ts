@@ -528,6 +528,8 @@ export const methods = {
     params: z.object({ id: z.string(), command: z.string(), args: z.array(z.string()).default([]) }),
     result: HarnessView,
   },
+  /** Remove a custom ACP harness added with `harness.add` (not one from the catalog). */
+  'harness.remove': { params: z.object({ id: z.string() }), result: ok },
   /** Install a harness on this computer (local only). Starts a job; poll `harness.job.get`. */
   'harness.install': {
     params: z.object({ id: z.string(), method: z.enum(['native', 'brew', 'npm', 'winget']).optional() }),
@@ -977,7 +979,11 @@ export const methods = {
     result: z.object({ npub: z.string() }),
   },
   /** Use an existing owner key (signing stays on the owner's device; the daemon keeps only the npub). */
-  'identity.ownerImport': { params: z.object({ npub: z.string() }), result: z.object({ npub: z.string() }) },
+  'identity.ownerImport': {
+    /** `replace` is required when it would drop an owner key the daemon holds (as in ownerCreate). */
+    params: z.object({ npub: z.string(), replace: z.boolean().default(false) }),
+    result: z.object({ npub: z.string() }),
+  },
   /** Reveal the daemon-held owner nsec, once, to a local client. Never available over Nostr. */
   'identity.ownerExport': { params: empty, result: z.object({ nsec: z.string() }) },
   /** Unsigned owner attestation for an agent, for an owner whose key lives on another device. */

@@ -49,6 +49,9 @@ export class PluginRegistry {
     this.harnesses.set(p.id, p);
     return this;
   }
+  removeHarness(id: string): boolean {
+    return this.harnesses.delete(id);
+  }
   addDeployer(d: Deployer): this {
     this.deployers.set(d.id, d);
     return this;

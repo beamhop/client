@@ -28,7 +28,7 @@ import { compilePolicy, LLM_PROVIDER_HOSTS } from '@beamhop/sandbox';
 import type { NewSessionEvent, SessionRecord } from '@beamhop/store';
 import type { Daemon, DaemonSandbox } from './daemon.ts';
 import { sandboxGitWritePaths } from './git-ops.ts';
-import { activeMethod, sessionCredentials } from './harness-auth.ts';
+import { activeMethod, loginProblem, sessionCredentials } from './harness-auth.ts';
 import { decodeBlob, HomeLoginSync, homeEnv, homeOf } from './home-login.ts';
 import { ReplyStreamer } from './output.ts';
 import { killSessionTree, SESSION_ENV_MARKER } from './proctree.ts';
@@ -449,6 +449,11 @@ export class SessionManager {
     const d = this.d;
     const plugin = d.registry.harness(harnessId);
     if (!plugin) throw new BeamhopError('unavailable', `harness "${harnessId}" is not installed`);
+    const noLogin = await loginProblem(d, agent, harnessId, plugin.displayName);
+    if (noLogin) {
+      this.errors.set(agent.name, noLogin);
+      throw new BeamhopError('unavailable', noLogin);
+    }
     const { mounts, worktrees } = await this.prepareMounts(live, agent);
     const o = (agent.sandbox.policy ?? {}) as NonNullable<Parameters<typeof compilePolicy>[2]>;
     // Only objects, beamhop/* refs and the worktree's own admin dir: never the repo's config or

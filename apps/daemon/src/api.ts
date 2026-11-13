@@ -71,6 +71,7 @@ import {
 import { type ChildLike, HarnessJobs, type SpawnFn } from './harness-jobs.ts';
 import { isInternalSecret } from './home.ts';
 import { encodeBlob, exportTransfer, homeEnv, readHome, writeHome } from './home-login.ts';
+import { agentKeyRef } from './identity.ts';
 import { type CallContext, createDispatcher, type Handler, type Handlers } from './rpc-server.ts';
 import { normalizeHostPattern, suggestionValue, withPolicyValue } from './rules.ts';
 import { probeHosts, requiredHosts } from './sandbox-hosts.ts';
@@ -472,6 +473,23 @@ export class ApiHandlers {
     return this.d.agentView(this.d.agent(name));
   }
 
+  /** What refers to a secret by name: agent identity keys, secretEnv and broker bindings, channels, webhooks. */
+  private secretUsers(name: string): string[] {
+    const d = this.d;
+    const out: string[] = [];
+    for (const a of d.config.agents.list()) {
+      if (a.identity.nostrKeyRef === name) out.push(`agent ${a.name} (identity key)`);
+      if (a.secretEnv.some((e) => (e.split('=')[1] ?? e) === name)) out.push(`agent ${a.name} (secretEnv)`);
+      if (a.sandbox.policy?.secrets?.some((b) => b.name === name))
+        out.push(`agent ${a.name} (sandbox secret binding)`);
+    }
+    for (const c of d.config.channels.list())
+      if (c.secretRefs.includes(name) || name.startsWith(`channel.${c.name}.`)) out.push(`channel ${c.name}`);
+    for (const s of d.config.schedules.list())
+      if (webhookSecretName(s.id) === name) out.push(`schedule ${s.id} (webhook secret)`);
+    return out;
+  }
+
   private saveAgent(input: unknown): AgentView {
     const a = this.d.config.agents.save(input);
     this.d.emitAgent(a.name);
@@ -730,11 +748,32 @@ export class ApiHandlers {
         const cur = d.agent(name);
         if (patch.name !== undefined && patch.name !== name)
           throw new BeamhopError('invalid_input', 'use agent.clone to rename');
+        // The identity key ref may only stay as it is or name the agent's own key: pointing it at any
+        // other secret would let the agent sign (and publish) with, e.g., another agent's key.
+        const id = patch.identity as { nostrKeyRef?: unknown } | undefined;
+        if (id && typeof id === 'object' && 'nostrKeyRef' in id) {
+          const ref = id.nostrKeyRef;
+          if (ref !== cur.identity.nostrKeyRef && ref !== agentKeyRef(name))
+            throw new BeamhopError(
+              'forbidden',
+              `identity.nostrKeyRef can only be ${agentKeyRef(name)} (this agent's own key)`,
+            );
+        }
         const next = deepMerge(cur, patch);
         const v = this.saveAgent(next);
-        const sensitive = ['sandbox', 'grants', 'mounts', 'routes', 'public', 'memberships', 'mesh'].filter(
-          (k) => k in patch,
-        );
+        const sensitive = [
+          'sandbox',
+          'grants',
+          'mounts',
+          'routes',
+          'public',
+          'memberships',
+          'mesh',
+          'secretEnv',
+          'identity',
+          'approvalRules',
+          'harnessAuth',
+        ].filter((k) => k in patch);
         d.audit({
           type: 'agent.updated',
           severity: sensitive.length ? 'security' : 'info',
@@ -1047,6 +1086,32 @@ export class ApiHandlers {
           actor: this.principal(ctx),
         });
         return view;
+      },
+
+      'harness.remove': async ({ id }, ctx) => {
+        const hid = id.startsWith('acp:') ? id : `acp:${id}`;
+        if (!this.customHarnesses.has(hid))
+          throw new BeamhopError(
+            'not_found',
+            `${id} is not a custom harness (only ones added with beamhop harness add can be removed)`,
+          );
+        const users = d.config.agents.list().filter((a) => a.harness === hid);
+        if (users.length)
+          throw new BeamhopError(
+            'conflict',
+            `${hid} is used by ${users.map((a) => a.name).join(', ')}; move them to another harness first`,
+          );
+        this.customHarnesses.delete(hid);
+        d.registry.removeHarness(hid);
+        d.store.kv.set('harness', 'custom', [...this.customHarnesses.values()]);
+        d.store.kv.delete('harness-defs', hid);
+        d.audit({
+          type: 'harness.removed',
+          severity: 'security',
+          summary: `Custom ACP harness ${hid} removed`,
+          actor: this.principal(ctx),
+        });
+        return OK;
       },
 
       // ── channels ──
@@ -1468,6 +1533,16 @@ export class ApiHandlers {
       },
       'secret.delete': async ({ name }, ctx) => {
         if (isInternalSecret(name)) throw new BeamhopError('forbidden', 'reserved secret name');
+        if ((await d.secrets.get(name)) === undefined)
+          throw new BeamhopError('not_found', `no secret named ${name}`);
+        // Deleting a secret something still uses breaks it silently (an agent loses its identity, a
+        // channel its credentials): name the users so they can be changed first.
+        const users = this.secretUsers(name);
+        if (users.length)
+          throw new BeamhopError(
+            'conflict',
+            `secret ${name} is in use by ${users.join(', ')}; change or remove ${users.length > 1 ? 'those' : 'that'} first`,
+          );
         await d.secrets.delete(name);
         d.invalidateSecretCache();
         d.audit({
@@ -1508,6 +1583,11 @@ export class ApiHandlers {
       'schedule.update': async ({ id, patch }, ctx) => {
         const cur = d.config.schedules.require(id);
         const next = { ...cur, ...patch, id } as ScheduleConfig;
+        // A schedule pointed at a missing agent could never run (and blocked later updates).
+        if ('agent' in patch) {
+          if (typeof next.agent !== 'string') throw new BeamhopError('invalid_input', 'agent must be a name');
+          d.agent(next.agent);
+        }
         d.scheduler.validate(next);
         const s = d.config.schedules.save(next);
         d.scheduler.rearm(id);
@@ -1537,7 +1617,13 @@ export class ApiHandlers {
       'schedule.run': async ({ id }) => {
         d.assertNotPanic();
         d.config.schedules.require(id);
-        void d.scheduler.run(id).catch((e) => d.log.warn('schedule run failed', { id, error: errMsg(e) }));
+        // Checks (agent exists, not stopped, owner's role, postTo) fail the call; the turn runs on.
+        const go = d.scheduler.prepare(id);
+        void go()
+          .then((r) => {
+            if (!r.ok) d.log.warn('schedule run failed', { id, error: r.error ?? 'unknown error' });
+          })
+          .catch((e) => d.log.warn('schedule run failed', { id, error: errMsg(e) }));
         return OK;
       },
 
@@ -1703,8 +1789,8 @@ export class ApiHandlers {
         });
         return { npub };
       },
-      'identity.ownerImport': async ({ npub }, ctx) => {
-        const n = await d.identity.importOwner(npub);
+      'identity.ownerImport': async ({ npub, replace }, ctx) => {
+        const n = await d.identity.importOwner(npub, replace);
         d.audit({
           type: 'owner.imported',
           severity: 'security',

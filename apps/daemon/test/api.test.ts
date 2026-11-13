@@ -345,7 +345,7 @@ describe('policy, secrets, schedules', () => {
           postTo: 'fk:group/other',
         })
         .then((s) => env!.client.call('schedule.run', { id: s.id })),
-    ).resolves.toBeDefined();
+    ).rejects.toSatisfy((e) => code(e) === 'forbidden');
     const s = await env.client.call('schedule.add', {
       agent: 'bot',
       kind: 'cron',

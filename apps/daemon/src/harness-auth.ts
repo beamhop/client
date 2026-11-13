@@ -97,6 +97,27 @@ export const harnessLogin = async (d: Daemon, harnessId: string): Promise<Harnes
 };
 
 /**
+ * Why a session on this harness cannot authenticate, or undefined when it can (or beamhop does not
+ * manage its login). A harness started without credentials does not fail: it waits on its own login
+ * flow, which nobody can answer inside the sandbox, so the turn would hang until stopped.
+ */
+export const loginProblem = async (
+  d: Daemon,
+  agent: Pick<AgentConfig, 'secretEnv'>,
+  harnessId: string,
+  harnessName: string,
+): Promise<string | undefined> => {
+  const login = await harnessLogin(d, harnessId);
+  // Only a missing sign-in blocks: an "invalid" verdict may come from a check that failed for another
+  // reason (network), and the harness's own error explains a really rejected login better.
+  if (login.status !== 'logged-out') return undefined;
+  // The agent brings its own credential for one of the harness's login variables (secretEnv override).
+  const vars = new Set(loginMethods(harnessId).flatMap((m) => [m.env ?? m.secret, m.secret]));
+  if ((agent.secretEnv ?? []).some((e) => vars.has(e.split('=')[0]!))) return undefined;
+  return `${harnessName} is not signed in. Sign in with: beamhop harness login ${harnessId}`;
+};
+
+/**
  * Env-kind credentials for a session: the harness login, unless the agent maps the same variable to a
  * secret of its own (`secretEnv: ["COPILOT_GITHUB_TOKEN=TEAM_TOKEN"]`). Broker-kind logins are not
  * returned: the broker reads them from the vault itself.

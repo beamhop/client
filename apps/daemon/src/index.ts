@@ -1,4 +1,4 @@
-import { beamhopHome, createLogger } from '@beamhop/core';
+import { beamhopHome, createLogger, expandHome } from '@beamhop/core';
 import { Daemon, type DaemonOptions } from './daemon.ts';
 
 export * from './cron.ts';
@@ -24,7 +24,8 @@ export interface RunDaemonOptions {
  * Resolves after a graceful shutdown.
  */
 export const runDaemon = async (opts: RunDaemonOptions = {}): Promise<void> => {
-  const home = opts.home ?? beamhopHome();
+  // Absolute from here on: `--home .` must not depend on where later code runs.
+  const home = opts.home ? expandHome(opts.home) : beamhopHome();
   const log = createLogger();
   const env = process.env;
   const port = opts.port ?? (env.BEAMHOP_PORT ? Number(env.BEAMHOP_PORT) : undefined);
