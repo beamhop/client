@@ -1,5 +1,6 @@
 import {
   BeamhopError,
+  explicitModel,
   type HarnessEvent,
   type HarnessSession,
   type Logger,
@@ -323,7 +324,8 @@ export const startCodexAppServer = async (
     );
     await rpc.notify('initialized');
     const common = { cwd: spec.cwd, approvalPolicy: policy.approvalPolicy, sandbox: sandboxMode };
-    const model = spec.model ? { model: spec.model } : {};
+    const m = explicitModel(spec.model);
+    const model = m ? { model: m } : {};
     const res = spec.resume
       ? await rpc.request<{ thread: { id: string } }>(
           'thread/resume',

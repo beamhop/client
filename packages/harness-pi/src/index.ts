@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
   BeamhopError,
+  explicitModel,
   type HarnessDetection,
   type HarnessEvent,
   type HarnessPlugin,
@@ -44,7 +45,8 @@ export interface PiHarnessOptions {
 /** Build pi CLI args for a session. Exported for tests. */
 export const piArgs = (spec: SessionSpec, extra: string[] = [], gatePath = PI_GATE_EXTENSION): string[] => {
   const args = ['--mode', 'rpc'];
-  if (spec.model) args.push('--model', spec.model);
+  const model = explicitModel(spec.model);
+  if (model) args.push('--model', model);
   if (spec.resume) args.push('--session', spec.resume);
   if (spec.permissionMode === 'read-only' || spec.permissionMode === 'plan')
     args.push('--tools', READ_ONLY_TOOLS);

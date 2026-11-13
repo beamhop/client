@@ -187,10 +187,14 @@ export class SessionManager {
 
   constructor(private readonly d: Daemon) {}
 
-  /** The failure text, with the hosts the sandbox refused during this turn named (when known yet). */
+  /**
+   * The failure text, with the hosts the sandbox refused during this turn named (when known yet). Only for
+   * a network-looking failure: a model or auth error is not the sandbox's doing, and refused hosts still
+   * show in the agent's Blocked list.
+   */
   private explainError(sessionId: string, message: string): string {
     const hosts = [...(this.blockedHosts.get(sessionId) ?? [])];
-    if (hosts.length === 0) return message;
+    if (hosts.length === 0 || !NETWORK_FAILURE.test(message)) return message;
     return `${message}\n${blockedNote(hosts)}`;
   }
 
@@ -201,14 +205,13 @@ export class SessionManager {
    * Runs after the error is shown, so it never delays it; adds one system event at most.
    */
   private async diagnoseFailure(live: LiveSession, agent: AgentConfig, message: string, named: boolean) {
+    if (named || !NETWORK_FAILURE.test(message)) return;
     await new Promise((ok) => setTimeout(ok, 500));
     const hosts = [...(this.blockedHosts.get(live.id) ?? [])];
-    if (named) return;
     if (hosts.length > 0) {
       this.event(live.id, { kind: 'system', text: blockedNote(hosts) });
       return;
     }
-    if (!NETWORK_FAILURE.test(message)) return;
     const bad = await unreachableRequired(this.d, agent).catch((e) => {
       this.d.log.debug('connection check failed', { session: live.id, error: errMsg(e) });
       return [];

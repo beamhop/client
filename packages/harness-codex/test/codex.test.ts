@@ -233,6 +233,13 @@ describe('helpers', () => {
     expect(a).toContain('--image=/i.png');
     expect(a[a.indexOf('--sandbox') + 1]).toBe('read-only');
   });
+  it('leaves the model to codex for the "default" model', () => {
+    // A ChatGPT plan rejects a model named "default"; codex picks the plan's model itself.
+    expect(execArgs(spec({ mcpServers: [], model: 'default' }), 'hi', undefined, [])).not.toContain(
+      '--model',
+    );
+    expect(execArgs(spec({ mcpServers: [] }), 'hi', undefined, [])).toContain('--model');
+  });
   it('maps exec events', () => {
     expect(
       mapExecEvent({ type: 'item.completed', item: { id: 'r', type: 'reasoning', text: 'hm' } }),

@@ -60,6 +60,9 @@ const run = async (
 const text = (evs: HarnessEvent[]) => evs.flatMap((e) => (e.type === 'text' ? [e.delta] : [])).join('');
 
 describe('piArgs', () => {
+  it('leaves the model to pi for the "default" model', () => {
+    expect(piArgs(spec({ permissionMode: 'auto', model: 'default' }))).toEqual(['--mode', 'rpc']);
+  });
   it('builds rpc args per mode', () => {
     expect(piArgs(spec({ permissionMode: 'auto' }))).toEqual([
       '--mode',

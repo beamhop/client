@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   BeamhopError,
+  explicitModel,
   type HarnessEvent,
   type HarnessSession,
   type SandboxHandle,
@@ -39,7 +40,8 @@ export const execArgs = (
     spec.cwd,
     ...mcpConfigArgs(spec.mcpServers),
   ];
-  if (spec.model) args.push('--model', spec.model);
+  const model = explicitModel(spec.model);
+  if (model) args.push('--model', model);
   for (const i of images) args.push(`--image=${i}`); // '=' form: --image is variadic
   if (threadId) args.push('resume', threadId);
   args.push('--', prompt);

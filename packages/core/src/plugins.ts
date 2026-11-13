@@ -88,9 +88,20 @@ export interface HarnessDetection {
   install?: { npm?: string; brew?: string; winget?: string; url?: string };
 }
 
+/** The agent config's model value meaning "the harness's own default" (`AgentConfig.model`'s default). */
+export const DEFAULT_MODEL = 'default';
+
+/**
+ * The model to ask the harness for, or undefined to let it pick its own default. Harnesses that pass the
+ * value through as a flag must use this: e.g. Codex with a ChatGPT plan rejects a model named "default".
+ */
+export const explicitModel = (model: string | undefined): string | undefined =>
+  model && model !== DEFAULT_MODEL ? model : undefined;
+
 export interface SessionSpec {
   sessionId: string;
   agent: string;
+  /** Model id, or `DEFAULT_MODEL` for the harness's own default (see `explicitModel`). */
   model: string;
   /** Working directory inside the sandbox (first rw mount or a worktree). */
   cwd: string;
